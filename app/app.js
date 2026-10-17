@@ -1470,3 +1470,33 @@ export async function openSavedDesign(id) {
   upsert(record);
   openDesign(record, false);
 }
+
+let hostFlush = null;
+/** Persist the latest editor state before an explicit host save. Never closes or replaces it.
+ * Rejects on failed local persistence rather than returning an older saved record.
+ */
+export function flushSavedDesign(id) {
+  if (!app || moving) return Promise.reject(new Error('EDITOR_BUSY'));
+  if (S.open && S.open.record.id !== id) return Promise.reject(new Error('EDITOR_MISMATCH'));
+  if (hostFlush) return hostFlush.id === id ? hostFlush.job : Promise.reject(new Error('EDITOR_BUSY'));
+  const editor = S.open;
+  const job = (async () => {
+    const wasInert = app.inert;
+    if (editor) app.inert = true;
+    try {
+      if (editor) {
+        if (editor.putting) await editor.putting;
+        if (editor.closed || S.open !== editor) throw new Error('EDITOR_BUSY');
+        let ok = await save(editor);
+        if (editor.dirty) ok = await save(editor);
+        if (!ok || editor.dirty || editor.localOk === false) throw new Error('EDITOR_SAVE_FAILED');
+      }
+      const record = await getDesign(id);
+      if (!record) throw new Error('DOCUMENT_NOT_FOUND');
+      return record;
+    } finally { if (editor && S.open === editor) app.inert = wasInert; }
+  })();
+  hostFlush = {id, job};
+  job.finally(() => { if (hostFlush?.job === job) hostFlush = null; }).catch(() => {});
+  return job;
+}

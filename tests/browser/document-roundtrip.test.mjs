@@ -87,6 +87,9 @@ test('actual app migrates, edits, saves twice, reopens, copies, reorders and dis
   if (process.env.MINICAN_SCREENSHOT) await page.screenshot({path:process.env.MINICAN_SCREENSHOT,fullPage:true});
   for (const name of ['첫 저장', '두 번째 저장']) {
     await page.locator('.cv-name').fill(name);
+    const flushed = await page.evaluate(async ({base,id}) => (await import(base+'/app/app.js')).flushSavedDesign(id), {base,id:sample.id});
+    assert.equal(flushed.name,name,'explicit host save includes edits before the autosave debounce');
+    assert.equal(await page.locator('.cv-name').inputValue(),name,'flushing leaves the editor open');
     await page.locator('.cv-status.ok').filter({hasText:'이 기기에 저장했어요'}).waitFor();
     assert.equal(await page.evaluate(async ({base,id}) => (await (await import(base+'/app/store.js')).getDesign(id)).name,{base,id:sample.id}),name,'committed value before reload');
     await page.reload();
@@ -109,5 +112,22 @@ test('actual app migrates, edits, saves twice, reopens, copies, reorders and dis
   assert.notEqual(copy.id,sample.id); assert.equal(copy.origin.documentId,sample.id);
   const original = await page.evaluate(async ({base,id}) => (await import(base+'/app/store.js')).getOriginalDesign(id), {base,id:rejected.id});
   assert.equal(original.slides.length,21);
+  await page.evaluate(async ({base,id}) => (await import(base+'/app/app.js')).openSavedDesign(id), {base,id:sample.id});
+  await page.locator('.cv-name').waitFor();
+  const mismatch = await page.evaluate(async ({base,id}) => {
+    try { await (await import(base+'/app/app.js')).flushSavedDesign(id); return 'saved'; } catch (error) { return error.message; }
+  },{base,id:legacy.id});
+  assert.equal(mismatch,'EDITOR_MISMATCH');
+  await page.evaluate(() => { window.savedTransaction=IDBDatabase.prototype.transaction;IDBDatabase.prototype.transaction=function(...args){if(args[1]==='readwrite')throw new DOMException('test quota','QuotaExceededError');return window.savedTransaction.apply(this,args);}; });
+  await page.locator('.cv-name').fill('저장 실패 뒤 남겨야 할 편집');
+  const failed = await page.evaluate(async ({base,id}) => {
+    try { await (await import(base+'/app/app.js')).flushSavedDesign(id); return 'saved'; } catch(error) { return error.message; }
+  },{base,id:sample.id});
+  assert.equal(failed,'EDITOR_SAVE_FAILED');assert.equal(await page.locator('.cv-name').inputValue(),'저장 실패 뒤 남겨야 할 편집');
+  await page.evaluate(() => {IDBDatabase.prototype.transaction=window.savedTransaction;delete window.savedTransaction;});
+  const recovered = await page.evaluate(async ({base,id}) => {
+    const api=await import(base+'/app/app.js');const [a,b]=await Promise.all([api.flushSavedDesign(id),api.flushSavedDesign(id)]);return [a,b];
+  },{base,id:sample.id});
+  assert.deepEqual(recovered[0],recovered[1]);assert.equal(recovered[0].name,'저장 실패 뒤 남겨야 할 편집');
   assert.deepEqual(errors,[]);
 });
