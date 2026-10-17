@@ -3,6 +3,7 @@
 // 계산과 규칙은 model.js·cutout.js(순수 함수)에 있고, 여기는 화면과 손가락·마우스·키보드만 다룬다.
 // 저장소는 모른다: 사진을 어디에 올릴지는 uploadImage 로, 무엇이 바뀌었는지는 onChange 로 프로젝트가 정한다.
 import { el, toast } from './dom.js';
+import { newId } from './document.js';
 import {
   COLORS, SHAPES, SHAPE_GROUPS, MASKS, OPACITY, TEXT_PRESETS, settings, configure, reshapeItems, backgroundOf, fontList, fontFamilyOf, layoutList,
   cleanBg, cleanItems, cleanDesign, emptyDesign, cleanItem, cleanImg, moveLayer, newPresetText, newEmoji, newShape, newArt, newYouTube, newPhoto, moveItem, scaleItem, widenItem, heightenItem, rotateItem,
@@ -737,6 +738,7 @@ export function createEditor({
 
   // 목록이 통째로 바뀌는 일(넣기·삭제·순서·복제·템플릿)을 한 뒤에 부른다.
   function listChanged(nextSel, nextMany = []) {
+    if (card.id) card.items = card.items.map(it => it.id ? it : { ...it, id: newId() });
     sel = nextMany.length >= 2 ? -1 : nextSel;
     many = nextMany.length >= 2 ? nextMany : [];
     pop = null;
@@ -2985,7 +2987,8 @@ export function createEditor({
   function setDesign(next) {
     card = next && typeof next === 'object' ? next : { bg: undefined, items: [] };
     card.bg = cleanBg(card.bg);
-    card.items = cleanItems(card.items, { keepSpaces: true });
+    card.items = cleanItems(card.items, { keepSpaces: true, strict: !!card.id });
+    if (card.id) card.items = card.items.map(it => it.id ? it : { ...it, id: newId() });
     setMotion(card);
     setVideo(card);
     closeCamera();                     // 찍던 것은 그만둔다(다른 장의 바탕이 되면 안 된다)

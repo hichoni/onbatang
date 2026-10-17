@@ -20,10 +20,11 @@ import {
   RATIOS, RATIO_KEY, MAX_DESIGNS, MAX_SLIDES, MAX_NAME, EXPORT_SIZES, DEFAULT_EXPORT, EXPORT_KEY, VIDEO_SIZES, DEFAULT_VIDEO, exportSize, ratioOf, newRecord, nextNumber,
   isBlank, fileName, whenText, sortRecords, addSlide, copySlide, removeSlide, moveSlide,
   libraryOf, dropPhoto, slideMotion, slideVideo, slideExtra, hasVideo, deckVideos, unusedVideos, cleanBrand,
+  migrateRecord, aspectOf, copyRecord,
 } from './designs.js';
 import { saveVideo, listVideos, removeVideos } from './videos.js';
 import { zipStore } from './zip.js';
-import { listDesigns, getDesign, putDesign, removeDesign, setStorageName } from './store.js';
+import { listDesigns, getDesign, putDesign, removeDesign, setStorageName, listDesignIssues, getOriginalDesign } from './store.js';
 import { setupApp, useFonts, photoToData, BASIC_GROUP } from './setup.js';
 import { mergeAccount, createPusher } from './sync.js';
 
@@ -246,7 +247,7 @@ function startNew(layoutId = '', tile = null) {
     record.slides = [{ bg: layout.bg, items: layoutItems(layout.id) }];
   }
   // 작은 그림과 새 그림의 모양이 같을 때에만 그 그림을 키워서 연다(모양이 다르면 찌그러져 보인다).
-  const from = Math.abs(ratioOf(record.ratio).aspect - thumbAspect(layout)) < 0.01 ? tile?.querySelector('.fe-card') : null;
+  const from = Math.abs(aspectOf(record) - thumbAspect(layout)) < 0.01 ? tile?.querySelector('.fe-card') : null;
   transit(() => { if (!S.open) openDesign(record, true); }, 'open', from);
 }
 
@@ -406,6 +407,12 @@ function render() {
     mine.append(el('div', { class: 'cv-list' }, ...list.map((r) => itemCard(r))));
   }
   if (S.error) mine.append(el('p', { class: 'warn-box', text: S.error }));
+  for (const issue of listDesignIssues()) mine.append(el('div', { class: 'warn-box', role: 'status' },
+    el('p', { text: `${issue.name || '그림'}: 지금 열 수 없는 자료예요 (${issue.code}). 원본은 그대로 남아 있어요.` }),
+    el('button', { class: 'btn', type: 'button', onClick: async () => {
+      try { saveBlob(new Blob([JSON.stringify(await getOriginalDesign(issue.id), null, 2)], { type: 'application/json' }), 'onbatang-original.json'); }
+      catch { toast('원본을 읽지 못했어요. 다시 시도해 주세요.'); }
+    } }, '원본 내려받기')));
 
   app.replaceChildren(hero, el('div', { class: 'cv-home' }, templates, mine,
     el('p', { class: 'cv-note', text: `${sync ? '그림은 이 기기에 먼저 저장한 뒤 내 계정에도 저장돼요. 바탕에 깐 영상만 이 기기에 남아요.' : '그림은 이 기기(이 브라우저)에만 저장돼요(서버로 올라가지 않아요). 다른 기기에서는 보이지 않으니, 다 만든 그림은 내려받아 두세요.'} 그림의 모양(정사각형·세로·가로·길게)은 꾸미는 화면에서 언제든 바꿀 수 있어요.` })));
@@ -424,7 +431,7 @@ function fitView(view, aspect) {
 }
 function thumb(record) {
   setupApp();
-  return fitView(designView(record.slides[0], { empty: '빈 그림' }), ratioOf(record.ratio).aspect);
+  return fitView(designView(record.slides[0], { empty: '빈 그림' }), aspectOf(record));
 }
 function itemCard(record) {
   const del = el('button', {
@@ -457,6 +464,13 @@ function itemCard(record) {
   }, ...face('trash', '지우기'));
   const open = (btn) => openEntry(record, btn);
   const edit = el('button', { class: 'btn btn-primary small cv-item-open', type: 'button', onClick: () => open(edit) }, '꾸미기');
+  const copy = el('button', { class: 'btn small', type: 'button', disabled: (S.list || []).length >= MAX_DESIGNS, onClick: async () => {
+    copy.disabled = true;
+    try {
+      const made = await putDesign({ ...copyRecord(await getDesign(record.id) || record), updatedAt: Date.now() });
+      upsert(made); if (pusher) pusher.queue(made); render();
+    } catch (ex) { toast(`복사하지 못했어요 (${ex.code || '저장소 오류'}).`); copy.disabled = false; }
+  } }, '복사');
   const busy = (on) => { for (const b of [edit, del, card.querySelector('.cv-thumb')]) if (b) b.disabled = on; };
   const pages = record.slides.length;
   const card = el('article', { class: 'cv-item', dataset: { id: record.id } },
@@ -465,7 +479,7 @@ function itemCard(record) {
     el('div', { class: 'cv-item-body' },
       el('span', { class: 'cv-item-name', text: record.name }),
       el('span', { class: 'cv-item-when' }, el('span', { text: ratioOf(record.ratio).name }), el('span', { text: whenText(record.updatedAt) })),
-      el('div', { class: 'cv-item-row' }, edit, del)));
+      el('div', { class: 'cv-item-row' }, edit, copy, del)));
   return card;
 }
 // 목록의 그림을 연다. 이 기기에 저장된 가장 새것을 읽는다(읽지 못하면 목록이 기억하는 것).
@@ -473,7 +487,7 @@ async function openEntry(entry, btn) {
   if (S.open || moving) return;
   btn.disabled = true;
   let record = entry;
-  try { record = (await getDesign(entry.id)) || entry; } catch (ex) { console.warn(ex); }
+  try { record = (await getDesign(entry.id)) || entry; } catch (ex) { console.warn(ex); toast(`열지 못했어요 (${ex.code || '저장소 오류'}). 원본은 그대로 남아 있어요.`); btn.disabled = false; return; }
   const ready = () => !S.open && S.phase === 'home';
   if (!ready()) return;
   upsert(record);
@@ -483,7 +497,8 @@ async function openEntry(entry, btn) {
 
 // ---------- 꾸미기 ----------
 function openDesign(record, isNew) {
-  setupApp(record.ratio);
+  record = migrateRecord(record);
+  setupApp(record);
   const O = {
     record: { ...record }, timer: 0, dirty: false, saved: !isNew, closed: false, editor: null, status: null, nameInput: null,
     // 슬라이드: slides 는 모든 장, at 은 지금 꾸미는 장의 번호. 편집기는 한 번에 한 장만 꾸민다(장을 바꿀 때 바꿔 끼운다).
@@ -526,7 +541,8 @@ function openDesign(record, isNew) {
     },
     // 실행 취소·다시 실행으로 그림의 모양이 되돌아갔을 때: 고른 모양 표시와 기록을 맞춘다.
     onAspect: (aspect) => {
-      O.record.ratio = RATIOS.reduce((best, r) => (Math.abs(r.aspect - aspect) < Math.abs(best.aspect - aspect) ? r : best)).id;
+      O.record.size = { width: aspect * O.record.size.height, height: O.record.size.height, unit: O.record.size.unit };
+      O.record.ratio = `${O.record.size.width}:${O.record.size.height}`;
       keepRatio(O.record.ratio);
       markRatio(O, shapes);
     },
@@ -646,7 +662,7 @@ function slideLabel(i, design) {
 }
 function renderStrip(O) {
   if (!O.strip || O.closed) return;
-  const aspect = ratioOf(O.record.ratio).aspect;
+  const aspect = aspectOf(O.record);
   const n = O.slides.length;
   const full = n >= MAX_SLIDES;
   const left = O.strip.querySelector('.cv-slide-list')?.scrollLeft || 0;
@@ -703,7 +719,7 @@ function refreshThumb(O) {
   const box = O.strip?.querySelector(`.cv-slide[data-slide="${O.at}"] .cv-slide-view`);
   if (!box || O.closed) return;
   const design = O.editor.getDesign();
-  box.replaceChildren(slideView(design, ratioOf(O.record.ratio).aspect));
+  box.replaceChildren(slideView(design, aspectOf(O.record)));
   const tile = box.closest('.cv-slide');
   tile.classList.toggle('moves', hasMotion(design));
   tile.classList.toggle('film', hasVideo(design));
@@ -765,7 +781,7 @@ function present(O) {
   O.editor.quiet();          // 꾸미기 판에서 틀어 보던 영상을 멈추고 카메라를 끈다(발표 화면 뒤에서 소리가 나지 않게)
   // 그리는 것과 움직임의 차례가 같은 요소를 가리키도록, 정리한 디자인 하나로 둘 다 한다(그릴 때와 같은 방법으로 정리한다).
   const slides = currentSlides(O).map((d) => cleanDesign(d, { keepSpaces: true }));
-  const aspect = ratioOf(O.record.ratio).aspect;
+  const aspect = aspectOf(O.record);
   let i = O.at;
   let parts = null;          // 지금 장의 요소 움직임(조종기)
   let turning = null;        // 틀고 있는 전환 효과
@@ -924,11 +940,11 @@ function present(O) {
 
 function markRatio(O, shapes) {
   // 그림 칸은 이 비율로 남은 자리에 꼭 맞게 커진다(app.css 의 .cv-canvas).
-  const aspect = ratioOf(O.record.ratio).aspect;
+  const aspect = aspectOf(O.record);
   O.shell?.style.setProperty('--cv-aspect', String(aspect));
   if (O.shell) O.shell.dataset.shape = aspect >= 1.3 ? 'wide' : aspect < 0.7 ? 'tall' : 'even';       // 옆 칸의 템플릿 줄 수를 정한다(app.css)
   for (const b of shapes.querySelectorAll('.cv-shape')) {
-    const on = b.dataset.ratio === O.record.ratio;
+    const on = Math.abs(ratioOf(b.dataset.ratio).aspect - aspect) < 1e-8;
     b.classList.toggle('on', on);
     b.setAttribute('aria-pressed', String(on));
   }
@@ -949,6 +965,8 @@ function setRatio(O, id, shapes) {
     if (O.closed) return;
     const before = settings().aspect;
     O.record.ratio = r.id;
+    const [width, height] = r.id.split(':').map(Number);
+    O.record.size = { width, height, unit: 'px' };
     keepRatio(r.id);
     markRatio(O, shapes);
     const after = O.editor.setAspect(r.aspect, { fit });       // 지금 장. 요소가 있으면 onChange → touched 로 저장이 걸린다
@@ -1015,7 +1033,7 @@ async function save(O) {
   if (!O.dirty || O.closed) return true;       // 닫은 뒤에는 저장하지 않는다(치운 편집기는 빈 그림을 돌려준다)
   const slides = currentSlides(O);
   // 올린 파일 목록도 함께 적는다(편집기가 들고 있는 목록 + 다른 장에서 쓰는 사진).
-  const record = { ...O.record, slides, uploads: libraryOf(O.editor.getUploads().map((u) => u.url), slides), updatedAt: Date.now(), synced: false };
+  const record = { ...O.record, revision: ++O.record.revision, slides, uploads: libraryOf(O.editor.getUploads().map((u) => u.url), slides), updatedAt: Date.now(), synced: false };
   // 아직 아무것도 놓지 않은 새 그림은 저장하지 않는다(빈 그림이 목록에 쌓이지 않게).
   if (!O.saved && isBlank(record)) { O.dirty = false; setStatus(O, '꾸미기 시작하면 저절로 저장돼요'); return true; }
   O.dirty = false;
@@ -1150,7 +1168,7 @@ const NO_VIDEO = '이 브라우저에서는 영상으로 만들 수 없어요. �
 function askDownload(O, btn) {
   if (videoBusy(O)) return;
   O.editor.quiet();          // 틀어 보던 영상을 멈춘다(창 뒤에서 소리가 나지 않게)
-  const aspect = ratioOf(O.record.ratio).aspect;
+  const aspect = aspectOf(O.record);
   const n = O.slides.length;
   const pref = exportPref();
   const can = canMakeVideo();
@@ -1262,7 +1280,7 @@ async function download(O, btn, { size, jpg, all }) {
   btn.disabled = true;
   relabel(btn, '그림으로 바꾸는 중…');
   try {
-    const aspect = ratioOf(O.record.ratio).aspect;
+    const aspect = aspectOf(O.record);
     const px = exportSize(size, aspect);
     const slides = currentSlides(O);
     const type = jpg ? 'image/jpeg' : 'image/png';
@@ -1301,7 +1319,7 @@ async function download(O, btn, { size, jpg, all }) {
 // 영상으로 만들기: 만드는 모습을 그대로 보여 주고(진행 막대 · 그만두기), 다 되면 틀어 보고 내려받게 한다.
 async function makeVideo(O, { vsize, stay }) {
   if (O.closed) return;
-  const size = videoSize(ratioOf(O.record.ratio).aspect, (VIDEO_SIZES.find((x) => x.id === vsize) || VIDEO_SIZES[0]).short);
+  const size = videoSize(aspectOf(O.record), (VIDEO_SIZES.find((x) => x.id === vsize) || VIDEO_SIZES[0]).short);
   const slides = currentSlides(O);
   const stop = new AbortController();
   let url = '';

@@ -1,0 +1,8 @@
+{
+  "contractVersion": 1, "jobId": "jsample20261017", "status": "ready",
+  "sourceDocumentId": "ssample20261017", "sourceAssetId": "asource20261017",
+  "converter": {"name": "self-authored-fixture", "version": "1", "fonts": []},
+  "selectedPages": [1, 2], "pageCount": 2,
+  "documentFile": "studio-document.json",
+  "warnings": [{"code": "SYNTHETIC_SAMPLE", "message": "직접 작성한 계약 검증 자료. PPT 변환 완료를 뜻하지 않음."}]
+}

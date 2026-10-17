@@ -1,0 +1,71 @@
+{
+  "provenance": "Self-authored fixtures. No teacher source; no conversion engine has run.",
+  "fixtures": [
+    {
+      "file": "self-authored-4x3.pptx",
+      "sha256": "739854765f14c5e3ca852399b1d6bc80879ce520d94eb7670f483667bf04254f",
+      "byteLength": 11185,
+      "pageCount": 2,
+      "originalSize": {
+        "width": 9144000,
+        "height": 6858000,
+        "unit": "emu"
+      },
+      "expectedAdapterResult": "ready",
+      "textLengths": [
+        12,
+        20
+      ]
+    },
+    {
+      "file": "self-authored-long-text.pptx",
+      "sha256": "c5c4765f71a89193964850dd5b6f04a61f3a37deb1415d01392ad7e8587cb9ec",
+      "byteLength": 9760,
+      "pageCount": 1,
+      "originalSize": {
+        "width": 9144000,
+        "height": 6858000,
+        "unit": "emu"
+      },
+      "expectedAdapterResult": "TEXT_LIMIT",
+      "textLengths": [
+        208
+      ]
+    },
+    {
+      "file": "self-authored-21-pages.pptx",
+      "sha256": "5541075147146b8d6dde0430ff8c52e685b45635954d5bf3883e6d643f769884",
+      "byteLength": 47632,
+      "pageCount": 21,
+      "originalSize": {
+        "width": 9144000,
+        "height": 6858000,
+        "unit": "emu"
+      },
+      "expectedAdapterResult": "PAGE_LIMIT",
+      "textLengths": [
+        24,
+        24,
+        24,
+        24,
+        24,
+        24,
+        24,
+        24,
+        24,
+        25,
+        25,
+        25,
+        25,
+        25,
+        25,
+        25,
+        25,
+        25,
+        25,
+        25,
+        25
+      ]
+    }
+  ]
+}

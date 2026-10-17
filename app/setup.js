@@ -1,7 +1,7 @@
 // 미니캔 모듈(src/)을 앱에 맞게 정한다: 글꼴은 미니캔을 들여 쓰는 곳이 넘긴 목록, 사진은 디자인 안에 넣은 것(data 주소)만.
 // 사진을 디자인 안에 글자로 넣어 두기 때문에, 그림으로 내려받기·배경 제거가 파일 저장소 없이 된다.
 import { configure, registerFonts, shrinkImage } from '../src/index.js';
-import { ratioOf, PHOTO_MAX_CHARS, MAX_CARD_PHOTOS, MAX_UPLOADS } from './designs.js';
+import { ratioOf, aspectOf, PHOTO_MAX_CHARS, MAX_CARD_PHOTOS, MAX_UPLOADS } from './designs.js';
 import { SHARED_LAYOUTS, MAX_CARD_ITEMS, BASIC_GROUP } from './layouts.js';
 import { setTitleFont } from './templates.js';
 import { loadVideo } from './videos.js';
@@ -39,7 +39,7 @@ export function setupApp(ratio = null) {
     configure({ loadVideo });
     registerFonts(fonts);
   }
-  if (ratio) configure({ aspect: ratioOf(ratio).aspect });
+  if (ratio) configure({ aspect: typeof ratio === 'object' ? aspectOf(ratio) : ratioOf(ratio).aspect });
 }
 
 const toDataUrl = (blob) => new Promise((resolve, reject) => {

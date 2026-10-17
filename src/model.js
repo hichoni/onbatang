@@ -14,6 +14,7 @@ import { SHAPE_ASSETS, SHAPE_GROUPS, shapeAsset } from './shapes.js';
 import { isArtId, artColorable, artAspect, artPack, artName } from './art.js';
 import { isYouTubeId, ytStart, ytTime } from './youtube.js';
 import { ENTER_IDS, COMBO_IDS, TRANSITION_IDS, STILL } from './motion.js';
+import { metadata, newId, fail, validatePageInput } from './document.js';
 
 export { SHAPE_GROUPS };
 
@@ -223,6 +224,7 @@ const lines = (raw) => String(raw ?? '').split(/\r\n|\r|\n/).map((l) => l.replac
 export function cleanItem(item, { keepSpaces = false } = {}) {
   const it = item && typeof item === 'object' ? item : {};
   const base = {
+    ...metadata(it),
     x: num(it.x, 0, 100, 50), y: num(it.y, 0, 100, 50), rot: Math.round(num(it.rot, -180, 180, 0)),
     op: Math.round(num(it.op, OPACITY.min, OPACITY.max, OPACITY.max)),     // 투명도
     lock: it.lock === true,                                                // 잠금(실수로 움직이지 않게)
@@ -302,11 +304,12 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
 
 /** 요소들을 정리한다. 한도(기본 24개, 사진 3장)까지만 남긴다. */
 export function cleanItems(items, opts) {
+  if (opts?.strict) validatePageInput({ items }, { items: config.maxItems, photos: config.maxPhotos, text: config.maxText });
   const out = [];
   let photos = 0;
   for (const raw of Array.isArray(items) ? items : []) {
     const it = cleanItem(raw, opts);
-    if (!it) continue;
+    if (!it) { if (opts?.strict) fail('UNSUPPORTED_ELEMENT', 'items', items); continue; }
     if (it.t === 'image' && ++photos > config.maxPhotos) continue;
     out.push(it);
     if (out.length >= config.maxItems) break;
@@ -320,7 +323,8 @@ export function cleanItems(items, opts) {
  */
 export function cleanDesign(design, opts) {
   const d = design && typeof design === 'object' ? design : {};
-  return { bg: cleanBg(d.bg), items: cleanItems(d.items, opts), ...designMotion(d), ...designVideo(d) };
+  const options = d.id ? { ...opts, strict: true, keepSpaces: true } : opts;
+  return { ...metadata(d, { identity: true }), bg: cleanBg(d.bg), items: cleanItems(d.items, options), ...designMotion(d), ...designVideo(d) };
 }
 /**
  * 디자인의 움직임: pa(요소들의 조합 효과) · tr(이 장이 넘어올 때의 전환 효과). 정해 둔 것만 담아 돌려준다(없으면 빈 객체).
@@ -594,7 +598,7 @@ export function duplicateItem(items, i) {
   if (!it || items.length >= config.maxItems) return null;
   if (it.t === 'image' && items.filter((k) => k.t === 'image').length >= config.maxPhotos) return null;
   const { id, ...copy } = it;            // 복제한 것은 다른 요소다: 이름표를 물려받지 않는다
-  return { ...copy, x: num(it.x + 4, 0, 100, 50), y: num(it.y + 4, 0, 100, 50) };
+  return { ...copy, ...(id ? { id: newId(), origin: { elementId: id } } : {}), x: num(it.x + 4, 0, 100, 50), y: num(it.y + 4, 0, 100, 50) };
 }
 
 /**
@@ -605,7 +609,7 @@ export function pasteItem(items, item, at = null) {
   if (!item || items.length >= config.maxItems) return null;
   if (item.t === 'image' && items.filter((k) => k.t === 'image').length >= config.maxPhotos) return null;
   const { id, ...copy } = item;          // 붙여 넣은 것은 다른 요소다: 이름표를 물려받지 않는다
-  return cleanItem({ ...copy, x: at ? at.x : item.x + 4, y: at ? at.y : item.y + 4, lock: false }, { keepSpaces: true });
+  return cleanItem({ ...copy, ...(id ? { id: newId(), origin: { elementId: id } } : {}), x: at ? at.x : item.x + 4, y: at ? at.y : item.y + 4, lock: false }, { keepSpaces: true });
 }
 
 /** 화면에 보일 짧은 이름(레이어 목록용). */
