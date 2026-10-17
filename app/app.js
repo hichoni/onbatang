@@ -20,7 +20,7 @@ import {
   RATIOS, RATIO_KEY, MAX_DESIGNS, MAX_SLIDES, MAX_NAME, EXPORT_SIZES, DEFAULT_EXPORT, EXPORT_KEY, VIDEO_SIZES, DEFAULT_VIDEO, exportSize, ratioOf, newRecord, nextNumber,
   isBlank, fileName, whenText, sortRecords, addSlide, copySlide, removeSlide, moveSlide,
   libraryOf, dropPhoto, slideMotion, slideVideo, slideExtra, hasVideo, deckVideos, unusedVideos, cleanBrand,
-  migrateRecord, aspectOf, copyRecord,
+  migrateRecord, aspectOf, copyRecord, withSlideMotion,
 } from './designs.js';
 import { saveVideo, listVideos, removeVideos } from './videos.js';
 import { zipStore } from './zip.js';
@@ -520,6 +520,8 @@ function openDesign(record, isNew) {
     onChange: () => touched(O),
     uploadImage: photoToData,
     notify: toast,
+    canPaste: item => [...(item.assetRefs || []), ...(item.source?.assetId ? [item.source.assetId] : [])]
+      .every(id => O.record.assets.some(asset => asset.id === id)),
     // 올린 파일 목록: 이 그림에 올린 사진들(슬라이드가 여러 장이어도 목록은 하나다). 저장할 때 편집기에서 꺼내 기록에 넣는다.
     uploads: libraryOf(record.uploads, record.slides),
     // 지금 꾸미는 장 말고 다른 장에서 그 사진을 쓴 곳의 수("쓰는 중" 표시와, 지우기 전에 알려 줄 때 쓴다).
@@ -760,7 +762,7 @@ function applyMotionAll(O, motion) {
   const others = O.slides.length - 1;
   if (others < 1) { toast('아직 한 장뿐이에요. 새 장을 더하면 이 장의 움직임을 이어받아요.', 3500); return; }
   const same = slideMotion(motion);
-  O.slides = O.slides.map((d, i) => (i === O.at ? d : { bg: d.bg, items: d.items, ...slideVideo(d), ...same }));
+  O.slides = O.slides.map((d, i) => (i === O.at ? d : withSlideMotion(d, same)));
   // 다른 장까지 바꿨으므로 실행 취소로는 지금 장만 되돌아가 어긋난다. 되돌리기 기록을 비운다(모양을 바꿀 때와 같다).
   O.editor.forget();
   renderStrip(O);

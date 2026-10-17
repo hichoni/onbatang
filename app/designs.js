@@ -90,6 +90,10 @@ export function slideVideo(slide) {
 }
 /** 장에 딸린 것 모두(움직임 · 영상 장면). 슬라이드를 새로 짜 맞추는 곳({ bg, items } 를 만드는 곳)마다 함께 펼쳐 넣는다(빠뜨리면 저장하면서 사라진다). */
 export const slideExtra = (slide) => ({ ...metadata(slide, { identity: true }), ...slideMotion(slide), ...slideVideo(slide) });
+export function withSlideMotion(slide, motion) {
+  const { pa, tr, ...extra } = slideExtra(slide);
+  return { bg: slide.bg, items: slide.items, ...extra, ...slideMotion(motion) };
+}
 /** 영상 장면이 있는 장인지. */
 export const hasVideo = (slide) => !!slideVideo(slide).video;
 /** 슬라이드들이 쓰는 영상 파일의 열쇠들(같은 파일은 한 번만). */

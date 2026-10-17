@@ -62,6 +62,20 @@ test('actual app migrates, edits, saves twice, reopens, copies, reorders and dis
   await page.getByRole('button',{name:sample.name+' 열기',exact:true}).click();
   await page.locator('.cv-name').waitFor();
   await page.evaluate(async base => (await import(base+'/app/tour.js')).stopTour(),base);
+  // A referenced source cannot become an unsavable dangling asset in another drawing.
+  await page.locator('.cv-canvas .fi-text').first().click();
+  await page.keyboard.press('Control+c');
+  await page.locator('.cv-back').click();
+  await page.getByRole('button',{name:'이전 그림 열기',exact:true}).click();
+  await page.locator('.cv-name').waitFor();
+  await page.locator('.cv-canvas .fe-card').first().click({position:{x:8,y:8}});
+  await page.keyboard.press('Control+v');
+  await page.getByText('이 그림에 없는 원본 자료가 연결되어 있어요.',{exact:false}).waitFor();
+  await page.locator('.cv-back').click();
+  const afterPaste = await page.evaluate(async ({base,id}) => (await import(base+'/app/store.js')).getDesign(id), {base,id:legacy.id});
+  assert.equal(afterPaste.slides[0].items.length,1);
+  await page.getByRole('button',{name:sample.name+' 열기',exact:true}).click();
+  await page.locator('.cv-name').waitFor();
   const ratio = await page.locator('.cv-canvas .fe-card').first().evaluate(el => {const r=el.getBoundingClientRect();return r.width/r.height;});
   assert.ok(Math.abs(ratio-4/3)<0.01, `actual canvas ratio ${ratio}`);
   if (process.env.MINICAN_SCREENSHOT) await page.screenshot({path:process.env.MINICAN_SCREENSHOT,fullPage:true});
@@ -70,10 +84,6 @@ test('actual app migrates, edits, saves twice, reopens, copies, reorders and dis
     await page.locator('.cv-status.ok').filter({hasText:'이 기기에 저장했어요'}).waitFor();
     assert.equal(await page.evaluate(async ({base,id}) => (await (await import(base+'/app/store.js')).getDesign(id)).name,{base,id:sample.id}),name,'committed value before reload');
     await page.reload();
-    await page.waitForTimeout(300);
-    if (!(await page.getByRole('button',{name:name+' 열기',exact:true}).count())) {
-      t.diagnostic(JSON.stringify({errors, body:await page.locator('body').innerText()}));
-    }
     await page.getByRole('button',{name:name+' 열기',exact:true}).click();
     await page.locator('.cv-name').waitFor();
   }

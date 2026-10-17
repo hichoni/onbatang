@@ -81,7 +81,7 @@ const BLOB_CACHE = 12;         // 이번에 올린 사진의 파일 내용을 �
  */
 export function createEditor({
   design = null, onChange = () => {}, uploadImage = null, loadImageBlob = null, fonts = fontList, notify = toast, onAspect = () => {},
-  uploads = null, usedElsewhere = null, onRemoveUpload = null, onMotionAll = null,
+  uploads = null, usedElsewhere = null, onRemoveUpload = null, onMotionAll = null, canPaste = () => true,
   saveVideo = null, createCamera = null, videoLimits = null, videoNote = '', videoHint = '',
   onSelect = null, lockedBy = null,
 } = {}) {
@@ -872,6 +872,10 @@ export function createEditor({
   // at({ x, y })을 주면 그 자리에(오른쪽 누르기 메뉴로 빈 곳에 붙일 때. 여럿이면 그 가운데가 거기에), 아니면 원래 자리에서 조금 옆에.
   function clipPaste(at = null) {
     if (!clipboard?.length) { notify('먼저 조각을 복사해요 (오른쪽 누르기 → 복사).'); return; }
+    if (!clipboard.every(item => canPaste(item))) {
+      notify('이 그림에 없는 원본 자료가 연결되어 있어요. 원래 그림을 복사해서 사용해 주세요.', 5000);
+      return;
+    }
     const cx = clipboard.reduce((n, k) => n + k.x, 0) / clipboard.length;
     const cy = clipboard.reduce((n, k) => n + k.y, 0) / clipboard.length;
     let list = items();

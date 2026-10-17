@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { migrateRecord, copyRecord, copySlide, moveSlide, aspectOf } from '../app/designs.js';
+import { migrateRecord, copyRecord, copySlide, moveSlide, aspectOf, withSlideMotion } from '../app/designs.js';
 import { cleanDesign, configure, duplicateItem, pasteItem } from '../src/model.js';
 const sample = () => JSON.parse(readFileSync(new URL('../app/samples/studio-document.json', import.meta.url)));
 const roundtrip = value => JSON.parse(JSON.stringify(value));
@@ -48,6 +48,16 @@ test('copies get unique document, page and element identities with source and li
   for (const e of [duplicateItem(r.slides[0].items, 0), pasteItem([], r.slides[0].items[0])]) {
     assert.notEqual(e.id, r.slides[0].items[0].id); assert.equal(e.origin.elementId, r.slides[0].items[0].id);
   }
+});
+
+test('applying or clearing motion across pages preserves page identity, source, assets and video', () => {
+  const r = migrateRecord(sample()), page = { ...r.slides[0], pa: 'rise', tr: 'fade', video: {src:'vexample123',dur:2} };
+  const next = withSlideMotion(page, {tr:'slide'});
+  assert.equal(next.pa,undefined);assert.equal(next.tr,'slide');
+  for(const k of ['id','source','assetRefs','video','items'])assert.deepEqual(next[k],page[k]);
+  const cleared=withSlideMotion(next,{});
+  assert.equal(cleared.tr,undefined);assert.equal(cleared.id,page.id);
+  assert.equal(migrateRecord({...r,slides:[cleared,r.slides[1]]}).slides[0].id,page.id);
 });
 
 test('unsupported schemas, invalid metadata, duplicate IDs and dangling assets reject without changing input', () => {
