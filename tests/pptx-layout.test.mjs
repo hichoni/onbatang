@@ -42,4 +42,6 @@ test('render-only slide layout retains typography after private provenance is st
   assert.equal(cleanItem({...label,source:undefined,layout:'unknown'}).layout,undefined);
   const image=cleanItem({t:'image',source,w:1.7,h:1.9,url:'https://example.test/local-image.png'});
   assert.equal(image.w,1.7);assert.equal(scaleItem(image,.5).w,.85);
+  assert.equal(cleanItem({...label,typeface:'학교안심 이어달리기 L'}).typeface,'학교안심 이어달리기 L');
+  assert.equal(cleanItem({...label,typeface:'학교안심 바른돋움 B'}).typeface,'학교안심 바른돋움 B');
 });

@@ -154,7 +154,7 @@ const textMin = item => pptxItem(item) ? 0.1 : TEXT_SIZE.min;
 const widthMin = item => pptxItem(item) ? 0.1 : 10;
 const shapeMin = item => pptxItem(item) ? 0.01 : SIZE.min;
 const heightMin = item => pptxItem(item) ? 0.01 : 0.6;
-const LOCAL_TYPEFACES = ['Arial','Calibri','Aptos','Malgun Gothic','맑은 고딕','돋움','Gulim','굴림'];
+const LOCAL_TYPEFACES = ['Arial','Calibri','Aptos','Malgun Gothic','맑은 고딕','돋움','Gulim','굴림','학교안심 이어달리기 L','학교안심 바른돋움 B'];
 /** 투명도: 100 이면 또렷하고, 낮을수록 비쳐 보인다. 아예 안 보이면 다시 고르기 어려워 10 까지만. */
 export const OPACITY = { min: 10, max: 100 };
 /** 사진의 테두리 모양. */
