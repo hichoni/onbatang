@@ -1,5 +1,11 @@
 # 온바탕 공통 문서 기반 진행 기록
 
+## 최신 후속 · v0.14.0 (2026-10-17)
+
+기존 PR #1을 이어 `startMinican({importAction:{label,open}})` 대문 버튼과 `openSavedDesign(id)` 호스트 연결을 구현했다. 편집 중인 자료/전환 중 화면은 `EDITOR_BUSY`로 유지한다. 공통 스키마·SQL은 바꾸지 않았고 외부 파싱 의존성은 호스트에만 두었다. 단위 테스트131개와 실제 Edge 문서 왕복 테스트가 통과했으며 활성 편집기를 호스트가 바꾸지 못하는 회귀 검증을 추가했다.
+
+가이랩 PR #76은 실제 PPTX worker·쪽 선택·기기 원본/고정 저장·온바탕 편집·활동·40분 수업·교사용 검증 결과 환류를 구현하고 실제 Edge에서 실행했다. 기기 전용 저장이며 실제 계정 QA, PowerPoint 충실 렌더, 교사 실자료 검수, 한 코드 학생 수업방은 미완료다. 호스트 `docs/onbatang-pptx-session.md`와 `docs/onbatang-studio-progress.md`에 최신 검증·preview 증거·다음 의존 작업을 기록한다. 아래는 첫 P0 세션의 역사 기록이다.
+
 2026-10-17. 가이랩 Studio의 2026-11-06 목표를 위한 첫 구현 단위다. 시작 기준은 원격 main `1d7554dfeb1f6b7dda2483ab0e1f3f8408b1edc3`(0.12.1), 작업 브랜치는 `codex/onbatang-document-contract`, 이번 버전은 **0.13.0**이다. 이전 별도 체크아웃의 미커밋 변경은 건드리지 않았다.
 
 ## 완료
