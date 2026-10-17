@@ -113,7 +113,7 @@ export function unusedVideos(files, designId, used, more = []) {
 }
 
 // Visual fields remain compatible with model.js; nested extension data is explicitly validated.
-const ITEM_FIELDS = ['t', 'x', 'y', 'w', 'h', 'rot', 'op', 'lock', 'g', 'an', 'aw', 'fx', 'fy', 'text', 'size', 'color', 'font', 'bold', 'italic', 'under', 'align', 'bgc', 'ch', 'shape', 'r', 'line', 'lc', 'hollow', 'art', 'yt', 'start', 'auto', 'url', 'path', 'mask'];
+const ITEM_FIELDS = ['t', 'x', 'y', 'w', 'h', 'rot', 'op', 'lock', 'g', 'an', 'aw', 'fx', 'fy', 'text', 'size', 'color', 'font', 'bold', 'italic', 'under', 'align', 'valign', 'lh', 'nowrap', 'typeface', 'bgc', 'ch', 'shape', 'r', 'line', 'lc', 'hollow', 'art', 'yt', 'start', 'auto', 'url', 'path', 'mask'];
 const cleanSlide = (d, index, documentId) => {
   if (!d || typeof d !== 'object' || Array.isArray(d)) fail('INVALID_PAGE', `slides.${index}`, d);
   const pageId = d.id ?? legacyId('p', `${documentId}:page:${index}`);
@@ -123,7 +123,7 @@ const cleanSlide = (d, index, documentId) => {
   return { bg: d.bg, ...slideExtra({ ...d, id: pageId }), items: items.map((item, i) => {
     const out = {};
     for (const k of ITEM_FIELDS) if (['string', 'number', 'boolean'].includes(typeof item[k])) out[k] = item[k];
-    return { ...out, ...metadata({ ...item, id: item.id ?? legacyId('e', `${documentId}:${pageId}:${i}`) }, { identity: true }) };
+    return { ...out, ...(item.layout==='slide'?{layout:'slide'}:{}), ...metadata({ ...item, id: item.id ?? legacyId('e', `${documentId}:${pageId}:${i}`) }, { identity: true }) };
   }) };
 };
 /**

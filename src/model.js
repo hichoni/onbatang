@@ -146,6 +146,15 @@ export const SHAPES = SHAPE_ASSETS.map(({ id, name, group }) => ({ id, name, gro
 
 export const ALIGNS = ['l', 'c', 'r'];
 export const TEXT_SIZE = { min: 2.5, max: 30 };
+// Imported slides contain small labels and thin rules. Keep the ordinary editing
+// defaults, while preserving these authored dimensions through cleaning and edits.
+// The render-only layout marker survives guest projections that strip provenance.
+const pptxItem = item => item?.source?.kind === 'pptx' || item?.layout === 'slide';
+const textMin = item => pptxItem(item) ? 0.1 : TEXT_SIZE.min;
+const widthMin = item => pptxItem(item) ? 0.1 : 10;
+const shapeMin = item => pptxItem(item) ? 0.01 : SIZE.min;
+const heightMin = item => pptxItem(item) ? 0.01 : 0.6;
+const LOCAL_TYPEFACES = ['Arial','Calibri','Aptos','Malgun Gothic','맑은 고딕','돋움','Gulim','굴림'];
 /** 투명도: 100 이면 또렷하고, 낮을수록 비쳐 보인다. 아예 안 보이면 다시 고르기 어려워 10 까지만. */
 export const OPACITY = { min: 10, max: 100 };
 /** 사진의 테두리 모양. */
@@ -163,15 +172,17 @@ export const EDGE = { min: 0.4, max: 4, step: 0.4, base: 1.2 };
 const OLD_ROUND = 4;
 const SIZE = { min: 2, max: 140 };
 const PHOTO_MIN = 5;
+const photoMin = item => pptxItem(item) ? 0.1 : PHOTO_MIN;
 const PHOTO_MAX = 300;          // 사진은 카드보다 크게 키워 배경처럼 깔 수 있다
 const shapeIds = SHAPES.map((s) => s.id);
 const maskIds = MASKS.map((m) => m.id);
 
-const num = (v, lo, hi, fallback) => {
+const num = (v, lo, hi, fallback, precision = 10) => {
   const n = Number(v);
   if (!Number.isFinite(n)) return fallback;
-  return Math.round(Math.min(hi, Math.max(lo, n)) * 10) / 10;
+  return Math.round(Math.min(hi, Math.max(lo, n)) * precision) / precision;
 };
+const measure = (item, ...args) => num(...args, pptxItem(item) ? 10000 : 10);
 // 숫자로 적힌 값인가(없는 값·빈 글·글자는 아니다). "정하지 않음"과 0 을 가려야 하는 값에 쓴다.
 const given = (v) => (typeof v === 'number' || (typeof v === 'string' && v.trim() !== '')) && Number.isFinite(Number(v));
 
@@ -225,7 +236,8 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
   const it = item && typeof item === 'object' ? item : {};
   const base = {
     ...metadata(it),
-    x: num(it.x, 0, 100, 50), y: num(it.y, 0, 100, 50), rot: Math.round(num(it.rot, -180, 180, 0)),
+    ...(pptxItem(it) ? {layout:'slide'} : {}),
+    x: measure(it,it.x, 0, 100, 50), y: measure(it,it.y, 0, 100, 50), rot: Math.round(num(it.rot, -180, 180, 0)),
     op: Math.round(num(it.op, OPACITY.min, OPACITY.max, OPACITY.max)),     // 투명도
     lock: it.lock === true,                                                // 잠금(실수로 움직이지 않게)
   };
@@ -241,8 +253,14 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
     const text = clip(keepSpaces ? String(it.text ?? '') : lines(it.text), config.maxText);
     if (!text && !keepSpaces) return null;
     return {
-      t: 'text', ...base, w: num(it.w, 10, 100, 80), text,
-      size: num(it.size, TEXT_SIZE.min, TEXT_SIZE.max, 7),
+      t: 'text', ...base, w: measure(base,it.w, widthMin(base), 100, 80), text,
+      size: measure(base,it.size, textMin(base), TEXT_SIZE.max, 7),
+      ...(pptxItem(base) ? {
+        ...(given(it.h) ? {h:measure(base,it.h,0.01,140,10),valign:['top','middle','bottom'].includes(it.valign)?it.valign:'top'} : {}),
+        ...(given(it.lh) ? {lh:measure(base,it.lh,0.5,4,1.25)} : {}),
+        ...(it.nowrap===true ? {nowrap:true} : {}),
+        ...(LOCAL_TYPEFACES.includes(it.typeface) ? {typeface:it.typeface} : {}),
+      } : {}),
       color: cleanColor(it.color),
       font: cleanFont(it.font),
       bold: it.bold === true,
@@ -259,7 +277,7 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
   }
   if (it.t === 'shape') {
     const out = {
-      t: 'shape', ...base, ...flip, w: num(it.w, SIZE.min, SIZE.max, 30), h: num(it.h, 0.6, SIZE.max, 30),
+      t: 'shape', ...base, ...flip, w: measure(base,it.w, shapeMin(base), SIZE.max, 30), h: measure(base,it.h, heightMin(base), SIZE.max, 30),
       shape: shapeIds.includes(it.shape) ? it.shape : 'rect',
       color: cleanColor(it.color, '#1c7ed6'),
     };
@@ -269,7 +287,7 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
     if (asset.corner && given(it.r)) out.r = Math.round(num(it.r, 0, 100, 0));
     // line: 테두리 굵기 · lc: 테두리 색 · hollow: 속을 비운다(테두리만). 테두리가 없으면 속을 비울 수 없다(보이지 않게 되므로).
     if (asset.edge && Number(it.line) > 0) {
-      out.line = num(it.line, EDGE.min, EDGE.max, EDGE.base);
+      out.line = measure(base,it.line, pptxItem(base)?0.01:EDGE.min, EDGE.max, EDGE.base);
       out.lc = cleanColor(it.lc, out.color);
       if (it.hollow === true) out.hollow = true;
     }
@@ -295,7 +313,7 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
     const img = cleanImg(it);
     if (!img) return null;
     return {
-      t: 'image', ...base, ...flip, w: num(it.w, PHOTO_MIN, photoMax().w, 50), h: num(it.h, PHOTO_MIN, photoMax().h, 50),
+      t: 'image', ...base, ...flip, w: measure(base,it.w, photoMin(base), photoMax().w, 50), h: measure(base,it.h, photoMin(base), photoMax().h, 50),
       mask: maskIds.includes(it.mask) ? it.mask : 'none', ...img,
     };
   }
@@ -507,28 +525,28 @@ export function moveItem(item, x, y, { snap = true } = {}) {
 export function scaleItem(item, k) {
   const f = Number.isFinite(k) && k > 0 ? k : 1;
   if (item.t === 'text') {
-    const size = num(item.size * f, TEXT_SIZE.min, TEXT_SIZE.max, item.size);
+    const size = measure(item,item.size * f, textMin(item), TEXT_SIZE.max, item.size);
     const real = size / item.size;
-    return { ...item, size, w: num(item.w * real, 10, 100, item.w) };
+    return { ...item, size, w: measure(item,item.w * real, widthMin(item), 100, item.w), ...(given(item.h)?{h:measure(item,item.h*real,0.01,140,item.h)}:{}) };
   }
   if (item.t === 'emoji') return { ...item, w: num(item.w * f, 4, SIZE.max, item.w) };
   // 도형·사진: 가로세로 비율을 지킨다.
   const max = item.t === 'image' ? photoMax() : { w: SIZE.max, h: SIZE.max };
-  const lo = item.t === 'image' ? Math.max(PHOTO_MIN / item.w, PHOTO_MIN / item.h) : Math.max(SIZE.min / item.w, 0.6 / item.h);
+  const lo = item.t === 'image' ? Math.max(photoMin(item) / item.w, photoMin(item) / item.h) : Math.max(shapeMin(item) / item.w, heightMin(item) / item.h);
   const hi = Math.min(max.w / item.w, max.h / item.h);
   const real = Math.min(hi, Math.max(lo, f));
-  return { ...item, w: num(item.w * real, 0, max.w, item.w), h: num(item.h * real, 0, max.h, item.h) };
+  return { ...item, w: measure(item,item.w * real, 0, max.w, item.w), h: measure(item,item.h * real, 0, max.h, item.h) };
 }
 
 /** 너비만(글상자·도형). */
 export function widenItem(item, w) {
-  if (item.t === 'text') return { ...item, w: num(w, 10, 100, item.w) };
-  if (item.t === 'shape') return { ...item, w: num(w, SIZE.min, SIZE.max, item.w) };
+  if (item.t === 'text') return { ...item, w: measure(item,w, widthMin(item), 100, item.w) };
+  if (item.t === 'shape') return { ...item, w: measure(item,w, shapeMin(item), SIZE.max, item.w) };
   return item;
 }
 /** 높이만(도형). */
 export function heightenItem(item, h) {
-  return item.t === 'shape' ? { ...item, h: num(h, 0.6, SIZE.max, item.h) } : item;
+  return item.t === 'shape' ? { ...item, h: measure(item,h, heightMin(item), SIZE.max, item.h) } : item;
 }
 
 /** 돌리기. 0·90·180·-90 도 가까이에서는 딱 붙인다. */
@@ -633,9 +651,9 @@ export function resizeTo(item, value) {
 }
 /** 크기 막대의 범위. */
 export function sizeRange(item) {
-  if (item.t === 'text') return { min: TEXT_SIZE.min, max: TEXT_SIZE.max, step: 0.5 };
+  if (item.t === 'text') return { min: textMin(item), max: TEXT_SIZE.max, step: pptxItem(item)?0.1:0.5 };
   if (item.t === 'emoji') return { min: 4, max: 100, step: 1 };
-  return { min: item.t === 'image' ? PHOTO_MIN : SIZE.min, max: item.t === 'image' ? 200 : 100, step: 1 };
+  return { min: item.t === 'image' ? photoMin(item) : shapeMin(item), max: item.t === 'image' ? 200 : 100, step: 1 };
 }
 
 /**
@@ -778,9 +796,9 @@ export function reshapeItems(items, from, to, { fit = false } = {}) {
     if (fit) {
       next = { ...it, x: (left + s * (it.x / 100)) * 100, y: (top + s * (it.y / 100) / a) * b * 100, w: it.w * s };
       if (it.t === 'text') next.size = it.size * s;
-      if (it.t === 'shape' || it.t === 'image' || it.t === 'art' || it.t === 'yt') next.h = it.h * k * s;
+      if (it.t === 'shape' || it.t === 'image' || it.t === 'art' || it.t === 'yt' || it.t==='text'&&given(it.h)) next.h = it.h * k * s;
       if (it.line) next.line = it.line * s;      // 테두리도 같은 비율로 가늘어진다(둥글기는 % 라 그대로)
-    } else if (it.t === 'shape' || it.t === 'image' || it.t === 'art' || it.t === 'yt') {
+    } else if (it.t === 'shape' || it.t === 'image' || it.t === 'art' || it.t === 'yt' || it.t==='text'&&given(it.h)) {
       next = { ...it, h: it.h * k };
     }
     if (next === it) return it;

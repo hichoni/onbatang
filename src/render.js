@@ -23,6 +23,7 @@ export function itemView(item) {
     // 글꼴 파일을 받기 전이나 그 글꼴에 없는 글자는 기본 글꼴로 보인다.
     const family = fontFamilyOf(item.font);
     if (family) node.style.fontFamily = `"${family}", var(--fe-font, sans-serif)`;
+    else if(item.typeface) node.style.fontFamily = `"${item.typeface}", var(--fe-font, sans-serif)`;
     node.style.color = item.color;
     if (item.bgc) node.style.background = item.bgc;
   } else if (item.t === 'emoji') {
@@ -69,7 +70,14 @@ export function placeItem(node, item) {
   node.style.opacity = item.op < 100 ? String(item.op / 100) : '';
   // 가운데 점에 맞추고 → 돌리고 → (좌우·상하) 뒤집는다.
   node.style.transform = `translate(-50%, -50%) rotate(${item.rot}deg)${item.fx || item.fy ? ` scale(${item.fx ? -1 : 1}, ${item.fy ? -1 : 1})` : ''}`;
-  if (item.t === 'text') { node.style.width = `${item.w}%`; node.style.fontSize = `${item.size}cqw`; }
+  if (item.t === 'text') {
+    node.style.width = `${item.w}%`; node.style.fontSize = `${item.size}cqw`;
+    node.style.height=item.h?`${item.h}%`:'';
+    node.style.display=item.h?'flex':'';node.style.flexDirection=item.h?'column':'';
+    node.style.justifyContent=item.h?({top:'flex-start',middle:'center',bottom:'flex-end'}[item.valign]||'flex-start'):'';
+    node.style.lineHeight=item.lh?String(item.lh):'';node.style.whiteSpace=item.nowrap?'pre':'';
+    node.style.fontWeight=item.source?.kind==='pptx'||item.layout==='slide'?(item.bold?'700':'400'):'';
+  }
   else if (item.t === 'emoji') node.style.fontSize = `${item.w}cqw`;
   else {
     node.style.width = `${item.w}%`;
