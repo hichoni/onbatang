@@ -31,6 +31,7 @@ import { mergeAccount, createPusher } from './sync.js';
 let app = null;
 let onView = () => {};
 let onBrandClick = null;
+let importAction = null;
 let brand = null;                // 들여 쓰는 곳의 표시 { name, logo } (없으면 표시하지 않는다)
 let sync = null;                 // 들여 쓰는 곳의 계정 저장(sync.js). 없으면 이 기기에만 저장한다
 let pusher = null;
@@ -358,6 +359,11 @@ function render() {
       el('ul', { class: 'cv-feats', 'aria-label': '만들 수 있는 것' }, ...FEATS.map(([pic, text, tone]) => el('li', { class: `cv-feat ${tone}` },
         el('span', { class: 'cv-feat-icon', 'aria-hidden': 'true' }, ic(pic)), el('span', { text })))),
       el('div', { class: 'cv-hero-go' }, start, tourButton('home'),
+        importAction ? el('button', { class: 'btn cv-import-btn', type: 'button', disabled: loading, onClick: async (event) => {
+          const button = event.currentTarget; button.disabled = true;
+          try { await importAction.open(); } catch (error) { console.warn(error); toast('가져오기 화면을 열지 못했어요. 다시 시도해주세요.'); }
+          finally { button.disabled = false; }
+        } }, importAction.label) : null,
         full ? el('p', { class: 'cv-hero-full', text: `그림은 ${MAX_DESIGNS}장까지 저장돼요. 안 쓰는 그림을 지워 주세요.` }) : null),
       el('p', { class: 'cv-hero-tag', text: `작은 생각도 멋진 작품이 되도록 · ${sync ? '내 계정에 자동 저장' : '이 기기에 자동 저장'}` })),
     heroShowcase()));
@@ -1432,14 +1438,16 @@ function flush() {
  * - brand: 들여 쓰는 곳의 표시 { name, logo }. 꾸미는 화면 위 막대 맨 앞에 작게 보인다(없으면 표시하지 않는다)
  * - onBrandClick(): 표시를 누르면 기기 저장과 계정 올리기를 마친 뒤 부른다. 저장하지 못하면 이동하지 않는다
  * - sync: 계정 저장 { pull, push, drop }(sync.js). 주면 이 기기에 저장한 뒤 계정에도 올리고, 시작할 때 계정과 맞춘다
+ * - importAction: 대문의 외부 가져오기 단추 { label, open }. 파일 해석과 저장은 호스트가 맡는다
  */
-export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null } = {}) {
+export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null } = {}) {
   if (app) throw new Error('minican already started');
   if (!root) throw new Error('minican root');
   app = root;
   if (typeof view === 'function') onView = view;
   brand = cleanBrand(mark);
   if (typeof hostHome === 'function') onBrandClick = hostHome;
+  if (importing && typeof importing.open === 'function' && typeof importing.label === 'string' && importing.label.trim()) importAction = importing;
   if (account && ['pull', 'push', 'drop'].every((k) => typeof account[k] === 'function')) {
     sync = account;
     pusher = createPusher(sync, { onDone: pushed });
@@ -1451,4 +1459,14 @@ export function startMinican({ root = document.getElementById('app'), fonts = []
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
   S.phase = 'boot';
   return refresh();
+}
+
+/** Open an already persisted host import. Never replaces an active/unsaved editor. */
+export async function openSavedDesign(id) {
+  if (!app || S.phase !== 'home' || S.open || moving) throw new Error('EDITOR_BUSY');
+  const record = await getDesign(id);
+  if (!record) throw new Error('DOCUMENT_NOT_FOUND');
+  if (S.open || moving) throw new Error('EDITOR_BUSY');
+  upsert(record);
+  openDesign(record, false);
 }

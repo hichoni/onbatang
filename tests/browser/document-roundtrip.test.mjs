@@ -61,6 +61,12 @@ test('actual app migrates, edits, saves twice, reopens, copies, reorders and dis
   await page.locator('.cv-back').click();
   await page.getByRole('button',{name:sample.name+' 열기',exact:true}).click();
   await page.locator('.cv-name').waitFor();
+  const busy = await page.evaluate(async ({base,id}) => {
+    try { await (await import(base+'/app/app.js')).openSavedDesign(id); return 'opened'; }
+    catch (error) { return error.message; }
+  }, {base,id:legacy.id});
+  assert.equal(busy,'EDITOR_BUSY','host imports cannot replace the active editor');
+  assert.equal(await page.locator('.cv-name').inputValue(),sample.name);
   await page.evaluate(async base => (await import(base+'/app/tour.js')).stopTour(),base);
   // A referenced source cannot become an unsavable dangling asset in another drawing.
   await page.locator('.cv-canvas .fi-text').first().click();
