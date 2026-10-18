@@ -1,4 +1,4 @@
-# 독립 온바탕 · v0.20.0
+# 독립 온바탕 · v0.21.0
 
 온바탕은 계정 없이 쓰는 편집기와 PPTX 자료 작업 공간입니다. **온바탕 with 가이랩**은 같은 공통 코드를 사용하는 가이랩의 확장 제품입니다. 가이랩의 로그인·계정 저장·활동·수업방·학생 제출은 독립본에 포함하지 않습니다. 기존 `startMinican` API와 기기 저장소 이름은 호환성을 위해 유지합니다.
 
@@ -29,6 +29,10 @@
 
 ## 자료 흐름과 보존
 
+v0.21.0부터 편집 중인 **내 자료 → 내 PPT 올리기**에서도 시작합니다. 현재 그림(새 빈 그림 포함)을 저장한 뒤 가져오기 화면을 열며, 닫으면 원래 그림·쪽·내 자료 탭으로 복귀합니다. 저장 실패 시 편집 화면을 유지합니다. 진행 중인 저장/일부 파트 재시도가 있으면 새 작업으로 초기화하지 않습니다. 이미 마친 가져오기는 새 파일 선택 단계에서 다시 시작합니다. PPT를 현재 그림 위에 덮어쓰거나 글꼴·비율이 다른 쪽을 무단으로 합치지 않습니다.
+
+편집기만 사용하는 호스트는 `createEditor({documentImport:{label,description,open}})`를 선택 연결할 수 있습니다. 이 콜백은 파일 파싱·저장을 호스트에 맡깁니다. 완성 앱의 `startMinican({importAction:{label,editorLabel,open}})`은 기기 저장 및 연결된 계정 저장의 성공을 확인한 뒤 `open({from:'editor',designId,slideIndex})`를 호출합니다. 기존 대문 가져오기는 유지합니다. `openSavedDesign(id,{slideIndex,tab:'upload'})`로 저장한 편집 위치를 복원할 수 있습니다.
+
 PPTX 가져오기 → 실제 PPT 화면/편집 미리보기 → 전체·원본 쪽별 글꼴 교체 → 자동 파트 저장 → 하나의 전체 자료 보기 → 쪽 편집 → 편집본 저장 → 전체 PPTX 내려받기입니다. 최대 200쪽의 선택 자료를 공통 문서 한도에 맞춰 자동 분할합니다. 한 쪽 자체가 편집 범위를 넘으면 이유와 이미지 가져오기 선택을 표시합니다. 원문을 잘라 성공으로 표시하지 않습니다.
 
 원본 Blob과 SHA-256, 출처·ID·자산 참조를 보존합니다. 기존 편집기 IndexedDB와 별도의 `${storage}-pptx-v1` DB에 원본·문서 revision·자료 묶음을 저장합니다. 편집기 초안은 기존 DB를 사용합니다. 문서와 자료 묶음의 충돌 검사 후 한 트랜잭션으로 고정하며 과거 기록을 덮어쓰지 않습니다. 일부 파트 저장 후 실패하면 같은 작업의 영수증으로 재시도합니다. 처음 가져온 자료는 읽기 전용으로 열어 최신 초안이 섞이지 않게 합니다.
@@ -47,7 +51,7 @@ PPTX 가져오기 → 실제 PPT 화면/편집 미리보기 → 전체·원본 �
 
 ## Firebase Hosting 배포
 
-현재 공개 주소는 **[https://onbatang.web.app/](https://onbatang.web.app/)** 입니다. v0.20.0·release commit `41776457364ad2a955ab67e057f84c64ce78bd15`를 배포했고 전체146파일의 실제 HTTP bytes/SHA와 실제 Edge11검사를 통과했습니다. 공개 사이트의 PPT 가져오기·기기 저장·재열기·두 방식 PPTX 내려받기를 확인했습니다. [배포 검증 기록](qa/2026-10-19-firebase-hosting.json). 이전 GitHub Pages에 저장한 그림이 새 Firebase 출처로 자동 이동하지는 않습니다.
+공개 주소는 **[https://onbatang.web.app/](https://onbatang.web.app/)** 입니다. 최신 앱 버전·release commit은 공개 `version.json`에서 확인합니다. 최초 v0.20.0·release commit `41776457364ad2a955ab67e057f84c64ce78bd15`의146파일 HTTP bytes/SHA·실제 Edge11검사를 [최초 배포 기록](qa/2026-10-19-firebase-hosting.json)에 보존합니다. 후속 내 자료 진입은 v0.21.0입니다. 이전 GitHub Pages에 저장한 그림이 새 Firebase 출처로 자동 이동하지는 않습니다.
 
 독립본은 전용 Firebase 프로젝트/Hosting 사이트 `onbatang`을 사용합니다. 가이랩·풍풍고 등 다른 프로젝트의 DB·Auth·Hosting은 배포하지 않습니다. 완성된 앱 release commit을 명시하여 정적 파일만 만들고 Hosting만 배포합니다.
 

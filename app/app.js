@@ -158,7 +158,9 @@ async function syncAccount() {
 /** 계정에 다 올렸을 때 꾸미는 화면의 저장 상태를 알린다. */
 function pushed(id, ok) {
   const O = S.open;
-  if (!O || O.record.id !== id || O.dirty) return;
+  if (!O || O.record.id !== id) return;
+  O.accountOk = ok;
+  if (O.dirty) return;
   setStatus(O, ok ? '계정에 저장했어요' : '계정에 올리지 못했어요 · 이 기기에는 저장됐어요', ok ? 'ok' : '');
 }
 /** 목록의 그 그림을 새 기록으로 바꿔 끼운다(없으면 맨 앞에 더한다). */
@@ -526,6 +528,11 @@ function openDesign(record, isNew) {
     design: O.slides[0],
     onChange: () => touched(O),
     uploadImage: photoToData,
+    documentImport: importAction?.editorLabel ? {
+      label: importAction.editorLabel,
+      description: importAction.editorDescription || '지금 그림을 저장한 뒤 PPT 자료를 가져와요.',
+      open: () => importFromEditor(O),
+    } : null,
     notify: toast,
     canPaste: item => [...(item.assetRefs || []), ...(item.source?.assetId ? [item.source.assetId] : [])]
       .every(id => O.record.assets.some(asset => asset.id === id)),
@@ -1036,7 +1043,7 @@ function touched(O) {
   clearTimeout(O.timer);
   O.timer = setTimeout(() => save(O), SAVE_DELAY);
 }
-async function save(O) {
+async function save(O, { preserveBlank = false } = {}) {
   clearTimeout(O.timer);
   O.timer = 0;
   if (!O.dirty || O.closed) return true;       // 닫은 뒤에는 저장하지 않는다(치운 편집기는 빈 그림을 돌려준다)
@@ -1044,7 +1051,7 @@ async function save(O) {
   // 올린 파일 목록도 함께 적는다(편집기가 들고 있는 목록 + 다른 장에서 쓰는 사진).
   const record = { ...O.record, revision: ++O.record.revision, slides, uploads: libraryOf(O.editor.getUploads().map((u) => u.url), slides), updatedAt: Date.now(), synced: false };
   // 아직 아무것도 놓지 않은 새 그림은 저장하지 않는다(빈 그림이 목록에 쌓이지 않게).
-  if (!O.saved && isBlank(record)) { O.dirty = false; setStatus(O, '꾸미기 시작하면 저절로 저장돼요'); return true; }
+  if (!preserveBlank && !O.saved && isBlank(record)) { O.dirty = false; setStatus(O, '꾸미기 시작하면 저절로 저장돼요'); return true; }
   O.dirty = false;
   let ok = true;
   let kept = record;
@@ -1127,6 +1134,58 @@ async function closeToHost(O, btn) {
     O.leaving = false;
     btn.disabled = false;
     app.inert = false;
+  }
+}
+
+/** Import navigation is opt-in. Keep the existing editor intact until local and
+ * account persistence have both succeeded; never drop a new blank drawing. */
+async function importFromEditor(O) {
+  if (!importAction?.editorLabel || S.open !== O || O.closed || O.leaving || moving || app.inert || hostFlush || videoBusy(O)) return;
+  const context = { from: 'editor', designId: O.record.id, slideIndex: O.at };
+  const previousFocus = app.contains(document.activeElement) ? document.activeElement : null;
+  let left = false, restored = false;
+  O.leaving = true; app.inert = true;
+  try {
+    if (O.putting) await O.putting;
+    if (O.closed || S.open !== O) throw new Error('EDITOR_BUSY');
+    if (!O.saved) O.dirty = true;
+    let ok = await save(O, { preserveBlank: true });
+    if (O.dirty) ok = await save(O, { preserveBlank: true });
+    if (!ok || O.dirty || O.localOk === false) throw new Error('EDITOR_SAVE_FAILED');
+    const saved = await getDesign(context.designId);
+    if (!saved) throw new Error('DOCUMENT_NOT_FOUND');
+    if (pusher) {
+      // flush() intentionally absorbs network errors for background retry.
+      // Queue this exact saved record and observe its final onDone while inert.
+      await pusher.flush(saved.id);
+      O.accountOk = null; pusher.queue(saved); await pusher.flush(saved.id);
+      if (O.accountOk !== true) throw new Error('EDITOR_SYNC_FAILED');
+    }
+    if (O.closed || S.open !== O) throw new Error('EDITOR_BUSY');
+    if (!await leaveEditor(O, { requireSaved: true })) throw new Error('EDITOR_SAVE_FAILED');
+    left = true;
+    try { S.list = await listDesigns(); } catch { upsert(saved); }
+    S.phase = 'home'; render();
+    await importAction.open(context);
+  } catch (error) {
+    if (left && !S.open && !moving && S.phase === 'home') {
+      try { await openSavedDesign(context.designId, { slideIndex: context.slideIndex, tab: 'upload' }); restored = true; }
+      catch { /* The persisted drawing remains in the home library for recovery. */ }
+    }
+    const note = error?.message === 'EDITOR_SYNC_FAILED'
+      ? '계정에 올리지 못했어요. 이 기기의 그림은 저장했고, 편집 화면을 유지했어요. 다시 시도해주세요.'
+      : left ? restored ? '가져오기 화면을 열지 못했어요. 저장한 그림으로 돌아왔어요.' : '가져오기 화면을 열지 못했어요. 그림은 내 그림에 저장돼 있어요.'
+      : '지금 그림을 저장하지 못해 가져오기로 이동하지 않았어요. 다시 시도해주세요.';
+    if (S.open === O) setStatus(O, note, 'bad');
+    toast(note, 5000);
+  } finally {
+    O.leaving = false;
+    if (S.open === O && !O.closed) {
+      app.inert = false;
+      if (previousFocus?.isConnected && document.activeElement === document.body && document.hasFocus()) {
+        try { previousFocus.focus({ preventScroll: true }); } catch { /* Preserve the persistence result. */ }
+      }
+    }
   }
 }
 async function closeDesign(O, btn = null) {
@@ -1516,7 +1575,8 @@ function flush() {
  * - brand: 들여 쓰는 곳의 표시 { name, logo }. 꾸미는 화면 위 막대 맨 앞에 작게 보인다(없으면 표시하지 않는다)
  * - onBrandClick(): 표시를 누르면 기기 저장과 계정 올리기를 마친 뒤 부른다. 저장하지 못하면 이동하지 않는다
  * - sync: 계정 저장 { pull, push, drop }(sync.js). 주면 이 기기에 저장한 뒤 계정에도 올리고, 시작할 때 계정과 맞춘다
- * - importAction: 대문의 외부 가져오기 단추 { label, open }. 파일 해석과 저장은 호스트가 맡는다
+ * - importAction: 대문의 외부 가져오기 단추 { label, open, editorLabel?, editorDescription? }.
+ *   editorLabel을 주면 내 자료에도 연결하며 저장 후 open({from:'editor',designId,slideIndex})를 부른다. 파일 해석은 호스트가 맡는다.
  */
 export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null } = {}) {
   if (app) throw new Error('minican already started');
@@ -1544,13 +1604,15 @@ export function startMinican({ root = document.getElementById('app'), fonts = []
 export function isMinicanStarted() { return app !== null; }
 
 /** Open an already persisted host import. Never replaces an active/unsaved editor. */
-export async function openSavedDesign(id) {
+export async function openSavedDesign(id, { slideIndex = 0, tab = null } = {}) {
   if (!app || S.phase !== 'home' || S.open || moving) throw new Error('EDITOR_BUSY');
   const record = await getDesign(id);
   if (!record) throw new Error('DOCUMENT_NOT_FOUND');
   if (S.open || moving) throw new Error('EDITOR_BUSY');
   upsert(record);
   openDesign(record, false);
+  if (Number.isSafeInteger(slideIndex) && slideIndex > 0 && slideIndex < S.open.slides.length) goSlide(S.open, slideIndex);
+  if (typeof tab === 'string') S.open.editor.openTab(tab);
 }
 
 let hostFlush = null;

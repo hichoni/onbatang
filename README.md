@@ -1,6 +1,10 @@
 # 온바탕 — 생각을 펼치는 따뜻한 디자인 공간
 
-**독립 온바탕 사용하기: [onbatang.web.app](https://onbatang.web.app/)** · Firebase Hosting v0.20.0. PPTX 가져오기·편집·이 기기 저장·다시 열기·PPTX 내려받기를 계정 없이 사용합니다. 가이랩의 확장 제품은 ‘온바탕 with 가이랩’입니다. 기존 GitHub Pages 주소와 Firebase 주소는 브라우저 저장 공간이 다릅니다.
+**독립 온바탕 사용하기: [onbatang.web.app](https://onbatang.web.app/)** · PPTX 가져오기·편집·이 기기 저장·다시 열기·PPTX 내려받기를 계정 없이 사용합니다. 가이랩의 확장 제품은 ‘온바탕 with 가이랩’입니다. 기존 GitHub Pages 주소와 Firebase 주소는 브라우저 저장 공간이 다릅니다. 공개 `version.json`에서 실제 배포 버전·앱 commit을 확인합니다.
+
+## v0.21.0 · 내 자료에서 PPT 올리기 (2026-10-19)
+
+편집기의 **내 자료 → 내 PPT 올리기**에서 바로 가져옵니다. 현재 그림을 먼저 저장하고, 가져오기를 닫으면 같은 그림·쪽·내 자료 탭으로 돌아옵니다. 저장 실패 때 화면을 바꾸지 않고 원본과 이전 자료를 보존합니다. 새 PPT를 확인·가져온 뒤 전체 자료 보기에서 편집을 이어갑니다. 다른 프로젝트는 `importAction.editorLabel` 또는 순수 편집기의 `documentImport` 콜백으로 연결할 수 있습니다.
 
 ## v0.20.0 · 독립 PPTX 자료 작업 공간 (2026-10-19)
 

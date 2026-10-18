@@ -476,6 +476,8 @@
 .fe-textadd.sub { font-size: 1.15rem; }
 .fe-textadd.body { font-size: .98rem; font-weight: 500; }
 .fe-upload { display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 48px; font-size: 1rem; }
+.fe-document-import { border-style: dashed; }
+.fe-document-import-note { margin-top: -4px; }
 /* 올린 파일 목록: 작은 그림을 누르면 카드에 놓인다. 오른쪽 위의 휴지통으로 지운다(한 번 더 묻는다) */
 .fe-files-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-top: 4px; }
 .fe-files-head .fe-head { margin-top: 0; }

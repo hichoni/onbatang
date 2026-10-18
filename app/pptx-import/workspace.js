@@ -414,7 +414,20 @@ export function mountImportWorkspace({root, services, onClose, onOpenDocument, o
     doc.body.append(modal); modal.showModal(); refreshRows();
   }
   render();
-  return {showLibrary: () => showTab('library'), showImport: () => showTab('import'), chooseFile, getState: () => ({step: state.step, tab: state.tab, selectedPages: selectedPages(), activePage: state.active, busy: state.busy, resumable: !!state.retry && state.result?.complete === false}),
+  function startNewImport() {
+    if (disposed) return false;
+    if (state.busy || (state.retry && state.result?.complete === false)) {
+      say('진행 중인 가져오기를 먼저 마치거나 저장 상태를 확인해주세요. 파일과 이미 저장한 자료는 유지돼요.');
+      return false;
+    }
+    actionController?.abort(); previewController?.abort(); services.disposePreview?.();
+    generation++; previewGeneration++; libraryGeneration++; thumbObserver?.disconnect(); caches.clear(); fileInput.value = '';
+    fontDialog?.close(); fontDialog?.remove(); fontDialog = null;
+    Object.assign(state, {step: 1, tab: 'import', file: null, inspection: null, selected: new Set(), modes: {}, active: 1,
+      preview: 'editable', filter: 'all', busy: null, previewPreparing: false, result: null, retry: null, fonts: [], fontPlan: null, priorPlans: [], previewPages: new Map()});
+    render(); say('새 PPT를 골라주세요. 편집하던 그림과 이전에 가져온 자료는 그대로 보관돼요.'); return true;
+  }
+  return {startNewImport, showLibrary: () => showTab('library'), showImport: () => showTab('import'), chooseFile, getState: () => ({step: state.step, tab: state.tab, selectedPages: selectedPages(), activePage: state.active, busy: state.busy, resumable: !!state.retry && state.result?.complete === false}),
     dispose() { if (disposed) return; disposed = true; generation++; previewGeneration++; libraryGeneration++; thumbObserver?.disconnect(); actionController?.abort(); previewController?.abort(); services.disposePreview?.(); fontDialog?.close(); fontDialog?.remove(); root.replaceChildren(); }};
 }
 

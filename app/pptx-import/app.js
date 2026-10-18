@@ -18,10 +18,11 @@ const download=(blob,name)=>{const url=URL.createObjectURL(blob),a=el('a','',{hr
 export function mountPptxApp({root,storage='minican',fonts,fontServices=defaultImportFontServices,onEdit,onClose,onMaterialSaved,actions=[]}={}){
  if(!root||typeof onEdit!=='function')throw new TypeError('root and onEdit are required');
  const library=createPptxLibrary({storage}),imports=createOnbatangImportStorage({repository:library.repository});
- const services=createImportUiServices({imports,fonts,fontServices});let current,active=0,busy=false,readOnly=false,exportDialog;
+ const services=createImportUiServices({imports,fonts,fontServices});let current,active=0,busy=false,readOnly=false,exportDialog,latestImport;
  const importRoot=el('section'),materialRoot=el('section',undefined,{class:'op-material',hidden:''});root.append(importRoot,materialRoot);
  const baseSave=services.saveAll;services.saveAll=async options=>{
-  const result=await baseSave(options);
+  let result;try{result=await baseSave(options);}catch(error){latestImport=error.recovery||null;throw error;}
+  latestImport=result;
   if(result.complete){
    try{const graph=await library.ensureMaterial(result);result.materialRef=graph.materialRef;}
    catch(error){error.recovery={...result,complete:false};throw error;}
@@ -40,7 +41,9 @@ export function mountPptxApp({root,storage='minican',fonts,fontServices=defaultI
    card.append(text,button('자료 열기',()=>showMaterial(graph.materialRef)),button('원본 PPTX',()=>source(graph)));host.append(card);
   }
  }
- const workspace=mountImportWorkspace({root:importRoot,services,onClose,onOpenDocument:row=>edit(row),onOpenMaterial:ref=>showMaterial(ref),renderLibrary});
+ const workspace=mountImportWorkspace({root:importRoot,services,onClose,onOpenDocument:async row=>{
+  current=latestImport?.materialRef?await library.getMaterial(latestImport.materialRef):null;readOnly=false;active=0;await edit(row);
+ },onOpenMaterial:ref=>showMaterial(ref),renderLibrary});
  async function working(graph){
   if(readOnly)return graph;
   const rows=await Promise.all(graph.documents.map(async row=>{const draft=await getDesign(row.id);return {...row,payload:draft||row.payload};}));
@@ -103,5 +106,7 @@ export function mountPptxApp({root,storage='minican',fonts,fontServices=defaultI
    }catch(error){result.textContent=message(error);}finally{locked(false);close.disabled=false;go.disabled=false;}
   },{'data-pptx-export-confirm':''});dialog.append(result,close,go);dialog.addEventListener('cancel',event=>{if(busy)event.preventDefault();});dialog.addEventListener('close',()=>{dialog.remove();exportDialog=null;});root.append(dialog);dialog.showModal();
  }
- return {library,async open(){importRoot.hidden=false;materialRoot.hidden=true;},showMaterial,showLibrary,reportError:error=>say(message(error),true),async editorClosed(){if(current)await paint();},async dispose(){workspace.dispose();services.dispose();await library.close();root.replaceChildren();}};
+ return {library,getEditorContext:()=>({materialRef:current?clone(current.materialRef):null,active}),
+  async restoreEditorContext(context){current=context?.materialRef?await library.getMaterial(context.materialRef):null;active=context?.active||0;readOnly=false;},
+  async open({newImport=false}={}){importRoot.hidden=false;materialRoot.hidden=true;if(newImport&&workspace.startNewImport())latestImport=null;},showMaterial,showLibrary,reportError:error=>say(message(error),true),async editorClosed(){if(current)await paint();},async dispose(){workspace.dispose();services.dispose();await library.close();root.replaceChildren();}};
 }

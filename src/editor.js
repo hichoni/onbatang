@@ -62,6 +62,7 @@ const BLOB_CACHE = 12;         // 이번에 올린 사진의 파일 내용을 �
  *   - uploadImage({ blob, ext, type, ratio }): 사진을 저장하고 { url, path? } 를 돌려주는 함수(비동기 가능).
  *       편집기가 미리 줄여서(긴 쪽 800) 넘겨준다. 주지 않으면 이 화면에서만 보이는 임시 주소(blob:)를 쓴다(새로 고침하면 사라진다).
  *   - loadImageBlob(item): 저장해 둔 사진의 파일 내용을 돌려주는 함수(배경 제거용). 주지 않으면 fetch(item.url) 로 받는다.
+ *   - documentImport: { label, description?, open() } 내 자료에 문서 가져오기 단추를 보이는 선택 연결. 파일 해석·저장·이동은 호스트가 맡는다.
  *   - fonts(): 지금 고를 수 있는 글꼴 목록을 돌려주는 함수(주지 않으면 configure 에 준 전부).
  *   - onAspect(aspect): 카드의 모양(가로 ÷ 세로)이 실행 취소·다시 실행으로 바뀌었을 때(setAspect 로 모양을 바꾸는 프로젝트만 쓴다).
  *   - notify(message, ms): 알림을 보여 주는 함수(주지 않으면 화면 아래의 작은 알림).
@@ -83,6 +84,7 @@ const BLOB_CACHE = 12;         // 이번에 올린 사진의 파일 내용을 �
 export function createEditor({
   design = null, onChange = () => {}, uploadImage = null, loadImageBlob = null, fonts = fontList, notify = toast, onAspect = () => {},
   uploads = null, usedElsewhere = null, onRemoveUpload = null, onMotionAll = null, canPaste = () => true,
+  documentImport = null,
   saveVideo = null, createCamera = null, videoLimits = null, videoNote = '', videoHint = '',
   onSelect = null, lockedBy = null,
 } = {}) {
@@ -99,6 +101,7 @@ export function createEditor({
   let tab = 'layout';         // 옆 메뉴에서 열려 있는 칸
   let pop = null;             // 도구 막대 아래에 펼쳐진 칸: 'color' · 'bgc' · 'edge' · 'corner' · 'thick' · 'size' · 'op' · 'flip' · 'pos' · 'swap' · 'mask' · 'cut' · null
   let busy = false;           // 사진 올리는 중
+  let importingDocument = false;
   let editing = -1;           // 카드 위에서 바로 글을 고치는 중인 글상자의 번호
   let typed = false;          // 이번에 고치기 시작한 뒤 기록을 남겼는지(처음 한 번만 남긴다)
   let cut = null;             // 배경 제거 작업(openCut 의 job): 방식(AI · 단색) · 막대 값 · 붓질 · 미리보기
@@ -118,8 +121,9 @@ export function createEditor({
   let others = [];            // 다른 사람이 고른 요소들 [{ id, name, color }] (함께 꾸밀 때. markOthers 로 받는다)
   let lastSelId = '';         // 마지막으로 onSelect 에 알린 이름표
   const limits = { ...VIDEO_LIMITS, ...(videoLimits && typeof videoLimits === 'object' ? videoLimits : {}) };
+  const hasDocumentImport = typeof documentImport?.open === 'function' && typeof documentImport.label === 'string' && !!documentImport.label.trim();
   const tabsHere = () => {
-    const list = tabList();
+    const list = tabList().map(row => hasDocumentImport && row[0] === 'upload' ? [...row.slice(0, 3), '내 사진·PPT를 올리거나 유튜브 영상을 넣어요.'] : row);
     if (!saveVideo) return list;
     const at = list.findIndex((t) => t[0] === 'upload') + 1;
     return [...list.slice(0, at), VIDEO_TAB, ...list.slice(at)];
@@ -280,7 +284,7 @@ export function createEditor({
         el('div', { class: 'fe-empty-go', role: 'group', 'aria-label': '빠르게 시작하기' },
           quick('text', '큰 제목 쓰기', () => add(newPresetText('title'))),
           quick('shapes', '꾸미기', () => openTab('element')),
-          quick('upload', '사진 · 영상', () => openTab('upload')),
+          quick('upload', hasDocumentImport ? '내 자료' : '사진 · 영상', () => openTab('upload')),
           quick('template', '틀 고르기', () => openTab('layout'))))]));
     syncSel();
   }
@@ -2597,6 +2601,7 @@ export function createEditor({
             fileInput.click();
           },
         }, ...(busy ? ['올리는 중…'] : [icon('upload'), '사진 올리기'])),
+        ...documentImportBody(),
         el('p', { class: 'fe-note', text: `PNG·JPG 사진이나 그림을 올려요. 이 카드에 ${photos}/${settings().maxPhotos}장 있어요.` }),
         el('p', { class: 'fe-note', text: '올린 사진을 누르면 도구 막대에서 배경 제거, 테두리 모양, 크기, 투명도, 뒤집기를 쓸 수 있어요.' }),
         el('p', { class: 'fe-note', text: '내가 찍거나 그린 것, 허락을 받은 것만 올리고, 얼굴·이름 같은 개인 정보가 없는지 살펴봐요.' }),
@@ -2776,6 +2781,26 @@ export function createEditor({
     ];
   }
 
+  function documentImportBody() {
+    if (!hasDocumentImport) return [];
+    const button = el('button', {
+      class: 'fe-btn fe-upload fe-document-import', type: 'button', dataset: { documentImport: '' },
+      disabled: busy || importingDocument || filing || !!cam,
+      onClick: async () => {
+        if (!card || busy || importingDocument || filing || cam) return;
+        importingDocument = true; button.disabled = true; button.setAttribute('aria-busy', 'true');
+        try { await documentImport.open(); }
+        catch { notify('가져오기 화면을 열지 못했어요. 지금 그림을 확인하고 다시 시도해주세요.', 4500); }
+        finally {
+          importingDocument = false;
+          if (card && button.isConnected) { button.disabled = busy || filing || !!cam; button.removeAttribute('aria-busy'); }
+        }
+      },
+    }, icon('upload'), documentImport.label.trim());
+    return [button, typeof documentImport.description === 'string' && documentImport.description.trim()
+      ? el('p', { class: 'fe-note fe-document-import-note', text: documentImport.description.trim() }) : null];
+  }
+
   function uploadBody() {
     const files = keepUploads();
     const max = settings().maxUploads;
@@ -2815,6 +2840,7 @@ export function createEditor({
           fileInput.click();
         },
       }, ...(busy ? ['올리는 중…'] : [icon('upload'), '사진 올리기'])),
+      ...documentImportBody(),
       el('div', { class: 'fe-files-head' }, el('b', { class: 'fe-head', text: '올린 파일' }), el('span', { class: 'fe-files-count', text: `${files.length}/${max}` })),
       // 지우기 전에 한 번 더 묻는다. 쓰고 있는 파일이면 쓴 곳에서도 사라진다고 알려 준다.
       armedImg ? el('div', { class: 'fe-file-ask', role: 'group', 'aria-label': '올린 파일 지우기' },
@@ -3075,6 +3101,8 @@ export function createEditor({
 
   const api = {
     stage, toolbar, panel, mount, setDesign,
+    /** Host navigation can restore an existing tool without knowing its DOM selectors. */
+    openTab: id => { if (card && tabsHere().some(([name]) => name === id)) openTab(id); },
     /** 함께 꾸밀 때: 다른 사람이 바꾼 것을 끼워 넣는다 merge(design, patch) · 지금 끼워 넣어도 되는지 idle() */
     merge, idle,
     /** 함께 꾸밀 때: 다른 사람이 고른 요소들 [{ id, name, color }] 에 그 사람의 색 테두리를 두른다(빈 목록이면 지운다). */

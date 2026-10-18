@@ -272,3 +272,88 @@ test('a material transaction quota failure keeps its saved parts and retries the
  assert.equal(await page.locator('[data-pptx-material]').count(),1);assert.deepEqual(await durable(),recovered,'recovered material and its original receipts survive a full page reload');
  await checkIsolation();
 });
+
+test('My materials imports preserve edited text, restore the same page on cancel, and block navigation until the real editor transaction succeeds',options,async t=>{
+ const {page,entry,base,checkIsolation}=await setup(t);
+ await enterImport(page,entry);await inspectFile(page,'self-authored-21-pages.pptx',21);await saveImport(page);
+ const original=await readLibrary(page,base),oldGraph=original.graphs[0],oldId=oldGraph.documents[0].id;
+ const readDraft=id=>page.evaluate(async({base,id})=>(await import(base+'/app/store.js')).getDesign(id),{base,id});
+ await page.locator('[data-pptx-page="1"]').click();await page.locator('[data-pptx-page="1"][aria-current=true]').waitFor();
+ await page.locator('[data-pptx-edit]').click();await page.locator('.cv-name').waitFor();
+ await page.getByRole('button',{name:'안내 닫기',exact:true}).click();
+ await page.locator('.cv-slide[data-slide="1"][aria-pressed=true]').waitFor();
+ const beforeEdit=await readDraft(oldId),oldText=beforeEdit.slides[1].items.find(item=>item.t==='text').text;
+ // Fail the actual storage transaction, including the editor's debounced
+ // autosave, rather than substituting a navigation callback or a fake status.
+ await page.evaluate(()=>{
+  const put=IDBObjectStore.prototype.put;window.editorImportFailures=0;
+  window.restoreEditorImportStorage=()=>{IDBObjectStore.prototype.put=put;};
+  IDBObjectStore.prototype.put=function(...args){
+   const request=put.apply(this,args);
+   if(this.transaction.db.name==='minican'&&this.name==='designs'){
+    window.editorImportFailures++;this.transaction.abort();
+   }
+   return request;
+  };
+ });
+ await page.locator('.cv-canvas .fe-card > .fi-text').first().dblclick();
+ await page.keyboard.press('Control+End');await page.keyboard.insertText(' · 업로드 전 편집');await page.keyboard.press('Escape');
+ await page.locator('.fe-tab[data-tab="upload"]').click();
+ await page.evaluate(()=>{window.editorImportCanvas=document.querySelector('.cv-canvas');});
+ const importButton=page.getByRole('button',{name:'내 PPT 올리기',exact:true});
+ for(let attempt=0;attempt<2;attempt++){
+  await importButton.click();
+  await page.locator('.cv-status.bad').filter({hasText:'가져오기로 이동하지 않았어요'}).waitFor();
+  await page.waitForFunction(()=>!document.querySelector('[data-document-import]')?.disabled);
+  assert.equal(await page.evaluate(()=>document.querySelector('.cv-canvas')===window.editorImportCanvas),true,'a failed save retains the same live editor DOM');
+  assert.equal(await page.locator('.op-root').isVisible(),false,'failed persistence never opens the PPT workspace');
+  await page.locator('.cv-slide[data-slide="1"][aria-pressed=true]').waitFor();
+  await page.locator('.fe-tab[data-tab="upload"][aria-selected=true]').waitFor();
+  assert.equal(await page.locator('.cv-canvas .fe-card > .fi-text').first().innerText(),oldText+' · 업로드 전 편집');
+  assert.deepEqual(await readDraft(oldId),beforeEdit,'aborted transactions leave the prior saved drawing intact');
+ }
+ assert.ok(await page.evaluate(()=>window.editorImportFailures>=2));
+ await page.evaluate(()=>{window.restoreEditorImportStorage();delete window.restoreEditorImportStorage;});
+ await importButton.click();await page.getByLabel('PPTX 파일 선택',{exact:true}).waitFor();
+ assert.equal(await page.locator('[data-import-result]').count(),0,'editor import starts at fresh file selection instead of the previous completion screen');
+ const flushed=await readDraft(oldId);assert.equal(flushed.slides[1].items.find(item=>item.t==='text').text,oldText+' · 업로드 전 편집');
+ assert.deepEqual(flushed.source,beforeEdit.source);assert.deepEqual(flushed.assetRefs,beforeEdit.assetRefs);
+ await page.getByRole('button',{name:'PPT 가져오기 닫기',exact:true}).click();
+ await page.locator('.cv-slide[data-slide="1"][aria-pressed=true]').waitFor();
+ await page.locator('.fe-tab[data-tab="upload"][aria-selected=true]').waitFor();
+ assert.equal(await page.locator('.cv-canvas .fe-card > .fi-text').first().innerText(),oldText+' · 업로드 전 편집');
+ assert.equal(await page.locator('.cv-name').inputValue(),beforeEdit.name);
+ assert.equal(await page.locator('.op-root').isVisible(),false);
+ assert.deepEqual(await readDraft(oldId),flushed,'cancel restores the saved document without another edit or revision');
+ await importButton.click();await inspectFile(page,'self-authored-4x3.pptx',2);
+ await page.locator('[data-import-save]').click();await page.locator('[data-import-result=complete]').waitFor();
+ await page.locator('[data-open-material=view]').click();await page.locator('[data-pptx-page="1"]').waitFor();
+ assert.equal(await page.locator('[data-pptx-page]').count(),2);
+ const imported=await readLibrary(page,base),newGraph=imported.graphs.find(graph=>graph.materialRef.id!==oldGraph.materialRef.id);
+ assert.ok(newGraph);assert.equal(newGraph.pages.length,2);assert.equal(imported.graphs.length,2);
+ assert.deepEqual(imported.originals.find(graph=>graph.materialRef.id===oldGraph.materialRef.id),original.originals[0]);
+ assert.deepEqual(await readDraft(oldId),flushed,'importing another deck does not overwrite the drawing left behind');
+ await page.locator('[data-pptx-page="0"]').click();await page.locator('[data-pptx-edit]').click();await page.locator('.cv-name').waitFor();
+ await page.locator('.cv-name').fill('내 자료에서 가져온 새 PPT');
+ const newText=await page.locator('.cv-canvas .fe-card > .fi-text').first().innerText();
+ await page.locator('.cv-canvas .fe-card > .fi-text').first().dblclick();
+ await page.keyboard.press('Control+End');await page.keyboard.insertText(' · 새 PPT 편집');await page.keyboard.press('Escape');
+ await page.locator('.cv-back').click();await page.locator('[data-pptx-save]').waitFor();await page.locator('[data-pptx-save]').click();
+ await page.waitForFunction(()=>document.querySelector('[data-pptx-status]')?.textContent.includes('편집본을 저장했어요'));
+ const saved=await readLibrary(page,base),newSaved=saved.graphs.find(graph=>graph.materialRef.id===newGraph.materialRef.id);
+ assert.equal(newSaved.materialRef.revision,1);assert.equal(newSaved.documents[0].payload.name,'내 자료에서 가져온 새 PPT');
+ assert.equal(newSaved.pages[0].page.items.find(item=>item.t==='text').text,newText+' · 새 PPT 편집');
+ assert.deepEqual(saved.originals,imported.originals,'saving the newly imported deck preserves both immutable source materials');
+ assert.deepEqual(saved.sources,imported.sources);
+ await enterImport(page,entry);await page.locator('[data-library-tab]').click();await page.locator('[data-pptx-material]').first().waitFor();
+ assert.equal(await page.locator('[data-pptx-material]').count(),2);
+ await page.locator(`[data-pptx-material="${newGraph.materialRef.id}"]`).getByRole('button',{name:'자료 열기',exact:true}).click();
+ await page.locator('[data-pptx-page="0"][aria-current=true]').waitFor();
+ assert.equal(await page.locator('[data-pptx-page]').count(),2);assert.match(await page.locator('.op-sheet').innerText(),/새 PPT 편집/);
+ assert.deepEqual(await readLibrary(page,base),saved,'a reload reopens the exact new saved material and both source originals');
+ assert.deepEqual(await readDraft(oldId),flushed,'the earlier editor draft survives import, cancellation, the new edit, and a full reload');
+ await page.locator('[data-pptx-edit]').click();await page.locator('.cv-name').waitFor();
+ assert.equal(await page.locator('.cv-name').inputValue(),'내 자료에서 가져온 새 PPT');
+ assert.equal(await page.locator('.cv-canvas .fe-card > .fi-text').first().innerText(),newText+' · 새 PPT 편집');
+ await checkIsolation();
+});
