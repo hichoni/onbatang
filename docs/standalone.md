@@ -53,6 +53,8 @@ PPTX 가져오기 → 실제 PPT 화면/편집 미리보기 → 전체·원본 �
 
 공개 주소는 **[https://onbatang.web.app/](https://onbatang.web.app/)** 입니다. 최신 앱 버전·release commit은 공개 `version.json`에서 확인합니다. 최초 v0.20.0·release commit `41776457364ad2a955ab67e057f84c64ce78bd15`의146파일 HTTP bytes/SHA·실제 Edge11검사를 [최초 배포 기록](qa/2026-10-19-firebase-hosting.json)에 보존합니다. 후속 내 자료 진입은 v0.21.0부터이며 v0.21.1은 가져오기 취소 후 편집을 끝낼 때 원래 자료 화면 표시도 복원합니다. 이전 GitHub Pages에 저장한 그림이 새 Firebase 출처로 자동 이동하지는 않습니다.
 
+최종 v0.21.1 앱 release는 `cf951d671ff7f407b4a2246e6577269d58b63b7f`입니다. 공개146파일 전체 bytes/SHA와 기존 v0.20 자료를 유지한 실제 공개 Edge 고유16항목을 확인했습니다. [내 자료 가져오기·저장/재열기 공개 검증](qa/2026-10-19-editor-import-firebase.json)에서 실패·수정·실제 계정/PowerPoint 미검증을 구분합니다. 뒤따르는 문서/검증 기록 commit도 이 앱 release를 배포 기준으로 유지합니다.
+
 독립본은 전용 Firebase 프로젝트/Hosting 사이트 `onbatang`을 사용합니다. 가이랩·풍풍고 등 다른 프로젝트의 DB·Auth·Hosting은 배포하지 않습니다. 완성된 앱 release commit을 명시하여 정적 파일만 만들고 Hosting만 배포합니다.
 
 ```sh
