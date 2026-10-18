@@ -19,7 +19,7 @@ test('actual Edge exports editable objects and visible image slides without miss
   const browserPage=await browser.newPage(),errors=[];browserPage.on('pageerror',error=>errors.push(error.message));
   const origin=`http://127.0.0.1:${server.address().port}`;await browserPage.goto(origin+'/export-test.html');
   const result=await browserPage.evaluate(async base=>{
-    const {createPptx}=await import(base+'/app/pptx.js'),{configure}=await import(base+'/src/model.js');
+    const {createPptx}=await import(base+'/app/pptx.js'),{configure,cleanDesign}=await import(base+'/src/model.js'),{designSheet}=await import(base+'/src/export.js');
     configure({aspect:16/9,maxItems:40,maxPhotos:10,maxText:120});
     const canvas=document.createElement('canvas');canvas.width=80;canvas.height=40;const ctx=canvas.getContext('2d');ctx.fillStyle='#ff0000';ctx.fillRect(0,0,40,40);ctx.fillStyle='#0000ff';ctx.fillRect(40,0,40,40);const url=canvas.toDataURL();
     const slides=[{id:'pexport001',bg:'#ffffff',items:[
@@ -38,13 +38,30 @@ test('actual Edge exports editable objects and visible image slides without miss
     const maskedInput=[{bg:'#ffffff',items:[{id:'emasked001',t:'image',url,x:50,y:50,w:40,h:30,mask:'circle',rot:30,op:50}]}],maskedBefore=JSON.stringify(maskedInput);
     const masked=await createPptx({slides:maskedInput,size:{width:960,height:540,unit:'px'}}),maskedFiles=unzip(masked.bytes);
     const maskedXml=new TextDecoder().decode(maskedFiles['ppt/slides/slide1.xml']),maskedName=Object.keys(maskedFiles).find(name=>name.startsWith('ppt/media/'));
-    const maskedBitmap=await createImageBitmap(new Blob([maskedFiles[maskedName]],{type:'image/png'})),maskedCanvas=document.createElement('canvas');maskedCanvas.width=maskedBitmap.width;maskedCanvas.height=maskedBitmap.height;const maskedContext=maskedCanvas.getContext('2d');maskedContext.drawImage(maskedBitmap,0,0);maskedBitmap.close();
+    const maskedBitmap=await createImageBitmap(new Blob([maskedFiles[maskedName]],{type:'image/png'})),maskedCanvas=document.createElement('canvas');maskedCanvas.width=1280;maskedCanvas.height=720;const maskedContext=maskedCanvas.getContext('2d');
+    function pictureBox(xml){const parsed=new DOMParser().parseFromString(xml,'application/xml'),pic=parsed.getElementsByTagNameNS(ns,'pic')[0],xfrm=pic.getElementsByTagNameNS(a,'xfrm')[0],off=xfrm.getElementsByTagNameNS(a,'off')[0],ext=xfrm.getElementsByTagNameNS(a,'ext')[0];return {x:Number(off.getAttribute('x')),y:Number(off.getAttribute('y')),w:Number(ext.getAttribute('cx')),h:Number(ext.getAttribute('cy'))};}
+    const maskedBox=pictureBox(maskedXml);
+    maskedContext.drawImage(maskedBitmap,Math.round(maskedBox.x/9144000*1280),Math.round(maskedBox.y/5143500*720),maskedBitmap.width,maskedBitmap.height);maskedBitmap.close();
     const rgba=maskedContext.getImageData(0,0,maskedCanvas.width,maskedCanvas.height).data;
     const sample=(u,v)=>{const angle=Math.PI/6,x=Math.round(maskedCanvas.width/2+u*Math.cos(angle)-v*Math.sin(angle)),y=Math.round(maskedCanvas.height/2+u*Math.sin(angle)+v*Math.cos(angle));return [...rgba.slice((y*maskedCanvas.width+x)*4,(y*maskedCanvas.width+x)*4+4)];};
     const maskPixels={left:sample(-maskedCanvas.width*.4*.2,0),right:sample(maskedCanvas.width*.4*.2,0),corner:sample(maskedCanvas.width*.4*.45,maskedCanvas.height*.3*.45)};
+    // Rebuild the cropped PPTX picture at its OOXML location and compare with
+    // the original full-canvas render, including clipped edges and transparency.
+    const cropCases=[
+      {id:'ecropmasked001',t:'image',url,x:50,y:50,w:40,h:30,mask:'circle',rot:30,fx:true,op:50},
+      {id:'ecropedge001',t:'shape',shape:'star',layout:'slide',x:98,y:3,w:35,h:30,rot:-25,color:'#ff0000',op:40},
+      {id:'ecropclear001',t:'shape',shape:'star',layout:'slide',x:70,y:70,w:15,h:15,op:0,color:'#ff0000',source:{kind:'pptx'}},
+    ],cropping=[];
+    for(const item of cropCases){
+      const input=[{bg:'#ffffff',items:[item]}],before=JSON.stringify(input),output=await createPptx({slides:input,size:{width:960,height:540,unit:'px'}}),files=unzip(output.bytes),xml=new TextDecoder().decode(files['ppt/slides/slide1.xml']),box=pictureBox(xml),name=Object.keys(files).find(name=>name.startsWith('ppt/media/'));
+      const bitmap=await createImageBitmap(new Blob([files[name]],{type:'image/png'})),canvas=document.createElement('canvas');canvas.width=1280;canvas.height=720;canvas.getContext('2d').drawImage(bitmap,Math.round(box.x/9144000*1280),Math.round(box.y/5143500*720));
+      const reference=await designSheet(cleanDesign(input[0]),[{items:[0],bg:false,box:{x:0,y:0,w:1280,h:720},at:{x:0,y:0}}],{width:1280,height:720,sheetWidth:1280,sheetHeight:720}),expected=reference.canvas.getContext('2d').getImageData(0,0,1280,720).data,actual=canvas.getContext('2d').getImageData(0,0,1280,720).data;
+      let different=0,painted=0;for(let i=0;i<actual.length;i+=4){if(expected[i+3])painted++;if(Math.abs(expected[i+3]-actual[i+3])>1||[0,1,2].some(channel=>Math.abs(expected[i+channel]*expected[i+3]/255-actual[i+channel]*actual[i+3]/255)>1))different++;}
+      cropping.push({id:item.id,box,width:bitmap.width,height:bitmap.height,different,painted,inputUnchanged:before===JSON.stringify(input),identity:xml.includes(`name="${item.id}"`)});bitmap.close();
+    }
     let failed;
     try{await createPptx({slides:[{bg:'paper',items:[{id:'emissing001',t:'image',url:'data:image/png;base64,bm90YXBpY3R1cmU=',x:50,y:50,w:30,h:30}]}],mode:'image'});}catch(error){failed=error.code;}
-    return {inputUnchanged:before===JSON.stringify(slides),xmlValid:!doc.querySelector('parsererror'),nativeTexts:doc.getElementsByTagNameNS(ns,'txBody').length,nativeShapes:doc.getElementsByTagNameNS(ns,'sp').length,pictures:doc.getElementsByTagNameNS(ns,'pic').length,textHeight:Number(textShape.getElementsByTagNameNS(a,'ext')[0].getAttribute('cy')),lineSpacingPts:[...textShape.getElementsByTagNameNS(a,'lnSpc')].map(node=>Number(node.firstElementChild.getAttribute('val'))),warnings:editable.warnings,whole:await pixels(imageFiles[wholeName]),fallback:await pixels(editFiles[fallbackName]),masked:{xml:maskedXml,pixels:maskPixels,inputUnchanged:maskedBefore===JSON.stringify(maskedInput),warnings:masked.warnings},failed};
+    return {inputUnchanged:before===JSON.stringify(slides),xmlValid:!doc.querySelector('parsererror'),nativeTexts:doc.getElementsByTagNameNS(ns,'txBody').length,nativeShapes:doc.getElementsByTagNameNS(ns,'sp').length,pictures:doc.getElementsByTagNameNS(ns,'pic').length,textHeight:Number(textShape.getElementsByTagNameNS(a,'ext')[0].getAttribute('cy')),lineSpacingPts:[...textShape.getElementsByTagNameNS(a,'lnSpc')].map(node=>Number(node.firstElementChild.getAttribute('val'))),warnings:editable.warnings,whole:await pixels(imageFiles[wholeName]),fallback:await pixels(editFiles[fallbackName]),masked:{xml:maskedXml,box:maskedBox,pixels:maskPixels,inputUnchanged:maskedBefore===JSON.stringify(maskedInput),warnings:masked.warnings},cropping,failed};
   },base);
   assert.equal(result.inputUnchanged,true);assert.equal(result.xmlValid,true);assert.equal(result.nativeTexts,1);assert.equal(result.nativeShapes,2);assert.equal(result.pictures,2);
   assert.ok(result.textHeight>500000&&result.textHeight<1300000,`DOM-measured multiline height ${result.textHeight}`);
@@ -52,14 +69,18 @@ test('actual Edge exports editable objects and visible image slides without miss
   assert.equal(result.warnings.some(warning=>warning.code==='TEXT_HEIGHT_APPROXIMATE'),false);
   assert.equal(result.warnings.filter(warning=>warning.code==='ELEMENT_RASTERIZED').length,1);
   assert.ok(result.whole.red>500&&result.whole.blue>500&&result.whole.green>500,'whole-slide PNG has every authored color');
-  assert.ok(result.fallback.red>500&&result.fallback.transparent>100000,'individual fallback has its drawing and transparent surrounding pixels');
+  assert.ok(result.fallback.red>500&&result.fallback.transparent>500,'individual fallback retains its drawing and transparent corners');
+  assert.ok(result.fallback.width<300&&result.fallback.height<200,'fallback frame only covers its painted bounds, leaving native text selectable');
   assert.equal(result.masked.inputUnchanged,true);assert.equal(result.masked.warnings.filter(warning=>warning.code==='ELEMENT_RASTERIZED').length,1);
   assert.doesNotMatch(result.masked.xml,/ rot=|flipH=|flipV=|alphaModFix/,'raster already includes rotation and opacity; picture must not apply them a second time');
-  assert.match(result.masked.xml,/<a:off x="0" y="0"\/><a:ext cx="9144000" cy="5143500"\/>/);
+  assert.ok(result.masked.box.x>0&&result.masked.box.y>0&&result.masked.box.w<9144000*.5&&result.masked.box.h<5143500*.6,'masked picture has a tight frame at its original position');
   assert.ok(result.masked.pixels.left[0]>240&&result.masked.pixels.left[2]<15,'red half follows the rotated picture');
   assert.ok(result.masked.pixels.right[2]>240&&result.masked.pixels.right[0]<15,'blue half follows the rotated picture');
   for(const point of [result.masked.pixels.left,result.masked.pixels.right])assert.ok(point[3]>=125&&point[3]<=130,`half opacity is applied once: ${point[3]}`);
   assert.equal(result.masked.pixels.corner[3],0,'circle mask clips the rotated picture corner');
+  for(const item of result.cropping){assert.equal(item.different,0,`cropped raster composite matches the full render: ${item.id}`);assert.equal(item.inputUnchanged,true);assert.equal(item.identity,true);assert.ok(item.width<1280&&item.height<720);}
+  assert.ok(result.cropping[0].painted>10000);assert.ok(result.cropping[1].painted>1000);assert.equal(result.cropping[1].box.y,0,'off-slide paint clips to the top edge');
+  for(const item of result.cropping.slice(2)){assert.equal(item.painted,0);assert.equal(item.width,1);assert.equal(item.height,1);}
   assert.equal(result.failed,'IMAGE_UNAVAILABLE');assert.deepEqual(errors,[]);
   const recordId=await browserPage.evaluate(async base=>{
     const {newRecord}=await import(base+'/app/designs.js'),store=await import(base+'/app/store.js');

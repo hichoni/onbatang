@@ -162,7 +162,35 @@ async function renderElement(design, index, options) {
   const prepared = await prepareRaster({...design, items: [design.items[index]], video: undefined}, options.signal, options.aspect);
   const width = 1280, height = Math.round(width / options.aspect);
   const rendered = await designSheet(prepared, [{items: [0], bg: false, box: {x: 0, y: 0, w: width, h: height}, at: {x: 0, y: 0}}], {width, height, sheetWidth: width, sheetHeight: height});
-  return {blob: await canvasBlob(rendered.canvas), missingFonts: rendered.missingFonts};
+  abort(options.signal);
+  // PowerPoint selects a picture's rectangular frame, including transparent
+  // pixels. A full-slide frame would cover unrelated editable objects below it.
+  // Crop the already painted result so rotation, masks, flips and antialiasing
+  // stay exact, and keep only the part visible inside the slide.
+  const rgba = rendered.canvas.getContext('2d').getImageData(0, 0, width, height).data;
+  let left = width, top = height, right = -1, bottom = -1;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (!rgba[(y * width + x) * 4 + 3]) continue;
+      left = Math.min(left, x); top = Math.min(top, y);
+      right = Math.max(right, x); bottom = Math.max(bottom, y);
+    }
+  }
+  // Retain an entirely transparent/off-slide element as a 1px transparent
+  // picture instead of dropping its identity or leaving a slide-sized hitbox.
+  if (right < left) { left = 0; top = 0; right = 0; bottom = 0; }
+  const canvas = document.createElement('canvas');
+  canvas.width = right - left + 1; canvas.height = bottom - top + 1;
+  canvas.getContext('2d').drawImage(rendered.canvas, left, top, canvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
+  return {blob: await canvasBlob(canvas), missingFonts: rendered.missingFonts,
+    bounds: {x: left / width, y: top / height, w: canvas.width / width, h: canvas.height / height}};
+}
+
+function rasterBox(rendered, size) {
+  if (!rendered?.bounds) return {x: 0, y: 0, w: size.width, h: size.height};
+  const box = rendered.bounds;
+  if (!object(box) || !['x', 'y', 'w', 'h'].every(key => Number.isFinite(box[key])) || box.x < 0 || box.y < 0 || box.w <= 0 || box.h <= 0 || box.x + box.w > 1 + Number.EPSILON || box.y + box.h > 1 + Number.EPSILON) fail('INVALID_RASTER', '그림의 위치를 확인하지 못해서 PPTX를 저장하지 않았어요.');
+  return {x: box.x * size.width, y: box.y * size.height, w: box.w * size.width, h: box.h * size.height};
 }
 async function textHeight(item, size, warn) {
   if (item.h) return item.h * size.height / 100;
@@ -181,6 +209,7 @@ async function textHeight(item, size, warn) {
 /** Every slide is exported, or the operation rejects without a partial download.
  * renderSlide(design,{aspect,signal,pageNumber}) / renderItem(design,index,options)
  * can be injected; each must return Blob or {blob,missingFonts?} with a PNG/JPEG image.
+ * renderItem may include bounds:{x,y,w,h} in 0..1 slide coordinates for a cropped image.
  */
 export async function createPptx({slides, aspect = 16 / 9, size, title = '온바탕', mode = 'editable', signal, onProgress, renderSlide = renderWhole, renderItem = renderElement} = {}) {
   abort(signal);
@@ -233,7 +262,8 @@ export async function createPptx({slides, aspect = 16 / 9, size, title = '온바
           await raster(loaded, item.id || `사진 ${id}`, item, box, crop ? `<a:srcRect ${horizontal ? `l="${crop}" r="${crop}"` : `t="${crop}" b="${crop}"`}/>` : '');
         } else {
           itemWarn('ELEMENT_RASTERIZED', '이 요소는 모양을 보존한 그림으로 저장해요.', {type: item.t, ...(item.shape ? {shape: item.shape} : {})});
-          await raster(await cancellable(renderItem(design, itemIndex, options), signal), item.id || `그림 ${id}`);
+          const rendered = await cancellable(renderItem(design, itemIndex, options), signal);
+          await raster(rendered, item.id || `그림 ${id}`, {}, rasterBox(rendered, slideSize));
         }
       }
     }

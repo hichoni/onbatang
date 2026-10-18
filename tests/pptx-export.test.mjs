@@ -95,6 +95,16 @@ test('whole-image mode exports every slide as one picture and captures input bef
   for(let i=1;i<=2;i++){const slide=zip.xml(`ppt/slides/slide${i}.xml`);assert.equal((slide.match(/<p:pic>/g)||[]).length,1);assert.doesNotMatch(slide,/<p:sp>/);}
 });
 
+test('cropped element rasters keep their slide position and identity without covering other editable objects',async()=>{
+  const slides=[page([text(),{id:'ecropped001',t:'shape',shape:'star',x:85,y:85,w:10,h:10,rot:30,op:50}])],before=structuredClone(slides);
+  const result=await createPptx({slides,size:{width:960,height:540,unit:'px'},renderItem:async()=>({blob:png,bounds:{x:.8,y:.75,w:.1,h:.2}})});
+  const slide=unzip(result.bytes).xml('ppt/slides/slide1.xml'),picture=slide.match(/<p:pic>.*?<\/p:pic>/)[0];
+  assert.match(picture,/name="ecropped001"/);assert.match(picture,/<a:off x="7315200" y="3857625"\/><a:ext cx="914400" cy="1028700"\/>/);
+  assert.doesNotMatch(picture,/ rot=|flipH=|flipV=|alphaModFix/,'the cropped raster is already painted');
+  assert.ok(slide.indexOf('<p:txBody>')<slide.indexOf('<p:pic>'),'native object order is retained');assert.deepEqual(slides,before);
+  for(const bounds of [[],{x:-.1,y:0,w:1,h:1},{x:0,y:0,w:0,h:1},{x:0,y:0,w:1,h:NaN},{x:.8,y:0,w:.3,h:1}])await assert.rejects(createPptx({slides,renderItem:async()=>({blob:png,bounds})}),code('INVALID_RASTER'));
+});
+
 test('photos remain native pictures with cover crop, rotation and opacity', async () => {
   const previous=globalThis.Image;
   globalThis.Image=class{naturalWidth=20;naturalHeight=10;set src(value){queueMicrotask(()=>this.onload());}};
