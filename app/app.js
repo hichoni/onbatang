@@ -1560,6 +1560,7 @@ export function flushSavedDesign(id) {
   const editor = S.open;
   const job = (async () => {
     const wasInert = app.inert;
+    const previousFocus = !wasInert && app.contains(document.activeElement) ? document.activeElement : null;
     if (editor) app.inert = true;
     try {
       if (editor) {
@@ -1572,7 +1573,17 @@ export function flushSavedDesign(id) {
       const record = await getDesign(id);
       if (!record) throw new Error('DOCUMENT_NOT_FOUND');
       return record;
-    } finally { if (editor && S.open === editor) app.inert = wasInert; }
+    } finally {
+      if (editor && S.open === editor) {
+        app.inert = wasInert;
+        // A rendered inert frame blurs the stage. Restore only that temporary
+        // loss, so the next shortcut works without stealing a host control's focus.
+        if (!wasInert && !editor.closed && previousFocus?.isConnected && app.contains(previousFocus)
+          && document.activeElement === document.body && document.hasFocus()) {
+          try { previousFocus.focus({ preventScroll: true }); } catch { /* Keep the save result if focus is no longer available. */ }
+        }
+      }
+    }
   })();
   hostFlush = {id, job};
   job.finally(() => { if (hostFlush?.job === job) hostFlush = null; }).catch(() => {});

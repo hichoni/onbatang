@@ -45,6 +45,40 @@ test('actual editor resizes from the opposite corner, respects modifiers and kee
   const point=(value,sx,sy)=>{const delta=local(value,sx*value.w/2,sy*value.h/2);return {x:value.x+delta.x,y:value.y+delta.y};};
   const samePoint=(actual,expected,message)=>{near(actual.x,expected.x,message+' x');near(actual.y,expected.y,message+' y');};
   const persisted=()=>page.evaluate(async({base,id})=>(await import(base+'/app/app.js')).flushSavedDesign(id),{base,id:current.id});
+  async function pauseFlush({abort=false}={}){
+    await page.evaluate(async({base,id,abort})=>{
+      // Keep the real IDB transaction and result, but hold its completion callback
+      // long enough for Chromium to process the app's temporary inert focus loss.
+      const prototype=IDBTransaction.prototype,events=['oncomplete','onerror','onabort'];
+      window.resizeSaveCompletionDescriptors=Object.fromEntries(events.map(name=>[name,Object.getOwnPropertyDescriptor(prototype,name)]));
+      window.pauseNextResizeSave=true;window.resizeSaveCallbacks=[];
+      for(const name of events){const descriptor=window.resizeSaveCompletionDescriptors[name];
+        Object.defineProperty(prototype,name,{...descriptor,set(handler){
+          const transaction=this;
+          if(window.pauseNextResizeSave&&transaction.objectStoreNames.contains('designs')){
+            window.pauseNextResizeSave=false;window.heldResizeSave=transaction;
+          }
+          if(abort&&name==='oncomplete'&&transaction.mode==='readwrite'&&transaction.objectStoreNames.contains('designs'))queueMicrotask(()=>transaction.abort());
+          descriptor.set.call(transaction,typeof handler!=='function'?handler:function(event){
+            if(transaction===window.heldResizeSave){
+              window.resizeSaveCallbacks.push(()=>handler.call(transaction,event));
+              window.resumeResizeSave=()=>{window.heldResizeSave=null;for(const done of window.resizeSaveCallbacks.splice(0))done();};
+            }else handler.call(transaction,event);
+          });
+        }});
+      }
+      window.resizePausedFlush=(await import(base+'/app/app.js')).flushSavedDesign(id);
+    },{base,id:current.id,abort});
+    await page.waitForFunction(()=>typeof window.resumeResizeSave==='function');
+    return page.evaluate(async()=>{
+      await new Promise(requestAnimationFrame);await new Promise(requestAnimationFrame);
+      return {inert:document.querySelector('#app').inert,focusDropped:document.activeElement===document.body};
+    });
+  }
+  const finishPausedFlush=()=>page.evaluate(async()=>{
+    try{window.resumeResizeSave();return await window.resizePausedFlush;}
+    finally{for(const[name,descriptor]of Object.entries(window.resizeSaveCompletionDescriptors))Object.defineProperty(IDBTransaction.prototype,name,descriptor);delete window.resumeResizeSave;}
+  });
   async function open(fixture){
     if(current){await page.locator('.cv-back').click();await page.getByRole('button',{name:fixture.name+' 열기',exact:true}).waitFor();}
     current=fixture;await page.getByRole('button',{name:fixture.name+' 열기',exact:true}).click();await page.locator('.cv-name').waitFor();
@@ -121,9 +155,27 @@ test('actual editor resizes from the opposite corner, respects modifiers and kee
   const naturalSaved=await persisted(),originalText=naturalOriginal.slides[0].items[0],savedText=naturalSaved.slides[0].items[0];
   for(const key of ['id','text','source'])assert.deepEqual(savedText[key],originalText[key],`ordinary text preserves ${key}`);
   assert.equal(savedText.h,undefined,'natural text never receives a synthetic fixed height');
-  await stage.focus();await page.keyboard.press('Control+z');const naturalUndo=await persisted();
+  await stage.focus();await page.keyboard.press('Control+z');
+  const held=await pauseFlush();assert.equal(held.inert,true);assert.equal(held.focusDropped,true,'a rendered inert frame really drops the editor focus');
+  const naturalUndo=await finishPausedFlush();
   assert.deepEqual(naturalUndo.slides[0].items,naturalOriginal.slides[0].items,'one undo restores the natural text frame and original wrapping');
+  assert.equal(await stage.evaluate(node=>document.activeElement===node),true,'host save restores the same editor focus after temporary inert');
   await page.keyboard.press('Control+Shift+z');const naturalRedo=await persisted();assert.deepEqual(naturalRedo.slides[0].items,naturalSaved.slides[0].items);
+  await pauseFlush();
+  await page.evaluate(()=>{const button=document.createElement('button');button.id='outside-save-focus';button.textContent='Host focus fixture';button.style.cssText='position:fixed;top:0;right:0;z-index:9999';document.body.append(button);});
+  const outside=page.locator('#outside-save-focus');await outside.click();
+  const externalSaved=await finishPausedFlush();assert.deepEqual(externalSaved.slides,naturalSaved.slides);
+  assert.equal(await outside.evaluate(node=>document.activeElement===node),true,'finishing save never steals focus from a host control');
+  await outside.evaluate(node=>node.remove());
+  await canvasItems.first().click();await stage.focus();await page.keyboard.press('ArrowRight');await pauseFlush({abort:true});
+  await assert.rejects(finishPausedFlush(),/EDITOR_SAVE_FAILED/,'real aborted storage keeps its existing save error');
+  assert.equal(await page.locator('#app').evaluate(node=>node.inert),false,'failed storage releases its temporary inert state');
+  assert.equal(await stage.evaluate(node=>document.activeElement===node),true,'failed save also restores temporary editor focus loss');
+  await page.keyboard.press('Control+z');
+  assert.deepEqual((await persisted()).slides,naturalSaved.slides,'the next shortcut still works after failed storage without another click');
+  await page.locator('#app').evaluate(node=>node.inert=true);
+  try{await persisted();assert.equal(await page.locator('#app').evaluate(node=>node.inert),true,'a previously inert app remains inert after flushing');}
+  finally{await page.locator('#app').evaluate(node=>node.inert=false);}
   await page.reload();await page.getByRole('button',{name:current.name+' 열기',exact:true}).click();await page.locator('.cv-name').waitFor();
   const naturalReopened=await persisted();
   for(const key of ['id','source','originalSize'])assert.deepEqual(naturalReopened[key],naturalSaved[key],`reopening retains document ${key}`);
