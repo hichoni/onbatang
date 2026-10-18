@@ -1,11 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cleanItem, cleanDesign, scaleItem, widenItem, heightenItem, reshapeItems, sizeRange } from '../src/model.js';
+import { cleanItem, cleanDesign, scaleItem, widenItem, heightenItem, reshapeItems, sizeRange, hangsPunctuation } from '../src/model.js';
 import { migrateRecord } from '../app/designs.js';
 
 const source = {kind:'pptx',pageIndex:0,objectId:'42'};
 const label = {t:'text',source,text:'작은 제목\n두 번째 줄',x:25,y:35,w:3,size:1.25,h:8,valign:'middle',lh:1.4,nowrap:true,typeface:'Arial'};
 const rule = {t:'shape',source,shape:'rect',x:50,y:45,w:80,h:0.09,line:0.05,lc:'#123456',color:'#ffffff'};
+
+test('Office punctuation default and explicit overrides survive sanitization, public projection and reopen', () => {
+  for (const value of [undefined, true, false]) {
+    const original={...label,text:'First paragraph!\n\nLast paragraph.',...(value===undefined?{}:{hangingPunct:value})};
+    let record=migrateRecord({name:'직접 만든 내어쓰기 표본',slides:[cleanDesign({items:[original]},{keepSpaces:true})]});
+    for(let n=0;n<3;n++)record=migrateRecord(JSON.parse(JSON.stringify(record)));
+    const item=record.slides[0].items[0],{source:privateSource,...publicItem}=item;
+    assert.equal(hangsPunctuation(item),value??true);
+    assert.equal(hangsPunctuation(cleanItem(publicItem)),value??true);
+    assert.equal(item.hangingPunct,value);
+    for(const key of ['text','w','h','size','x','y','typeface'])assert.equal(item[key],original[key]);
+  }
+  assert.equal(hangsPunctuation(cleanItem({t:'text',text:'Ordinary!',size:3})),false);
+  for(const invalid of ['false',0,1,null,{}])assert.equal(cleanItem({...label,hangingPunct:invalid}).hangingPunct,undefined);
+});
 
 test('imported small text, fixed text frame and thin lines survive cleaning and repeated save/reopen', () => {
   let record = migrateRecord({name:'직접 만든 PPT 호환 표본',slides:[cleanDesign({items:[label,rule]})]});

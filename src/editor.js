@@ -1180,6 +1180,8 @@ export function createEditor({
     if (!it || it.t !== 'text' || it.lock || !node || editing === sel) return;
     editing = sel;
     typed = false;
+    // Render-only punctuation spans must never trap the caret or an IME range.
+    if (node.querySelector('.fi-text-flow')) node.textContent = it.text;
     try { node.contentEditable = 'plaintext-only'; } catch { /* 아래에서 다시 */ }
     if (node.contentEditable !== 'plaintext-only') node.contentEditable = 'true';
     node.classList.add('editing');

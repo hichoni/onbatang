@@ -52,6 +52,15 @@ test('an imported 4096-character text frame stays editable and uses source dimen
   assert.deepEqual(result.size,{width:9144000,height:6858000,unit:'emu'});
 });
 
+test('PPTX fixes punctuation behavior explicitly for slide defaults, false overrides and ordinary text', async () => {
+  const items=[text({text:'First!\n\nLast.'}),text({id:'efalsehang001',hangingPunct:false,text:'Keep punctuation inside!'}),text({id:'etruehang001',hangingPunct:true,text:'Hang punctuation!'}),text({id:'eordinary001',layout:undefined,text:'Ordinary text!'})],before=structuredClone(items);
+  const result=await createPptx({slides:[page(items)]}),slide=unzip(result.bytes).xml('ppt/slides/slide1.xml');
+  assert.deepEqual([...slide.matchAll(/hangingPunct="([01])"/g)].map(match=>match[1]),['1','1','1','0','1','0']);
+  assert.equal((slide.match(/<a:t xml:space="preserve">/g)||[]).length,6);
+  assert.doesNotMatch(slide,/normAutofit|fontScale/);
+  assert.deepEqual(items,before,'export never changes input text, fonts, geometry or override flags');
+});
+
 test('editable text uses the CSS baseline distance in exact points without fitting or changing authored frames',async()=>{
   const slides=[page([text({size:3.5,lh:1.25,h:2,valign:'middle',text:'첫 줄\n다음 줄\n마지막 줄'}),text({id:'edefaultline001',size:2.5,lh:undefined,nowrap:true})])],before=structuredClone(slides);
   for(const [width,expected] of [[800,[3500,2500]],[1200,[5250,3750]]]){

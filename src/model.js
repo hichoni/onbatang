@@ -150,6 +150,10 @@ export const TEXT_SIZE = { min: 2.5, max: 30 };
 // defaults, while preserving these authored dimensions through cleaning and edits.
 // The render-only layout marker survives guest projections that strip provenance.
 const pptxItem = isSlideItem;
+// Office defaults imported slide paragraphs to hanging punctuation. Keep an
+// explicit false: public render-only items lose private source metadata.
+export const hangsPunctuation = item => typeof item?.hangingPunct === 'boolean'
+  ? item.hangingPunct : pptxItem(item);
 export const textLimit = item => itemTextLimit(item, config.maxText);
 const textMin = item => pptxItem(item) ? 0.1 : TEXT_SIZE.min;
 const widthMin = item => pptxItem(item) ? 0.1 : 10;
@@ -259,6 +263,7 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
     return {
       t: 'text', ...base, w: measure(base,it.w, widthMin(base), 100, 80), text,
       size: measure(base,it.size, textMin(base), TEXT_SIZE.max, 7),
+      ...(typeof it.hangingPunct === 'boolean' ? {hangingPunct:it.hangingPunct} : {}),
       ...(pptxItem(base) ? {
         ...(given(it.h) ? {h:measure(base,it.h,0.01,140,10),valign:['top','middle','bottom'].includes(it.valign)?it.valign:'top'} : {}),
         ...(given(it.lh) ? {lh:measure(base,it.lh,0.5,4,1.25)} : {}),

@@ -50,6 +50,10 @@
   border-radius: var(--fe-card-radius, 5%); background: var(--fe-bg, #fffdf5); color: var(--fe-ink, #1d2433);
   text-align: left; line-height: 1.3; word-break: keep-all; overflow-wrap: anywhere;
 }
+/* Keep the punctuation visible while its advance hangs outside the line box.
+   This is used only for slide text with hanging punctuation enabled. */
+.fi-text-flow { min-width: 0; }
+.fi-text-hang { display: inline-block; width: 0; white-space: pre; }
 /* 빈 카드의 안내(편집 화면에만 보인다): 아이콘 + 한 줄 + 작은 한 줄. 글만 넣은 것(designView 의 empty)도 가운데에 온다 */
 .fe-empty {
   position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 6px; padding: 8%; text-align: center;

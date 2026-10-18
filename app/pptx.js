@@ -1,7 +1,7 @@
 // Editable PresentationML export. Stored designs and source files are never changed.
 // Package parts follow ISO/IEC 29500 PresentationML; ZIP creation stays dependency-free.
 import {zipStore} from './zip.js';
-import {cleanDesign, settings, fontList, backgroundOf} from '../src/model.js';
+import {cleanDesign, settings, fontList, backgroundOf, hangsPunctuation} from '../src/model.js';
 import {designToBlob, designSheet} from '../src/export.js';
 import {itemView, paintCard} from '../src/render.js';
 import {sceneFrame} from '../src/scene.js';
@@ -93,7 +93,7 @@ function nativeText(item, box, id, size, warn) {
   // Exact points preserve the authored baseline distance without shrinking text
   // to an explicit frame whose visible overflow may be intentional in the editor.
   const lineSpacing = Math.round(requestedSize * (item.lh || 1.25));
-  const paragraphs = item.text.split('\n').map(line => `<a:p><a:pPr algn="${{l: 'l', c: 'ctr', r: 'r'}[item.align] || 'ctr'}"><a:lnSpc><a:spcPts val="${lineSpacing}"/></a:lnSpc><a:spcBef><a:spcPts val="0"/></a:spcBef><a:spcAft><a:spcPts val="0"/></a:spcAft></a:pPr><a:r>${properties}<a:t xml:space="preserve">${xml(line)}</a:t></a:r><a:endParaRPr ${style}/></a:p>`).join('');
+  const paragraphs = item.text.split('\n').map(line => `<a:p><a:pPr algn="${{l: 'l', c: 'ctr', r: 'r'}[item.align] || 'ctr'}" hangingPunct="${hangsPunctuation(item) ? 1 : 0}"><a:lnSpc><a:spcPts val="${lineSpacing}"/></a:lnSpc><a:spcBef><a:spcPts val="0"/></a:spcBef><a:spcAft><a:spcPts val="0"/></a:spcAft></a:pPr><a:r>${properties}<a:t xml:space="preserve">${xml(line)}</a:t></a:r><a:endParaRPr ${style}/></a:p>`).join('');
   return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${xml(item.id || `글상자 ${id}`)}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr>${transform(box, item)}<a:prstGeom prst="${item.bgc ? 'roundRect' : 'rect'}"><a:avLst/></a:prstGeom>${item.bgc ? solid(item.bgc, item.op) : '<a:noFill/>'}<a:ln><a:noFill/></a:ln></p:spPr><p:txBody><a:bodyPr wrap="${item.nowrap ? 'none' : 'square'}" lIns="${inset}" rIns="${inset}" tIns="${Math.round(inset * .44)}" bIns="${Math.round(inset * .44)}" anchor="${{top: 't', middle: 'ctr', bottom: 'b'}[item.valign] || 't'}"><a:noAutofit/></a:bodyPr><a:lstStyle/>${paragraphs}</p:txBody></p:sp>`;
 }
 function picture(box, id, relation, name, item = {}, crop = '') {

@@ -1,6 +1,6 @@
 // 디자인 그리기(브라우저): 요소 하나(itemView)와 디자인 한 장(designView). 편집기와 "보기 전용" 화면이 함께 쓴다.
 import { el } from './dom.js';
-import { backgroundOf, cleanDesign, fontFamilyOf, settings } from './model.js';
+import { backgroundOf, cleanDesign, fontFamilyOf, settings, hangsPunctuation } from './model.js';
 import { shapeAsset, shapeSvg } from './shapes.js';
 import { artSvg, loadArt, artReady } from './art.js';
 import { sceneView } from './scene.js';
@@ -25,6 +25,7 @@ export function itemView(item) {
     if (family) node.style.fontFamily = `"${family}", var(--fe-font, sans-serif)`;
     node.style.color = item.color;
     if (item.bgc) node.style.background = item.bgc;
+    if (!item.nowrap && hangsPunctuation(item)) hangParagraphEnds(node, item.text);
   } else if (item.t === 'emoji') {
     node = el('div', { class: 'fi fi-emoji', text: item.ch });
   } else if (item.t === 'shape') {
@@ -46,6 +47,24 @@ export function itemView(item) {
   }
   placeItem(node, item);
   return node;
+}
+
+// Chromium does not implement CSS hanging-punctuation. PresentationML's Office
+// default lets a paragraph-final stop remain on the preceding line. Exclude
+// just that glyph's advance from line fitting, without changing text, font size
+// or the stored frame. One flow wrapper keeps fixed-height flex text a single
+// flex item; literal newlines still separate the authored paragraphs.
+function hangParagraphEnds(node, text) {
+  const paragraphs = text.split('\n');
+  if (!paragraphs.some(line => /[!?,.;:、。，．！？；：]$/.test(line))) return;
+  const flow = el('span', {class:'fi-text-flow'});
+  paragraphs.forEach((line, index) => {
+    if (index) flow.append('\n');
+    if (/[!?,.;:、。，．！？；：]$/.test(line)) {
+      flow.append(line.slice(0, -1), el('span', {class:'fi-text-hang', text:line.slice(-1)}));
+    } else flow.append(line);
+  });
+  node.replaceChildren(flow);
 }
 
 /**
