@@ -75,7 +75,7 @@ test('host home saves latest edits, waits for sync, and keeps unsaved work after
     await page.getByText('저장하지 못해 이동하지 않았어요.', {exact:false}).waitFor();
     assert.equal(await page.locator('body').getAttribute('data-home'), null);
     assert.equal(await page.locator('.cv-name').inputValue(), '실패해도 남는 수정');
-    assert.equal(await page.locator('#app').evaluate(el => el.inert), false);
+    assert.equal(await page.locator('.cv-app-root').evaluate(el => el.inert), false);
     await page.evaluate(() => { IDBDatabase.prototype.transaction = window.realTransaction; });
     // Existing back button still returns to the drawings, without leaving for the host.
     await page.locator('.cv-back').click();

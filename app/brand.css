@@ -11,28 +11,28 @@ body.mc-app{--font:'Onbatang UI',system-ui,-apple-system,'Malgun Gothic',sans-se
 .cv-brand-link:focus-visible{outline:2px solid var(--primary);outline-offset:3px;border-radius:4px}
 .cv-brand-link:disabled{cursor:wait;opacity:.6}
 .cv-demo-brand .onba-logo{width:86px}
-body.mc-app #app[data-view="home"]{--text:#24322d;--muted:#65726f;--cv-line:#dde5e1}
-body.mc-app #app[data-view="home"] .cv-hero{background:radial-gradient(ellipse at 100% 0,#f9edd8 0,transparent 50%),radial-gradient(ellipse at 0% 100%,#e8f3ed 0,transparent 52%),#f5f2e9;border-color:#e4e8dd}
-body.mc-app #app[data-view="home"] .cv-home-heading{display:block}
-body.mc-app #app[data-view="home"] .cv-home-title{margin:0;line-height:1}
-body.mc-app #app[data-view="home"] .cv-home-title .onba-logo{width:clamp(280px,32vw,400px);max-width:100%;height:auto}
-body.mc-app #app[data-view="home"] .cv-hero-kicker{margin-top:24px;font-size:clamp(1.45rem,2.35vw,1.95rem);font-weight:700;line-height:1.45;letter-spacing:-.045em;color:#24322d}
-body.mc-app #app[data-view="home"] .cv-kick-color{color:#286f62}
-body.mc-app #app[data-view="home"] .cv-hero-lead{font-size:1rem;line-height:1.8;color:#586762;margin-top:14px}
-body.mc-app #app[data-view="home"] .cv-hero-tag{margin-left:0;color:#626f6b;font-size:.8rem;line-height:1.6}
-body.mc-app #app[data-view="home"] .btn.cv-cta{background:#24322d;box-shadow:0 5px 14px #24322d1a;font-size:1rem;font-weight:650;min-height:52px;padding:12px 24px}
-body.mc-app #app[data-view="home"] .btn.cv-cta:hover:not(:disabled){background:#345144}
-body.mc-app #app[data-view="home"] .btn.cv-cta:focus-visible{outline-color:#286f62}
-body.mc-app #app[data-view="home"] .cv-feat{font-weight:550;font-size:.86rem}
-body.mc-app #app[data-view="home"] .cv-starts-head h2,body.mc-app #app[data-view="home"] .cv-section-head h2{font-weight:700;letter-spacing:-.035em}
+body.mc-app :is(#app,.cv-app-root)[data-view="home"]{--text:#24322d;--muted:#65726f;--cv-line:#dde5e1}
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero{background:radial-gradient(ellipse at 100% 0,#f9edd8 0,transparent 50%),radial-gradient(ellipse at 0% 100%,#e8f3ed 0,transparent 52%),#f5f2e9;border-color:#e4e8dd}
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-home-heading{display:block}
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-home-title{margin:0;line-height:1}
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-home-title .onba-logo{width:clamp(280px,32vw,400px);max-width:100%;height:auto}
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero-kicker{margin-top:24px;font-size:clamp(1.45rem,2.35vw,1.95rem);font-weight:700;line-height:1.45;letter-spacing:-.045em;color:#24322d}
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-kick-color{color:#286f62}
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero-lead{font-size:1rem;line-height:1.8;color:#586762;margin-top:14px}
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero-tag{margin-left:0;color:#626f6b;font-size:.8rem;line-height:1.6}
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .btn.cv-cta{background:#24322d;box-shadow:0 5px 14px #24322d1a;font-size:1rem;font-weight:650;min-height:52px;padding:12px 24px}
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .btn.cv-cta:hover:not(:disabled){background:#345144}
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .btn.cv-cta:focus-visible{outline-color:#286f62}
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-feat{font-weight:550;font-size:.86rem}
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-starts-head h2,body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-section-head h2{font-weight:700;letter-spacing:-.035em}
 .cv-demo-blob.one{background:#f6e8cf}.cv-demo-blob.two{background:#e3eee7}.cv-demo-down{background:#286f62}.cv-demo-card-note{background:#e1eee4;color:#24483f}
 .onba-boot-mark{width:64px;height:64px}
 @media(max-width:600px){
  .cv-brand-link{display:flex;padding-left:6px}.cv-brand-link img{max-width:70px;height:16px}
  .onba-editor-logo{padding-right:4px}.onba-editor-logo .onba-logo{width:102px}
- body.mc-app #app[data-view="home"] .cv-home-title .onba-logo{width:280px}
- body.mc-app #app[data-view="home"] .cv-hero-kicker{margin-top:20px;font-size:1.4rem}
- body.mc-app #app[data-view="home"] .btn.cv-cta{white-space:normal;text-align:left}
+ body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-home-title .onba-logo{width:280px}
+ body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero-kicker{margin-top:20px;font-size:1.4rem}
+ body.mc-app :is(#app,.cv-app-root)[data-view="home"] .btn.cv-cta{white-space:normal;text-align:left}
 }
 
 /* ---------- 온바탕의 꾸미는 화면: 종이 바탕 ----------

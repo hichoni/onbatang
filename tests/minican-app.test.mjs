@@ -151,7 +151,7 @@ test('앱은 이 기기 밖으로 아무것도 보내지 않고, 로그인·서�
     const addresses = f === 'pptx.js' ? src.replaceAll(/http:\/\/schemas\.openxmlformats\.org\/(?:drawingml\/2006\/main|presentationml\/2006\/main|officeDocument\/2006\/(?:relationships|extended-properties)|package\/2006\/(?:relationships(?:\/metadata\/core-properties)?|content-types|metadata\/core-properties))/g, '').replaceAll('http://purl.org/dc/elements/1.1/', '') : src;
     assert.doesNotMatch(addresses.replaceAll('http://www.w3.org/2000/svg', ''), /https?:\/\//, `${f}: 바깥 주소`);
     assert.doesNotMatch(src, /firebase|firestore|tinkerlab|틴커랩|student|login|로그인/i, f);
-    for (const [, from] of src.matchAll(/from '([^']+)'/g)) assert.match(from, /^\.\/[\w-]+\.js$|^\.\.\/src\/[\w-]+\.js$/, `${f}: ${from}`);
+    for (const [, from] of src.matchAll(/from '([^']+)'/g)) assert.match(from, /^\.\/(?:pptx-import\/)?[\w-]+\.js$|^\.\.\/src\/[\w-]+\.js$/, `${f}: ${from}`);
   }
   assert.doesNotMatch(readFileSync(APP + 'app.css', 'utf8'), /cv-team|cv-roster|cv-me\b|cv-adopt/);
 });

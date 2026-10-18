@@ -72,7 +72,7 @@ test('actual editor resizes from the opposite corner, respects modifiers and kee
     await page.waitForFunction(()=>typeof window.resumeResizeSave==='function');
     return page.evaluate(async()=>{
       await new Promise(requestAnimationFrame);await new Promise(requestAnimationFrame);
-      return {inert:document.querySelector('#app').inert,focusDropped:document.activeElement===document.body};
+      return {inert:document.querySelector('.cv-app-root').inert,focusDropped:document.activeElement===document.body};
     });
   }
   const finishPausedFlush=()=>page.evaluate(async()=>{
@@ -169,13 +169,13 @@ test('actual editor resizes from the opposite corner, respects modifiers and kee
   await outside.evaluate(node=>node.remove());
   await canvasItems.first().click();await stage.focus();await page.keyboard.press('ArrowRight');await pauseFlush({abort:true});
   await assert.rejects(finishPausedFlush(),/EDITOR_SAVE_FAILED/,'real aborted storage keeps its existing save error');
-  assert.equal(await page.locator('#app').evaluate(node=>node.inert),false,'failed storage releases its temporary inert state');
+  assert.equal(await page.locator('.cv-app-root').evaluate(node=>node.inert),false,'failed storage releases its temporary inert state');
   assert.equal(await stage.evaluate(node=>document.activeElement===node),true,'failed save also restores temporary editor focus loss');
   await page.keyboard.press('Control+z');
   assert.deepEqual((await persisted()).slides,naturalSaved.slides,'the next shortcut still works after failed storage without another click');
-  await page.locator('#app').evaluate(node=>node.inert=true);
-  try{await persisted();assert.equal(await page.locator('#app').evaluate(node=>node.inert),true,'a previously inert app remains inert after flushing');}
-  finally{await page.locator('#app').evaluate(node=>node.inert=false);}
+  await page.locator('.cv-app-root').evaluate(node=>node.inert=true);
+  try{await persisted();assert.equal(await page.locator('.cv-app-root').evaluate(node=>node.inert),true,'a previously inert app remains inert after flushing');}
+  finally{await page.locator('.cv-app-root').evaluate(node=>node.inert=false);}
   await page.reload();await page.getByRole('button',{name:current.name+' 열기',exact:true}).click();await page.locator('.cv-name').waitFor();
   const naturalReopened=await persisted();
   for(const key of ['id','source','originalSize'])assert.deepEqual(naturalReopened[key],naturalSaved[key],`reopening retains document ${key}`);

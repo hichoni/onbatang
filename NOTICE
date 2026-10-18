@@ -58,3 +58,23 @@ The approved B Onbatang symbol, custom wordmark contours and application brandin
    - nanum-pen (나눔손글씨 펜) — Copyright (c) 2010, NHN Corporation (http://www.nhncorp.com)
    - nanum-brush (나눔손글씨 붓) — Copyright (c) 2010, NHN Corporation (http://www.nhncorp.com)
    - east-sea-dokdo (동해독도) — Copyright (c) YoonDesign Inc. All Rights Reserved.
+
+6. PPTX 가져오기 · 정적 브라우저 배포본 — app/pptx-import/vendor/
+   원본과 미리보기는 브라우저 안에서 처리하며 아래 라이브러리를 고정 버전으로 묶습니다.
+   도구: tools/build-pptx-import.mjs · 버전/입력/출력 SHA-256: app/pptx-import/vendor/BUILD.json.
+   정적 호스팅에서 npm이나 CDN 없이 실행할 수 있도록 worker와 격리된 미리보기 HTML을 함께 배포합니다.
+   - fflate 0.8.3 — Copyright (c) 2020 Arjun Barrett — MIT License
+     https://github.com/101arrowz/fflate · 전문: vendor/licenses/fflate-MIT.txt
+   - @xmldom/xmldom 0.8.15 — MIT License
+     https://github.com/xmldom/xmldom · 전문: vendor/licenses/xmldom-MIT.txt
+   - @aiden0z/pptx-renderer 1.3.0 — Apache License 2.0
+     https://github.com/aiden0z/pptx-renderer · 전문: vendor/licenses/pptx-renderer-Apache-2.0.txt
+     제3자 고지: vendor/licenses/THIRD_PARTY_NOTICES.md.
+     내장 MTX 압축 해제 구현의 MPL 2.0 및 ECMA 문자/표 고지는 vendor/licenses/licenses/에 보존합니다.
+   - JSZip — MIT 또는 GPL-3.0 중 MIT 조건으로 배포 · vendor/licenses/jszip-LICENSE.md
+   - Apache ECharts — Apache License 2.0 · vendor/licenses/echarts-LICENSE.txt 및 echarts-NOTICE.txt
+     d3 고지: vendor/licenses/licenses/LICENSE-d3.
+   - ZRender — BSD 3-Clause · vendor/licenses/zrender-LICENSE.txt
+   - tslib — 0BSD · vendor/licenses/tslib-CopyrightNotice.txt 및 tslib-LICENSE.txt
+   위 vendor/ 상대 경로의 기준은 app/pptx-import/입니다. 각 배포 파일의 원문 고지를 따릅니다.
+   사용자가 가져온 PPT에 포함된 글꼴·사진의 이용 조건은 이 라이브러리 라이선스와 별개입니다.

@@ -1522,6 +1522,7 @@ export function startMinican({ root = document.getElementById('app'), fonts = []
   if (app) throw new Error('minican already started');
   if (!root) throw new Error('minican root');
   app = root;
+  app.classList.add('cv-app-root');
   if (typeof view === 'function') onView = view;
   brand = cleanBrand(mark);
   if (typeof hostHome === 'function') onBrandClick = hostHome;
@@ -1538,6 +1539,9 @@ export function startMinican({ root = document.getElementById('app'), fonts = []
   S.phase = 'boot';
   return refresh();
 }
+
+/** Check before a wrapper replaces DOM; this editor owns one app per window. */
+export function isMinicanStarted() { return app !== null; }
 
 /** Open an already persisted host import. Never replaces an active/unsaved editor. */
 export async function openSavedDesign(id) {

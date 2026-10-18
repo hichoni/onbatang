@@ -87,7 +87,7 @@ test('download choices wait for confirmation and remain usable on short and narr
   await page.locator('.cv-down-btn').click();await dialog.waitFor();
   assert.equal(await page.locator('.download-panel').getAttribute('role'),'dialog');
   assert.equal(await page.locator('.download-panel').getAttribute('aria-modal'),'true');
-  assert.equal(await page.locator('#app').evaluate(node=>node.inert),true,'background editor is inactive while choosing an export');
+  assert.equal(await page.locator('.cv-app-root').evaluate(node=>node.inert),true,'background editor is inactive while choosing an export');
   await save.focus();await page.keyboard.press('Tab');
   assert.equal(await page.locator('.download-panel .modal-close').evaluate(node=>node===document.activeElement),true,'Tab wraps inside the dialog');
   await page.keyboard.press('Shift+Tab');assert.equal(await save.evaluate(node=>node===document.activeElement),true,'Shift+Tab also stays inside the dialog');
@@ -108,7 +108,7 @@ test('download choices wait for confirmation and remain usable on short and narr
     assert.equal(downloadCount,1);await layout('short desktop video');
   }
   await page.keyboard.press('Escape');assert.equal(await dialog.count(),0);assert.equal(downloadCount,1,'closing options never downloads');
-  assert.equal(await page.locator('#app').evaluate(node=>node.inert),false,'Escape restores the background editor');
+  assert.equal(await page.locator('.cv-app-root').evaluate(node=>node.inert),false,'Escape restores the background editor');
   assert.equal(await page.locator('.cv-down-btn').evaluate(node=>node===document.activeElement),true,'Escape returns focus to the download button');
   assert.equal(await page.locator('.cv-name').inputValue(),'내려받기 화면 검증','cancel leaves the editor and its document intact');
   await page.setViewportSize({width:390,height:700});await page.locator('.cv-down-btn').click();

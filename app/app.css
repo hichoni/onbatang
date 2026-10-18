@@ -29,7 +29,7 @@ img { max-width: 100%; display: block; }
 input:focus-visible, textarea:focus-visible, button:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
 .card { background: var(--card); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); margin-bottom: 14px; }
 .warn-box { background: #fff7ed; color: #b35309; border-radius: 10px; padding: 10px 14px; font-weight: 700; }
-#app { max-width: 1100px; margin: 0 auto; padding: 16px 16px 48px; }
+:is(#app,.cv-app-root) { max-width: 1100px; margin: 0 auto; padding: 16px 16px 48px; }
 
 /* 단추 */
 .btn {
@@ -99,7 +99,7 @@ body.mc-app {
 .cv-app .fe-sep { width: 1px; }
 
 /* 편집기는 창의 너비를 다 쓴다. 첫 화면의 공통 본문 폭은 아래 첫 화면 규칙에서 정한다. */
-body.mc-app #app[data-view="home"], body.mc-app #app[data-view="edit"] { max-width: none; padding: 0; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"], body.mc-app :is(#app,.cv-app-root)[data-view="edit"] { max-width: none; padding: 0; }
 
 /* ---- 첫 화면 ① 남색 띠: 소개 + 새로 만들기 | 템플릿 ---- */
 .cv-hero { background: var(--cv-ink); color: #fff; }
@@ -588,7 +588,7 @@ body.mc-app .modal-panel { animation: cv-pop-in .22s cubic-bezier(.2, .7, .2, 1)
 
 /* 미니캔 첫 화면: 소개 카드 · 템플릿 · 내 그림을 같은 본문 폭에 놓는다.
    홈 화면에만 적용하므로 편집기와 발표 화면의 짜임은 그대로 유지한다. */
-body.mc-app #app[data-view="home"] {
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] {
   --text: #171c44;
   --muted: #626980;
   --cv-line: #e0e4ee;
@@ -603,7 +603,7 @@ body.mc-app #app[data-view="home"] {
 }
 
 /* ---- 대문: 왼쪽 소개 · 오른쪽 꾸미는 화면을 본뜬 그림 ---- */
-body.mc-app #app[data-view="home"] .cv-hero {
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero {
   position: relative;
   overflow: hidden;
   border: 1px solid #e6e8f3;
@@ -611,7 +611,7 @@ body.mc-app #app[data-view="home"] .cv-hero {
   background: radial-gradient(120% 90% at 0% 100%, #e3f6ec 0%, transparent 55%), radial-gradient(90% 80% at 100% 0%, #e7e9ff 0%, transparent 60%), #f9faff;
   color: #171c44;
 }
-body.mc-app #app[data-view="home"] .cv-hero-in {
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero-in {
   max-width: none;
   margin: 0;
   padding: 34px 40px 30px;
@@ -619,36 +619,36 @@ body.mc-app #app[data-view="home"] .cv-hero-in {
   align-items: center;
   gap: 18px 28px;
 }
-body.mc-app #app[data-view="home"] .cv-hero-text { position: relative; z-index: 1; min-width: 0; }
-body.mc-app #app[data-view="home"] .cv-home-heading { display: flex; align-items: center; gap: 18px; }
-body.mc-app #app[data-view="home"] .cv-home-icon {
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero-text { position: relative; z-index: 1; min-width: 0; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-home-heading { display: flex; align-items: center; gap: 18px; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-home-icon {
   display: grid; place-items: center; flex: none; width: 76px; height: 76px; border-radius: 20px;
   background: linear-gradient(145deg, #ffffff, #eef0fb); box-shadow: 0 6px 18px rgba(23, 28, 68, .10), inset 0 0 0 1px #e3e6f5; color: #171c44;
 }
-body.mc-app #app[data-view="home"] .cv-home-icon :is(.fe-ic, svg, .cv-logo) { display: block; width: 44px; height: 44px; }
-body.mc-app #app[data-view="home"] .cv-home-title { margin: 0; color: #171c44; font-size: clamp(2.6rem, 5.4vw, 4.4rem); font-weight: 400; line-height: 1.05; letter-spacing: -.02em; }
-body.mc-app #app[data-view="home"] .cv-hero-kicker { margin: 20px 0 0; color: #171c44; font-size: clamp(1.25rem, 2.3vw, 1.8rem); font-weight: 800; line-height: 1.3; letter-spacing: -.02em; }
-body.mc-app #app[data-view="home"] .cv-kick-color { color: #1f9d6c; }
-body.mc-app #app[data-view="home"] .cv-hero-lead { max-width: none; margin: 10px 0 0; color: #5c637c; font-size: 1.02rem; line-height: 1.6; }
-body.mc-app #app[data-view="home"] .cv-feats { display: flex; flex-wrap: wrap; gap: 14px 18px; margin: 22px 0 0; padding: 0; list-style: none; }
-body.mc-app #app[data-view="home"] .cv-feat { display: grid; justify-items: center; gap: 7px; min-width: 64px; color: #2a3150; font-size: .9rem; font-weight: 700; }
-body.mc-app #app[data-view="home"] .cv-feat-icon { display: grid; place-items: center; width: 58px; height: 58px; border-radius: 50%; font-size: 1.45rem; }
-body.mc-app #app[data-view="home"] .cv-feat.mint .cv-feat-icon { background: #dcf3e7; color: #1f8a60; }
-body.mc-app #app[data-view="home"] .cv-feat.sky .cv-feat-icon { background: #dcebff; color: #2f6fd6; }
-body.mc-app #app[data-view="home"] .cv-feat.lilac .cv-feat-icon { background: #ebe6ff; color: #5a49c9; }
-body.mc-app #app[data-view="home"] .cv-feat.sun .cv-feat-icon { background: #fff1c7; color: #b98200; }
-body.mc-app #app[data-view="home"] .cv-hero-go { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; max-width: none; margin-top: 24px; }
-body.mc-app #app[data-view="home"] .btn.cv-cta {
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-home-icon :is(.fe-ic, svg, .cv-logo) { display: block; width: 44px; height: 44px; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-home-title { margin: 0; color: #171c44; font-size: clamp(2.6rem, 5.4vw, 4.4rem); font-weight: 400; line-height: 1.05; letter-spacing: -.02em; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero-kicker { margin: 20px 0 0; color: #171c44; font-size: clamp(1.25rem, 2.3vw, 1.8rem); font-weight: 800; line-height: 1.3; letter-spacing: -.02em; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-kick-color { color: #1f9d6c; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero-lead { max-width: none; margin: 10px 0 0; color: #5c637c; font-size: 1.02rem; line-height: 1.6; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-feats { display: flex; flex-wrap: wrap; gap: 14px 18px; margin: 22px 0 0; padding: 0; list-style: none; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-feat { display: grid; justify-items: center; gap: 7px; min-width: 64px; color: #2a3150; font-size: .9rem; font-weight: 700; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-feat-icon { display: grid; place-items: center; width: 58px; height: 58px; border-radius: 50%; font-size: 1.45rem; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-feat.mint .cv-feat-icon { background: #dcf3e7; color: #1f8a60; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-feat.sky .cv-feat-icon { background: #dcebff; color: #2f6fd6; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-feat.lilac .cv-feat-icon { background: #ebe6ff; color: #5a49c9; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-feat.sun .cv-feat-icon { background: #fff1c7; color: #b98200; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero-go { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; max-width: none; margin-top: 24px; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .btn.cv-cta {
   display: inline-flex; align-items: center; gap: 12px; min-height: 58px; padding: 12px 30px; border-radius: 999px;
   background: #1b2160; color: #fff; font-size: 1.05rem; font-weight: 800; white-space: nowrap; box-shadow: 0 8px 20px rgba(27, 33, 96, .22);
 }
-body.mc-app #app[data-view="home"] .btn.cv-cta:hover:not(:disabled) { background: #262d7c; }
-body.mc-app #app[data-view="home"] .btn.cv-cta svg { width: 1.25em; height: 1.25em; }
-body.mc-app #app[data-view="home"] .cv-hero-full { margin: 0; color: #626980; font-size: .85rem; line-height: 1.4; }
-body.mc-app #app[data-view="home"] .cv-hero-tag { margin: 12px 0 0 6px; color: #8a90a8; font-size: .86rem; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .btn.cv-cta:hover:not(:disabled) { background: #262d7c; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .btn.cv-cta svg { width: 1.25em; height: 1.25em; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero-full { margin: 0; color: #626980; font-size: .85rem; line-height: 1.4; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero-tag { margin: 12px 0 0 6px; color: #8a90a8; font-size: .86rem; }
 
 /* 오른쪽 그림: 모두 장식(aria-hidden). 크기는 칸 너비를 따른다. */
-body.mc-app #app[data-view="home"] .cv-demo { position: relative; min-height: 360px; aspect-ratio: 1.45; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-demo { position: relative; min-height: 360px; aspect-ratio: 1.45; }
 .cv-demo-blob { position: absolute; border-radius: 50%; filter: blur(2px); }
 .cv-demo-blob.one { right: -6%; top: -14%; width: 46%; aspect-ratio: 1; background: #e4e7ff; }
 .cv-demo-blob.two { left: 6%; bottom: -16%; width: 70%; height: 30%; background: #e6f6ee; }
@@ -693,46 +693,46 @@ body.mc-app #app[data-view="home"] .cv-demo { position: relative; min-height: 36
 .cv-demo-say { right: 2%; top: 0; transform: rotate(-4deg); }
 .cv-demo-card-note { right: 4%; bottom: -2%; padding: 10px 16px; border-radius: 12px; background: #dff5ea; box-shadow: 0 8px 18px rgba(23, 28, 68, .10); transform: rotate(-3deg); }
 
-body.mc-app #app[data-view="home"] .cv-home {
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-home {
   display: grid;
   gap: 12px;
   max-width: none;
   margin: 0;
   padding: 12px 0 0;
 }
-body.mc-app #app[data-view="home"] .cv-home > :is(.cv-starts, .cv-mine) {
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-home > :is(.cv-starts, .cv-mine) {
   min-width: 0;
   padding: 14px 20px;
   border: 1px solid #e0e4ee;
   border-radius: 18px;
   background: #fff;
 }
-body.mc-app #app[data-view="home"] .cv-home > .cv-starts { padding: 12px 18px; }
-body.mc-app #app[data-view="home"] :is(.cv-starts-head, .cv-sec-head) { gap: 6px 12px; min-height: 40px; margin: 0 0 8px; }
-body.mc-app #app[data-view="home"] .cv-starts-head { margin-bottom: 6px; }
-body.mc-app #app[data-view="home"] :is(.cv-starts-head, .cv-sec-head) h2 {
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-home > .cv-starts { padding: 12px 18px; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] :is(.cv-starts-head, .cv-sec-head) { gap: 6px 12px; min-height: 40px; margin: 0 0 8px; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-starts-head { margin-bottom: 6px; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] :is(.cv-starts-head, .cv-sec-head) h2 {
   margin: 0;
   color: #171c44;
   font-size: 1.1rem;
   line-height: 1.4;
 }
-body.mc-app #app[data-view="home"] .cv-seg {
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-seg {
   padding: 3px;
   border: 1px solid #e0e4ee;
   border-radius: 12px;
   background: #f1f3fa;
 }
-body.mc-app #app[data-view="home"] .cv-seg-btn {
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-seg-btn {
   min-height: 34px;
   padding: 5px 13px;
   border-radius: 9px;
   color: #626980;
 }
-body.mc-app #app[data-view="home"] .cv-seg-btn:hover { color: #171c44; }
-body.mc-app #app[data-view="home"] .cv-seg-btn.on { background: #171c44; color: #fff; }
-body.mc-app #app[data-view="home"] :is(.cv-starts-tools, .cv-start-arrows) { display: flex; align-items: center; gap: 8px; }
-body.mc-app #app[data-view="home"] .cv-starts-tools { gap: 12px; }
-body.mc-app #app[data-view="home"] .cv-start-arrow {
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-seg-btn:hover { color: #171c44; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-seg-btn.on { background: #171c44; color: #fff; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] :is(.cv-starts-tools, .cv-start-arrows) { display: flex; align-items: center; gap: 8px; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-starts-tools { gap: 12px; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-start-arrow {
   display: grid;
   place-items: center;
   width: 40px;
@@ -745,9 +745,9 @@ body.mc-app #app[data-view="home"] .cv-start-arrow {
   font: inherit;
   cursor: pointer;
 }
-body.mc-app #app[data-view="home"] .cv-start-arrow:hover:not(:disabled) { border-color: #a8b2dc; background: #eef1ff; }
-body.mc-app #app[data-view="home"] .cv-start-arrow:disabled { opacity: .35; cursor: default; }
-body.mc-app #app[data-view="home"] .cv-start-list {
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-start-arrow:hover:not(:disabled) { border-color: #a8b2dc; background: #eef1ff; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-start-arrow:disabled { opacity: .35; cursor: default; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-start-list {
   grid-template-columns: none;
   grid-auto-flow: column;
   grid-auto-columns: 148px;
@@ -763,7 +763,7 @@ body.mc-app #app[data-view="home"] .cv-start-list {
   scrollbar-width: thin;
   scrollbar-color: #bdc5df #f2f4fa;
 }
-body.mc-app #app[data-view="home"] .cv-start {
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-start {
   min-width: 0;
   gap: 6px;
   padding: 6px;
@@ -775,48 +775,48 @@ body.mc-app #app[data-view="home"] .cv-start {
   font-size: .85rem;
   line-height: 1.4;
 }
-body.mc-app #app[data-view="home"] .cv-start-view { display: grid; place-items: center; aspect-ratio: 16 / 9; background: #eef1f7; }
-body.mc-app #app[data-view="home"] .cv-start-view .fe-card { width: auto; height: 100%; }
-body.mc-app #app[data-view="home"] .cv-start-view .fe-card.is-wide { width: 100%; height: auto; }
-body.mc-app #app[data-view="home"] .cv-start:hover:not(:disabled) { border-color: #b4bde8; background: #f0f3ff; }
-body.mc-app #app[data-view="home"] .cv-start:hover:not(:disabled) .cv-start-view { transform: none; outline-color: transparent; }
-body.mc-app #app[data-view="home"] :is(.btn.cv-cta, .cv-start, .cv-seg-btn, .cv-start-arrow):focus-visible { outline: 3px solid #4f57d7; outline-offset: 3px; }
-body.mc-app #app[data-view="home"] .cv-account { font-size: .86rem; }
-body.mc-app #app[data-view="home"] .cv-list { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px; }
-body.mc-app #app[data-view="home"] .cv-item { border-radius: 14px; }
-body.mc-app #app[data-view="home"] :is(.cv-state) {
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-start-view { display: grid; place-items: center; aspect-ratio: 16 / 9; background: #eef1f7; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-start-view .fe-card { width: auto; height: 100%; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-start-view .fe-card.is-wide { width: 100%; height: auto; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-start:hover:not(:disabled) { border-color: #b4bde8; background: #f0f3ff; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-start:hover:not(:disabled) .cv-start-view { transform: none; outline-color: transparent; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] :is(.btn.cv-cta, .cv-start, .cv-seg-btn, .cv-start-arrow):focus-visible { outline: 3px solid #4f57d7; outline-offset: 3px; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-account { font-size: .86rem; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-list { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-item { border-radius: 14px; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] :is(.cv-state) {
   border-width: 1px;
   border-color: #d7ddea;
   border-radius: 14px;
   background: #f8f9fd;
   color: #626980;
 }
-body.mc-app #app[data-view="home"] .cv-state b { color: #171c44; }
-body.mc-app #app[data-view="home"] .cv-home > .cv-note { max-width: none; margin: 0; padding: 0 4px; font-size: .85rem; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-state b { color: #171c44; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-home > .cv-note { max-width: none; margin: 0; padding: 0 4px; font-size: .85rem; }
 
 @media (max-width: 900px) {
-  body.mc-app #app[data-view="home"] { margin-top: 14px; }
-  body.mc-app #app[data-view="home"] .cv-hero-in { grid-template-columns: minmax(0, 1fr); padding: 26px 24px; }
-  body.mc-app #app[data-view="home"] .cv-demo { min-height: 0; max-width: 620px; width: 100%; justify-self: center; }
+  body.mc-app :is(#app,.cv-app-root)[data-view="home"] { margin-top: 14px; }
+  body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero-in { grid-template-columns: minmax(0, 1fr); padding: 26px 24px; }
+  body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-demo { min-height: 0; max-width: 620px; width: 100%; justify-self: center; }
 }
 @media (max-width: 620px) {
-  body.mc-app #app[data-view="home"] .cv-hero-in { padding: 20px 16px; gap: 10px; }
-  body.mc-app #app[data-view="home"] .cv-home-heading { gap: 12px; }
-  body.mc-app #app[data-view="home"] .cv-home-icon { width: 56px; height: 56px; border-radius: 16px; }
-  body.mc-app #app[data-view="home"] .cv-home-icon :is(.fe-ic, svg, .cv-logo) { width: 32px; height: 32px; }
-  body.mc-app #app[data-view="home"] .cv-hero-lead { font-size: .94rem; }
-  body.mc-app #app[data-view="home"] .cv-feats { gap: 10px 12px; }
-  body.mc-app #app[data-view="home"] .cv-feat-icon { width: 48px; height: 48px; font-size: 1.2rem; }
-  body.mc-app #app[data-view="home"] .btn.cv-cta { width: 100%; justify-content: center; padding: 12px 18px; font-size: 1rem; }
-  body.mc-app #app[data-view="home"] .cv-demo { display: none; }
-  body.mc-app #app[data-view="home"] .cv-home > :is(.cv-starts, .cv-mine) { padding: 12px 14px; }
-  body.mc-app #app[data-view="home"] .cv-home > .cv-starts { padding: 12px 14px; }
-  body.mc-app #app[data-view="home"] .cv-starts-head { align-items: flex-start; }
-  body.mc-app #app[data-view="home"] .cv-starts-head h2 { width: 100%; }
-  body.mc-app #app[data-view="home"] .cv-starts-tools { width: 100%; justify-content: space-between; gap: 8px; }
-  body.mc-app #app[data-view="home"] .cv-start-list { grid-auto-columns: 148px; }
-  body.mc-app #app[data-view="home"] .cv-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-  body.mc-app #app[data-view="home"] .cv-account { width: 100%; margin-left: 0; }
+  body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero-in { padding: 20px 16px; gap: 10px; }
+  body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-home-heading { gap: 12px; }
+  body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-home-icon { width: 56px; height: 56px; border-radius: 16px; }
+  body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-home-icon :is(.fe-ic, svg, .cv-logo) { width: 32px; height: 32px; }
+  body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero-lead { font-size: .94rem; }
+  body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-feats { gap: 10px 12px; }
+  body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-feat-icon { width: 48px; height: 48px; font-size: 1.2rem; }
+  body.mc-app :is(#app,.cv-app-root)[data-view="home"] .btn.cv-cta { width: 100%; justify-content: center; padding: 12px 18px; font-size: 1rem; }
+  body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-demo { display: none; }
+  body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-home > :is(.cv-starts, .cv-mine) { padding: 12px 14px; }
+  body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-home > .cv-starts { padding: 12px 14px; }
+  body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-starts-head { align-items: flex-start; }
+  body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-starts-head h2 { width: 100%; }
+  body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-starts-tools { width: 100%; justify-content: space-between; gap: 8px; }
+  body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-start-list { grid-auto-columns: 148px; }
+  body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-account { width: 100%; margin-left: 0; }
 }
 
 /* 처음 불러오는 동안: 가운데에서 숨 쉬는 미니캔 표시(app.js 가 첫 화면을 그리면 사라진다). */
@@ -835,7 +835,7 @@ body.mc-app #app[data-view="home"] .cv-home > .cv-note { max-width: none; margin
 .btn.cv-tour-btn:hover:not(:disabled) { border-color: var(--primary); color: var(--primary-dark); }
 .btn.cv-tour-btn.invite { box-shadow: 0 0 0 0 rgba(40, 111, 98, .45); animation: onba-invite 1.8s ease-out infinite; }
 @keyframes onba-invite { 70% { box-shadow: 0 0 0 10px rgba(40, 111, 98, 0); } 100% { box-shadow: 0 0 0 0 rgba(40, 111, 98, 0); } }
-body.mc-app #app[data-view="home"] .cv-hero-go { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; }
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero-go { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; }
 
 /* 어둡게 덮는 네 조각과 비춘 틀. 비춘 자리는 덮지 않아 그대로 눌러 볼 수 있다. */
 .onba-tour-shade { position: fixed; inset: 0; z-index: 10000; pointer-events: none; }

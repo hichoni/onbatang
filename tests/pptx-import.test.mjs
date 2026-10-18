@@ -1,0 +1,133 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {createHash} from 'node:crypto';
+import {Worker as NodeWorker} from 'node:worker_threads';
+import {zipSync,unzipSync} from 'fflate';
+import {inspectPptx,convertPptx,PPTX_MIME,PPTX_LIMITS} from '../app/pptx-import/converter.js';
+import {createPptxClient} from '../app/pptx-import/client.js';
+import {getImportFontRegistry,createImportFontServices,createFontPlan,applyFontPlan,loadImportFontAssets} from '../app/pptx-import/fonts.js';
+import {importConvertedDocument} from '../app/import-document.js';
+import {migrateRecord} from '../app/designs.js';
+import {cleanDesign} from '../src/model.js';
+import {buildPptxImport} from '../tools/build-pptx-import.mjs';
+
+const enc=new TextEncoder(),dec=new TextDecoder();
+const digest=bytes=>createHash('sha256').update(bytes).digest('hex');
+const fixture=name=>new URL('../tools/fixtures/pptx/'+name,import.meta.url);
+const fileOf=bytes=>new File([bytes],'self-authored.pptx',{type:PPTX_MIME});
+const baseBytes=()=>readFile(fixture('self-authored-4x3.pptx'));
+const repack=parts=>fileOf(zipSync(parts));
+const texts=document=>document.slides.map(page=>page.items.filter(item=>item.t==='text').map(item=>item.text));
+const identity=document=>document.slides.map(page=>({id:page.id,source:page.source,assetRefs:page.assetRefs,items:page.items.map(item=>({id:item.id,source:item.source,assetRefs:item.assetRefs}))}));
+
+test('self-authored PPTX bytes convert to stable editable identities, text, dimensions and provenance through clean/save/reopen',async()=>{
+ const bytes=await baseBytes(),before=Buffer.from(bytes),inspection=await inspectPptx(fileOf(bytes));
+ const first=await convertPptx(fileOf(bytes)),again=await convertPptx(fileOf(bytes));
+ const expected=JSON.parse(await readFile(fixture('self-authored-4x3.expected.json'),'utf8'));
+ assert.equal(inspection.pageCount,2);assert.ok(inspection.pages.every(page=>page.canImport));
+ assert.deepEqual(texts(first.document),texts(expected.document));assert.deepEqual(identity(first.document),identity(again.document));
+ assert.deepEqual(first.document.originalSize,{width:9144000,height:6858000,unit:'emu'});
+ assert.equal(first.document.size.width/first.document.size.height,4/3);
+ assert.equal(first.document.source.sha256,digest(bytes));assert.equal(first.document.assets[0].sha256,digest(bytes));
+ assert.deepEqual(importConvertedDocument(first).record,first.document);
+ let reopened=first.document;
+ for(let count=0;count<3;count++)reopened=migrateRecord(JSON.parse(JSON.stringify({...reopened,slides:reopened.slides.map(cleanDesign)})));
+ assert.deepEqual(texts(reopened),texts(first.document));assert.deepEqual(identity(reopened),identity(first.document));
+ assert.deepEqual(reopened.originalSize,first.document.originalSize);assert.deepEqual(reopened.assets,first.document.assets);
+ const reversed=await convertPptx(fileOf(bytes),{selectedPages:[2,1]});
+ assert.deepEqual(reversed.document.slides.map(page=>page.id),[first.document.slides[1].id,first.document.slides[0].id]);
+ assert.deepEqual(texts(reversed.document),texts(first.document).toReversed());assert.deepEqual(bytes,before);
+});
+
+test('inspection preserves long authored text and all 21 original pages without silently truncating editable document limits',async()=>{
+ const longBytes=await readFile(fixture('self-authored-long-text.pptx')),long=await convertPptx(fileOf(longBytes));
+ const expected=JSON.parse(await readFile(fixture('self-authored-long-text.expected.json'),'utf8'));
+ assert.deepEqual(texts(long.document),texts(expected.document));assert.ok(texts(long.document)[0][0].length>120);
+ const many=fileOf(await readFile(fixture('self-authored-21-pages.pptx'))),inspection=await inspectPptx(many);
+ assert.equal(inspection.pageCount,21);assert.equal(inspection.pages.length,21);
+ await assert.rejects(convertPptx(many),{code:'PAGE_LIMIT'});
+ const tail=await convertPptx(many,{selectedPages:[21]});assert.deepEqual(tail.report.selectedPages,[21]);assert.equal(tail.document.slides[0].source.pageNumber,21);
+});
+
+test('ZIP traversal, active content, encrypted package markers and external XML entities are rejected before a document can be stored',async()=>{
+ const original=await baseBytes(),make=()=>unzipSync(original);
+ for(const [path,code]of [['../outside.xml','UNSAFE_ZIP_PATH'],['ppt/vbaProject.bin','UNSUPPORTED_ACTIVE_CONTENT'],['EncryptedPackage','UNSUPPORTED_ACTIVE_CONTENT']]){
+  const parts=make();parts[path]=enc.encode('self-authored rejection fixture');await assert.rejects(inspectPptx(repack(parts)),{code});
+ }
+ const parts=make();parts['ppt/presentation.xml']=enc.encode(dec.decode(parts['ppt/presentation.xml']).replace(/(<\?xml[^?]*\?>)/,'$1<!DOCTYPE p:presentation [<!ENTITY external SYSTEM "https://example.invalid/private">]>'));
+ await assert.rejects(inspectPptx(repack(parts)),{code:'UNSAFE_XML'});assert.equal(digest(original),digest(await baseBytes()));
+});
+
+test('external image relationships block their affected page while safe pages remain selectable and external hyperlinks are omitted',async()=>{
+ const original=await baseBytes(),parts=unzipSync(original),name='ppt/slides/_rels/slide1.xml.rels';
+ const external=(type,id)=>`<Relationship Id="${id}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/${type}" Target="https://example.invalid/resource" TargetMode="External"/>`;
+ parts[name]=enc.encode(dec.decode(parts[name]).replace('</Relationships>',external('image','externalImage')+'</Relationships>'));
+ const inspection=await inspectPptx(repack(parts));assert.equal(inspection.pages[0].canImport,false);assert.equal(inspection.pages[1].canImport,true);
+ assert.ok(inspection.pages[0].warnings.some(warning=>warning.code==='EXTERNAL_RESOURCE'));
+ await assert.rejects(convertPptx(repack(parts),{selectedPages:[1]}),{code:'UNSUPPORTED_SLIDES'});
+ assert.deepEqual((await convertPptx(repack(parts),{selectedPages:[2]})).report.selectedPages,[2]);
+ const links=unzipSync(original);links[name]=enc.encode(dec.decode(links[name]).replace('</Relationships>',external('hyperlink','externalLink')+'</Relationships>'));
+ const linked=await inspectPptx(repack(links));assert.equal(linked.pages[0].canImport,true);assert.ok(linked.pages[0].warnings.some(warning=>warning.code==='EXTERNAL_LINK_OMITTED'));
+});
+
+test('default OFL font plans apply to the whole PPT or original page numbers and undo from the intact baseline',async()=>{
+ const converted=await convertPptx(fileOf(await baseBytes())),baseline=converted.document,before=structuredClone(baseline);
+ const sources=Object.fromEntries(converted.report.fontUsage.map(usage=>[usage.elementId,usage.originalName]));
+ const names=[...new Set(Object.values(sources))],all=Object.fromEntries(names.map(name=>[name,'gowun-dodum']));
+ const plan=createFontPlan({mappings:all,rules:[{scopePages:[2],mappings:Object.fromEntries(names.map(name=>[name,'do-hyeon']))}],sourceNamesByElementId:sources});
+ const changed=applyFontPlan(baseline,plan);
+ assert.deepEqual(changed.slides.map(page=>page.items.find(item=>item.t==='text').font),['gowun-dodum','do-hyeon']);
+ assert.deepEqual(texts(changed),texts(baseline));assert.deepEqual(identity(changed),identity(baseline));assert.deepEqual(changed.assets,baseline.assets);assert.deepEqual(changed.originalSize,baseline.originalSize);
+ assert.deepEqual(applyFontPlan(baseline,{}),baseline);assert.deepEqual(baseline,before);
+ const registry=getImportFontRegistry();assert.equal(registry.length,15);assert.ok(registry.every(font=>!font.id.startsWith('gai-')));
+ const loaded=await loadImportFontAssets(plan,{fetchImpl:async url=>new Response(await readFile(new URL(url)))});
+ assert.deepEqual(loaded.fonts.map(font=>font.id).sort(),['do-hyeon','gowun-dodum']);assert.ok(loaded.licenseNotices.every(notice=>/SIL OPEN FONT LICENSE/i.test(notice.text)));
+});
+
+test('host registry injection is isolated, preserves host IDs and refuses unknown targets, unsafe CSS families and off-origin font loads',async()=>{
+ const entry={...getImportFontRegistry()[0],id:'host-title',family:'mc-host-title',aliases:['Host Title']};
+ const host=createImportFontServices({registry:[entry]}),plan=host.createFontPlan({mappings:{Original:'host-title'}});
+ assert.equal(host.resolveImportFontReplacement('Original',plan,1).id,'host-title');
+ assert.throws(()=>createFontPlan(plan),{code:'UNKNOWN_FONT_TARGET'});
+ entry.aliases.push('mutable caller alias');assert.ok(!host.getImportFontRegistry()[0].aliases.includes('mutable caller alias'));
+ assert.throws(()=>createImportFontServices({registry:[{...entry,family:'unsafe";font-size:99px'}]}),{code:'INVALID_FONT_REGISTRY'});
+ const remote=createImportFontServices({registry:[{...entry,fontUrl:'https://example.invalid/font.woff2'}]});
+ let requests=0;await assert.rejects(remote.loadImportFontAssets(plan,{fetchImpl:()=>{requests++;throw Error('must not fetch');}}),{code:'FONT_ASSET_ORIGIN'});assert.equal(requests,0);
+ const large=createImportFontServices({registry:Array.from({length:26},(_,index)=>({...entry,id:'host-'+index,family:'mc-host-'+index}))});
+ const many=large.createFontPlan({mappings:Object.fromEntries(Array.from({length:26},(_,index)=>['source-'+index,'host-'+index]))});
+ await assert.rejects(large.loadImportFontAssets(many,{fetchImpl:()=>{requests++;throw Error('must not fetch');}}),{code:'FONT_ASSET_SIZE'});assert.equal(requests,0);
+});
+
+test('checked-in worker converts real PPTX bytes in an isolated worker with no bare imports and terminates after the request',async()=>{
+ const url=new URL('../app/pptx-import/vendor/pptx-worker.js',import.meta.url).href;
+ const worker=new NodeWorker(`const {parentPort}=require('node:worker_threads');globalThis.self={addEventListener:(name,handler)=>parentPort.on(name,data=>handler({data})),postMessage:data=>parentPort.postMessage(data)};import(${JSON.stringify(url)});`,{eval:true});
+ try{
+  const result=await new Promise((resolve,reject)=>{
+   const timer=setTimeout(()=>reject(Error('worker-timeout')),5000);
+   worker.on('error',error=>{clearTimeout(timer);reject(error);});
+   worker.on('message',data=>{if(data.type==='error'){clearTimeout(timer);reject(Object.assign(Error('worker-conversion'),{code:data.error.code}));}if(data.type==='result'){clearTimeout(timer);resolve(data.result);}});
+   baseBytes().then(bytes=>worker.postMessage({id:'self-authored-worker',method:'convert',file:fileOf(bytes),options:{selectedPages:[2,1]}}),reject);
+  });
+  assert.deepEqual(result.document.slides.map(page=>page.source.pageNumber),[2,1]);assert.equal(result.document.source.sha256,digest(await baseBytes()));
+ }finally{await worker.terminate();}
+});
+
+test('worker client cancellation ends its own CPU job and leaves another conversion independent',async()=>{
+ const workers=[];
+ const client=createPptxClient({workerFactory:()=>{const events={};const worker={events,terminated:false,addEventListener:(name,fn)=>events[name]=fn,postMessage:message=>worker.message=message,terminate:()=>worker.terminated=true};workers.push(worker);return worker;}});
+ const abort=new AbortController(),first=client.inspectPptx(new Blob(['self']),{signal:abort.signal}),second=client.inspectPptx(new Blob(['other']));
+ abort.abort();await assert.rejects(first,{code:'CANCELLED'});assert.equal(workers[0].terminated,true);assert.equal(workers[1].terminated,false);
+ workers[1].events.message({data:{id:workers[1].message.id,type:'result',result:{pageCount:2}}});assert.deepEqual(await second,{pageCount:2});assert.equal(workers[1].terminated,true);
+});
+
+test('static bundles rebuild byte-for-byte with package/source hashes, intact CSP and all distribution licenses',async()=>{
+ const result=await buildPptxImport({check:true});assert.equal(result.rendererVersion,'1.3.0');assert.ok(result.workerBytes<500000);assert.ok(result.previewBytes<2*1024*1024);
+ const root=new URL('../app/pptx-import/vendor/',import.meta.url),manifest=JSON.parse(await readFile(new URL('BUILD.json',root),'utf8'));
+ assert.equal(manifest.packages.fflate,'0.8.3');assert.equal(manifest.packages['@xmldom/xmldom'],'0.8.15');assert.equal(manifest.renderer.version,'1.3.0');
+ for(const [name,entry]of Object.entries(manifest.files)){const bytes=await readFile(new URL(name,root));assert.equal(bytes.length,entry.bytes);assert.equal(digest(bytes),entry.sha256);}
+ const html=await readFile(new URL('preview-frame.html',root),'utf8');
+ for(const directive of ["default-src 'none'","connect-src 'none'","frame-src 'none'","media-src 'none'","object-src 'none'","base-uri 'none'","form-action 'none'"])assert.ok(html.includes(directive));
+ const script=html.match(/<script>([\s\S]*)<\/script>/)?.[1];assert.ok(script);assert.ok(html.includes("script-src 'sha256-"+createHash('sha256').update(script).digest('base64')+"'"));
+ assert.equal(PPTX_LIMITS.zipBytes,50*1024*1024);assert.equal(PPTX_LIMITS.xmlDepth,64);assert.equal(PPTX_LIMITS.documentBytes,524288);
+});
