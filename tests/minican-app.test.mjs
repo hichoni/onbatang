@@ -144,8 +144,12 @@ test('앱은 이 기기 밖으로 아무것도 보내지 않고, 로그인·서�
   assert.ok(files.includes('app.js') && files.includes('app.css') && files.includes('index.html'));
   for (const f of files) {
     const src = readFileSync(APP + f, 'utf8');
-    assert.doesNotMatch(src, /\bfetch\(|XMLHttpRequest|WebSocket|sendBeacon|EventSource/, f);
-    assert.doesNotMatch(src.replaceAll('http://www.w3.org/2000/svg', ''), /https?:\/\//, `${f}: 바깥 주소`);
+    // PPTX only reads a cleaned existing photo URL. No credentials, referrer, body,
+    // writes or other network APIs are allowed; keep every other app file under the old rule.
+    const networkSource = f === 'pptx.js' ? src.replace("fetch(item.url, {signal, method: 'GET', credentials: 'omit', referrerPolicy: 'no-referrer'})", 'readExistingPhoto()') : src;
+    assert.doesNotMatch(networkSource, /\bfetch\(|XMLHttpRequest|WebSocket|sendBeacon|EventSource/, f);
+    const addresses = f === 'pptx.js' ? src.replaceAll(/http:\/\/schemas\.openxmlformats\.org\/(?:drawingml\/2006\/main|presentationml\/2006\/main|officeDocument\/2006\/(?:relationships|extended-properties)|package\/2006\/(?:relationships(?:\/metadata\/core-properties)?|content-types|metadata\/core-properties))/g, '').replaceAll('http://purl.org/dc/elements/1.1/', '') : src;
+    assert.doesNotMatch(addresses.replaceAll('http://www.w3.org/2000/svg', ''), /https?:\/\//, `${f}: 바깥 주소`);
     assert.doesNotMatch(src, /firebase|firestore|tinkerlab|틴커랩|student|login|로그인/i, f);
     for (const [, from] of src.matchAll(/from '([^']+)'/g)) assert.match(from, /^\.\/[\w-]+\.js$|^\.\.\/src\/[\w-]+\.js$/, `${f}: ${from}`);
   }

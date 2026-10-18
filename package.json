@@ -1,6 +1,6 @@
 {
   "name": "onbatang",
-  "version": "0.17.0",
+  "version": "0.18.0",
   "description": "브라우저에서 바로 쓰는 작은 그림 꾸미기 편집기 (글·도형·사진·움직임·영상, 바깥 라이브러리와 빌드 없음)",
   "license": "MIT",
   "type": "module",

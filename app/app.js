@@ -24,6 +24,7 @@ import {
 } from './designs.js';
 import { saveVideo, listVideos, removeVideos } from './videos.js';
 import { zipStore } from './zip.js';
+import { createPptx } from './pptx.js';
 import { listDesigns, getDesign, putDesign, removeDesign, setStorageName, listDesignIssues, getOriginalDesign } from './store.js';
 import { setupApp, useFonts, photoToData, BASIC_GROUP } from './setup.js';
 import { mergeAccount, createPusher } from './sync.js';
@@ -555,7 +556,7 @@ function openDesign(record, isNew) {
       markRatio(O, shapes);
     },
   });
-  const down = el('button', { class: 'btn btn-primary cv-down-btn', type: 'button', title: '그림이나 영상으로 내려받아요(크기를 고를 수 있어요)', onClick: () => askDownload(O, down) }, ...face('download', '내려받기'));
+  const down = el('button', { class: 'btn btn-primary cv-down-btn', type: 'button', title: '그림·영상·PPTX로 내려받아요', onClick: () => askDownload(O, down) }, ...face('download', '내려받기'));
   const show = el('button', { class: 'btn cv-show-btn', type: 'button', title: '화면 가득 보여 줘요', onClick: () => present(O) }, ...face('play', '발표'));
   // 그림의 모양: 꾸미는 화면 안에서 바로 바꾼다. 놓아 둔 도형과 사진은 찌그러지지 않게 편집기가 맞춰 준다.
   const shapes = el('div', { class: 'cv-shapes', role: 'group', 'aria-label': '그림의 모양' }, ...RATIOS.map((r) => {
@@ -1180,7 +1181,7 @@ function askDownload(O, btn) {
   const n = O.slides.length;
   const pref = exportPref();
   const can = canMakeVideo();
-  const pick = { kind: pref.video && can ? 'video' : pref.jpg ? 'jpg' : 'png', all: pref.all && n > 1, stay: pref.stay };
+  const pick = { kind: pref.video && can ? 'video' : pref.jpg ? 'jpg' : 'png', all: pref.all && n > 1, stay: pref.stay, pptxMode: 'editable' };
   // 장마다 바탕에 깐 영상이 있는지: ''(없다) · 'yes'(있다) · 'gone'(있는데 그 파일이 이 기기에 없다. 조금 뒤에 알게 된다)
   const scenes = currentSlides(O).map((d) => (hasVideo(d) ? 'yes' : ''));
   currentSlides(O).forEach((d, i) => {
@@ -1242,18 +1243,24 @@ function askDownload(O, btn) {
   }));
   const draw = () => {
     const video = pick.kind === 'video';
-    lead.textContent = !video ? '크기를 누르면 바로 내려받아요. 클수록 또렷하지만 파일이 커져요.'
+    const pptx = pick.kind === 'pptx';
+    lead.textContent = pptx ? 'PPTX는 PowerPoint에서 열 수 있는 발표 파일이에요. 글·요소 편집용 또는 화면 이미지로 고를 수 있어요.' : !video ? '크기를 누르면 바로 내려받아요. 클수록 또렷하지만 파일이 커져요.'
       : scenes.some(Boolean) && !live ? '크기를 누르면 영상을 만들기 시작해요. 글과 조각이 발표할 때처럼 움직여요.'
         : '크기를 누르면 영상을 만들기 시작해요. 발표할 때처럼 움직이는 영상이 돼요.';
     // 영상은 모든 장을 차례로 담는다. 너무 길면(한도를 넘으면) 만들지 않는다: 크기 단추를 잠그고 까닭을 알려 준다.
     const ms = video ? filmMs(pick.stay) : 0;
     const long = ms > MAX_FILM_SECONDS * 1000;
     sizes.classList.toggle('two', video);
+    sizes.hidden = pptx;
     sizes.replaceChildren(...(video ? videoSizes(long) : imageSizes()));
     const rows = [row('파일 종류',
       chip('PNG · 또렷하게', pick.kind === 'png', () => set({ kind: 'png' }), { type: 'png' }),
       chip('JPG · 용량 작게', pick.kind === 'jpg', () => set({ kind: 'jpg' }), { type: 'jpg' }),
+      chip('PPTX · 발표 파일', pptx, () => set({ kind: 'pptx' }), { type: 'pptx' }),
       chip('영상 · 움직임까지', video, () => set({ kind: 'video' }), { type: 'video' }, can ? {} : { disabled: true, title: NO_VIDEO }))];
+    if (pptx) rows.push(row('담는 방식',
+      chip('글·요소 편집 가능', pick.pptxMode === 'editable', () => set({pptxMode: 'editable'}), { pptx: 'editable' }),
+      chip('슬라이드 이미지', pick.pptxMode === 'image', () => set({pptxMode: 'image'}), { pptx: 'image' })));
     if (video) {
       // 한 장이 얼마나 머무는지만 고른다(바탕에 영상을 깐 장은 그 영상이 끝날 때까지 이어진다).
       rows.push(row('한 장에', ...STAYS.map((sec) => chip(`${sec}초`, pick.stay === sec, () => set({ stay: sec }), { stay: String(sec) }))));
@@ -1265,9 +1272,16 @@ function askDownload(O, btn) {
     } else if (n > 1) {
       rows.push(row('어느 장',
         chip(`지금 장 (${O.at + 1}번째)`, !pick.all, () => set({ all: false }), { scope: 'one' }),
-        chip(`모든 장 (${n}장 · 압축 파일)`, pick.all, () => set({ all: true }), { scope: 'all' })));
+        chip(`모든 장 (${n}장 · ${pptx ? 'PPTX 한 파일' : '압축 파일'})`, pick.all, () => set({ all: true }), { scope: 'all' })));
     }
     if (!video && sceneNote(pick.all ? scenes : [scenes[O.at]], false)) rows.push(el('p', { class: 'cv-down-note', text: sceneNote(pick.all ? scenes : [scenes[O.at]], false) }));
+    if (pptx) {
+      rows.push(el('p', {class: 'cv-down-note', text: pick.pptxMode === 'editable'
+        ? '글·기본 도형·사진을 각각 수정할 수 있어요. 지원하지 않는 조각은 개별 이미지로 담아요. 글꼴 파일은 포함하지 않으므로 여는 기기에 해당 글꼴이 필요해요.'
+        : '한 장 전체를 이미지로 넣어 화면 모습을 유지해요. 글이나 요소를 따로 수정하기는 어려워요.'}));
+      rows.push(el('p', {class: 'cv-down-note', text: '영상과 움직임은 정지한 모습으로 담아요. 원본 PPT와 편집한 자료는 그대로 보관돼요.'}));
+      rows.push(el('button', {class: 'btn btn-primary', type: 'button', 'data-pptx-save': '', onClick: () => makePptx(O, {all: pick.all, mode: pick.pptxMode})}, 'PPTX 내려받기'));
+    }
     if (!can) rows.push(el('p', { class: 'cv-down-note', text: NO_VIDEO }));
     options.replaceChildren(...rows);
   };
@@ -1282,6 +1296,35 @@ const saveBlob = (blob, name) => {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 30000);
 };
+// PPTX는 편집 중인 장까지 저장한 뒤 한 파일로 만든다. 실패·취소 때 일부 파일을 내려받지 않는다.
+async function makePptx(O, {all, mode}) {
+  if (O.closed) return;
+  const controller = new AbortController();
+  const label = el('p', {role: 'status', 'aria-live': 'polite', text: '편집 내용을 저장하고 있어요…'});
+  const progress = el('progress', {max: all ? O.slides.length : 1, value: 0, 'aria-label': 'PPTX 만드는 중'});
+  const notes = el('ul');
+  const cancel = el('button', {class: 'btn', type: 'button', onClick: closeModal}, '만들기 취소');
+  const box = el('div', {class: 'cv-pptx-export'}, el('h2', {text: 'PPTX 내려받기'}), label, progress, notes, cancel);
+  openModal(box, {onClose: () => controller.abort()});
+  try {
+    await flushSavedDesign(O.record.id);
+    if (controller.signal.aborted || O.closed) return;
+    const slides = structuredClone(currentSlides(O)), selected = all ? slides : [slides[O.at]];
+    const result = await createPptx({slides: selected, aspect: aspectOf(O.record), size: O.record.size,
+      title: O.record.name || '온바탕', mode, signal: controller.signal,
+      onProgress: ({completed, total}) => { progress.value = completed; label.textContent = `${completed} / ${total}장을 만들었어요…`; }});
+    if (controller.signal.aborted) return;
+    const name = (O.record.name || '온바탕').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').slice(0, 100);
+    saveBlob(result.blob, `${name}${all || slides.length === 1 ? '' : `-${O.at + 1}`}.pptx`);
+    label.textContent = `${result.slideCount}장을 PPTX로 내려받았어요. 파일을 열어 글꼴과 배치를 확인해주세요.`;
+    for (const text of new Set(result.warnings.map(note => `${note.pageNumber}장 · ${note.message}`))) notes.append(el('li', {text}));
+    cancel.textContent = '닫기'; progress.hidden = true;
+  } catch (error) {
+    if (controller.signal.aborted) return;
+    label.textContent = `PPTX를 만들지 못했어요. ${error.message || ''} 편집 내용은 그대로 보관돼요.`;
+    label.setAttribute('role', 'alert'); cancel.textContent = '닫기'; progress.hidden = true;
+  }
+}
 async function download(O, btn, { size, jpg, all }) {
   if (O.closed) return;
   const label = labelOf(btn);

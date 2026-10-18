@@ -21,6 +21,7 @@ const FONTS = [
 ];
 
 /** startMinican({ fonts }) 에 그대로 주는 글꼴 목록: { id, name, desc, url } */
-export const ONBATANG_FONTS = FONTS.map(([id, name, desc, ext]) => ({ id, name, desc, url: new URL(`./fonts/${id}.${ext}`, import.meta.url).href }));
+const EXPORT_FAMILIES = ['Gowun Batang', 'Gowun Dodum', 'Do Hyeon', 'Jua', 'Bagel Fat One', 'Gugi', 'Dongle', 'Yeon Sung', 'Single Day', 'Poor Story', 'Gamja Flower', 'Hi Melody', 'Nanum Pen Script', 'Nanum Brush Script', 'East Sea Dokdo'];
+export const ONBATANG_FONTS = FONTS.map(([id, name, desc, ext], index) => ({ id, name, desc, exportFamily: EXPORT_FAMILIES[index], url: new URL(`./fonts/${id}.${ext}`, import.meta.url).href }));
 /** 큰 제목에 쓰는 글꼴(템플릿) */
 export const ONBATANG_TITLE_FONT = 'do-hyeon';
