@@ -405,9 +405,37 @@ body.mc-app #app[data-view="home"], body.mc-app #app[data-view="edit"] { max-wid
 .cv-show-key[hidden] { display: none; }      /* 영상 장면이 없는 장에서는 영상 단추를 감춘다 */
 @media (pointer: coarse) { .cv-show-bar { opacity: .9; } }
 
-/* ---- 내려받기 창: 크기 세 가지 + 파일 종류 · 어느 장 ---- */
-.cv-down-ask h2, .cv-fit-ask h2 { margin: 0 0 4px; padding-right: 40px; color: var(--text); }
-.cv-down-ask > p, .cv-fit-ask > p { margin: 0 0 14px; }
+/* ---- 내려받기 창: 파일 종류 → 저장할 장 → 설정 → 내려받기 ----
+   이 창만 본문을 스크롤한다. 짧은 화면에서도 제목 · 선택 요약 · 실행 단추를 함께 볼 수 있다. */
+.modal-backdrop.download-backdrop { z-index: 70; }
+.modal-panel.download-panel {
+  display: flex; width: min(100%, 720px); max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px);
+  padding: 0; overflow: hidden; border-radius: 20px;
+}
+.download-panel .modal-close { z-index: 1; top: 16px; right: 16px; }
+.cv-down-ask { display: flex; flex-direction: column; width: 100%; min-width: 0; min-height: 0; max-height: inherit; }
+.cv-down-head { flex: none; padding: 22px 28px 18px; border-bottom: 1px solid var(--cv-line); }
+.cv-down-head h2, .cv-fit-ask h2 { margin: 0 0 6px; padding-right: 40px; color: var(--text); }
+.cv-down-head > p { margin: 0; padding-right: 18px; font-size: .93rem; line-height: 1.5; }
+.cv-down-body { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding: 20px 28px 24px; }
+.cv-down-section { min-width: 0; margin: 0 0 22px; padding: 0; border: 0; }
+.cv-down-section:last-child { margin-bottom: 0; }
+.cv-down-heading { display: block; width: 100%; padding: 0; margin: 0 0 10px; font-size: .94rem; font-weight: 800; color: var(--text); }
+.cv-down-formats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.cv-down-modes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.cv-down-format, .cv-down-mode {
+  display: grid; align-content: start; justify-items: start; gap: 5px; min-width: 0; min-height: 86px;
+  padding: 13px 12px; border: 2px solid var(--cv-line); border-radius: var(--cv-r-l); background: #fff;
+  color: var(--text); font: inherit; text-align: left; cursor: pointer;
+}
+.cv-down-format b, .cv-down-mode b { font-size: .98rem; font-weight: 800; line-height: 1.35; }
+.cv-down-format small, .cv-down-mode small { font-size: .81rem; line-height: 1.5; color: var(--muted); }
+.cv-down-format:hover:not(:disabled), .cv-down-mode:hover:not(:disabled) { border-color: var(--primary); background: var(--soft); }
+.cv-down-format[aria-pressed="true"], .cv-down-mode[aria-pressed="true"] { border-color: var(--primary); background: var(--soft); }
+.cv-down-format[aria-pressed="true"] b, .cv-down-mode[aria-pressed="true"] b { color: var(--primary-dark); }
+.cv-down-format:disabled, .cv-down-mode:disabled { opacity: .5; cursor: not-allowed; }
+.cv-down-format:focus-visible, .cv-down-mode:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.cv-fit-ask > p { margin: 0 0 14px; }
 .cv-sizes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .cv-size {
   position: relative; display: grid; gap: 2px; justify-items: center; align-content: start; padding: 14px 8px 12px; border: 2px solid var(--cv-line); border-radius: var(--cv-r-l); background: #fff;
@@ -415,24 +443,58 @@ body.mc-app #app[data-view="home"], body.mc-app #app[data-view="edit"] { max-wid
 }
 .cv-size:hover { border-color: var(--primary); background: var(--soft); }
 .cv-size.last { border-color: var(--primary); }
-/* 고를 수 없는 크기(영상이 너무 길 때): 흐리게 두고, 올려도 반응하지 않는다. 까닭은 아래의 안내 글이 알린다. */
-.cv-size:disabled { opacity: .45; cursor: not-allowed; }
-.cv-size:disabled:hover { border-color: var(--cv-line); background: #fff; }
-.cv-size.last:disabled:hover { border-color: var(--primary); }
 .cv-size b { font-size: 1.15rem; }
 .cv-size-px { font-weight: 800; color: var(--primary-dark); font-variant-numeric: tabular-nums; }
 .cv-size small { color: var(--muted); line-height: 1.35; }
 .cv-size-last { position: absolute; top: -10px; right: 8px; padding: 0 8px; border-radius: 999px; background: var(--primary); color: #fff; font-size: .74rem; font-weight: 800; line-height: 20px; }
-.cv-down-options { display: grid; gap: 8px; margin-top: 14px; }
-/* 이름표 칸 + 고르는 단추들. 단추가 많아 줄이 바뀌어도 이름표 밑으로 들어가지 않고 단추끼리 줄을 맞춘다 */
-.cv-down-row { display: grid; grid-template-columns: 4.4em minmax(0, 1fr); align-items: start; gap: 6px; }
-.cv-down-label { min-height: 44px; display: flex; align-items: center; font-size: .9rem; font-weight: 800; color: var(--muted); }
 .cv-down-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 /* 영상을 고르면 크기가 두 가지다 */
 .cv-sizes.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.cv-down-note { margin: 0; padding-left: calc(4.4em + 6px); font-size: .88rem; line-height: 1.45; color: var(--muted); }
-.cv-down-note.warn { color: var(--text); font-weight: 600; }
-.cv-down-row .chip:disabled { opacity: .5; cursor: not-allowed; }
+.cv-down-note { margin: 10px 0 0; font-size: .85rem; line-height: 1.55; color: var(--muted); }
+.cv-down-note.warn { padding: 10px 12px; border-radius: var(--cv-r-s); background: var(--warn-soft); color: var(--warn); font-weight: 600; }
+.cv-down-ask .cv-size { min-width: 0; padding: 14px 8px 12px; }
+.cv-down-ask .cv-size.last { background: var(--soft); }
+.cv-down-ask .cv-size b { font-size: 1rem; }
+.cv-down-ask .cv-size-px { font-size: .91rem; white-space: nowrap; }
+.cv-down-ask .cv-size small { font-size: .78rem; }
+.cv-down-footer {
+  flex: none; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px;
+  padding: 16px 28px; border-top: 1px solid var(--cv-line); background: #fff;
+}
+.cv-down-summary { display: grid; gap: 3px; min-width: 0; }
+.cv-down-summary b { font-size: .94rem; line-height: 1.4; }
+.cv-down-summary small { font-size: .79rem; line-height: 1.4; color: var(--muted); }
+.cv-down-actions { display: flex; align-items: center; gap: 8px; }
+.cv-down-submit { min-height: 48px; white-space: nowrap; }
+.cv-down-cancel { background: transparent; color: var(--muted); }
+@media (max-width: 600px) {
+  .modal-panel.download-panel { max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px); border-radius: 16px; }
+  .download-panel .modal-close { top: 12px; right: 12px; }
+  .cv-down-head { padding: 18px 18px 14px; }
+  .cv-down-head > p { padding-right: 0; font-size: .86rem; }
+  .cv-down-body { padding: 18px; scrollbar-gutter: auto; }
+  .cv-down-section { margin-bottom: 20px; }
+  .cv-down-formats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cv-down-format { min-height: 76px; padding: 11px 12px; }
+  .cv-down-modes { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .cv-down-mode { min-height: 0; padding: 11px 12px; }
+  .cv-down-chips .chip { padding: 8px 12px; font-size: .86rem; }
+  .cv-down-ask .cv-sizes { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+  .cv-down-ask .cv-sizes.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cv-down-ask .cv-size { padding: 12px 5px 10px; }
+  .cv-down-ask .cv-size b { font-size: .92rem; }
+  .cv-down-ask .cv-size-px { font-size: .75rem; }
+  .cv-down-ask .cv-size small { font-size: .73rem; }
+  .cv-down-ask .cv-size-last { right: 4px; padding: 0 6px; font-size: .68rem; line-height: 18px; }
+  .cv-down-footer { grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 14px 18px 16px; }
+  .cv-down-submit { flex: 1; min-width: 0; }
+  .cv-down-cancel { padding-right: 12px; padding-left: 12px; }
+}
+@media (max-height: 500px) and (min-width: 601px) {
+  .cv-down-head { padding-top: 16px; padding-bottom: 12px; }
+  .cv-down-body { padding-top: 16px; padding-bottom: 16px; }
+  .cv-down-footer { padding-top: 12px; padding-bottom: 12px; }
+}
 
 /* ---- 영상을 만드는 창: 만드는 모습 · 진행 막대 → 다 된 영상 · 내려받기 ---- */
 .cv-film h2 { margin: 0 0 12px; padding-right: 40px; color: var(--text); }

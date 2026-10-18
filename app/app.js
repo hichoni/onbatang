@@ -1153,15 +1153,13 @@ async function closeDesign(O, btn = null) {
     app.querySelector(`.cv-item[data-id="${id}"] .cv-thumb .fe-card`)?.classList.add('cv-moving');
   }, 'close');
 }
-// ---------- 내려받기: 크기 · 파일 종류(그림 · 영상) · (여러 장이면) 이 장만 / 모든 장 · (영상이면) 머무는 시간 ----------
+// ---------- 내려받기: 파일 형식 → 범위 → 형식별 옵션 → 명시 실행 ----------
 function exportPref() {
   let p = {};
   try { p = JSON.parse(localStorage.getItem(EXPORT_KEY)) || {}; } catch { /* 기억해 둔 것이 없다 */ }
   return {
     size: EXPORT_SIZES.some((x) => x.id === p.size) ? p.size : DEFAULT_EXPORT, jpg: p.jpg === true, all: p.all === true,
     video: p.video === true, vsize: VIDEO_SIZES.some((x) => x.id === p.vsize) ? p.vsize : DEFAULT_VIDEO, stay: STAYS.includes(p.stay) ? p.stay : DEFAULT_STAY,
-    // 골라 본 적이 있는지(없으면 "추천", 있으면 "지난번"이라고 알려 준다)
-    pickedSize: EXPORT_SIZES.some((x) => x.id === p.size), pickedVideo: VIDEO_SIZES.some((x) => x.id === p.vsize),
   };
 }
 // 고른 것을 기억한다(그림과 영상의 것을 한곳에 두므로, 바뀐 것만 덮어쓴다).
@@ -1181,12 +1179,12 @@ function askDownload(O, btn) {
   const n = O.slides.length;
   const pref = exportPref();
   const can = canMakeVideo();
-  const pick = { kind: pref.video && can ? 'video' : pref.jpg ? 'jpg' : 'png', all: pref.all && n > 1, stay: pref.stay, pptxMode: 'editable' };
+  const pick = { kind: pref.video && can ? 'video' : pref.jpg ? 'jpg' : 'png', all: pref.all && n > 1, stay: pref.stay, pptxMode: 'editable', size: pref.size, vsize: pref.vsize };
   // 장마다 바탕에 깐 영상이 있는지: ''(없다) · 'yes'(있다) · 'gone'(있는데 그 파일이 이 기기에 없다. 조금 뒤에 알게 된다)
   const scenes = currentSlides(O).map((d) => (hasVideo(d) ? 'yes' : ''));
   currentSlides(O).forEach((d, i) => {
     const src = slideVideo(d).video?.src;
-    if (src) sceneUrl(src).then((url) => { if (!url) { scenes[i] = 'gone'; if (options.isConnected) draw(); } });
+    if (src) sceneUrl(src).then((url) => { if (!url) { scenes[i] = 'gone'; if (body.isConnected) draw(); } });
   });
   // 바탕에 깐 영상을 움직이는 채로 · 소리와 함께 담을 수 있는 브라우저인지(아니면 첫 모습의 멈춘 그림으로 담긴다).
   const live = canFilmScenes();
@@ -1207,86 +1205,123 @@ function askDownload(O, btn) {
     if (scenes[i] === 'gone') delete clean.video;
     return clean;
   }), { stay, scenes: live }).ms;
-  const lead = el('p', { class: 'muted' });
-  const sizes = el('div', { class: 'cv-sizes' });
-  const options = el('div', { class: 'cv-down-options' });
+  const lead = el('p', { class: 'muted', text: '파일 형식과 저장할 쪽을 고른 뒤 내려받으세요.' });
+  const body = el('div', { class: 'cv-down-body' });
+  const summaryTitle = el('b');
+  const summaryDetail = el('small');
+  const submit = el('button', { class: 'btn btn-primary cv-down-submit', type: 'button', 'data-download-save': '', onClick: () => {
+    // 옵션을 고를 때는 만들지 않는다. 마지막 단추에서만 현재 선택을 실행한다.
+    if (pick.kind === 'pptx') { makePptx(O, {all: pick.all, mode: pick.pptxMode}); return; }
+    if (pick.kind === 'video' && (!can || filmMs(pick.stay) > MAX_FILM_SECONDS * 1000)) return;
+    closeModal();
+    if (pick.kind === 'video') {
+      rememberExport({video: true, vsize: pick.vsize, stay: pick.stay});
+      makeVideo(O, {vsize: pick.vsize, stay: pick.stay});
+    } else {
+      rememberExport({size: pick.size, jpg: pick.kind === 'jpg', all: pick.all, video: false});
+      download(O, btn, {size: pick.size, jpg: pick.kind === 'jpg', all: pick.all});
+    }
+  } });
+  const box = el('div', {class: 'cv-down-ask'},
+    el('div', {class: 'cv-down-head'}, el('h2', {id: 'cv-download-title', text: '내려받기'}), lead), body,
+    el('div', {class: 'cv-down-footer'},
+      el('div', {class: 'cv-down-summary', role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true'}, summaryTitle, summaryDetail),
+      el('div', {class: 'cv-down-actions'}, el('button', {class: 'btn btn-ghost cv-down-cancel', type: 'button', onClick: closeModal}, '취소'), submit)));
   const set = (changes) => {
-    // 다시 그려도 누르던 단추에 그대로 있게 한다(글쇠로 고르는 사람이 길을 잃지 않게).
-    const at = document.activeElement?.closest?.('.cv-down-options .chip')?.dataset;
     Object.assign(pick, changes);
     draw();
-    if (at) options.querySelector(Object.entries(at).map(([k, v]) => `.chip[data-${k}="${v}"]`).join(''))?.focus();
   };
   const chip = (label, on, onClick, data, more = {}) => el('button', { class: `btn chip${on ? ' on' : ''}`, type: 'button', 'aria-pressed': String(on), dataset: data, onClick, ...more }, label);
-  const row = (label, ...chips) => el('div', { class: 'cv-down-row' }, el('span', { class: 'cv-down-label', text: label }), el('div', { class: 'cv-down-chips' }, ...chips));
-  const sizeButton = ({ id, name, desc, width, height, last, note, onPick, off = false }) => el('button', { class: `cv-size${last ? ' last' : ''}`, type: 'button', dataset: { size: id }, onClick: onPick, ...(off ? { disabled: true } : {}) },
+  const section = (label, ...children) => el('fieldset', {class: 'cv-down-section'}, el('legend', {class: 'cv-down-heading', text: label}), ...children);
+  const choice = (className, name, desc, on, data, changes, more = {}) => el('button', {
+    class: className, type: 'button', 'aria-pressed': String(on), dataset: data, onClick: () => set(changes), ...more,
+  }, el('b', {text: name}), el('small', {text: desc}));
+  const sizeButton = ({ id, name, desc, width, height, last, note, onPick }) => el('button', { class: `cv-size${last ? ' last' : ''}`, type: 'button', 'aria-pressed': String(last), dataset: { size: id }, onClick: onPick },
     el('b', { text: name }), el('span', { class: 'cv-size-px', text: `${width} × ${height}` }), el('small', { text: desc }),
     note ? el('span', { class: 'cv-size-last', text: note }) : null);
   const imageSizes = () => EXPORT_SIZES.map((size) => sizeButton({
-    ...size, ...exportSize(size.id, aspect), last: size.id === pref.size, note: size.id !== pref.size ? '' : pref.pickedSize ? '지난번' : '추천',
-    onPick: () => {
-      closeModal();
-      rememberExport({ size: size.id, jpg: pick.kind === 'jpg', all: pick.all, video: false });
-      download(O, btn, { size: size.id, jpg: pick.kind === 'jpg', all: pick.all });
-    },
+    ...size, ...exportSize(size.id, aspect), last: size.id === pick.size, note: size.id === DEFAULT_EXPORT ? '추천' : '',
+    onPick: () => set({size: size.id}),
   }));
-  // 영상의 크기: 지난번에 고른 것에 테두리를 두르되, 추천하는 크기(글자가 또렷한 쪽)는 늘 알려 준다
-  // (지난번에 작은 것을 골랐더라도 더 좋은 쪽이 있다는 것이 보이게).
-  const videoSizes = (off) => VIDEO_SIZES.map((size) => sizeButton({
-    ...size, ...videoSize(aspect, size.short), last: size.id === pref.vsize, off,
-    note: pref.pickedVideo && size.id === pref.vsize ? '지난번' : size.id === DEFAULT_VIDEO ? '추천' : '',
-    onPick: () => {
-      closeModal();
-      rememberExport({ video: true, vsize: size.id, stay: pick.stay });
-      makeVideo(O, { vsize: size.id, stay: pick.stay });
-    },
+  const videoSizes = () => VIDEO_SIZES.map((size) => sizeButton({
+    ...size, ...videoSize(aspect, size.short), last: size.id === pick.vsize, note: size.id === DEFAULT_VIDEO ? '추천' : '',
+    onPick: () => set({vsize: size.id}),
   }));
   const draw = () => {
+    // 누른 단추와 스크롤 위치를 유지한다. 비동기 영상 확인도 선택을 방해하지 않는다.
+    const active = body.contains(document.activeElement) ? {...document.activeElement.dataset} : null;
+    const scrollTop = body.scrollTop;
     const video = pick.kind === 'video';
     const pptx = pick.kind === 'pptx';
-    lead.textContent = pptx ? 'PPTX는 PowerPoint에서 열 수 있는 발표 파일이에요. 글·요소 편집용 또는 화면 이미지로 고를 수 있어요.' : !video ? '크기를 누르면 바로 내려받아요. 클수록 또렷하지만 파일이 커져요.'
-      : scenes.some(Boolean) && !live ? '크기를 누르면 영상을 만들기 시작해요. 글과 조각이 발표할 때처럼 움직여요.'
-        : '크기를 누르면 영상을 만들기 시작해요. 발표할 때처럼 움직이는 영상이 돼요.';
-    // 영상은 모든 장을 차례로 담는다. 너무 길면(한도를 넘으면) 만들지 않는다: 크기 단추를 잠그고 까닭을 알려 준다.
     const ms = video ? filmMs(pick.stay) : 0;
     const long = ms > MAX_FILM_SECONDS * 1000;
-    sizes.classList.toggle('two', video);
-    sizes.hidden = pptx;
-    sizes.replaceChildren(...(video ? videoSizes(long) : imageSizes()));
-    const rows = [row('파일 종류',
-      chip('PNG · 또렷하게', pick.kind === 'png', () => set({ kind: 'png' }), { type: 'png' }),
-      chip('JPG · 용량 작게', pick.kind === 'jpg', () => set({ kind: 'jpg' }), { type: 'jpg' }),
-      chip('PPTX · 발표 파일', pptx, () => set({ kind: 'pptx' }), { type: 'pptx' }),
-      chip('영상 · 움직임까지', video, () => set({ kind: 'video' }), { type: 'video' }, can ? {} : { disabled: true, title: NO_VIDEO }))];
-    if (pptx) rows.push(row('담는 방식',
-      chip('글·요소 편집 가능', pick.pptxMode === 'editable', () => set({pptxMode: 'editable'}), { pptx: 'editable' }),
-      chip('슬라이드 이미지', pick.pptxMode === 'image', () => set({pptxMode: 'image'}), { pptx: 'image' })));
+    const rows = [section('파일 형식', el('div', {class: 'cv-down-formats'},
+      choice('cv-down-format', 'PNG', '또렷한 그림', pick.kind === 'png', {type: 'png'}, {kind: 'png'}),
+      choice('cv-down-format', 'JPG', '용량이 작은 그림', pick.kind === 'jpg', {type: 'jpg'}, {kind: 'jpg'}),
+      choice('cv-down-format', 'PPTX', 'PowerPoint 파일', pptx, {type: 'pptx'}, {kind: 'pptx'}),
+      choice('cv-down-format', '영상', '움직임까지 담기', video, {type: 'video'}, {kind: 'video'}, can ? {} : {disabled: true, title: NO_VIDEO})))];
+    rows.push(section('저장할 쪽', video
+      ? el('p', {class: 'cv-down-note', text: `모든 장 (${n}장)을 순서대로 영상 하나에 담아요.`})
+      : n > 1 ? el('div', {class: 'cv-down-chips'},
+        chip(`지금 장 (${O.at + 1}번째)`, !pick.all, () => set({all: false}), {scope: 'one'}),
+        chip(`모든 장 (${n}장)`, pick.all, () => set({all: true}), {scope: 'all'}))
+        : el('p', {class: 'cv-down-note', text: '지금 장 (1장)'})));
+    if (pptx) rows.push(section('PPTX 방식', el('div', {class: 'cv-down-modes'},
+      choice('cv-down-mode', '편집형', '글·기본 도형·사진을 따로 수정해요.', pick.pptxMode === 'editable', {pptx: 'editable'}, {pptxMode: 'editable'}),
+      choice('cv-down-mode', '이미지형', '화면 모습을 한 장의 그림으로 담아요.', pick.pptxMode === 'image', {pptx: 'image'}, {pptxMode: 'image'})),
+      el('p', {class: 'cv-down-note', text: pick.pptxMode === 'editable'
+        ? '지원하지 않는 조각은 개별 이미지로 담아요. 글꼴 파일은 포함하지 않아 여는 기기에 해당 글꼴이 필요해요.'
+        : '글이나 요소를 따로 수정하기는 어려워요.'}),
+      el('p', {class: 'cv-down-note', text: '영상과 움직임은 정지한 모습으로 담아요.'})));
+    else rows.push(section(video ? '영상 화질' : '이미지 화질',
+      el('p', {class: 'cv-down-note', text: '클수록 또렷하지만 파일 용량이 커져요.'}),
+      el('div', {class: `cv-sizes${video ? ' two' : ''}`}, ...(video ? videoSizes() : imageSizes()))));
     if (video) {
       // 한 장이 얼마나 머무는지만 고른다(바탕에 영상을 깐 장은 그 영상이 끝날 때까지 이어진다).
-      rows.push(row('한 장에', ...STAYS.map((sec) => chip(`${sec}초`, pick.stay === sec, () => set({ stay: sec }), { stay: String(sec) }))));
-      rows.push(el('p', { class: 'cv-down-note', text: `${n > 1 ? `${n}장 모두 · ` : ''}영상 길이 약 ${secondsText(ms)}` }));
+      rows.push(section('장마다 머무는 시간', el('div', {class: 'cv-down-chips'}, ...STAYS.map((sec) => chip(`${sec}초`, pick.stay === sec, () => set({stay: sec}), {stay: String(sec)}))),
+        el('p', {class: 'cv-down-note', text: '바탕에 깐 영상이 있는 장은 그 영상이 끝날 때까지 이어져요.'})));
       if (long) rows.push(el('p', { class: 'cv-down-note warn', role: 'status', text: `영상은 ${MAX_FILM_SECONDS / 60}분까지 만들 수 있어요. 바탕에 깐 영상의 쓸 구간을 줄이거나, 장을 나눠 따로 만들어요.` }));
       // 바탕에 깐 영상이 어떻게 담기는지 미리 알려 준다(멈춘 그림으로 담기거나 빠지는 것이 있을 때는 눈에 띄게).
       const note = sceneNote(scenes, true);
       if (note) rows.push(el('p', { class: `cv-down-note${live && !scenes.includes('gone') ? '' : ' warn'}`, text: note }));
-    } else if (n > 1) {
-      rows.push(row('어느 장',
-        chip(`지금 장 (${O.at + 1}번째)`, !pick.all, () => set({ all: false }), { scope: 'one' }),
-        chip(`모든 장 (${n}장 · ${pptx ? 'PPTX 한 파일' : '압축 파일'})`, pick.all, () => set({ all: true }), { scope: 'all' })));
     }
     if (!video && sceneNote(pick.all ? scenes : [scenes[O.at]], false)) rows.push(el('p', { class: 'cv-down-note', text: sceneNote(pick.all ? scenes : [scenes[O.at]], false) }));
-    if (pptx) {
-      rows.push(el('p', {class: 'cv-down-note', text: pick.pptxMode === 'editable'
-        ? '글·기본 도형·사진을 각각 수정할 수 있어요. 지원하지 않는 조각은 개별 이미지로 담아요. 글꼴 파일은 포함하지 않으므로 여는 기기에 해당 글꼴이 필요해요.'
-        : '한 장 전체를 이미지로 넣어 화면 모습을 유지해요. 글이나 요소를 따로 수정하기는 어려워요.'}));
-      rows.push(el('p', {class: 'cv-down-note', text: '영상과 움직임은 정지한 모습으로 담아요. 원본 PPT와 편집한 자료는 그대로 보관돼요.'}));
-      rows.push(el('button', {class: 'btn btn-primary', type: 'button', 'data-pptx-save': '', onClick: () => makePptx(O, {all: pick.all, mode: pick.pptxMode})}, 'PPTX 내려받기'));
-    }
     if (!can) rows.push(el('p', { class: 'cv-down-note', text: NO_VIDEO }));
-    options.replaceChildren(...rows);
+    body.replaceChildren(...rows);
+    body.scrollTop = scrollTop;
+    if (active && Object.keys(active).length) body.querySelector(Object.entries(active).map(([k, v]) => `button[data-${k}="${v}"]`).join(''))?.focus({preventScroll: true});
+    const range = video || pick.all ? `모든 장 ${n}장` : `지금 장 (${O.at + 1}/${n})`;
+    const label = video ? '영상' : pptx ? `PPTX ${pick.pptxMode === 'editable' ? '편집형' : '이미지형'}` : pick.kind.toUpperCase();
+    summaryTitle.textContent = `${label} · ${range}`;
+    const px = video ? videoSize(aspect, VIDEO_SIZES.find(size => size.id === pick.vsize).short) : exportSize(pick.size, aspect);
+    summaryDetail.textContent = pptx ? 'PPTX 한 파일 · 원본과 편집 자료는 그대로 보관돼요.' : video
+      ? `${px.width} × ${px.height}px · 약 ${secondsText(ms)} · 만든 뒤 미리보고 저장해요.`
+      : `${px.width} × ${px.height}px · ${pick.all && n > 1 ? `${label} ${n}장을 ZIP 한 파일로 저장해요.` : '그림 한 파일로 저장해요.'}`;
+    submit.disabled = video && long;
+    submit.toggleAttribute('data-pptx-save', pptx);
+    submit.replaceChildren(...face('download', video ? '영상 만들기' : `${pptx ? 'PPTX' : label} 내려받기`));
   };
   draw();
-  openModal(el('div', { class: 'cv-down-ask' }, el('h2', { text: '내려받기' }), lead, sizes, options));
+  const wasInert = app.inert;
+  openModal(box, {onClose: () => { app.inert = wasInert; if (btn.isConnected) btn.focus({preventScroll: true}); }});
+  const panel = box.closest('.modal-panel');
+  app.inert = true;
+  panel.classList.add('download-panel');
+  panel.parentElement.classList.add('download-backdrop');
+  panel.setAttribute('role', 'dialog');
+  panel.setAttribute('aria-modal', 'true');
+  panel.setAttribute('aria-labelledby', 'cv-download-title');
+  panel.addEventListener('keydown', e => {
+    e.stopPropagation(); // 뒤쪽 편집기의 단축키가 열려 있는 창에 반응하지 않게 한다.
+    if (e.key === 'Escape') { e.preventDefault(); closeModal(); }
+    if (e.key === 'Tab') {
+      const buttons = [...panel.querySelectorAll('button:not(:disabled)')];
+      const first = buttons[0], last = buttons.at(-1);
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  });
+  body.querySelector('[aria-pressed="true"]')?.focus({preventScroll: true});
 }
 const saveBlob = (blob, name) => {
   const url = URL.createObjectURL(blob);
