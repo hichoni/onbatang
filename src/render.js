@@ -21,9 +21,8 @@ export function itemView(item) {
       text: item.text,
     });
     // 글꼴 파일을 받기 전이나 그 글꼴에 없는 글자는 기본 글꼴로 보인다.
-    const family = fontFamilyOf(item.font);
+    const family = item.typeface || fontFamilyOf(item.font);
     if (family) node.style.fontFamily = `"${family}", var(--fe-font, sans-serif)`;
-    else if(item.typeface) node.style.fontFamily = `"${item.typeface}", var(--fe-font, sans-serif)`;
     node.style.color = item.color;
     if (item.bgc) node.style.background = item.bgc;
   } else if (item.t === 'emoji') {

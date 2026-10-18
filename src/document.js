@@ -1,6 +1,16 @@
 // Shared, storage-independent document contract. No network or host account concepts.
 export const SCHEMA_VERSION = 1;
 export const DOCUMENT_LIMITS = Object.freeze({ pages: 20, items: 40, photos: 10, text: 120, assets: 256 });
+// Imported slides keep authored text boxes and pictures as individual elements.
+// The public marker also works after a guest projection removes provenance.
+export const SLIDE_LIMITS = Object.freeze({ items: 40, photos: 40, text: 4096 });
+export const isSlideItem = item => item?.layout === 'slide' || item?.source?.kind === 'pptx';
+export const itemTextLimit = (item, ordinary = DOCUMENT_LIMITS.text) => isSlideItem(item) ? Math.max(ordinary, SLIDE_LIMITS.text) : ordinary;
+export function pageLimits(page, ordinary = DOCUMENT_LIMITS) {
+  return Array.isArray(page?.items) && page.items.some(isSlideItem)
+    ? { ...ordinary, items: Math.max(ordinary.items, SLIDE_LIMITS.items), photos: Math.max(ordinary.photos, SLIDE_LIMITS.photos) }
+    : ordinary;
+}
 export class DocumentError extends Error {
   constructor(code, path, original, details = {}) {
     super(`${code}: ${path}`);
@@ -87,6 +97,7 @@ export function cleanAssets(list = []) {
 export function validatePageInput(page, limits = DOCUMENT_LIMITS) {
   const items = page?.items;
   if (!Array.isArray(items)) fail('INVALID_ITEMS', 'items', page);
+  limits = pageLimits(page, limits);
   if (items.length > limits.items) fail('ITEM_LIMIT', 'items', page, { limit: limits.items, actual: items.length });
   if (items.filter(x => x?.t === 'image').length > limits.photos) fail('PHOTO_LIMIT', 'items', page, { limit: limits.photos });
   const seen = new Set();
@@ -97,7 +108,8 @@ export function validatePageInput(page, limits = DOCUMENT_LIMITS) {
       if (seen.has(item.id)) fail('DUPLICATE_ID', `items.${i}.id`, page);
       seen.add(item.id);
     }
-    if (item.t === 'text' && (typeof item.text !== 'string' || item.text.length > limits.text)) fail('TEXT_LIMIT', `items.${i}.text`, page, { limit: limits.text, actual: item.text?.length });
+    const textLimit = itemTextLimit(item, limits.text);
+    if (item.t === 'text' && (typeof item.text !== 'string' || item.text.length > textLimit)) fail('TEXT_LIMIT', `items.${i}.text`, page, { limit: textLimit, actual: item.text?.length });
   }
 }
 export function validateReferences(record) {

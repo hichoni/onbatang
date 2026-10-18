@@ -14,7 +14,7 @@ import { SHAPE_ASSETS, SHAPE_GROUPS, shapeAsset } from './shapes.js';
 import { isArtId, artColorable, artAspect, artPack, artName } from './art.js';
 import { isYouTubeId, ytStart, ytTime } from './youtube.js';
 import { ENTER_IDS, COMBO_IDS, TRANSITION_IDS, STILL } from './motion.js';
-import { metadata, newId, fail, validatePageInput } from './document.js';
+import { metadata, newId, fail, validatePageInput, isSlideItem, itemTextLimit, pageLimits } from './document.js';
 
 export { SHAPE_GROUPS };
 
@@ -149,7 +149,8 @@ export const TEXT_SIZE = { min: 2.5, max: 30 };
 // Imported slides contain small labels and thin rules. Keep the ordinary editing
 // defaults, while preserving these authored dimensions through cleaning and edits.
 // The render-only layout marker survives guest projections that strip provenance.
-const pptxItem = item => item?.source?.kind === 'pptx' || item?.layout === 'slide';
+const pptxItem = isSlideItem;
+export const textLimit = item => itemTextLimit(item, config.maxText);
 const textMin = item => pptxItem(item) ? 0.1 : TEXT_SIZE.min;
 const widthMin = item => pptxItem(item) ? 0.1 : 10;
 const shapeMin = item => pptxItem(item) ? 0.01 : SIZE.min;
@@ -238,7 +239,7 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
     ...metadata(it),
     ...(pptxItem(it) ? {layout:'slide'} : {}),
     x: measure(it,it.x, 0, 100, 50), y: measure(it,it.y, 0, 100, 50), rot: Math.round(num(it.rot, -180, 180, 0)),
-    op: Math.round(num(it.op, OPACITY.min, OPACITY.max, OPACITY.max)),     // 투명도
+    op: Math.round(num(it.op, pptxItem(it) ? 0 : OPACITY.min, OPACITY.max, OPACITY.max)), // 빈 PPT 객체도 이름표를 보존한다.
     lock: it.lock === true,                                                // 잠금(실수로 움직이지 않게)
   };
   // 이름표(id)는 있을 때만 남긴다: 여럿이 함께 꾸미는 프로젝트가 요소를 가려낼 때 쓴다(틴커랩 미니캔의 "함께 만드는 그림"). 혼자 쓰는 그림에는 없다.
@@ -250,7 +251,7 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
   if (it.aw === true) base.aw = true;
   const flip = { fx: it.fx === true, fy: it.fy === true };                 // 좌우·상하 뒤집기
   if (it.t === 'text') {
-    const text = clip(keepSpaces ? String(it.text ?? '') : lines(it.text), config.maxText);
+    const text = clip(keepSpaces ? String(it.text ?? '') : lines(it.text), textLimit(it));
     if (!text && !keepSpaces) return null;
     return {
       t: 'text', ...base, w: measure(base,it.w, widthMin(base), 100, 80), text,
@@ -322,15 +323,16 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
 
 /** 요소들을 정리한다. 한도(기본 24개, 사진 3장)까지만 남긴다. */
 export function cleanItems(items, opts) {
-  if (opts?.strict) validatePageInput({ items }, { items: config.maxItems, photos: config.maxPhotos, text: config.maxText });
+  const limits = pageLimits({items}, {items:config.maxItems,photos:config.maxPhotos,text:config.maxText});
+  if (opts?.strict) validatePageInput({ items }, limits);
   const out = [];
   let photos = 0;
   for (const raw of Array.isArray(items) ? items : []) {
     const it = cleanItem(raw, opts);
     if (!it) { if (opts?.strict) fail('UNSUPPORTED_ELEMENT', 'items', items); continue; }
-    if (it.t === 'image' && ++photos > config.maxPhotos) continue;
+    if (it.t === 'image' && ++photos > limits.photos) continue;
     out.push(it);
-    if (out.length >= config.maxItems) break;
+    if (out.length >= limits.items) break;
   }
   return out;
 }
@@ -613,8 +615,9 @@ export function rebaseItems(list, { items: patch = new Map(), added = new Set(),
 /** 복사해서 조금 옆에 놓는다. 꽉 찼거나 사진이 한도까지 있으면 null. */
 export function duplicateItem(items, i) {
   const it = items[i];
-  if (!it || items.length >= config.maxItems) return null;
-  if (it.t === 'image' && items.filter((k) => k.t === 'image').length >= config.maxPhotos) return null;
+  const limits = pageLimits({items}, {items:config.maxItems,photos:config.maxPhotos,text:config.maxText});
+  if (!it || items.length >= limits.items) return null;
+  if (it.t === 'image' && items.filter((k) => k.t === 'image').length >= limits.photos) return null;
   const { id, ...copy } = it;            // 복제한 것은 다른 요소다: 이름표를 물려받지 않는다
   return { ...copy, ...(id ? { id: newId(), origin: { elementId: id } } : {}), x: num(it.x + 4, 0, 100, 50), y: num(it.y + 4, 0, 100, 50) };
 }
@@ -624,8 +627,9 @@ export function duplicateItem(items, i) {
  * 잠금은 풀어서 붙인다. 꽉 찼거나 사진이 3장이면 null.
  */
 export function pasteItem(items, item, at = null) {
-  if (!item || items.length >= config.maxItems) return null;
-  if (item.t === 'image' && items.filter((k) => k.t === 'image').length >= config.maxPhotos) return null;
+  const limits = pageLimits({items:[...items,item]}, {items:config.maxItems,photos:config.maxPhotos,text:config.maxText});
+  if (!item || items.length >= limits.items) return null;
+  if (item.t === 'image' && items.filter((k) => k.t === 'image').length >= limits.photos) return null;
   const { id, ...copy } = item;          // 붙여 넣은 것은 다른 요소다: 이름표를 물려받지 않는다
   return cleanItem({ ...copy, ...(id ? { id: newId(), origin: { elementId: id } } : {}), x: at ? at.x : item.x + 4, y: at ? at.y : item.y + 4, lock: false }, { keepSpaces: true });
 }

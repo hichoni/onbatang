@@ -27,7 +27,7 @@
         "height": 6858000,
         "unit": "emu"
       },
-      "expectedAdapterResult": "TEXT_LIMIT",
+      "expectedAdapterResult": "ready",
       "textLengths": [
         208
       ]

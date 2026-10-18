@@ -73,9 +73,9 @@ test('21 pages fail explicitly; a deliberate subset can include page 21 without 
   assert.equal(report.omittedPages.length, 19);
 });
 
-test('long extracted text is rejected intact instead of shortened into a successful document', () => {
+test('extracted text beyond the slide bound is rejected intact instead of shortened', () => {
   const value = input();
-  const original = '긴 원문은 변환 보고서와 원본 파일에 보존합니다. '.repeat(8);
+  const original = '긴 원문은 변환 보고서와 원본 파일에 보존합니다. '.repeat(180);
   value.document.slides[0].items[0].text = original;
   rejected(value, 'TEXT_LIMIT');
   assert.equal(value.document.slides[0].items[0].text, original);

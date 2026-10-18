@@ -5,7 +5,7 @@
 import { el, toast } from './dom.js';
 import { newId } from './document.js';
 import {
-  COLORS, SHAPES, SHAPE_GROUPS, MASKS, OPACITY, TEXT_PRESETS, settings, configure, reshapeItems, backgroundOf, fontList, fontFamilyOf, layoutList,
+  COLORS, SHAPES, SHAPE_GROUPS, MASKS, OPACITY, TEXT_PRESETS, settings, configure, reshapeItems, backgroundOf, fontList, fontFamilyOf, layoutList, textLimit, clip,
   cleanBg, cleanItems, cleanDesign, emptyDesign, cleanItem, cleanImg, moveLayer, newPresetText, newEmoji, newShape, newArt, newYouTube, newPhoto, moveItem, scaleItem, widenItem, heightenItem, rotateItem,
   designMotion, reorder, duplicateItem, pasteItem, itemLabel, sizeOf, resizeTo, sizeRange, alignItem, coverItem, layoutItems, EDGE, canEdge, canRound, cornerOf, THICK, isLine, thickOf, thicken,
   designVideo, cleanVideo, trimVideo, videoSeconds, videoTime, VIDEO_FITS, MIN_VIDEO, rebaseItems, alignBoxes, distributeBoxes, clampShift, scaleItems, regroup, newGroupId,
@@ -1223,7 +1223,8 @@ export function createEditor({
     if (!node || !it) return;
     if (!typed) { typed = true; remember(); }
     const text = node.innerText.replace(/ /g, ' ');
-    if ([...text].length > settings().maxText) notify(`글상자 하나에는 ${settings().maxText}자까지 쓸 수 있어요.`);
+    const limit = textLimit(it);
+    if (text.length > limit) notify(`글상자 하나에는 ${limit}자까지 쓸 수 있어요.`);
     const list = items().slice();
     list[editing] = cleanItem({ ...it, text }, { keepSpaces: true });
     card.items = list;
@@ -1245,7 +1246,7 @@ export function createEditor({
   cardEl.addEventListener('paste', (e) => {
     if (editing < 0) return;
     e.preventDefault();
-    const text = (e.clipboardData?.getData('text/plain') || '').slice(0, settings().maxText);
+    const text = clip(e.clipboardData?.getData('text/plain') || '', textLimit(cur()));
     if (text) document.execCommand('insertText', false, text);
   });
   cardEl.addEventListener('drop', (e) => { if (editing >= 0) e.preventDefault(); });
@@ -2039,7 +2040,10 @@ export function createEditor({
     const own = [];
     if (it.t === 'text') {
       const choices = fonts();
-      const font = el('select', { class: 'fe-font', 'aria-label': '글꼴', title: '글꼴', onChange: () => change({ font: font.value }) },
+      const font = el('select', { class: 'fe-font', 'aria-label': '글꼴', title: '글꼴', onChange: () => {
+        if (font.value) change({ font: font.value, typeface: undefined });
+      } },
+        it.typeface ? el('option', { value: '', text: `${it.typeface} (원본 글꼴)` }) : null,
         ...choices.map((f) => {
           const o = el('option', { value: f.id, text: f.name });
           const family = fontFamilyOf(f.id);
@@ -2047,7 +2051,7 @@ export function createEditor({
           return o;
         }),
         choices.some((f) => f.id === it.font) ? null : el('option', { value: it.font, text: '(지금은 고를 수 없는 글꼴)' }));
-      font.value = it.font;
+      font.value = it.typeface ? '' : it.font;
       const size = sizeRange(it);
       const ink = el('span', { class: 'fe-ink' });
       ink.style.background = it.color;

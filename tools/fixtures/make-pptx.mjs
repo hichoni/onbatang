@@ -42,7 +42,7 @@ function makePptx(texts) {
 
 const cases = [
   { name: 'self-authored-4x3', key: '43', texts: ['절차대로 선물 포장하기', '가장 먼저 해야 할 일은 무엇일까요?'], expected: 'ready' },
-  { name: 'self-authored-long-text', key: 'long', texts: ['긴 원문은 잘라서 성공으로 표시하지 않습니다. '.repeat(8)], expected: 'TEXT_LIMIT' },
+  { name: 'self-authored-long-text', key: 'long', texts: ['긴 원문은 잘라서 성공으로 표시하지 않습니다. '.repeat(8)], expected: 'ready' },
   { name: 'self-authored-21-pages', key: '21', texts: Array.from({ length: 21 }, (_, i) => `직접 만든 ${i + 1}쪽: 쪽 선택과 원본 순서 검증`), expected: 'PAGE_LIMIT' },
 ];
 mkdirSync(OUT, { recursive: true });
