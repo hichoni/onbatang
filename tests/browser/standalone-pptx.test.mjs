@@ -299,6 +299,7 @@ test('My materials imports preserve edited text, restore the same page on cancel
  await page.locator('.cv-canvas .fe-card > .fi-text').first().dblclick();
  await page.keyboard.press('Control+End');await page.keyboard.insertText(' · 업로드 전 편집');await page.keyboard.press('Escape');
  await page.locator('.fe-tab[data-tab="upload"]').click();
+ await page.locator('[data-upload-tab="ppt"]').click();
  await page.evaluate(()=>{window.editorImportCanvas=document.querySelector('.cv-canvas');});
  const importButton=page.getByRole('button',{name:'내 PPT 올리기',exact:true});
  for(let attempt=0;attempt<2;attempt++){
@@ -338,6 +339,7 @@ test('My materials imports preserve edited text, restore the same page on cancel
  assert.deepEqual(restored.sources,original.sources,'saving after cancellation keeps the original PPT bytes');
  await page.locator('[data-pptx-edit]').click();await page.locator('.cv-slide[data-slide="1"][aria-pressed=true]').waitFor();
  await page.locator('.fe-tab[data-tab="upload"]').click();
+ await page.locator('[data-upload-tab="ppt"]').click();
  await importButton.click();await inspectFile(page,'self-authored-4x3.pptx',2);
  await page.locator('[data-import-save]').click();await page.locator('[data-import-result=complete]').waitFor();
  await page.locator('[data-open-material=view]').click();await page.locator('[data-pptx-page="1"]').waitFor();

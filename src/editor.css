@@ -476,8 +476,28 @@
 .fe-textadd.sub { font-size: 1.15rem; }
 .fe-textadd.body { font-size: .98rem; font-weight: 500; }
 .fe-upload { display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 48px; font-size: 1rem; }
-.fe-document-import { border-style: dashed; }
-.fe-document-import-note { margin-top: -4px; }
+/* 내 자료의 종류는 한 줄에서 고르고, 고른 종류의 내용만 아래에 둔다. */
+.fe-upload-tabs { display: flex; gap: 3px; padding: 3px; border: 1px solid var(--fe-line); border-radius: 10px; background: #fff; }
+.fe-upload-tab { flex: 1 1 0; min-width: 0; min-height: 38px; padding: 6px 3px; border: 0; border-radius: 7px; background: transparent; color: var(--fe-muted); font-size: .88rem; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.fe-upload-tab:hover:not(:disabled) { color: var(--fe-primary-dark); background: var(--fe-soft); }
+.fe-upload-tab.on { color: var(--fe-primary-dark); background: var(--fe-soft); }
+.fe-upload-tab:focus-visible, .fe-upload-help summary:focus-visible { outline: 3px solid var(--fe-primary); outline-offset: 2px; }
+.fe-upload-tab:disabled { cursor: default; opacity: .6; }
+.fe-upload-panel { display: grid; gap: 14px; min-width: 0; align-content: start; }
+.fe-ppt-intro { display: grid; justify-items: center; gap: 9px; padding: 19px 0 7px; text-align: center; }
+.fe-ppt-intro > .fe-ic { width: 48px; height: 48px; margin-bottom: 3px; color: var(--fe-muted); }
+.fe-ppt-intro > b { color: var(--fe-text); font-size: 1.05rem; font-weight: 800; }
+.fe-ppt-size { display: flex; align-items: center; gap: 10px; padding: 13px 12px; border-radius: 10px; background: var(--fe-soft); }
+.fe-ppt-size > .fe-ic { width: 28px; height: 28px; color: var(--fe-primary-dark); }
+.fe-ppt-size > div { min-width: 0; display: grid; gap: 4px; }
+.fe-ppt-size b { font-size: .88rem; color: var(--fe-text); }
+.fe-ppt-size .fe-note { font-size: .8rem; }
+.fe-upload-help { margin-top: 6px; border: 1px solid var(--fe-line); border-radius: 10px; background: #fff; }
+.fe-upload-help summary { padding: 12px; font-size: .85rem; font-weight: 600; color: var(--fe-text); cursor: pointer; }
+.fe-upload-help-body { display: grid; gap: 10px; padding: 0 12px 13px; }
+.fe-upload-help-body .fe-note { font-size: .82rem; }
+.fe-files-empty { display: grid; justify-items: center; gap: 8px; padding: 20px 8px; text-align: center; }
+.fe-files-empty > .fe-ic { width: 42px; height: 42px; color: var(--fe-muted); }
 /* 올린 파일 목록: 작은 그림을 누르면 카드에 놓인다. 오른쪽 위의 휴지통으로 지운다(한 번 더 묻는다) */
 .fe-files-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-top: 4px; }
 .fe-files-head .fe-head { margin-top: 0; }
@@ -648,7 +668,7 @@
 .fi-yt.live:not(.started):hover .fi-yt-play { transform: scale(1.08); }
 .fi-yt.started .fi-yt-thumb, .fi-yt.started .fi-yt-play { display: none; }
 .fi-yt.live:not(.started) .fi-yt-frame { visibility: hidden; }
-.fe-yt-add { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--fe-line); }
+.fe-yt-add { display: grid; gap: 12px; }
 .fe-yt-row { flex-wrap: nowrap; }
 .fe-panel input.fe-yt-input, .fe-panel input.fe-yt-start { flex: 1 1 auto; min-width: 0; }
 .fe-panel input.fe-yt-start { max-width: 110px; }

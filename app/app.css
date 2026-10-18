@@ -218,6 +218,9 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"], body.mc-app :is(#app,.cv-a
 .cv-bar-gap { order: 4; flex: 1 1 100%; height: 0; }
 /* 그림의 모양 고르기: 작은 네모 그림 + 이름. 고른 것만 하얗게 뜬다 */
 .cv-shapes { order: 5; display: flex; gap: 2px; padding: 3px; border-radius: var(--cv-r-m); background: #eceef6; }
+.cv-ratio-current { display: inline-flex; align-items: center; flex: 0 1 auto; min-width: 0; padding: 4px 9px; color: var(--primary-dark); font-size: var(--cv-fs-s); font-weight: 700; white-space: nowrap; }
+.cv-ratio-current.on { border-radius: var(--cv-r-s); background: #fff; box-shadow: 0 1px 3px rgba(23, 28, 68, .2); }
+.cv-ratio-current[hidden] { display: none; }
 .cv-shape {
   display: flex; align-items: center; gap: 6px; min-height: 34px; padding: 4px 10px; border: 0; border-radius: var(--cv-r-s); background: transparent;
   font: inherit; font-size: var(--cv-fs-s); font-weight: 700; color: var(--muted); cursor: pointer; white-space: nowrap;

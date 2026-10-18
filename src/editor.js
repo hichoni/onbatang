@@ -28,7 +28,7 @@ const TABS = [
   ['layout', 'template', '틀', '만들어 둔 틀을 눌러 시작해요. 글을 눌러 내 글로 바꿔요.'],
   ['text', 'text', '글', '넣은 글은 두 번 눌러 고쳐요.'],
   ['element', 'shapes', '꾸미기', '도형과 그림 조각을 눌러 놓아요. 색과 크기는 위 도구에서 바꿔요.'],
-  ['upload', 'upload', '내 자료', '내 사진을 올리거나 유튜브 영상을 넣어요.'],
+  ['upload', 'upload', '내 자료', '사진·영상을 넣어요.'],
   ['bg', 'palette', '바탕색', '이 장의 바탕색을 골라요.'],
   ['layer', 'layers', '겹 순서', '앞에 보이는 조각부터 차례로 나와요.'],
 ];
@@ -102,6 +102,10 @@ export function createEditor({
   let pop = null;             // 도구 막대 아래에 펼쳐진 칸: 'color' · 'bgc' · 'edge' · 'corner' · 'thick' · 'size' · 'op' · 'flip' · 'pos' · 'swap' · 'mask' · 'cut' · null
   let busy = false;           // 사진 올리는 중
   let importingDocument = false;
+  let uploadTab = 'photo';     // 내 자료의 종류는 같은 편집기를 다시 그려도 유지한다.
+  let youtubeInput = null;
+  const uploadTabsId = newId('u');
+  const uploadHelpOpen = {photo: false, ppt: false, youtube: false};
   let editing = -1;           // 카드 위에서 바로 글을 고치는 중인 글상자의 번호
   let typed = false;          // 이번에 고치기 시작한 뒤 기록을 남겼는지(처음 한 번만 남긴다)
   let cut = null;             // 배경 제거 작업(openCut 의 job): 방식(AI · 단색) · 막대 값 · 붓질 · 미리보기
@@ -123,7 +127,7 @@ export function createEditor({
   const limits = { ...VIDEO_LIMITS, ...(videoLimits && typeof videoLimits === 'object' ? videoLimits : {}) };
   const hasDocumentImport = typeof documentImport?.open === 'function' && typeof documentImport.label === 'string' && !!documentImport.label.trim();
   const tabsHere = () => {
-    const list = tabList().map(row => hasDocumentImport && row[0] === 'upload' ? [...row.slice(0, 3), '내 사진·PPT를 올리거나 유튜브 영상을 넣어요.'] : row);
+    const list = tabList().map(row => hasDocumentImport && row[0] === 'upload' ? [...row.slice(0, 3), '사진·PPT·영상을 넣어요.'] : row);
     if (!saveVideo) return list;
     const at = list.findIndex((t) => t[0] === 'upload') + 1;
     return [...list.slice(0, at), VIDEO_TAB, ...list.slice(at)];
@@ -757,7 +761,7 @@ export function createEditor({
     onChange();
   }
 
-  function add(item, { edit = true } = {}) {
+  function add(item, { edit = true, focus = true } = {}) {
     if (!item) return;
     if (items().length >= settings().maxItems) { notify(`카드 한 장에는 조각을 ${settings().maxItems}개까지 놓을 수 있어요.`); return; }
     endEdit();
@@ -770,7 +774,7 @@ export function createEditor({
     card.items = [...items(), placed];
     listChanged(card.items.length - 1);
     // 텍스트는 바로 글을 쓸 수 있게(글 전체가 골라진 채로), 나머지는 화살표 키로 옮길 수 있게.
-    if (placed.t === 'text' && edit) startEdit(true); else focusStage();
+    if (placed.t === 'text' && edit) startEdit(true); else if (focus) focusStage();
   }
 
   function remove() {
@@ -1695,7 +1699,13 @@ export function createEditor({
         if (keep && !library.some(sameUrl(photo.url))) library.push(photo.path ? { url: photo.url, path: photo.path } : { url: photo.url });
         // 카드에 자리가 있으면 바로 놓는다. 사진이 꽉 찬 카드라면 목록에만 둔다(올린 것은 남는다).
         if (card === target) {
-          if (!keep || photosHere() < settings().maxPhotos) add(photo);
+          if (!keep || photosHere() < settings().maxPhotos) {
+            // The photo may finish while a user is choosing a material tab or
+            // entering a video URL. Preserve that newer keyboard task.
+            const focused = document.activeElement;
+            const keepUploadFocus = panel.contains(focused) && (focused === youtubeInput || !!focused?.dataset.uploadTab);
+            add(photo, { focus: !keepUploadFocus });
+          }
           else listed += 1;
         }
       } catch (ex) {
@@ -2324,6 +2334,9 @@ export function createEditor({
   let shownTab = '';
   function renderPanel({ top = false } = {}) {
     if (!card) { panel.replaceChildren(); shownTab = ''; return; }
+    const focused = panel.contains(document.activeElement) ? document.activeElement : null;
+    const focusedUploadTab = focused?.dataset.uploadTab;
+    const focusedYoutube = focused === youtubeInput;
     const was = panel.querySelector('.fe-tabbody');
     const keep = !top && was && shownTab === tab ? was.scrollTop : 0;
     const tabs = el('div', { class: `fe-tabs${tabsHere().length > 7 ? ' many' : ''}`, role: 'tablist', 'aria-label': '넣을 것 고르기' }, ...tabsHere().map(([id, pic, name]) => el('button', {
@@ -2340,6 +2353,10 @@ export function createEditor({
     shownTab = tab;
     if (keep) body.scrollTop = keep;
     fileInput.multiple = libraryOn();        // 올린 파일 목록을 쓰면 여러 장을 한꺼번에 고를 수 있다
+    if (tab === 'upload') {
+      if (focusedUploadTab) panel.querySelector(`[data-upload-tab="${uploadTab}"]`)?.focus({ preventScroll: true });
+      else if (focusedYoutube && uploadTab === 'youtube') youtubeInput?.focus({ preventScroll: true });
+    }
   }
 
   // 템플릿을 묶음(group)별로 나눈다. 묶음이 적히지 않은 목록은 한 덩어리다.
@@ -2590,24 +2607,7 @@ export function createEditor({
         ...shapePicker((shape) => add(newShape(shape, visibleColor(shape)))),
       ];
     }
-    if (tab === 'upload' && libraryOn()) return uploadBody();
-    if (tab === 'upload') {
-      const photos = photosHere();
-      return [
-        el('button', {
-          class: 'fe-btn primary fe-upload', type: 'button', disabled: busy,
-          onClick: () => {
-            if (photos >= settings().maxPhotos) { notify(`사진은 카드 한 장에 ${settings().maxPhotos}장까지예요.`); return; }
-            fileInput.click();
-          },
-        }, ...(busy ? ['올리는 중…'] : [icon('upload'), '사진 올리기'])),
-        ...documentImportBody(),
-        el('p', { class: 'fe-note', text: `PNG·JPG 사진이나 그림을 올려요. 이 카드에 ${photos}/${settings().maxPhotos}장 있어요.` }),
-        el('p', { class: 'fe-note', text: '올린 사진을 누르면 도구 막대에서 배경 제거, 테두리 모양, 크기, 투명도, 뒤집기를 쓸 수 있어요.' }),
-        el('p', { class: 'fe-note', text: '내가 찍거나 그린 것, 허락을 받은 것만 올리고, 얼굴·이름 같은 개인 정보가 없는지 살펴봐요.' }),
-        ytAdder(),
-      ];
-    }
+    if (tab === 'upload') return uploadPane();
     if (tab === 'bg') return [bgPicker(), el('p', { class: 'fe-note', text: bgNote })];
     // 레이어: 겹친 순서대로(위에 보이는 것부터). 가려져서 누르기 어려운 것도 여기서 고를 수 있다.
     // 줄을 끌어서 순서를 바꾼다: 마우스는 줄 어디든, 손가락은 왼쪽의 손잡이(목록을 넘기는 것과 헷갈리지 않게). 손잡이에서 ↑ ↓ 글쇠로도 옮긴다.
@@ -2743,7 +2743,63 @@ export function createEditor({
     ];
   }
 
-  // 업로드 칸(올린 파일 목록을 쓸 때): 올리기 단추 → 올린 파일들(새것부터) → 안내.
+  // 내 자료: 종류를 먼저 고르고, 고른 자료의 작업만 보여 준다.
+  function uploadPane() {
+    const choices = [['photo', '사진'], ...(hasDocumentImport ? [['ppt', 'PPT']] : []), ['youtube', '유튜브']];
+    const choose = id => {
+      if (importingDocument || !choices.some(([key]) => key === id)) return;
+      uploadTab = id; armedFile = null; renderPanel({ top: true });
+      panel.querySelector(`[data-upload-tab="${id}"]`)?.focus({ preventScroll: true });
+    };
+    const tabs = el('div', { class: 'fe-upload-tabs', role: 'tablist', 'aria-label': '자료 종류', dataset: { uploadTabs: '' } },
+      ...choices.map(([id, name], index) => el('button', {
+        class: `fe-upload-tab${uploadTab === id ? ' on' : ''}`, type: 'button', role: 'tab', id: `${uploadTabsId}-tab-${id}`,
+        'aria-selected': String(uploadTab === id), 'aria-controls': `${uploadTabsId}-panel-${id}`, tabindex: uploadTab === id ? '0' : '-1',
+        dataset: { uploadTab: id }, disabled: importingDocument,
+        onClick: () => choose(id), onKeydown: event => {
+          const next = event.key === 'ArrowRight' ? (index + 1) % choices.length : event.key === 'ArrowLeft' ? (index + choices.length - 1) % choices.length
+            : event.key === 'Home' ? 0 : event.key === 'End' ? choices.length - 1 : -1;
+          if (next < 0) return; event.preventDefault(); choose(choices[next][0]);
+        },
+      }, name)));
+    const content = uploadTab === 'photo' ? (libraryOn() ? uploadBody() : directPhotoBody()) : uploadTab === 'ppt' ? pptUploadBody() : [ytAdder()];
+    return [tabs, ...choices.map(([id]) => el('div', {
+      class: 'fe-upload-panel', role: 'tabpanel', id: `${uploadTabsId}-panel-${id}`, 'aria-labelledby': `${uploadTabsId}-tab-${id}`,
+      dataset: { uploadPanel: id }, hidden: uploadTab !== id,
+    }, ...(uploadTab === id ? content : [])))];
+  }
+  function uploadHelp(id, title, ...notes) {
+    const details = el('details', { class: 'fe-upload-help', open: uploadHelpOpen[id], dataset: { uploadHelp: id } },
+      el('summary', { text: title }), el('div', { class: 'fe-upload-help-body' }, ...notes.filter(Boolean)));
+    details.addEventListener('toggle', () => { uploadHelpOpen[id] = details.open; }); return details;
+  }
+  function photoHelp(note) {
+    return uploadHelp('photo', '사진 올리기 안내',
+      note ? el('p', { class: 'fe-note', text: note }) : null,
+      el('p', { class: 'fe-note', text: '사진을 고르면 배경 제거, 테두리 모양, 크기, 투명도, 뒤집기를 쓸 수 있어요.' }),
+      el('p', { class: 'fe-note', text: '내가 찍거나 그린 것, 허락을 받은 것만 올려요. 얼굴·이름 같은 개인 정보도 살펴봐요.' }));
+  }
+  function directPhotoBody() {
+    const photos = photosHere();
+    return [el('button', {
+      class: 'fe-btn primary fe-upload', type: 'button', disabled: busy,
+      onClick: () => { if (photos >= settings().maxPhotos) { notify(`사진은 카드 한 장에 ${settings().maxPhotos}장까지예요.`); return; } fileInput.click(); },
+    }, ...(busy ? ['올리는 중…'] : [icon('upload'), '사진 올리기'])),
+    el('p', { class: 'fe-note', text: `이 장에 사진 ${photos}/${settings().maxPhotos}장` }), photoHelp('PNG·JPG 사진이나 그림을 올려요.')];
+  }
+  function pptUploadBody() {
+    return [el('div', { class: 'fe-ppt-intro' }, icon('screen'),
+      el('b', { text: 'PPT를 온바탕으로' }), el('p', { class: 'fe-note', text: '글·도형·사진을 편집할 수 있어요.' })),
+    ...documentImportBody(),
+    el('div', { class: 'fe-ppt-size' }, icon('cover'), el('div', {}, el('b', { text: '원본 비율로 자동 맞춤' }),
+      el('p', { class: 'fe-note', text: '16:9·4:3 등 PPT 크기에 맞춰 열어요.' }))),
+    el('p', { class: 'fe-note', text: '현재 그림은 저장한 뒤 새 자료로 열어요.' }),
+    uploadHelp('ppt', '가져오기 안내',
+      el('p', { class: 'fe-note', text: 'PPTX 파일의 슬라이드를 살펴보고 가져올 쪽을 골라요. 원본 파일은 바뀌지 않아요.' }),
+      typeof documentImport?.description === 'string' && documentImport.description.trim()
+        ? el('p', { class: 'fe-note', text: documentImport.description.trim() }) : null)];
+  }
+
   // ---------- 유튜브 영상 넣기 ----------
   // 주소를 붙여 넣으면 카드 가운데에 영상이 놓인다(영상의 이름표와 시작 시각만 저장한다). 발표할 때 누르면 그 자리에서 틀어진다.
   function addYouTube(text) {
@@ -2754,15 +2810,15 @@ export function createEditor({
     return true;
   }
   function ytAdder() {
-    const input = el('input', {
+    const go = () => { if (addYouTube(youtubeInput.value)) youtubeInput.value = ''; };
+    const input = youtubeInput ||= el('input', {
       class: 'fe-search fe-yt-input', type: 'url', inputmode: 'url', placeholder: 'https://youtu.be/…', 'aria-label': '유튜브 영상 주소', autocomplete: 'off', spellcheck: 'false',
       onKeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); go(); } },
     });
-    const go = () => { if (addYouTube(input.value)) input.value = ''; };
     return el('div', { class: 'fe-yt-add', role: 'group', 'aria-label': '유튜브 영상 넣기' },
-      el('div', { class: 'fe-head', text: '유튜브 영상' }),
       el('div', { class: 'fe-row fe-yt-row' }, input, el('button', { class: 'fe-btn', type: 'button', onClick: go }, icon('plus'), '넣기')),
-      el('p', { class: 'fe-note', text: '유튜브의 "공유 → 복사" 주소를 붙여 넣어요. 꾸미기 판에서 Ctrl+V 로 붙여 넣어도 돼요. 발표할 때 스페이스 바로 틀고 멈춰요(인터넷 필요).' }));
+      el('p', { class: 'fe-note', text: '공개된 유튜브 영상을 넣을 수 있어요.' }),
+      uploadHelp('youtube', '유튜브 사용 안내', el('p', { class: 'fe-note', text: '유튜브의 "공유 → 복사" 주소를 붙여 넣어요. 꾸미기 판에서 Ctrl+V로 붙여 넣어도 돼요. 발표할 때 스페이스 바로 틀고 멈춰요(인터넷 필요).' })));
   }
   // 시작 시각 칸: "1:30" · "90" · "1m30s" 를 받는다. 비우면 처음부터.
   function ytStartBody(it) {
@@ -2784,21 +2840,26 @@ export function createEditor({
   function documentImportBody() {
     if (!hasDocumentImport) return [];
     const button = el('button', {
-      class: 'fe-btn fe-upload fe-document-import', type: 'button', dataset: { documentImport: '' },
+      class: 'fe-btn primary fe-upload fe-document-import', type: 'button', dataset: { documentImport: '' },
       disabled: busy || importingDocument || filing || !!cam,
+      'aria-busy': importingDocument ? 'true' : null,
       onClick: async () => {
         if (!card || busy || importingDocument || filing || cam) return;
         importingDocument = true; button.disabled = true; button.setAttribute('aria-busy', 'true');
+        for (const control of panel.querySelectorAll('[data-upload-tab]')) control.disabled = true;
         try { await documentImport.open(); }
         catch { notify('가져오기 화면을 열지 못했어요. 지금 그림을 확인하고 다시 시도해주세요.', 4500); }
         finally {
           importingDocument = false;
-          if (card && button.isConnected) { button.disabled = busy || filing || !!cam; button.removeAttribute('aria-busy'); }
+          if (card) {
+            const current = panel.querySelector('[data-document-import]');
+            if (current) { current.disabled = busy || filing || !!cam; current.removeAttribute('aria-busy'); }
+            for (const control of panel.querySelectorAll('[data-upload-tab]')) control.disabled = false;
+          }
         }
       },
     }, icon('upload'), documentImport.label.trim());
-    return [button, typeof documentImport.description === 'string' && documentImport.description.trim()
-      ? el('p', { class: 'fe-note fe-document-import-note', text: documentImport.description.trim() }) : null];
+    return [button];
   }
 
   function uploadBody() {
@@ -2840,7 +2901,6 @@ export function createEditor({
           fileInput.click();
         },
       }, ...(busy ? ['올리는 중…'] : [icon('upload'), '사진 올리기'])),
-      ...documentImportBody(),
       el('div', { class: 'fe-files-head' }, el('b', { class: 'fe-head', text: '올린 파일' }), el('span', { class: 'fe-files-count', text: `${files.length}/${max}` })),
       // 지우기 전에 한 번 더 묻는다. 쓰고 있는 파일이면 쓴 곳에서도 사라진다고 알려 준다.
       armedImg ? el('div', { class: 'fe-file-ask', role: 'group', 'aria-label': '올린 파일 지우기' },
@@ -2851,11 +2911,8 @@ export function createEditor({
           pbtn('그만두기', () => { armedFile = null; renderPanel(); }))) : null,
       files.length
         ? el('div', { class: 'fe-files' }, ...files.map((img, i) => tile(img, i + 1)).reverse())
-        : el('p', { class: 'fe-note fe-files-empty', text: '아직 올린 파일이 없어요. PNG·JPG 사진이나 그림을 올려요.' }),
-      files.length ? el('p', { class: 'fe-note', text: `누르면 카드에 놓여요(한 장에 ${settings().maxPhotos}장까지). 여러 번 넣어도 올린 파일은 하나예요.` }) : null,
-      el('p', { class: 'fe-note', text: '놓은 사진을 누르면 도구 막대에서 배경 제거, 테두리 모양, 크기, 투명도, 뒤집기를 쓸 수 있어요.' }),
-      el('p', { class: 'fe-note', text: '내가 찍거나 그린 것, 허락을 받은 것만 올리고, 얼굴·이름 같은 개인 정보가 없는지 살펴봐요.' }),
-      ytAdder(),
+        : el('div', { class: 'fe-files-empty' }, icon('image'), el('p', { class: 'fe-note', text: '아직 올린 사진이 없어요.' })),
+      photoHelp(`사진을 누르면 이 장에 놓여요(한 장에 ${settings().maxPhotos}장까지). 여러 번 넣어도 올린 파일은 하나예요.`),
     ];
   }
 

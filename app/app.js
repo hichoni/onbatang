@@ -20,7 +20,7 @@ import {
   RATIOS, RATIO_KEY, MAX_DESIGNS, MAX_SLIDES, MAX_NAME, EXPORT_SIZES, DEFAULT_EXPORT, EXPORT_KEY, VIDEO_SIZES, DEFAULT_VIDEO, exportSize, ratioOf, newRecord, nextNumber,
   isBlank, fileName, whenText, sortRecords, addSlide, copySlide, removeSlide, moveSlide,
   libraryOf, dropPhoto, slideMotion, slideVideo, slideExtra, hasVideo, deckVideos, unusedVideos, cleanBrand,
-  migrateRecord, aspectOf, copyRecord, withSlideMotion,
+  migrateRecord, aspectOf, canvasRatioOf, copyRecord, withSlideMotion,
 } from './designs.js';
 import { saveVideo, listVideos, removeVideos } from './videos.js';
 import { zipStore } from './zip.js';
@@ -575,6 +575,8 @@ function openDesign(record, isNew) {
     }, icon, el('span', { class: 'cv-shape-name', text: r.name }));
   }));
   O.shapes = shapes;
+  const canvasRatio = O.ratioLabel = el('span', { class: 'cv-ratio-current', role: 'status', 'aria-live': 'polite', dataset: { canvasRatio: '' } });
+  shapes.prepend(canvasRatio);
   // 위 막대: 나가기 · 이름 · 저장 상태 | 모양 · 발표 · 내려받기
   const mark = brand ? el(onBrandClick ? 'button' : 'span', onBrandClick ? {
     class: 'cv-brand cv-brand-link', type: 'button', title: `저장하고 ${brand.name} 홈으로`,
@@ -957,10 +959,22 @@ function present(O) {
 function markRatio(O, shapes) {
   // 그림 칸은 이 비율로 남은 자리에 꼭 맞게 커진다(app.css 의 .cv-canvas).
   const aspect = aspectOf(O.record);
+  const ratio = canvasRatioOf(O.record);
+  if (O.ratioLabel) {
+    O.ratioLabel.hidden = O.record.source?.kind !== 'pptx' && ratio.preset !== null;
+    O.ratioLabel.textContent = ratio.label;
+    O.ratioLabel.dataset.ratio = ratio.id;
+    O.ratioLabel.classList.toggle('on', ratio.preset === null);
+    O.ratioLabel.setAttribute('aria-current', String(ratio.preset === null));
+    const source = O.record.originalSize;
+    O.ratioLabel.title = ratio.original && source?.unit === 'emu'
+      ? `원본 슬라이드 크기 ${Number((source.width / 360000).toFixed(3))} × ${Number((source.height / 360000).toFixed(3))}cm`
+      : '저장된 슬라이드 크기의 정확한 가로·세로 비율이에요.';
+  }
   O.shell?.style.setProperty('--cv-aspect', String(aspect));
   if (O.shell) O.shell.dataset.shape = aspect >= 1.3 ? 'wide' : aspect < 0.7 ? 'tall' : 'even';       // 옆 칸의 템플릿 줄 수를 정한다(app.css)
   for (const b of shapes.querySelectorAll('.cv-shape')) {
-    const on = Math.abs(ratioOf(b.dataset.ratio).aspect - aspect) < 1e-8;
+    const on = ratio.preset === b.dataset.ratio;
     b.classList.toggle('on', on);
     b.setAttribute('aria-pressed', String(on));
   }

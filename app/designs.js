@@ -57,6 +57,24 @@ export const ratioOf = (id) => {
   return aspect >= 0.25 && aspect <= 4 ? { id, name: '원본 비율', desc: id, aspect } : RATIOS[0];
 };
 export const aspectOf = record => record?.size ? cleanSize(record.size).width / record.size.height : ratioOf(record?.ratio).aspect;
+/** Describe the stored canvas without rounding it to an editor preset or resizing it. */
+export function canvasRatioOf(record) {
+  // Allow only floating-point representation noise, not a nearby custom ratio.
+  const sameAspect = (a, b) => Math.abs(a - b) <= Number.EPSILON * Math.max(1, Math.abs(a), Math.abs(b)) * 4;
+  const aspect = aspectOf(record), preset = RATIOS.find(value => sameAspect(value.aspect, aspect));
+  const originalSize = record?.originalSize ? cleanSize(record.originalSize, 'originalSize') : null;
+  const original = record?.source?.kind === 'pptx' && originalSize !== null
+    && sameAspect(originalSize.width / originalSize.height, aspect);
+  const size = original ? originalSize : record?.size ? cleanSize(record.size) : null;
+  let id = preset?.id || ratioOf(record?.ratio).id;
+  if (!preset && size) {
+    const gcd = (a, b) => b ? gcd(b, a % b) : a;
+    const divisor = Number.isSafeInteger(size.width) && Number.isSafeInteger(size.height) ? gcd(size.width, size.height) : 1;
+    id = `${size.width / divisor}:${size.height / divisor}`;
+  }
+  return { id, aspect, preset: preset?.id || null, original,
+    label: `${original ? '원본 비율' : '현재 비율'} · ${id}` };
+}
 /** 새 그림의 모양으로 쓸, 지난번에 고른 모양을 기억해 두는 자리(localStorage). */
 export const RATIO_KEY = 'minican.ratio';
 

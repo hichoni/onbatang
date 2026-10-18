@@ -46,23 +46,25 @@ async function setup(t,{sync=false}={}){
 }
 async function stopTour(page){await page.evaluate(async()=>{(await import('/app/tour.js')).stopTour();});}
 const importButton=page=>page.locator('[data-document-import]');
+const choosePpt=page=>page.locator('[data-upload-tab="ppt"]').click();
 
 test('new blank editor is durably saved before import, restores upload on rejection/cancel, and never overwrites another active editor',options,async t=>{
  const {page,errors,external}=await setup(t);
  await page.locator('.cv-hero .cv-new-btn').click();await stopTour(page);
  assert.equal(await page.locator('.fe-quick').filter({hasText:'내 자료'}).count(),1);
  await page.locator('.fe-tab[data-tab="upload"]').click();
- assert.match(await page.locator('.fe-panel').textContent(),/내 사진·PPT를 올리거나 유튜브 영상을 넣어요/);
+ assert.match(await page.locator('.fe-panel').textContent(),/사진·PPT·영상을 넣어요/);
+ await choosePpt(page);
  assert.equal(await importButton(page).textContent(),'내 PPT 올리기');
  await importButton(page).click();
  await page.waitForFunction(()=>window.calls.length===1&&document.querySelector('.fe-tab[data-tab="upload"].on')&&!document.querySelector('#app').inert);
  const first=await page.evaluate(async()=>({call:window.calls[0],records:await (await import('/app/store.js')).listDesigns(),name:document.querySelector('.cv-name').value}));
  assert.equal(first.call.from,'editor');assert.equal(first.call.slideIndex,0);assert.equal(first.call.persistedAtCallback,true);assert.equal(first.call.blankAtCallback,true);
  assert.equal(first.records.length,1);assert.equal(first.records[0].id,first.call.designId);assert.equal(first.records[0].name,first.name);assert.deepEqual(first.records[0].slides[0].items,[]);
- await page.evaluate(()=>window.callbackMode='cancel');await importButton(page).click();
+ await page.evaluate(()=>window.callbackMode='cancel');await choosePpt(page);await importButton(page).click();
  await page.waitForFunction(()=>window.calls.length===2&&document.querySelector('.fe-tab[data-tab="upload"].on')&&!document.querySelector('#app').inert);
  assert.equal(await page.evaluate(()=>window.calls[1].designId),first.call.designId);assert.equal(await page.locator('.cv-name').inputValue(),first.name);
- await page.evaluate(()=>window.callbackMode='other');await importButton(page).click();
+ await page.evaluate(()=>window.callbackMode='other');await choosePpt(page);await importButton(page).click();
  await page.waitForFunction(()=>window.calls.length===3&&document.querySelector('.cv-name')?.value==='다른 활성 그림'&&!document.querySelector('#app').inert);
  const other=await page.evaluate(async()=>{const {getDesign}=await import('/app/store.js');return {sameOriginal:!!await getDesign(window.calls[0].designId),otherExists:!!await getDesign(window.otherId),otherId:window.otherId};});
  assert.equal(other.sameOriginal,true);assert.equal(other.otherExists,true);assert.notEqual(other.otherId,first.call.designId);
@@ -74,6 +76,7 @@ test('account callback rejection keeps the same editor and local body, then succ
  await page.getByRole('button',{name:'계정 모의 검수 열기',exact:true}).click();await stopTour(page);
  await page.locator('.cv-canvas .fi-text').dblclick();await page.locator('.cv-canvas [contenteditable]').fill('동기화와 가져오기 직전 수정한 합성 본문');await page.keyboard.press('Tab');
  await page.locator('.cv-name').fill('동기화 실패 뒤에도 유지');await page.locator('.fe-tab[data-tab="upload"]').click();
+ await choosePpt(page);
  await page.evaluate(()=>{window.originalNameNode=document.querySelector('.cv-name');window.originalCanvas=document.querySelector('.cv-canvas');});
  await importButton(page).click();
  await page.waitForFunction(()=>document.querySelector('.cv-alert')?.textContent.includes('계정에 올리지 못했어요.')&&!document.querySelector('#app').inert);
