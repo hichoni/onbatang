@@ -184,6 +184,9 @@ const num = (v, lo, hi, fallback, precision = 10) => {
   return Math.round(Math.min(hi, Math.max(lo, n)) * precision) / precision;
 };
 const measure = (item, ...args) => num(...args, pptxItem(item) ? 10000 : 10);
+// Screen-pixel nudges and anchored resizing need sub-tenth-percent positions,
+// including after save/reopen. Dimension limits and their precision stay intact.
+const position = (value, fallback) => num(value, 0, 100, fallback, 10000);
 // 숫자로 적힌 값인가(없는 값·빈 글·글자는 아니다). "정하지 않음"과 0 을 가려야 하는 값에 쓴다.
 const given = (v) => (typeof v === 'number' || (typeof v === 'string' && v.trim() !== '')) && Number.isFinite(Number(v));
 
@@ -238,7 +241,7 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
   const base = {
     ...metadata(it),
     ...(pptxItem(it) ? {layout:'slide'} : {}),
-    x: measure(it,it.x, 0, 100, 50), y: measure(it,it.y, 0, 100, 50), rot: Math.round(num(it.rot, -180, 180, 0)),
+    x: position(it.x, 50), y: position(it.y, 50), rot: Math.round(num(it.rot, -180, 180, 0)),
     op: Math.round(num(it.op, pptxItem(it) ? 0 : OPACITY.min, OPACITY.max, OPACITY.max)), // 빈 PPT 객체도 이름표를 보존한다.
     lock: it.lock === true,                                                // 잠금(실수로 움직이지 않게)
   };
@@ -520,7 +523,7 @@ export function snapCenter(v) {
 export function moveItem(item, x, y, { snap = true } = {}) {
   const [sx, onV] = snap ? snapCenter(x) : [x, false];
   const [sy, onH] = snap ? snapCenter(y) : [y, false];
-  return { item: { ...item, x: num(sx, 0, 100, 50), y: num(sy, 0, 100, 50) }, guides: { v: onV, h: onH } };
+  return { item: { ...item, x: position(sx, 50), y: position(sy, 50) }, guides: { v: onV, h: onH } };
 }
 
 /** 전체 크기를 k 배로(글상자는 글자 크기도 함께). 너무 작아지거나 커지지 않게 한계를 둔다. */
@@ -619,7 +622,7 @@ export function duplicateItem(items, i) {
   if (!it || items.length >= limits.items) return null;
   if (it.t === 'image' && items.filter((k) => k.t === 'image').length >= limits.photos) return null;
   const { id, ...copy } = it;            // 복제한 것은 다른 요소다: 이름표를 물려받지 않는다
-  return { ...copy, ...(id ? { id: newId(), origin: { elementId: id } } : {}), x: num(it.x + 4, 0, 100, 50), y: num(it.y + 4, 0, 100, 50) };
+  return { ...copy, ...(id ? { id: newId(), origin: { elementId: id } } : {}), x: position(it.x + 4, 50), y: position(it.y + 4, 50) };
 }
 
 /**
@@ -667,7 +670,7 @@ export function sizeRange(item) {
 export function alignItem(item, where, hw = 0, hh = 0) {
   const x = where === 'left' ? hw : where === 'right' ? 100 - hw : where === 'center' ? 50 : item.x;
   const y = where === 'top' ? hh : where === 'bottom' ? 100 - hh : where === 'middle' ? 50 : item.y;
-  return { ...item, x: num(x, 0, 100, item.x), y: num(y, 0, 100, item.y) };
+  return { ...item, x: position(x, item.x), y: position(y, item.y) };
 }
 
 // ---------- 그룹 ----------
@@ -711,7 +714,7 @@ export function scaleItems(items, k, ax, ay) {
     k: f,
     items: items.map((it) => {
       const sized = scaleItem(it, f);
-      return { ...sized, x: num(ax + (it.x - ax) * f, 0, 100, it.x), y: num(ay + (it.y - ay) * f, 0, 100, it.y) };
+      return { ...sized, x: position(ax + (it.x - ax) * f, it.x), y: position(ay + (it.y - ay) * f, it.y) };
     }),
   };
 }

@@ -6,7 +6,7 @@ import { el, toast } from './dom.js';
 import { newId } from './document.js';
 import {
   COLORS, SHAPES, SHAPE_GROUPS, MASKS, OPACITY, TEXT_PRESETS, settings, configure, reshapeItems, backgroundOf, fontList, fontFamilyOf, layoutList, textLimit, clip,
-  cleanBg, cleanItems, cleanDesign, emptyDesign, cleanItem, cleanImg, moveLayer, newPresetText, newEmoji, newShape, newArt, newYouTube, newPhoto, moveItem, scaleItem, widenItem, heightenItem, rotateItem,
+  cleanBg, cleanItems, cleanDesign, emptyDesign, cleanItem, cleanImg, moveLayer, newPresetText, newEmoji, newShape, newArt, newYouTube, newPhoto, moveItem, rotateItem,
   designMotion, reorder, duplicateItem, pasteItem, itemLabel, sizeOf, resizeTo, sizeRange, alignItem, coverItem, layoutItems, EDGE, canEdge, canRound, cornerOf, THICK, isLine, thickOf, thicken,
   designVideo, cleanVideo, trimVideo, videoSeconds, videoTime, VIDEO_FITS, MIN_VIDEO, rebaseItems, alignBoxes, distributeBoxes, clampShift, scaleItems, regroup, newGroupId,
 } from './model.js';
@@ -20,6 +20,7 @@ import { parseYouTube, ytStart, ytTime, ytWatch } from './youtube.js';
 import { ACCEPT_IMAGES, PHOTO_EDGE, readPixels, canvasToPng, shrinkImage } from './images.js';
 import { fontReady } from './fonts.js';
 import { TOLERANCE, colorAlpha, prepareAlpha, finishCutout, resizeMask, plainBorder } from './cutout.js';
+import { anchorResizedItem, resizeItemFromHandle } from './resize.js';
 
 const HISTORY = 40;
 // 옆 메뉴의 칸: [이름, 아이콘(icons.js), 보이는 이름, 한 줄 설명]
@@ -126,15 +127,16 @@ export function createEditor({
 
   const guideV = el('div', { class: 'fe-guide v', hidden: true });
   const guideH = el('div', { class: 'fe-guide h', hidden: true });
-  const handle = (h, cls, label, pic = null) => el('span', { class: `fe-h fe-${cls}`, dataset: { h }, title: label }, pic);
-  const hWide = handle('wide', 'wide', '너비 바꾸기');
-  const hTall = handle('tall', 'tall', '높이 바꾸기');
+  const handle = (h, cls, label, pic = null) => el('span', { class: `fe-h fe-${cls}`, dataset: { h, ...(h === 'scale' ? { corner: cls.split(' ').at(-1) } : {}) }, title: label }, pic);
+  const hWide = handle('wide', 'wide', '너비 바꾸기 · 왼쪽 변 고정 · Ctrl: 가운데 기준');
+  const hTall = handle('tall', 'tall', '높이 바꾸기 · 위쪽 변 고정 · Ctrl: 가운데 기준');
+  const resizeHint = '가로·세로 바꾸기 · Shift: 비율 유지 · Ctrl: 가운데 기준';
   // 손잡이의 차례: 변의 손잡이를 먼저, 모서리의 손잡이를 나중에 둔다(작은 요소에서 닿는 자리가 겹치면 모서리가 위에 온다).
   const selBox = el('div', { class: 'fe-sel', hidden: true },
     handle('rot', 'rot', '돌리기', icon('upright')),
     hWide, hTall,
-    handle('scale', 'scale nw', '크기 바꾸기'), handle('scale', 'scale ne', '크기 바꾸기'),
-    handle('scale', 'scale sw', '크기 바꾸기'), handle('scale', 'scale se', '크기 바꾸기'),
+    handle('scale', 'scale nw', resizeHint), handle('scale', 'scale ne', resizeHint),
+    handle('scale', 'scale sw', resizeHint), handle('scale', 'scale se', resizeHint),
     el('span', { class: 'fe-lockmark', 'aria-hidden': 'true' }, icon('lock')));
   // 고른 테두리의 가장 작은 크기(px). 요소가 이보다 작으면 테두리를 넉넉하게 둘러서, 손잡이끼리 겹치지 않고 따로 잡힌다.
   const coarse = typeof matchMedia === 'function' ? matchMedia('(pointer: coarse)') : null;
@@ -148,7 +150,7 @@ export function createEditor({
   // 여럿을 골랐을 때: 하나하나의 가는 테두리(manyBox)와 모두를 감싸는 상자(groupBox). 빈 곳을 끌어 고를 때의 네모(marquee).
   const manyBox = el('div', { class: 'fe-many', 'aria-hidden': 'true' });
   // 모두를 감싸는 상자의 네 모서리 손잡이: 끌면 고른 것들이 맞은편 모서리를 기준으로 함께 커지고 작아진다.
-  const groupHandle = (corner) => el('span', { class: `fe-h fe-scale ${corner}`, dataset: { h: 'gscale', corner }, title: '함께 크기 바꾸기' });
+  const groupHandle = (corner) => el('span', { class: `fe-h fe-scale ${corner}`, dataset: { h: 'gscale', corner }, title: '함께 크기 바꾸기 · 모양 비율 유지 · Ctrl: 가운데 기준' });
   const groupBox = el('div', { class: 'fe-groupbox', hidden: true }, groupHandle('nw'), groupHandle('ne'), groupHandle('sw'), groupHandle('se'));
   const marquee = el('div', { class: 'fe-marquee', hidden: true });
   const overlay = el('div', { class: 'fe-overlay' }, othersBox, manyBox, guideV, guideH, selBox, groupBox, marquee, sceneFlag);
@@ -572,8 +574,11 @@ export function createEditor({
     const tiny = it.t === 'shape' && w < least && h < least;
     selBox.style.transform = `translate(-50%, -50%) rotate(${it.rot}deg)`;
     selBox.classList.toggle('locked', it.lock);
-    hWide.hidden = (it.t !== 'text' && it.t !== 'shape') || tiny;
-    hTall.hidden = it.t !== 'shape' || tiny;
+    hWide.hidden = it.t === 'emoji' || tiny;
+    hTall.hidden = it.t === 'emoji' || (it.t === 'text' && !Number.isFinite(it.h)) || tiny;
+    const hint = it.t === 'emoji' ? '이모지 크기 바꾸기 · 모양 비율 유지 · Ctrl: 가운데 기준'
+      : it.t === 'text' && !Number.isFinite(it.h) ? '글상자 너비 바꾸기 · Shift: 글자도 함께 확대 · Ctrl: 가운데 기준' : resizeHint;
+    selBox.querySelectorAll('[data-h="scale"]').forEach(h => { h.title = hint; });
   }
 
   // 다른 사람이 고른 요소마다 그 사람의 색 테두리와 이름표를 두른다(내 테두리와 같은 자리 계산).
@@ -1000,7 +1005,7 @@ export function createEditor({
     } else if (!it) {
       groups = [
         [row('paste', '붙여넣기', 'Ctrl+V', () => clipPaste(at), { disabled: !clipboard })],
-        [row('undo', '실행 취소', 'Ctrl+Z', undo, { disabled: !past.length }), row('redo', '다시 실행', 'Ctrl+Shift+Z', redo, { disabled: !future.length })],
+        [row('undo', '실행 취소', 'Ctrl+Z', undo, { disabled: !past.length }), row('redo', '다시 실행', 'Ctrl+Y / Ctrl+Shift+Z', redo, { disabled: !future.length })],
       ];
     } else if (it.lock) {
       groups = [[row('unlock', '잠금 해제', '', () => change({ lock: false })), row('copy', '복사', 'Ctrl+C', () => { clipCopy(); focusStage(); })]];
@@ -1308,7 +1313,7 @@ export function createEditor({
     const h = e.target.closest?.('.fe-h');
     const top = e.target.closest?.('.fi') ? itemAt(e.clientX, e.clientY, !!e.pointerType && e.pointerType !== 'mouse') : -1;
     if (h && h.dataset.h === 'gscale' && many.length) startGroupScale(e, h.dataset.corner);
-    else if (h && sel >= 0 && !cur().lock) start(h.dataset.h, e);
+    else if (h && sel >= 0 && !cur().lock) start(h.dataset.h, e, h.dataset.corner);
     // Shift 를 누른 채 누르면 그 요소를 고른 것에 넣거나 뺀다. 빈 곳에서 끌면 고른 것에 더한다.
     else if (e.shiftKey && top >= 0 && !items()[top].lock) { e.preventDefault(); focusStage(); toggleChosen(top); }
     // 여럿 고른 것 가운데 하나를 잡으면 모두 함께 옮긴다(끌지 않고 떼면 그것 하나만 고른다).
@@ -1359,7 +1364,7 @@ export function createEditor({
     const ay = corner.includes('n') ? g.bottom : g.top;
     drag = {
       mode: 'gscale', id: e.pointerId, px: e.clientX, py: e.clientY, idx: many.slice(), from: many.map((i) => items()[i]), moved: false,
-      ax, ay, at: [(ax - s.left) / (s.width || 1) * 100, (ay - s.top) / (s.height || 1) * 100], reach: Math.max(1, Math.hypot(e.clientX - ax, e.clientY - ay)),
+      rect: s, box: g, corner, ax, ay,
     };
   }
   // 여럿을 함께 옮기기 시작한다. tap: 끌지 않고 떼면 이것 하나만 고른다.
@@ -1370,7 +1375,7 @@ export function createEditor({
     try { stage.setPointerCapture(e.pointerId); } catch { /* 잡지 못해도 계속한다 */ }
     drag = { mode: 'group', id: e.pointerId, rect: stage.getBoundingClientRect(), px: e.clientX, py: e.clientY, idx: many.slice(), from: many.map((i) => items()[i]), moved: false, tap };
   }
-  function start(mode, e) {
+  function start(mode, e, corner) {
     e.preventDefault();
     focusStage();
     const it = cur();
@@ -1379,19 +1384,13 @@ export function createEditor({
     const rect = stage.getBoundingClientRect();
     const cx = rect.left + rect.width * it.x / 100;
     const cy = rect.top + rect.height * it.y / 100;
-    // 손잡이를 잡은 곳이 가운데에서 떨어진 거리(along·across 는 기울어진 방향으로 잰 것). 끄는 동안 "여기서 얼마나 더 갔는지"만큼 늘이고 줄인다.
-    // (작은 요소는 테두리를 넉넉하게 두르므로 손잡이가 요소의 끝보다 바깥에 있다. 잡은 자리에서 움직인 만큼으로 재야
-    //  잡는 순간 크기가 튀지 않고, 손가락이 간 만큼 요소의 끝이 따라온다)
-    const rad = it.rot * Math.PI / 180;
-    const [dx, dy] = [e.clientX - cx, e.clientY - cy];
+    // 넉넉한 선택 테두리 대신 실제 요소 크기를 기억한다. 잡은 자리에서
+    // 움직인 만큼만 바꾸므로 작은 조각도 손잡이를 잡는 순간 튀지 않는다.
     const node = nodes[sel];
     drag = {
       mode, id: e.pointerId, rect, from: it, moved: false,
       px: e.clientX, py: e.clientY, cx, cy,
-      along: Math.abs(dx * Math.cos(rad) + dy * Math.sin(rad)),
-      across: Math.abs(-dx * Math.sin(rad) + dy * Math.cos(rad)),
-      reach: Math.hypot(dx, dy),
-      half: Math.max(1, Math.hypot(node?.offsetWidth || 0, node?.offsetHeight || 0) / 2),      // 요소의 가운데에서 모서리까지(px)
+      corner: corner || mode, width: node?.offsetWidth || 1, height: node?.offsetHeight || 1,
     };
   }
   stage.addEventListener('pointermove', (e) => {
@@ -1409,8 +1408,12 @@ export function createEditor({
         drag.moved = true;
         remember();
       }
-      const k = Math.max(0.05, Math.hypot(e.clientX - drag.ax, e.clientY - drag.ay) / drag.reach);
-      const made = scaleItems(drag.from, k, drag.at[0], drag.at[1]).items;
+      const { box, rect, corner } = drag;
+      const dx = e.clientX - drag.px, dy = e.clientY - drag.py;
+      const k = Math.max(0.000001, 1 + (e.ctrlKey ? 2 : 1) * ((corner.includes('w') ? -1 : 1) * box.width * dx + (corner.includes('n') ? -1 : 1) * box.height * dy) / Math.max(1, box.width ** 2 + box.height ** 2));
+      const ax = e.ctrlKey ? box.left + box.width / 2 : drag.ax;
+      const ay = e.ctrlKey ? box.top + box.height / 2 : drag.ay;
+      const made = scaleItems(drag.from, k, (ax - rect.left) / rect.width * 100, (ay - rect.top) / rect.height * 100).items;
       putMany(new Map(drag.idx.map((i, n) => [i, made[n]])));
       return;
     }
@@ -1447,18 +1450,21 @@ export function createEditor({
       next = moved.item;
       guideV.hidden = !moved.guides.v;
       guideH.hidden = !moved.guides.h;
-    } else if (mode === 'scale') {
-      // 모서리가 손가락을 따라온다: 가운데에서 모서리까지의 길이가 손가락이 간 만큼 늘고 준다.
-      next = scaleItem(from, Math.max(0.01, (drag.half + Math.hypot(e.clientX - cx, e.clientY - cy) - drag.reach) / drag.half));
     } else if (mode === 'rot') {
       next = rotateItem(from, Math.atan2(e.clientY - cy, e.clientX - cx) * 180 / Math.PI + 90);
     } else {
-      // 너비·높이: 기울어진 방향에 맞춰 가운데에서 손가락까지의 거리를 잰다.
-      const rad = from.rot * Math.PI / 180;
-      const dx = e.clientX - cx;
-      const dy = e.clientY - cy;
-      if (mode === 'wide') next = widenItem(from, from.w + (Math.abs(dx * Math.cos(rad) + dy * Math.sin(rad)) - drag.along) * 2 / rect.width * 100);
-      else next = heightenItem(from, from.h + (Math.abs(-dx * Math.sin(rad) + dy * Math.cos(rad)) - drag.across) * 2 / rect.height * 100);
+      const box = {
+        width: drag.width, height: drag.height, stageWidth: rect.width, stageHeight: rect.height,
+        handle: drag.corner, dx: e.clientX - drag.px, dy: e.clientY - drag.py,
+        proportional: e.shiftKey, centered: e.ctrlKey,
+      };
+      next = resizeItemFromHandle(from, box);
+      // Text can wrap differently at its new width. Anchor against the actual
+      // rendered height so its opposite corner stays still after that reflow.
+      const node = nodes[sel];
+      placeItem(node, next);
+      next = anchorResizedItem(from, next, { ...box, afterWidth: node.offsetWidth, afterHeight: node.offsetHeight });
+      if (next.x < 0 || next.x > 100 || next.y < 0 || next.y > 100) next = items()[sel];
     }
     put(next);
   });
@@ -1539,9 +1545,9 @@ export function createEditor({
       else if (mod && key === 'KeyG') { e.preventDefault(); if (e.shiftKey) ungroupMany(); else groupMany(); }
       else if (arrows[e.key]) {
         e.preventDefault();
-        const step = e.shiftKey ? 5 : 1;
+        const rect = stage.getBoundingClientRect(), step = e.shiftKey ? 10 : 1;
         remember();
-        shiftMany(many.map((i) => items()[i]), many.slice(), arrows[e.key][0] * step, arrows[e.key][1] * step);
+        shiftMany(many.map((i) => items()[i]), many.slice(), arrows[e.key][0] * step / rect.width * 100, arrows[e.key][1] * step / rect.height * 100);
         onChange();
       } else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); remove(); }
       else if (e.key === 'Escape') select(-1);
@@ -1553,8 +1559,8 @@ export function createEditor({
     if (mod && key === 'KeyX') { e.preventDefault(); clipCut(); return; }
     if (mod && key === 'KeyD') { e.preventDefault(); copy(); return; }
     if (it.lock) { if (e.key === 'Escape') select(-1); return; }
-    const step = e.shiftKey ? 5 : 1;
-    const arrows = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
+    const rect = stage.getBoundingClientRect(), step = e.shiftKey ? 10 : 1;
+    const arrows = { ArrowLeft: [-step / rect.width * 100, 0], ArrowRight: [step / rect.width * 100, 0], ArrowUp: [0, -step / rect.height * 100], ArrowDown: [0, step / rect.height * 100] };
     if (arrows[e.key]) {
       e.preventDefault();
       remember();
@@ -1991,7 +1997,7 @@ export function createEditor({
     const it = cur();
     const always = [
       tb(icon('undo'), undo, { title: '실행 취소 (Ctrl+Z)', name: '실행 취소', disabled: !past.length, cls: 'icon undo' }),
-      tb(icon('redo'), redo, { title: '다시 실행 (Ctrl+Shift+Z)', name: '다시 실행', disabled: !future.length, cls: 'icon redo' }),
+      tb(icon('redo'), redo, { title: '다시 실행 (Ctrl+Y / Ctrl+Shift+Z)', name: '다시 실행', disabled: !future.length, cls: 'icon redo' }),
       el('span', { class: 'fe-sep' }),
     ];
     if (many.length) {
