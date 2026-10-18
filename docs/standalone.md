@@ -1,4 +1,4 @@
-# 독립 온바탕 · v0.21.0
+# 독립 온바탕 · v0.21.1
 
 온바탕은 계정 없이 쓰는 편집기와 PPTX 자료 작업 공간입니다. **온바탕 with 가이랩**은 같은 공통 코드를 사용하는 가이랩의 확장 제품입니다. 가이랩의 로그인·계정 저장·활동·수업방·학생 제출은 독립본에 포함하지 않습니다. 기존 `startMinican` API와 기기 저장소 이름은 호환성을 위해 유지합니다.
 
@@ -51,7 +51,7 @@ PPTX 가져오기 → 실제 PPT 화면/편집 미리보기 → 전체·원본 �
 
 ## Firebase Hosting 배포
 
-공개 주소는 **[https://onbatang.web.app/](https://onbatang.web.app/)** 입니다. 최신 앱 버전·release commit은 공개 `version.json`에서 확인합니다. 최초 v0.20.0·release commit `41776457364ad2a955ab67e057f84c64ce78bd15`의146파일 HTTP bytes/SHA·실제 Edge11검사를 [최초 배포 기록](qa/2026-10-19-firebase-hosting.json)에 보존합니다. 후속 내 자료 진입은 v0.21.0입니다. 이전 GitHub Pages에 저장한 그림이 새 Firebase 출처로 자동 이동하지는 않습니다.
+공개 주소는 **[https://onbatang.web.app/](https://onbatang.web.app/)** 입니다. 최신 앱 버전·release commit은 공개 `version.json`에서 확인합니다. 최초 v0.20.0·release commit `41776457364ad2a955ab67e057f84c64ce78bd15`의146파일 HTTP bytes/SHA·실제 Edge11검사를 [최초 배포 기록](qa/2026-10-19-firebase-hosting.json)에 보존합니다. 후속 내 자료 진입은 v0.21.0부터이며 v0.21.1은 가져오기 취소 후 편집을 끝낼 때 원래 자료 화면 표시도 복원합니다. 이전 GitHub Pages에 저장한 그림이 새 Firebase 출처로 자동 이동하지는 않습니다.
 
 독립본은 전용 Firebase 프로젝트/Hosting 사이트 `onbatang`을 사용합니다. 가이랩·풍풍고 등 다른 프로젝트의 DB·Auth·Hosting은 배포하지 않습니다. 완성된 앱 release commit을 명시하여 정적 파일만 만들고 Hosting만 배포합니다.
 

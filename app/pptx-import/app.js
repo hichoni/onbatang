@@ -108,5 +108,5 @@ export function mountPptxApp({root,storage='minican',fonts,fontServices=defaultI
  }
  return {library,getEditorContext:()=>({materialRef:current?clone(current.materialRef):null,active}),
   async restoreEditorContext(context){current=context?.materialRef?await library.getMaterial(context.materialRef):null;active=context?.active||0;readOnly=false;},
-  async open({newImport=false}={}){importRoot.hidden=false;materialRoot.hidden=true;if(newImport&&workspace.startNewImport())latestImport=null;},showMaterial,showLibrary,reportError:error=>say(message(error),true),async editorClosed(){if(current)await paint();},async dispose(){workspace.dispose();services.dispose();await library.close();root.replaceChildren();}};
+  async open({newImport=false}={}){importRoot.hidden=false;materialRoot.hidden=true;if(newImport&&workspace.startNewImport())latestImport=null;},showMaterial,showLibrary,reportError:error=>say(message(error),true),async editorClosed(){if(current){importRoot.hidden=true;materialRoot.hidden=false;await paint();}},async dispose(){workspace.dispose();services.dispose();await library.close();root.replaceChildren();}};
 }
