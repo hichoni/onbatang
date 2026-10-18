@@ -88,7 +88,12 @@ function nativeText(item, box, id, size, warn) {
   const style = `lang="ko-KR" sz="${fontSize}" b="${item.bold ? 1 : 0}" i="${item.italic ? 1 : 0}"${item.under ? ' u="sng"' : ''}`;
   const properties = `<a:rPr ${style}>${solid(item.color, item.op)}<a:latin typeface="${xml(family)}"/><a:ea typeface="${xml(family)}"/><a:cs typeface="${xml(family)}"/></a:rPr>`;
   const inset = item.bgc ? Math.round(item.size * size.width / 100 * .5) : 0;
-  const paragraphs = item.text.split('\n').map(line => `<a:p><a:pPr algn="${{l: 'l', c: 'ctr', r: 'r'}[item.align] || 'ctr'}"><a:lnSpc><a:spcPct val="${Math.round((item.lh || 1.25) * 100000)}"/></a:lnSpc><a:spcBef><a:spcPts val="0"/></a:spcBef><a:spcAft><a:spcPts val="0"/></a:spcAft></a:pPr><a:r>${properties}<a:t xml:space="preserve">${xml(line)}</a:t></a:r><a:endParaRPr ${style}/></a:p>`).join('');
+  // CSS line-height multiplies the font size. DrawingML percentages multiply
+  // the font's normal line metrics instead, making otherwise identical text taller.
+  // Exact points preserve the authored baseline distance without shrinking text
+  // to an explicit frame whose visible overflow may be intentional in the editor.
+  const lineSpacing = Math.round(requestedSize * (item.lh || 1.25));
+  const paragraphs = item.text.split('\n').map(line => `<a:p><a:pPr algn="${{l: 'l', c: 'ctr', r: 'r'}[item.align] || 'ctr'}"><a:lnSpc><a:spcPts val="${lineSpacing}"/></a:lnSpc><a:spcBef><a:spcPts val="0"/></a:spcBef><a:spcAft><a:spcPts val="0"/></a:spcAft></a:pPr><a:r>${properties}<a:t xml:space="preserve">${xml(line)}</a:t></a:r><a:endParaRPr ${style}/></a:p>`).join('');
   return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${xml(item.id || `글상자 ${id}`)}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr>${transform(box, item)}<a:prstGeom prst="${item.bgc ? 'roundRect' : 'rect'}"><a:avLst/></a:prstGeom>${item.bgc ? solid(item.bgc, item.op) : '<a:noFill/>'}<a:ln><a:noFill/></a:ln></p:spPr><p:txBody><a:bodyPr wrap="${item.nowrap ? 'none' : 'square'}" lIns="${inset}" rIns="${inset}" tIns="${Math.round(inset * .44)}" bIns="${Math.round(inset * .44)}" anchor="${{top: 't', middle: 'ctr', bottom: 'b'}[item.valign] || 't'}"><a:noAutofit/></a:bodyPr><a:lstStyle/>${paragraphs}</p:txBody></p:sp>`;
 }
 function picture(box, id, relation, name, item = {}, crop = '') {

@@ -48,8 +48,23 @@ test('an imported 4096-character text frame stays editable and uses source dimen
   const content = '가'.repeat(4096), result = await createPptx({slides:[page([text({text:content,h:35,rot:-12,fx:true,fy:true,nowrap:true,valign:'bottom',lh:1.5,op:50})])],size:{width:720,height:540,unit:'pt'}});
   const slide = unzip(result.bytes).xml('ppt/slides/slide1.xml');
   assert.ok(slide.includes(content)); assert.match(slide,/rot="-720000"/);
-  assert.match(slide,/anchor="b"/); assert.match(slide,/wrap="none"/); assert.match(slide,/val="150000"/); assert.match(slide,/a:alpha val="50000"/);
+  assert.match(slide,/anchor="b"/); assert.match(slide,/wrap="none"/); assert.match(slide,/<a:lnSpc><a:spcPts val="4320"\/>/); assert.match(slide,/a:alpha val="50000"/);
   assert.deepEqual(result.size,{width:9144000,height:6858000,unit:'emu'});
+});
+
+test('editable text uses the CSS baseline distance in exact points without fitting or changing authored frames',async()=>{
+  const slides=[page([text({size:3.5,lh:1.25,h:2,valign:'middle',text:'첫 줄\n다음 줄\n마지막 줄'}),text({id:'edefaultline001',size:2.5,lh:undefined,nowrap:true})])],before=structuredClone(slides);
+  for(const [width,expected] of [[800,[3500,2500]],[1200,[5250,3750]]]){
+    const result=await createPptx({slides,size:{width,height:600,unit:'pt'}}),slide=unzip(result.bytes).xml('ppt/slides/slide1.xml');
+    const paragraphs=[...slide.matchAll(/<a:lnSpc><a:spcPts val="(\d+)"\/><\/a:lnSpc>/g)].map(match=>Number(match[1]));
+    assert.deepEqual(paragraphs,[expected[0],expected[0],expected[0],expected[1],expected[1]]);
+    assert.match(slide,/<a:ext cx="\d+" cy="152400"\/>/);
+    assert.match(slide,/anchor="ctr"><a:noAutofit\/>/);assert.match(slide,/wrap="none"/);
+    assert.doesNotMatch(slide,/a:spcPct|a:normAutofit|fontScale/);
+    assert.match(slide,new RegExp(`sz="${width*3.5}"`));
+    for(const line of slides[0].items[0].text.split('\n'))assert.ok(slide.includes(line));
+  }
+  assert.deepEqual(slides,before);
 });
 
 test('legacy rounded rectangles match 4cqw CSS at the export aspect without changing explicit corners',async()=>{

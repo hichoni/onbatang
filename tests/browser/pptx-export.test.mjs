@@ -35,16 +35,31 @@ test('actual Edge exports editable objects and visible image slides without miss
     const textShape=[...doc.getElementsByTagNameNS(ns,'sp')].find(node=>node.getElementsByTagNameNS(ns,'cNvPr')[0]?.getAttribute('name')==='etext001');
     async function pixels(bytes){const blob=new Blob([bytes],{type:'image/png'}),image=await createImageBitmap(blob),canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;const c=canvas.getContext('2d');c.drawImage(image,0,0);image.close();const rgba=c.getImageData(0,0,canvas.width,canvas.height).data;let red=0,blue=0,green=0,opaque=0,transparent=0;for(let i=0;i<rgba.length;i+=4){if(rgba[i+3]>200){opaque++;if(rgba[i]>200&&rgba[i+1]<70&&rgba[i+2]<70)red++;if(rgba[i+2]>200&&rgba[i]<70&&rgba[i+1]<70)blue++;if(rgba[i+1]>200&&rgba[i]<70&&rgba[i+2]<70)green++;}if(rgba[i+3]===0)transparent++;}return {width:canvas.width,height:canvas.height,red,blue,green,opaque,transparent};}
     const fallbackName=Object.keys(editFiles).filter(name=>name.startsWith('ppt/media/')).at(-1),wholeName=Object.keys(imageFiles).find(name=>name.startsWith('ppt/media/'));
+    const maskedInput=[{bg:'#ffffff',items:[{id:'emasked001',t:'image',url,x:50,y:50,w:40,h:30,mask:'circle',rot:30,op:50}]}],maskedBefore=JSON.stringify(maskedInput);
+    const masked=await createPptx({slides:maskedInput,size:{width:960,height:540,unit:'px'}}),maskedFiles=unzip(masked.bytes);
+    const maskedXml=new TextDecoder().decode(maskedFiles['ppt/slides/slide1.xml']),maskedName=Object.keys(maskedFiles).find(name=>name.startsWith('ppt/media/'));
+    const maskedBitmap=await createImageBitmap(new Blob([maskedFiles[maskedName]],{type:'image/png'})),maskedCanvas=document.createElement('canvas');maskedCanvas.width=maskedBitmap.width;maskedCanvas.height=maskedBitmap.height;const maskedContext=maskedCanvas.getContext('2d');maskedContext.drawImage(maskedBitmap,0,0);maskedBitmap.close();
+    const rgba=maskedContext.getImageData(0,0,maskedCanvas.width,maskedCanvas.height).data;
+    const sample=(u,v)=>{const angle=Math.PI/6,x=Math.round(maskedCanvas.width/2+u*Math.cos(angle)-v*Math.sin(angle)),y=Math.round(maskedCanvas.height/2+u*Math.sin(angle)+v*Math.cos(angle));return [...rgba.slice((y*maskedCanvas.width+x)*4,(y*maskedCanvas.width+x)*4+4)];};
+    const maskPixels={left:sample(-maskedCanvas.width*.4*.2,0),right:sample(maskedCanvas.width*.4*.2,0),corner:sample(maskedCanvas.width*.4*.45,maskedCanvas.height*.3*.45)};
     let failed;
     try{await createPptx({slides:[{bg:'paper',items:[{id:'emissing001',t:'image',url:'data:image/png;base64,bm90YXBpY3R1cmU=',x:50,y:50,w:30,h:30}]}],mode:'image'});}catch(error){failed=error.code;}
-    return {inputUnchanged:before===JSON.stringify(slides),xmlValid:!doc.querySelector('parsererror'),nativeTexts:doc.getElementsByTagNameNS(ns,'txBody').length,nativeShapes:doc.getElementsByTagNameNS(ns,'sp').length,pictures:doc.getElementsByTagNameNS(ns,'pic').length,textHeight:Number(textShape.getElementsByTagNameNS(a,'ext')[0].getAttribute('cy')),warnings:editable.warnings,whole:await pixels(imageFiles[wholeName]),fallback:await pixels(editFiles[fallbackName]),failed};
+    return {inputUnchanged:before===JSON.stringify(slides),xmlValid:!doc.querySelector('parsererror'),nativeTexts:doc.getElementsByTagNameNS(ns,'txBody').length,nativeShapes:doc.getElementsByTagNameNS(ns,'sp').length,pictures:doc.getElementsByTagNameNS(ns,'pic').length,textHeight:Number(textShape.getElementsByTagNameNS(a,'ext')[0].getAttribute('cy')),lineSpacingPts:[...textShape.getElementsByTagNameNS(a,'lnSpc')].map(node=>Number(node.firstElementChild.getAttribute('val'))),warnings:editable.warnings,whole:await pixels(imageFiles[wholeName]),fallback:await pixels(editFiles[fallbackName]),masked:{xml:maskedXml,pixels:maskPixels,inputUnchanged:maskedBefore===JSON.stringify(maskedInput),warnings:masked.warnings},failed};
   },base);
   assert.equal(result.inputUnchanged,true);assert.equal(result.xmlValid,true);assert.equal(result.nativeTexts,1);assert.equal(result.nativeShapes,2);assert.equal(result.pictures,2);
   assert.ok(result.textHeight>500000&&result.textHeight<1300000,`DOM-measured multiline height ${result.textHeight}`);
+  assert.deepEqual(result.lineSpacingPts,[3600,3600],'CSS 38.4px × 1.25 line height exports as exactly 36pt');
   assert.equal(result.warnings.some(warning=>warning.code==='TEXT_HEIGHT_APPROXIMATE'),false);
   assert.equal(result.warnings.filter(warning=>warning.code==='ELEMENT_RASTERIZED').length,1);
   assert.ok(result.whole.red>500&&result.whole.blue>500&&result.whole.green>500,'whole-slide PNG has every authored color');
   assert.ok(result.fallback.red>500&&result.fallback.transparent>100000,'individual fallback has its drawing and transparent surrounding pixels');
+  assert.equal(result.masked.inputUnchanged,true);assert.equal(result.masked.warnings.filter(warning=>warning.code==='ELEMENT_RASTERIZED').length,1);
+  assert.doesNotMatch(result.masked.xml,/ rot=|flipH=|flipV=|alphaModFix/,'raster already includes rotation and opacity; picture must not apply them a second time');
+  assert.match(result.masked.xml,/<a:off x="0" y="0"\/><a:ext cx="9144000" cy="5143500"\/>/);
+  assert.ok(result.masked.pixels.left[0]>240&&result.masked.pixels.left[2]<15,'red half follows the rotated picture');
+  assert.ok(result.masked.pixels.right[2]>240&&result.masked.pixels.right[0]<15,'blue half follows the rotated picture');
+  for(const point of [result.masked.pixels.left,result.masked.pixels.right])assert.ok(point[3]>=125&&point[3]<=130,`half opacity is applied once: ${point[3]}`);
+  assert.equal(result.masked.pixels.corner[3],0,'circle mask clips the rotated picture corner');
   assert.equal(result.failed,'IMAGE_UNAVAILABLE');assert.deepEqual(errors,[]);
   const recordId=await browserPage.evaluate(async base=>{
     const {newRecord}=await import(base+'/app/designs.js'),store=await import(base+'/app/store.js');
