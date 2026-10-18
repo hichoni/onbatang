@@ -48,7 +48,7 @@ function dimensions(size, aspect) {
     const scale = {px: 9525, pt: 12700, emu: 1}[size.unit];
     if (size.unit !== 'px' || (size.width >= 128 && size.height >= 128)) {
       const width = Math.round(size.width * scale), height = Math.round(size.height * scale);
-      if (width < 1 || height < 1 || width > 51206400 || height > 51206400) fail('INVALID_SLIDE_SIZE', 'PowerPoint에서 지원하는 슬라이드 크기를 넘었어요.');
+      if (width < 914400 || height < 914400 || width > 51206400 || height > 51206400) fail('INVALID_SLIDE_SIZE', 'PowerPoint 슬라이드의 가로와 세로는 각각 1~56인치여야 해요.');
       return {width, height, aspect: ratio};
     }
   }
@@ -81,7 +81,9 @@ function typeface(item, warn) {
   return family;
 }
 function nativeText(item, box, id, size, warn) {
-  const family = typeface(item, warn), fontSize = Math.max(1, Math.round(item.size * size.width / 12700));
+  const requestedSize = item.size * size.width / 12700;
+  if (!Number.isFinite(requestedSize) || requestedSize < 100 || requestedSize > 400000) fail('UNSUPPORTED_FONT_SIZE', 'PowerPoint에서 편집할 글자 크기는 1~4000pt여야 해요. 글자 크기를 바꾸거나 그림 PPTX로 내보내 주세요.', {elementId: item.id, pointSize: requestedSize / 100});
+  const family = typeface(item, warn), fontSize = Math.round(requestedSize);
   warn('FONT_NOT_EMBEDDED', '글자는 편집할 수 있으며, 받는 기기에 글꼴이 없으면 다른 글꼴로 보일 수 있어요.', {font: family});
   const style = `lang="ko-KR" sz="${fontSize}" b="${item.bold ? 1 : 0}" i="${item.italic ? 1 : 0}"${item.under ? ' u="sng"' : ''}`;
   const properties = `<a:rPr ${style}>${solid(item.color, item.op)}<a:latin typeface="${xml(family)}"/><a:ea typeface="${xml(family)}"/><a:cs typeface="${xml(family)}"/></a:rPr>`;

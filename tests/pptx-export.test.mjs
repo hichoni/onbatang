@@ -123,7 +123,19 @@ test('legacy ratio sizes fall back to useful physical dimensions; invalid sizes 
   const result=await createPptx({slides:[page([])],size:{width:16,height:9,unit:'px'}});
   assert.deepEqual(result.size,{width:9144000,height:5143500,unit:'emu'});
   await assert.rejects(createPptx({slides:[page([])],mode:'unknown'}),code('INVALID_MODE'));
-  for(const size of [{width:0,height:9,unit:'px'},{width:NaN,height:9,unit:'px'},{width:10,height:1,unit:'pt'},{width:60000000,height:40000000,unit:'emu'}])await assert.rejects(createPptx({slides:[page([])],size}),code('INVALID_SLIDE_SIZE'));
+  for(const size of [{width:0,height:9,unit:'px'},{width:NaN,height:9,unit:'px'},{width:10,height:1,unit:'pt'},{width:10,height:10,unit:'pt'},{width:914399,height:914400,unit:'emu'},{width:60000000,height:40000000,unit:'emu'}])await assert.rejects(createPptx({slides:[page([])],size}),code('INVALID_SLIDE_SIZE'));
+  for(const edge of [914400,51206400])assert.deepEqual((await createPptx({slides:[page([])],size:{width:edge,height:edge,unit:'emu'}})).size,{width:edge,height:edge,unit:'emu'});
+});
+
+test('native fonts below 1pt reject without enlarging the input while whole-image export remains available',async()=>{
+  const slides=[page([text({size:.1})])],before=structuredClone(slides),size={width:960,height:540,unit:'px'};
+  await assert.rejects(createPptx({slides,size}),error=>error.code==='UNSUPPORTED_FONT_SIZE'&&error.details.elementId==='etext001'&&Math.abs(error.details.pointSize-.72)<1e-9);
+  assert.deepEqual(slides,before);
+  const image=await createPptx({slides,size,mode:'image',renderSlide:async()=>png});
+  assert.equal(image.slideCount,1);assert.match(unzip(image.bytes).xml('ppt/slides/slide1.xml'),/<p:pic>/);assert.deepEqual(slides,before);
+  await assert.rejects(createPptx({slides,size:{width:10,height:10,unit:'pt'},mode:'image',renderSlide:async()=>png}),code('INVALID_SLIDE_SIZE'));
+  const exact=await createPptx({slides:[page([text({size:1})])],size:{width:100,height:100,unit:'pt'}});
+  assert.match(unzip(exact.bytes).xml('ppt/slides/slide1.xml'),/sz="100"/);
 });
 
 test('cancel before or between rendering never returns a partial presentation',async()=>{
