@@ -1,0 +1,120 @@
+{
+  "checkedDate": "2026-10-19",
+  "timezone": "Asia/Seoul",
+  "status": "PASS_PUBLIC_FIREBASE_HOSTING",
+  "url": "https://onbatang.web.app",
+  "project": "onbatang",
+  "site": "onbatang",
+  "hostingVersion": "6dde98a3601525c5",
+  "firebaseToolsVersion": "15.32.1",
+  "release": {
+    "product": "onbatang",
+    "version": "0.20.0",
+    "sourceCommit": "41776457364ad2a955ab67e057f84c64ce78bd15",
+    "sourceFiles": 143,
+    "deployToolAndDocumentationCommitsAreSeparate": true
+  },
+  "publicFiles": {
+    "checkedAt": "2026-10-18T15:28:56.471Z",
+    "verified": 146,
+    "totalBytes": 18643362,
+    "exactBytesAndSha256": true,
+    "fileMapSha256": "f88485ce75e1bec706ab525c3e25c35ae1fd9be09b86ca4a1293d6d5ea55ce1e",
+    "gitSources": [
+      "index.html",
+      "app/",
+      "src/",
+      "LICENSE",
+      "NOTICE"
+    ],
+    "generatedOnly": [
+      "version.json"
+    ]
+  },
+  "liveBrowser": {
+    "status": "PASS",
+    "checks": [
+      {
+        "name": "root-redirects-to-standalone-app",
+        "passed": true
+      },
+      {
+        "name": "exact-version-and-source-commit",
+        "passed": true
+      },
+      {
+        "name": "critical-public-files-match-source-bytes",
+        "passed": true,
+        "files": 11
+      },
+      {
+        "name": "both-self-authored-pages-preview",
+        "passed": true
+      },
+      {
+        "name": "device-import-preserves-source-and-page-order",
+        "passed": true
+      },
+      {
+        "name": "actual-editor-save-keeps-original-history",
+        "passed": true
+      },
+      {
+        "name": "fresh-page-reopens-exact-device-material",
+        "passed": true
+      },
+      {
+        "name": "original-download-is-byte-identical",
+        "passed": true
+      },
+      {
+        "name": "two-page-editable-pptx-download",
+        "passed": true
+      },
+      {
+        "name": "two-page-image-pptx-download",
+        "passed": true
+      },
+      {
+        "name": "no-remote-writes-external-requests-or-history-changes",
+        "passed": true
+      }
+    ],
+    "fixture": "SELF_AUTHORED_TWO_PAGE_PPTX",
+    "pageErrors": 0,
+    "externalRequests": 0,
+    "remoteWrites": 0,
+    "serviceWorkers": 0,
+    "downloads": [
+      {
+        "mode": "editable",
+        "slideCount": 2,
+        "bytes": 13881,
+        "sha256": "3cfa9d621e05a5ed484451741b5c0d5416d50d616d2adbd988d5566115b2389d"
+      },
+      {
+        "mode": "image",
+        "slideCount": 2,
+        "bytes": 89402,
+        "sha256": "121aabee50442340871bb00683a150e81cc36ca9278be310b391f4ae694b12ab"
+      }
+    ],
+    "privateReportSha256": "94baa5a4bb5ff9fcbf0d3b9bf0f9fc8d844ce798e219ddacbff14f45f5f034e1"
+  },
+  "preservation": {
+    "existingProjectsAndProductionDatabasesUnchanged": true,
+    "hostingOnlyDeployed": true,
+    "firestoreRulesAuthOrFunctionsNotDeployed": true,
+    "sourceTeacherOrQaFilesNotPublished": true,
+    "existingPullRequestsPreserved": true,
+    "sourceReleaseUnchanged": true
+  },
+  "boundaries": {
+    "accountQa": "SEPARATE_GAILAB_QA_RECORD",
+    "nativePowerPointOfThisStandaloneExport": "NOT_RUN",
+    "actualTeacherPpt": "LOCAL_BROWSER_TESTED_SEPARATELY_NOT_PUBLISHED",
+    "physicalDevicesAndThirtyFiveStudents": "NOT_RUN",
+    "githubPages": "OLDER_DEPLOYMENT_NOT_REPLACED",
+    "storage": "DEVICE_AND_ORIGIN_LOCAL_NO_CROSS_DEVICE_ACCOUNT_SYNC"
+  }
+}

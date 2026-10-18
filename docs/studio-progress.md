@@ -1,5 +1,11 @@
 # 온바탕 공통 문서 기반 진행 기록
 
+## 독립 Firebase 배포 완료 (2026-10-19)
+
+사용자 요청에 따라 전용 Firebase 프로젝트/Hosting 사이트 `onbatang`에 **https://onbatang.web.app/** 을 배포했다. 앱 release는 v0.20.0 / `41776457364ad2a955ab67e057f84c64ce78bd15`다. 배포 도구·설정·검증 문서는 별도 후속 commit이며 앱/src 바이트는 이 release를 그대로 사용한다. 확정 Git 원본에서 정적145파일과 version.json만 준비했고 실제 공개146파일·18,643,362바이트 전체의 SHA-256 일치를 확인했다. 실제 공개 주소의 Edge11/11에서 PPT 화면→자체2쪽 가져오기→편집·고정 저장→새로고침→원본 bytes→편집형/이미지형 각2쪽을 확인했다. 페이지 오류·외부 요청·원격 쓰기는0이다. [공개 배포 증거](qa/2026-10-19-firebase-hosting.json).
+
+기존 프로젝트/운영DB·원본·계정·PR은 보존했다. Hosting만 배포하며 Auth/Firestore/Functions를 배포하지 않았다. 독립본 저장은 기기/출처별이며 기존 GitHub Pages 자료가 새 Firebase 주소로 자동 이전되는 것은 아니다. 아래 ‘독립 공개 배포 미완료’는 Firebase 배포 전 기록이다. GitHub Pages main 자체는 갱신하지 않았다. 실제 학교 기기·35명·새 출력의 PowerPoint 직접 검수는 계속 별도 미완료다.
+
 ## 최신 후속 · v0.20.0 독립 PPTX (2026-10-19)
 
 가이랩에서 검증한 PPTX 변환·격리 미리보기·글꼴 정책·자동 파트 저장을 공통 원본 `app/pptx-import/`로 옮겼다. 가이랩은 원본을 공식 sync한 뒤 호스트 글꼴과 저장 어댑터만 연결한다. `app/standalone.js`는 계정 없는 별도 제품 진입점이며 저장소별 IndexedDB에 원본 Blob과 불변 문서/자료 revision을 보관한다. 가이랩의 로그인·활동·수업방·SQL을 포함하지 않는다. 독립 제품 이름은 온바탕, 가이랩 확장 제품은 온바탕 with 가이랩이다. [설치·호스트 연결](standalone.md).

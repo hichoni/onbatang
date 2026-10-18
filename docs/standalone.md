@@ -44,3 +44,17 @@ PPTX 가져오기 → 실제 PPT 화면/편집 미리보기 → 전체·원본 �
 `npm test`와 `MINICAN_PLAYWRIGHT_PATH`를 지정한 `node --test tests/browser/standalone-pptx.test.mjs`로 검증합니다. 자체 제작 21쪽의 20+1 자동 분할, 전체 순서, 본문 편집·고정 저장·재열기, 원본 해시, 이전 기록, 두 방식의 전체 PPTX, 혼합 비율 거부, `/schoolgo/` 하위 경로, 글꼴 교체·고지·저장소 분리를 실제 Edge에서 확인합니다. 외부 요청·페이지 오류·생성된 service worker는 모두 0입니다. 실제 교사 자료·PowerPoint 앱·계정·공개 배포는 각각 증거가 있는 범위만 완료로 기록합니다.
 
 개발 브랜치 v0.20.0과 기존 공개 GitHub Pages의 버전은 별개입니다. main 병합과 Pages 반영을 확인하기 전에는 공개 사이트가 최신이라고 안내하지 않습니다.
+
+## Firebase Hosting 배포
+
+현재 공개 주소는 **[https://onbatang.web.app/](https://onbatang.web.app/)** 입니다. v0.20.0·release commit `41776457364ad2a955ab67e057f84c64ce78bd15`를 배포했고 전체146파일의 실제 HTTP bytes/SHA와 실제 Edge11검사를 통과했습니다. 공개 사이트의 PPT 가져오기·기기 저장·재열기·두 방식 PPTX 내려받기를 확인했습니다. [배포 검증 기록](qa/2026-10-19-firebase-hosting.json). 이전 GitHub Pages에 저장한 그림이 새 Firebase 출처로 자동 이동하지는 않습니다.
+
+독립본은 전용 Firebase 프로젝트/Hosting 사이트 `onbatang`을 사용합니다. 가이랩·풍풍고 등 다른 프로젝트의 DB·Auth·Hosting은 배포하지 않습니다. 완성된 앱 release commit을 명시하여 정적 파일만 만들고 Hosting만 배포합니다.
+
+```sh
+node tools/build-firebase-hosting.mjs 41776457364ad2a955ab67e057f84c64ce78bd15
+node tools/build-firebase-hosting.mjs 41776457364ad2a955ab67e057f84c64ce78bd15 --check
+firebase deploy --only hosting --project onbatang --config firebase.json
+```
+
+`work/firebase-public`에는 확정 Git blob의 `index.html`, `app/`, `src/`, LICENSE/NOTICE와 `version.json`만 들어갑니다. 체크아웃·QA 설정·교사 원본·node_modules는 공개하지 않습니다. 예상하지 못한 파일이 섞이면 준비를 중단합니다. 공개 `version.json`의 `version`·`sourceCommit`·`sourceFiles`와 실제 파일 SHA, 실제 브라우저 가져오기·저장·재열기·내려받기를 확인한 뒤 배포 성공으로 보고합니다. 앱 release commit과 배포 도구/문서 후속 commit은 구분합니다.
