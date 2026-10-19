@@ -14,6 +14,33 @@ const options={skip:!process.env.MINICAN_PLAYWRIGHT_PATH,timeout:300000};
 const slideFiles=files=>Object.keys(files).filter(name=>/^ppt\/slides\/slide\d+\.xml$/.test(name));
 const xml=(files,path)=>new TextDecoder().decode(files[path]);
 
+test('local slide navigation suppresses brief loading notices but explains a genuinely slow save',options,async t=>{
+ const {page,entry}=await setup(t);await enterImport(page,entry);await inspectFile(page,'self-authored-21-pages.pptx',21);
+ await page.locator('[data-import-save]').click();await page.locator('[data-inline-import]').waitFor({state:'detached'});await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);
+ await page.locator('[data-delayed-loading]').waitFor({state:'detached'});
+ await page.evaluate(()=>{window.noticeCount=0;new MutationObserver(rows=>{for(const row of rows)for(const n of row.addedNodes)if(n.nodeType===1&&n.matches('[data-delayed-loading]'))window.noticeCount++;}).observe(document.querySelector('.cv-canvas'),{childList:true});const original=IDBDatabase.prototype.transaction;let held=false;window.restoreNoticeTransaction=()=>IDBDatabase.prototype.transaction=original;IDBDatabase.prototype.transaction=function(stores,mode,...args){const tx=original.call(this,stores,mode,...args);if(!held&&this.name==='minican'&&mode==='readonly'&&[stores].flat().includes('designs')){held=true;Object.defineProperty(tx,'oncomplete',{set(fn){tx.addEventListener('complete',event=>setTimeout(()=>fn.call(tx,event),1200));}});}return tx;};});
+ const before=await page.locator('.cv-strip').boundingBox();await page.locator('[data-material-page="20"]').click();
+ await page.locator('[data-delayed-loading]').waitFor();assert.match(await page.locator('[data-delayed-loading]').innerText(),/21쪽을 여는 중/);
+ assert.equal(await page.locator('[data-delayed-loading] progress:not([hidden])').count(),0);
+ assert.deepEqual(await page.locator('.cv-strip').boundingBox(),before,'slow notice never changes the strip layout');
+ await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='21 / 21쪽 · 전체 PPT');await page.locator('[data-delayed-loading]').waitFor({state:'detached'});
+ assert.equal(await page.evaluate(()=>window.noticeCount),1);await page.evaluate(()=>{window.restoreNoticeTransaction();window.noticeCount=0;});
+ let fast=0;
+ for(const index of [0,20,0]){const start=await page.evaluate(()=>performance.now()),seen=await page.evaluate(()=>window.noticeCount);await page.locator(`[data-material-page="${index}"]`).click();await page.waitForFunction(i=>document.querySelector(`[data-material-page="${i}"]`)?.getAttribute('aria-pressed')==='true',index);if(await page.evaluate(()=>performance.now())-start<390){fast++;assert.equal(await page.evaluate(()=>window.noticeCount),seen,'fast navigation adds no transient live notice');}}
+ assert.ok(fast>0);await page.evaluate(()=>new Promise(r=>setTimeout(r,500)));assert.equal(await page.locator('[data-delayed-loading]').count(),0,'finished operations cannot produce a late notice');
+});
+
+test('a deferred notice remains readable without blocking input and disposal cancels pending announcements',options,async t=>{
+ const {page,entry}=await setup(t);await page.goto(entry);await page.locator('.cv-home-title').waitFor();
+ await page.evaluate(async()=>{const {deferredOnbatangLoading}=await import('/app/loading.js');window.noticeHost=document.createElement('section');document.body.append(window.noticeHost);window.notice=deferredOnbatangLoading(window.noticeHost,{delay:20,minVisible:250});});
+ await page.locator('[data-delayed-loading]').waitFor();await page.evaluate(()=>{window.noticeFinishedAt=performance.now();window.notice.finish();});
+ assert.equal(await page.locator('[data-delayed-loading]').count(),1);assert.equal(await page.locator('#app').evaluate(n=>n.inert),false);
+ await page.locator('[data-delayed-loading]').waitFor({state:'detached'});
+ assert.ok(await page.evaluate(()=>performance.now()-window.noticeFinishedAt)>100,'notice does not blink away on a near-boundary completion');
+ await page.evaluate(async()=>{const {deferredOnbatangLoading}=await import('/app/loading.js');const pending=deferredOnbatangLoading(window.noticeHost,{delay:20});pending.dispose();});
+ await page.evaluate(()=>new Promise(r=>setTimeout(r,60)));assert.equal(await page.locator('[data-delayed-loading]').count(),0);
+});
+
 test('slide selection keeps shell, rail, thumbnails and viewport steady within and across PPT parts',options,async t=>{
  const {page,entry,base,checkIsolation}=await setup(t);await enterImport(page,entry);await inspectFile(page,'self-authored-21-pages.pptx',21);
  await page.locator('[data-import-save]').click();await page.locator('[data-inline-import]').waitFor({state:'detached'});await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);

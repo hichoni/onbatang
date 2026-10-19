@@ -5,7 +5,7 @@
 //             꾸미는 화면은 넓은 화면에서 창을 꽉 채우고(스크롤 없음), 좁은 화면에서는 위에서 아래로 쌓인다(app.css).
 import { el, toast, openModal, closeModal } from './ui.js';
 import { onbatangLogo } from './brand.js';
-import { onbatangLoading } from './loading.js';
+import { onbatangLoading,deferredOnbatangLoading } from './loading.js';
 import {bindFilmstrip} from './filmstrip.js';
 import {orderPages,movePage} from './page-order.js';
 import {createLocalPalettes} from './palettes.js';
@@ -781,10 +781,13 @@ function decorateStrip(O){
 
 // Stored PPT parts stay independent. The editor shows their pages as one deck
 // without exceeding per-document size limits or rewriting fixed revisions.
+function materialLoading(O,options){
+  O.materialLoading?.dispose();
+  return O.materialLoading=deferredOnbatangLoading(O.shell.querySelector('.cv-canvas'),{...options,compact:true,className:'cv-material-loading',active:()=>!O.closed&&S.open===O});
+}
 async function loadMaterialNavigation(O) {
   if (!materialNavigation || O.record.source?.kind !== 'pptx') return;
-  const loading=onbatangLoading({title:'PPT 전체 슬라이드를 불러오고 있어요',detail:'저장된 모든 쪽을 순서대로 연결해요.',compact:true});
-  loading.node.classList.add('cv-material-loading');O.shell.querySelector('.cv-canvas').append(loading.node);
+  const loading=materialLoading(O,{title:'PPT 전체 슬라이드를 불러오고 있어요',detail:'저장된 모든 쪽을 순서대로 연결해요.'});
   try {
     const deck=await materialNavigation.load({designId:O.record.id});
     if(O.closed||S.open!==O)return;
@@ -793,7 +796,7 @@ async function loadMaterialNavigation(O) {
       renderStrip(O);
     }
   }catch{if(!O.closed&&S.open===O)toast('PPT 전체 목록을 열지 못했어요. 현재 편집과 저장 자료는 유지돼요. 내 자료에서 다시 열어주세요.',5000);}
-  finally{loading.node.remove();}
+  finally{loading.finish();}
 }
 function materialPages(O){return orderPages(O.materialDeck.documents.flatMap(record=>(record.id===O.record.id?currentSlides(O):record.slides).map((page,index)=>({record,page,index}))),O.materialDeck.pageOrder);}
 function renderMaterialNavigation(O,left=0) {
@@ -837,8 +840,7 @@ async function navigateMaterialPage(O,value) {
   if(O.closed||O.leaving||O.inlineImport||moving||app.inert||hostFlush||videoBusy(O))return;
   if(value.record.id===O.record.id){goSlide(O,value.index);return;}
   O.leaving=true;app.inert=true;
-  const loading=onbatangLoading({title:`${value.page.source?.pageNumber||value.index+1}쪽을 여는 중이에요`,detail:'지금 편집한 내용을 먼저 저장해요.',compact:true});
-  loading.node.classList.add('cv-material-loading');O.shell.querySelector('.cv-canvas').append(loading.node);
+  const loading=materialLoading(O,{title:`${value.page.source?.pageNumber||value.index+1}쪽을 여는 중이에요`,detail:'지금 편집한 내용을 먼저 저장해요.'});
   try{
     await persistEditorAction(O);
     const record=await getDesign(value.record.id);
@@ -854,7 +856,7 @@ async function navigateMaterialPage(O,value) {
     setStatus(O,accountFor(ready)?'저장돼 있어요':'이 기기에 저장돼 있어요');upsert(ready);renderStrip(O);
   }catch{
     if(!O.closed&&S.open===O){setStatus(O,'현재 쪽을 저장하거나 다음 쪽을 열지 못했어요. 편집은 그대로 유지돼요.','bad');toast('저장 상태를 확인한 뒤 다시 이동해주세요.',5000);}
-  }finally{loading.node.remove();O.leaving=false;if(!O.closed&&S.open===O)app.inert=false;}
+  }finally{loading.finish();O.leaving=false;if(!O.closed&&S.open===O)app.inert=false;}
 }
 // 지금 장의 작은 그림만 다시 그린다(꾸미는 동안 띠를 통째로 다시 그리지 않는다).
 function refreshThumb(O) {
@@ -1229,6 +1231,7 @@ async function leaveEditor(O, { requireSaved = false, waitForSync = false } = {}
   // 그 그림은 지우려던 영상을 아직 쓰고 있을 수 있다.
   if (ok && !O.dirty && O.localOk !== false) await tidyVideos(O.record.id, currentSlides(O));
   O.closed = true;
+  O.materialLoading?.dispose();
   O.stripDrag?.destroy();
   if (accountFor(O.record)) {
     const uploading = pusher.flush(O.record.id);

@@ -12,6 +12,26 @@ const el=(tag,attrs={},...children)=>{
   node.append(...children);return node;
 };
 
+// Routine local navigation is usually faster than a frame of loading UI.
+// Defer the entire node (including its live announcement); a displayed notice
+// stays readable briefly without delaying the completed work or blocking input.
+export function deferredOnbatangLoading(host,{delay=400,minVisible=200,active=()=>true,className='',...options}={}){
+  let loading=null,shownAt=0,finished=false,hideTimer;
+  const showTimer=setTimeout(()=>{
+    if(finished||!host.isConnected||!active())return;
+    loading=onbatangLoading(options);loading.node.dataset.delayedLoading='';
+    if(className)loading.node.classList.add(className);
+    host.append(loading.node);shownAt=performance.now();
+  },delay);
+  function dispose(){finished=true;clearTimeout(showTimer);clearTimeout(hideTimer);loading?.node.remove();loading=null;}
+  return {dispose,finish(){
+    if(finished)return;finished=true;clearTimeout(showTimer);
+    if(!loading)return;
+    const remaining=Math.max(0,minVisible-(performance.now()-shownAt));
+    if(remaining&&host.isConnected&&active())hideTimer=setTimeout(dispose,remaining);else dispose();
+  }};
+}
+
 export function onbatangLoading({title='온바탕을 준비하고 있어요',detail='잠시만 기다려주세요.',compact=false}={}) {
   const heading=el('strong',{class:'onba-loading-title',text:title});
   const note=el('span',{class:'onba-loading-detail',text:detail});
