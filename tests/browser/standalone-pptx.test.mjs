@@ -14,6 +14,53 @@ const options={skip:!process.env.MINICAN_PLAYWRIGHT_PATH,timeout:300000};
 const slideFiles=files=>Object.keys(files).filter(name=>/^ppt\/slides\/slide\d+\.xml$/.test(name));
 const xml=(files,path)=>new TextDecoder().decode(files[path]);
 
+test('large horizontal filmstrip reorders across parts, preserves fixed originals and exports in saved order',options,async t=>{
+ const {page,entry,base,checkIsolation}=await setup(t);await enterImport(page,entry);await inspectFile(page,'self-authored-21-pages.pptx',21);
+ await page.locator('[data-import-save]').click();await page.locator('[data-inline-import]').waitFor({state:'detached'});await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);
+ const before=await readLibrary(page,base),oldIds=before.graphs[0].pages.map(row=>row.page.id);
+ assert.ok(await page.locator('.cv-slide-view').first().evaluate(node=>node.clientHeight)>=90);
+ await page.getByLabel('슬라이드 미리보기 크기').fill('120');assert.equal(await page.locator('.cv-slide-view').first().evaluate(node=>node.clientHeight),120);
+ await page.locator('.cv-slide-list').hover();await page.mouse.wheel(0,600);assert.ok(await page.locator('.cv-slide-list').evaluate(node=>node.scrollLeft)>0);
+ const last=page.locator('[data-material-page="20"]');await last.focus();await page.keyboard.press('Alt+ArrowLeft');
+ await page.waitForFunction(()=>!document.querySelector('#app').inert);
+ await page.waitForFunction(()=>document.querySelector('[data-material-page="19"]')?.getAttribute('aria-label')?.includes('원본 21쪽'));
+ const saved=await readLibrary(page,base);assert.deepEqual(saved.graphs[0].pages.map(row=>row.page.id),[...oldIds.slice(0,19),oldIds[20],oldIds[19]]);
+ assert.deepEqual(saved.originals,before.originals);assert.deepEqual(saved.sources,before.sources);
+ await page.locator('[data-material-page="0"]').dragTo(page.locator('[data-material-page="2"]'),{targetPosition:{x:150,y:30}});
+ await page.waitForFunction(()=>document.querySelector('[data-material-page="0"]')?.getAttribute('aria-label')?.includes('원본 2쪽'));
+ const ordered=await readLibrary(page,base),name=await page.locator('.cv-name').inputValue();
+ await page.reload();await page.getByRole('button',{name:name+' 열기',exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);
+ assert.equal(await page.locator('.cv-slide-view').first().evaluate(node=>node.clientHeight),120);
+ assert.match(await page.locator('[data-material-page="19"]').getAttribute('aria-label'),/원본 21쪽/);
+ await page.locator('.cv-down-btn').click();const dialog=page.getByRole('dialog',{name:'내려받기',exact:true});await dialog.locator('[data-type=pptx]').click();await dialog.locator('[data-scope=all]').click();await dialog.locator('[data-pptx=editable]').click();
+ const output=await downloadBy(page,()=>dialog.locator('[data-pptx-save]').click()),files=unzipSync(output.bytes);assert.match(xml(files,'ppt/slides/slide1.xml'),/직접 만든 2쪽/);
+ assert.match(xml(files,'ppt/slides/slide20.xml'),/직접 만든 21쪽/);assert.deepEqual((await readLibrary(page,base)).graphs,ordered.graphs);
+ await checkIsolation();
+});
+
+test('direct eyedropper, four named palettes, undo, cancel, stale selection and reload',options,async t=>{
+ const {page,entry}=await setup(t);await page.goto(entry);await page.locator('.cv-hero .cv-new-btn').click();await page.locator('.fe-tab[data-tab=bg]').click();
+ await page.evaluate(()=>{window.EyeDropper=class{async open(){return {sRGBHex:'#123456'};}};});
+ await page.locator('.cv-side .fe-eyedropper').click();assert.equal(await page.locator('.cv-canvas .fe-card').evaluate(node=>getComputedStyle(node).backgroundColor),'rgb(18, 52, 86)');
+ await page.locator('.cv-side .fe-palette-slots button').nth(2).click();await page.locator('.cv-side').getByLabel('팔레트 이름').fill('수업 색');await page.locator('.cv-side').getByLabel('팔레트 이름').press('Tab');
+ await page.locator('.cv-side').getByRole('button',{name:'현재 색 담기',exact:true}).click();
+ assert.equal(await page.locator('.cv-side .fe-palette-color[aria-label="#123456 적용"]').count(),2);
+ await page.locator('.cv-canvas .fe-stage').focus();await page.keyboard.press('Control+z');assert.notEqual(await page.locator('.cv-canvas .fe-card').evaluate(node=>getComputedStyle(node).backgroundColor),'rgb(18, 52, 86)');
+ assert.equal(await page.locator('.cv-side').getByLabel('팔레트 이름').inputValue(),'수업 색');
+ const state=await page.evaluate(()=>localStorage.getItem('onbatang.palettes.v1.minican'));
+ await page.evaluate(()=>{window.EyeDropper=class{async open(){throw new DOMException('cancel','AbortError');}};});await page.locator('.cv-side .fe-eyedropper').click();assert.equal(await page.evaluate(()=>localStorage.getItem('onbatang.palettes.v1.minican')),state);
+ await page.evaluate(()=>{window.EyeDropper=class{open(){return new Promise(resolve=>window.finishPick=resolve);}};});await page.locator('.cv-side .fe-eyedropper').click();
+ await page.locator('.fe-tab[data-tab=text]').click();await page.locator('.fe-tabbody .fe-textadd').first().click();await page.evaluate(()=>window.finishPick({sRGBHex:'#654321'}));
+ assert.equal(await page.evaluate(()=>localStorage.getItem('onbatang.palettes.v1.minican')),state,'async pick never applies to a different selected element');
+ await page.evaluate(()=>{window.EyeDropper=class{async open(){return {sRGBHex:'#224466'};}};});await page.locator('.cv-canvas .fe-stage').focus();await page.keyboard.press('i');
+ await page.waitForFunction(()=>localStorage.getItem('onbatang.palettes.v1.minican')?.includes('#224466'));
+ await page.locator('.cv-back').click();await page.locator('.cv-home-title').waitFor();await page.reload();await page.getByRole('button',{name:'그림 1 열기',exact:true}).click();await page.locator('.fe-tab[data-tab=bg]').click();
+ assert.equal(await page.locator('.cv-side').getByLabel('팔레트 이름').inputValue(),'수업 색');
+ assert.ok(await page.locator('.cv-side .fe-palette-color[aria-label="#224466 적용"]').count()>0);
+ await page.evaluate(()=>{delete window.EyeDropper;window.pickerFallbacks=0;HTMLInputElement.prototype.showPicker=function(){window.pickerFallbacks++;};});await page.locator('.cv-side .fe-eyedropper').click();assert.equal(await page.evaluate(()=>window.pickerFallbacks),1);
+ await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+});
+
 test('symbol assembly loading and whole editor rail preserve every split page, failed-save edits, reload and whole PPTX downloads',options,async t=>{
  const {page,context,entry,base,checkIsolation}=await setup(t);
  await enterImport(page,entry);

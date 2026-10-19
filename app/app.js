@@ -6,6 +6,9 @@
 import { el, toast, openModal, closeModal } from './ui.js';
 import { onbatangLogo } from './brand.js';
 import { onbatangLoading } from './loading.js';
+import {bindFilmstrip} from './filmstrip.js';
+import {orderPages,movePage} from './page-order.js';
+import {createLocalPalettes} from './palettes.js';
 import {
   createEditor, designView, designToBlob, configure, settings, reshapeItems, layoutList, layoutItems, icon, cleanDesign, hasMotion, playDesign, playTransition,
   COMBOS, TRANSITIONS, designsToVideo, canMakeVideo, canFilmScenes, filmPlan, MAX_FILM_SECONDS, videoSize, STAYS, DEFAULT_STAY, scenePlayer, dropScene, sceneUrl, youTubePlayers,
@@ -26,7 +29,7 @@ import {
 import { saveVideo, listVideos, removeVideos } from './videos.js';
 import { zipStore } from './zip.js';
 import { createPptx } from './pptx.js';
-import { listDesigns, getDesign, putDesign, removeDesign, setStorageName, listDesignIssues, getOriginalDesign } from './store.js';
+import { listDesigns, getDesign, putDesign, removeDesign, setStorageName, storageName, listDesignIssues, getOriginalDesign } from './store.js';
 import { setupApp, useFonts, photoToData, BASIC_GROUP } from './setup.js';
 import { mergeAccount, createPusher, syncsRecord } from './sync.js';
 
@@ -36,6 +39,7 @@ let onBrandClick = null;
 let importAction = null;
 let materialAction = null;
 let materialNavigation = null;
+let colorPalettes=null;
 let brand = null;                // 들여 쓰는 곳의 표시 { name, logo } (없으면 표시하지 않는다)
 let sync = null;                 // 들여 쓰는 곳의 계정 저장(sync.js). 없으면 이 기기에만 저장한다
 let pusher = null;
@@ -527,6 +531,7 @@ function openDesign(record, isNew) {
     onKeydown: (e) => { if (e.key === 'Enter') name.blur(); },
   });
   O.editor = createEditor({
+    colorPalettes,
     design: O.slides[0],
     onChange: () => touched(O),
     uploadImage: photoToData,
@@ -686,6 +691,7 @@ function slideLabel(i, design) {
 }
 function renderStrip(O) {
   if (!O.strip || O.closed) return;
+  O.stripDrag?.stop();
   const aspect = aspectOf(O.record);
   const n = O.slides.length;
   const full = n >= MAX_SLIDES;
@@ -723,8 +729,8 @@ function renderStrip(O) {
       }, el('span', { class: 'cv-slide-plus', 'aria-hidden': 'true' }, ic('plus')), el('span', { class: 'cv-slide-add-text', text: '새 장' }))),
     el('div', { class: 'cv-slide-tools' },
       el('span', { class: 'cv-slide-count', text: `${O.at + 1} / ${n}장` }),
-      tool('left', '앞으로', '이 장을 앞으로 옮기기', () => changeSlides(O, (slides, at) => moveSlide(slides, at, -1)), O.at === 0),
-      tool('right', '뒤로', '이 장을 뒤로 옮기기', () => changeSlides(O, (slides, at) => moveSlide(slides, at, 1)), O.at === n - 1),
+      tool('left', '앞으로', '이 장을 앞으로 옮기기', () => moveStripSelection(O,-1), O.materialDeck?materialPages(O).findIndex(v=>v.record.id===O.record.id&&v.index===O.at)===0:O.at===0),
+      tool('right', '뒤로', '이 장을 뒤로 옮기기', () => moveStripSelection(O,1), O.materialDeck?materialPages(O).findIndex(v=>v.record.id===O.record.id&&v.index===O.at)===materialPages(O).length-1:O.at===n-1),
       tool('copy', '복제', '이 장을 복제하기', () => changeSlides(O, copySlide), full),
       del));
   // 띠를 다시 그려도 옆으로 넘겨 둔 자리는 그대로 두고, 고른 장이 안 보일 때에만 그쪽으로 (부드럽게) 넘긴다.
@@ -737,7 +743,30 @@ function renderStrip(O) {
     const by = r.left < box.left + 8 ? r.left - box.left - 8 : r.right > box.right - 8 ? r.right - box.right + 8 : 0;
     if (by) list.scrollBy({ left: by, behavior: CALM.matches ? 'auto' : 'smooth' });
   }
-  renderMaterialNavigation(O);
+  renderMaterialNavigation(O,left);
+  decorateStrip(O);
+}
+function moveStripSelection(O,delta){if(O.materialDeck){const pages=materialPages(O),from=pages.findIndex(v=>v.record.id===O.record.id&&v.index===O.at);reorderStrip(O,from,from+delta);}else changeSlides(O,(slides,at)=>moveSlide(slides,at,delta));}
+async function reorderStrip(O,from,to){
+  if(O.closed||O.leaving||O.inlineImport||app.inert||videoBusy(O))return;
+  if(!O.materialDeck){changeSlides(O,(slides,at)=>{const next=[...slides];next.splice(to,0,...next.splice(from,1));const selected=slides[at];return [next,next.indexOf(selected)];});return;}
+  if(!materialNavigation.reorder){toast('이 자료의 순서를 저장하는 기능을 연결하지 못했어요.');return;}
+  const pages=materialPages(O);if(from<0||to<0||from>=pages.length||to>=pages.length||from===to)return;
+  O.leaving=true;app.inert=true;
+  try{await persistEditorAction(O);const deck=await materialNavigation.reorder({designId:O.record.id,materialRef:O.materialDeck.materialRef,pageIds:movePage(pages.map(v=>v.page.id),from,to)});
+    if(!O.closed&&S.open===O){O.materialDeck={...deck,documents:deck.documents.map(migrateRecord)};renderStrip(O);toast('슬라이드 순서를 저장했어요. 원본과 이전 저장본은 그대로예요.');}
+  }catch(error){toast(error?.message||'순서를 저장하지 못했어요. 원래 순서와 편집은 유지돼요.',5000);}
+  finally{O.leaving=false;if(!O.closed&&S.open===O)app.inert=false;}
+}
+function decorateStrip(O){
+  const list=O.strip.querySelector('.cv-slide-list'),count=O.strip.querySelector('.cv-slide-count');
+  const key=`onbatang.filmstrip-size.v1.${storageName()}`;let height=92;try{height=Math.max(64,Math.min(152,Number(localStorage.getItem(key))||92));}catch{}
+  O.strip.style.setProperty('--cv-thumb-height',`${height}px`);
+  const size=el('input',{type:'range',min:'64',max:'152',step:'8',value:String(height),'aria-label':'슬라이드 미리보기 크기',onInput:()=>{O.strip.style.setProperty('--cv-thumb-height',`${size.value}px`);try{localStorage.setItem(key,size.value);}catch{}}});
+  const scroll=(text,dir)=>el('button',{class:'cv-slide-scroll',type:'button','aria-label':text,onClick:()=>list.scrollBy({left:dir*list.clientWidth*.75,behavior:CALM.matches?'auto':'smooth'})},dir<0?'‹':'›');
+  const header=el('div',{class:'cv-strip-header'},count,el('span',{class:'cv-strip-guide',text:'끌어서 순서 변경 · 휠로 가로 이동'}),el('label',{class:'cv-strip-size'},'크기',size),scroll('목록 왼쪽 보기',-1),scroll('목록 오른쪽 보기',1));
+  O.strip.prepend(header);list.tabIndex=0;
+  O.stripDrag=bindFilmstrip(list,{reorder:(from,to)=>reorderStrip(O,from,to),busy:()=>O.closed||O.leaving||!!O.inlineImport||app.inert});
 }
 
 // Stored PPT parts stay independent. The editor shows their pages as one deck
@@ -750,15 +779,16 @@ async function loadMaterialNavigation(O) {
     const deck=await materialNavigation.load({designId:O.record.id});
     if(O.closed||S.open!==O)return;
     if(deck?.documents?.some(record=>record.id===O.record.id)){
-      O.materialDeck={title:deck.title,documents:deck.documents.map(migrateRecord)};
+      O.materialDeck={...deck,documents:deck.documents.map(migrateRecord)};
       renderStrip(O);
     }
   }catch{if(!O.closed&&S.open===O)toast('PPT 전체 목록을 열지 못했어요. 현재 편집과 저장 자료는 유지돼요. 내 자료에서 다시 열어주세요.',5000);}
   finally{loading.node.remove();}
 }
-function renderMaterialNavigation(O) {
+function materialPages(O){return orderPages(O.materialDeck.documents.flatMap(record=>(record.id===O.record.id?currentSlides(O):record.slides).map((page,index)=>({record,page,index}))),O.materialDeck.pageOrder);}
+function renderMaterialNavigation(O,left=0) {
   if(!O.materialDeck)return;
-  const pages=O.materialDeck.documents.flatMap(record=>(record.id===O.record.id?currentSlides(O):record.slides).map((page,index)=>({record,page,index})));
+  const pages=materialPages(O);
   const at=pages.findIndex(value=>value.record.id===O.record.id&&value.index===O.at);
   const rail=O.strip.querySelector('.cv-slide-list');
   rail.setAttribute('aria-label','PPT 전체 슬라이드');
@@ -773,7 +803,10 @@ function renderMaterialNavigation(O) {
   const hint=el('span',{class:'cv-material-hint',text:'모든 쪽을 이어서 편집할 수 있어요. 변경은 이 기기에 자동 저장돼요.'});
   O.strip.append(hint);
   const selected=rail.querySelector('.on');
-  if(selected)rail.scrollLeft=Math.max(0,selected.offsetLeft-rail.offsetLeft-rail.clientWidth/2+selected.clientWidth/2);
+  const key=`${O.record.id}:${O.at}`;
+  rail.scrollLeft=left;
+  if(selected&&O.materialScrollTarget!==key)rail.scrollLeft=Math.max(0,selected.offsetLeft-rail.offsetLeft-rail.clientWidth/2+selected.clientWidth/2);
+  O.materialScrollTarget=key;
 }
 async function navigateMaterialPage(O,value) {
   if(O.closed||O.leaving||O.inlineImport||moving||app.inert||hostFlush||videoBusy(O))return;
@@ -1167,6 +1200,7 @@ async function leaveEditor(O, { requireSaved = false, waitForSync = false } = {}
   // 그 그림은 지우려던 영상을 아직 쓰고 있을 수 있다.
   if (ok && !O.dirty && O.localOk !== false) await tidyVideos(O.record.id, currentSlides(O));
   O.closed = true;
+  O.stripDrag?.stop();
   if (accountFor(O.record)) {
     const uploading = pusher.flush(O.record.id);
     if (waitForSync) await uploading;            // 바깥 화면으로 가면 이 앱이 닫히므로 올리기까지 기다린다
@@ -1562,7 +1596,7 @@ function askDownload(O, btn) {
     const video = pick.kind === 'video';
     const pptx = pick.kind === 'pptx';
     const scopeN=pptx&&O.materialDeck?O.materialDeck.documents.reduce((total,row)=>total+(row.id===O.record.id?O.slides.length:row.slides.length),0):n;
-    const scopeAt=pptx&&O.materialDeck?O.materialDeck.documents.slice(0,O.materialDeck.documents.findIndex(row=>row.id===O.record.id)).reduce((total,row)=>total+row.slides.length,0)+O.at:O.at;
+    const scopeAt=pptx&&O.materialDeck?materialPages(O).findIndex(value=>value.record.id===O.record.id&&value.index===O.at):O.at;
     const ms = video ? filmMs(pick.stay) : 0;
     const long = ms > MAX_FILM_SECONDS * 1000;
     const rows = [section('파일 형식', el('div', {class: 'cv-down-formats'},
@@ -1664,6 +1698,7 @@ async function makePptx(O, {all, mode}) {
         selected.push(...structuredClone(draft.slides));
       }
       progress.max=selected.length;
+      selected=orderPages(selected,O.materialDeck.pageOrder);
     }
     const result = await createPptx({slides: selected, aspect: aspectOf(O.record), size: O.record.size,
       title: O.record.name || '온바탕', mode, signal: controller.signal,
@@ -1857,6 +1892,7 @@ export function startMinican({ root = document.getElementById('app'), fonts = []
     pusher = createPusher(sync, { onDone: pushed });
   }
   setStorageName(storage);
+  colorPalettes=createLocalPalettes(storage);
   useFonts(fonts, titleFont);
   setupApp();
   window.addEventListener('pagehide', flush);

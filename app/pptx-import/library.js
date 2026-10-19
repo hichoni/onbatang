@@ -2,6 +2,7 @@
 // the existing editor database, so enabling imports does not migrate old drawings.
 import {isId,cleanAssets,legacyId} from '../../src/document.js';
 import {isDesignId,migrateRecord} from '../designs.js';
+import {orderPages,validatePageOrder} from '../page-order.js';
 
 const fail=code=>{throw Object.assign(Error(code),{code});};
 const natural=n=>Number.isSafeInteger(n)&&n>=0&&n<=2147483647;
@@ -72,7 +73,7 @@ export function createPptxLibrary({storage='minican',indexedDB=globalThis.indexe
     pages.push({index:pages.length,pageNumber:sourcePageNumber,document:row,page,partIndex:index,pageIndex});
    }
   }
-  return {materialRef:{id:manifest.id,revision:manifest.revision},manifest,documents,pages};
+  return {materialRef:{id:manifest.id,revision:manifest.revision},manifest,documents,pages:orderPages(pages,manifest.pageOrder,{strict:true})};
  }
  async function ensureMaterial(result){
   if(!result?.complete||!isId(result.batchId)||!result.documents?.length||!Array.isArray(result.parts))fail('IMPORT_INCOMPLETE');
@@ -88,6 +89,16 @@ export function createPptxLibrary({storage='minican',indexedDB=globalThis.indexe
  }
  async function getMaterial(ref){return transaction('readonly',async s=>{if(ref.revision===undefined){const head=await request(s.materials.get(ref.id));if(!head)fail('NOT_FOUND');ref={id:ref.id,revision:head.revision};}return graph(s,ref);});}
  async function listMaterials(){return transaction('readonly',async s=>{const heads=await request(s.materials.getAll());return Promise.all(heads.map(head=>graph(s,head)));});}
+ async function saveOrder({materialRef,pageOrder}={}){
+  return transaction('readwrite',async s=>{
+   const head=await request(s.materials.get(materialRef.id));if(head?.revision!==materialRef.revision)fail('REVISION_CONFLICT');
+   const old=await graph(s,materialRef),ids=validatePageOrder(pageOrder,old.pages.map(value=>value.page.id));
+   if(same(ids,old.pages.map(value=>value.page.id)))return old;
+   if(head.revision===2147483647)fail('REVISION_LIMIT');
+   const manifest={...old.manifest,revision:head.revision+1,pageOrder:ids};
+   await request(s.materialRevisions.add(manifest,key(manifest.id,manifest.revision)));await request(s.materials.put({id:manifest.id,revision:manifest.revision},manifest.id));return graph(s,{id:manifest.id,revision:manifest.revision});
+  });
+ }
  async function pinEdits({materialRef,drafts=[]}={}){
   if(!Array.isArray(drafts))fail('INVALID_DRAFTS');const cleaned=new Map(drafts.filter(Boolean).map(row=>{const clean=migrateRecord(row);return [clean.id,clean];}));
   return transaction('readwrite',async s=>{
@@ -105,8 +116,9 @@ export function createPptxLibrary({storage='minican',indexedDB=globalThis.indexe
    }
    if(!changed)return old;
    const manifest={...old.manifest,revision:old.manifest.revision+1,parts};
+   if(old.manifest.pageOrder){const ids=parts.flatMap(part=>part.pages.map(page=>page.pageId));manifest.pageOrder=orderPages(ids.map(id=>({id})),old.manifest.pageOrder).map(page=>page.id);}
    await request(s.materialRevisions.add(manifest,key(manifest.id,manifest.revision)));await request(s.materials.put({id:manifest.id,revision:manifest.revision},manifest.id));return graph(s,{id:manifest.id,revision:manifest.revision});
   });
  }
- return Object.freeze({repository,ensureMaterial,getMaterial,listMaterials,pinEdits,async close(){if(opening){(await opening).close();opening=null;}}});
+ return Object.freeze({repository,ensureMaterial,getMaterial,listMaterials,pinEdits,saveOrder,async close(){if(opening){(await opening).close();opening=null;}}});
 }

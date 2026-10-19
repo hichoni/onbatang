@@ -10,6 +10,7 @@ const dot = (cx, cy) => `<circle cx="${cx}" cy="${cy}" r="1.1" fill="currentColo
 
 /** 이름 → SVG 안에 넣을 도형들. */
 export const ICONS = {
+  eyedropper: '<path d="M14 5l5 5m-7-3l5 5-8 8H4v-5zM14 5l2-2a2 2 0 0 1 3 0l2 2a2 2 0 0 1 0 3l-2 2"/>',
   // ---- 도구 줄(옆 메뉴) ----
   template: '<rect x="3.5" y="3.5" width="17" height="17" rx="2.5"/><path d="M3.5 9.5h17M9.5 9.5v11"/>',
   text: '<path d="M5 7.5V5h14v2.5M12 5v14M9 19h6"/>',

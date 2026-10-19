@@ -21,6 +21,7 @@ import { ACCEPT_IMAGES, PHOTO_EDGE, readPixels, canvasToPng, shrinkImage } from 
 import { fontReady } from './fonts.js';
 import { TOLERANCE, colorAlpha, prepareAlpha, finishCutout, resizeMask, plainBorder } from './cutout.js';
 import { anchorResizedItem, resizeItemFromHandle } from './resize.js';
+import {cleanPalettes,updatePalettes} from './palettes.js';
 
 const HISTORY = 40;
 // 옆 메뉴의 칸: [이름, 아이콘(icons.js), 보이는 이름, 한 줄 설명]
@@ -84,11 +85,57 @@ const BLOB_CACHE = 12;         // 이번에 올린 사진의 파일 내용을 �
 export function createEditor({
   design = null, onChange = () => {}, uploadImage = null, loadImageBlob = null, fonts = fontList, notify = toast, onAspect = () => {},
   uploads = null, usedElsewhere = null, onRemoveUpload = null, onMotionAll = null, canPaste = () => true,
-  documentImport = null,
+  documentImport = null, colorPalettes = null,
   saveVideo = null, createCamera = null, videoLimits = null, videoNote = '', videoHint = '',
   onSelect = null, lockedBy = null,
 } = {}) {
   let card = null;            // 지금 꾸미는 디자인(card.items 를 새 목록으로, card.bg 를 새 값으로 바꿔 끼운다)
+  let palettes;try{palettes=cleanPalettes(colorPalettes?.read());}catch{palettes=cleanPalettes();}
+  let sampling=null;
+  function paletteAction(action){
+    palettes=updatePalettes(palettes,action);
+    try{colorPalettes?.write(palettes);}catch{notify('이 기기에 팔레트를 저장하지 못했어요. 이번 화면에서는 계속 쓸 수 있어요.',4000);}
+  }
+  function colorTarget(){const it=cur();if(many.length||it?.lock)return null;if(!it)return {value:backgroundOf(card.bg).bg,apply:setBg};if(['text','shape','art'].includes(it.t)&&it.color)return {value:it.color,apply:it.t==='shape'?fillWith:hex=>change({color:hex})};return null;}
+  function eyedropper(value,onPick,fallback){
+    return el('button',{class:'fe-btn fe-eyedropper',type:'button','aria-label':'화면에서 색 추출',title:'화면에서 색 추출 (I) · Esc로 취소',onClick:()=>sampleColor(value,onPick,fallback)},icon('eyedropper'),el('span',{text:'스포이드'}));
+  }
+  async function sampleColor(value,onPick,fallback){
+    if(sampling||!card)return;
+    if(typeof globalThis.EyeDropper!=='function'){
+      notify('이 브라우저는 화면 스포이드를 지원하지 않아 색 선택 창을 열어요.',4000);
+      if(fallback){try{fallback.showPicker?fallback.showPicker():fallback.click();}catch{fallback.click();}}
+      else{pop=cur()?'color':'pagebg';renderBar();const input=popBox.querySelector('input[type=color]');try{input?.showPicker?input.showPicker():input?.click();}catch{input?.click();}}
+      return;
+    }
+    const job={card,sel:cur(),controller:new AbortController()};sampling=job;
+    try{
+      // Invoke open directly from the user gesture; do not await anything first.
+      const result=await new globalThis.EyeDropper().open({signal:job.controller.signal});
+      if(sampling!==job||card!==job.card||cur()!==job.sel||many.length)return;
+      if(!/^#[0-9a-f]{6}$/i.test(result.sRGBHex))return;
+      paletteAction({type:'add',color:result.sRGBHex});onPick(result.sRGBHex.toLowerCase());renderBar();renderPanel();
+      notify(`색을 적용하고 팔레트 ${palettes.active+1}에 담았어요.`);
+    }catch(error){if(error?.name!=='AbortError')notify('색을 추출하지 못했어요. 다시 누르거나 직접 색을 골라주세요.');}
+    finally{if(sampling===job)sampling=null;}
+  }
+  function savedColors(value,onPick){
+    const box=el('section',{class:'fe-palettes','aria-label':'나의 팔레트'});
+    function fill(){
+      const slot=palettes.slots[palettes.active];
+      const choose=hex=>{paletteAction({type:'recent',color:hex});onPick(hex);};
+      const chips=(colors,remove=false)=>el('div',{class:'fe-palette-colors'},...colors.map(hex=>{
+        const pick=el('button',{class:'fe-palette-color',type:'button',title:hex,'aria-label':`${hex} 적용`,'aria-pressed':String(value===hex),onClick:()=>choose(hex)});pick.style.background=hex;
+        return el('span',{class:'fe-palette-cell'},pick,remove?el('button',{class:'fe-palette-remove',type:'button','aria-label':`${hex} 팔레트에서 지우기`,title:'팔레트에서 지우기',onClick:()=>{paletteAction({type:'remove',color:hex});fill();}},'×'):null);
+      }));
+      const name=el('input',{class:'fe-palette-name',value:slot.name,maxlength:'18','aria-label':'팔레트 이름',onChange:()=>{paletteAction({type:'rename',name:name.value});fill();}});
+      box.replaceChildren(el('div',{class:'fe-palette-heading'},el('b',{text:'나의 팔레트'}),el('small',{text:colorPalettes?'이 기기에 저장':'이번 화면에서 사용'})),
+        el('div',{class:'fe-palette-slots',role:'group','aria-label':'팔레트 슬롯'},...palettes.slots.map((s,i)=>el('button',{type:'button','aria-label':`팔레트 ${i+1}: ${s.name}`,'aria-pressed':String(i===palettes.active),onClick:()=>{paletteAction({type:'select',index:i});fill();}},String(i+1)))),
+        el('div',{class:'fe-palette-heading'},name,el('button',{class:'fe-btn',type:'button',disabled:!/^#[0-9a-f]{6}$/i.test(value||''),onClick:()=>{paletteAction({type:'add',color:value});fill();}},'현재 색 담기')),
+        slot.colors.length?chips(slot.colors,true):el('p',{class:'fe-note',text:'스포이드로 찍거나 현재 색을 담아보세요. 최대 12색까지 모아요.'}),
+        palettes.recent.length?el('div',{},el('small',{text:'최근 사용한 색'}),chips(palettes.recent)):null);
+    }fill();return box;
+  }
   const blobs = new Map();    // 사진 주소 → 파일 내용
   let sel = -1;               // 고른 것의 번호(없으면 -1)
   let many = [];              // 여럿을 함께 골랐을 때 그 번호들(둘 이상일 때만. 그동안 sel 은 -1). 잠근 것은 넣지 않는다
@@ -1533,6 +1580,7 @@ export function createEditor({
     // 글쇠의 자리(e.code)로 견준다. 한글 입력 상태에서는 e.key 가 'ㅋ' 처럼 와서 Ctrl+Z 를 놓친다.
     const key = e.code;
     const mod = e.ctrlKey || e.metaKey;
+    if(!mod&&!e.altKey&&!e.shiftKey&&!e.isComposing&&key==='KeyI'){const target=colorTarget();if(target){e.preventDefault();sampleColor(target.value,target.apply);}return;}
     if (mod && key === 'KeyZ') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
     if (mod && key === 'KeyY') { e.preventDefault(); redo(); return; }
     if (e.key === 'Escape' && pop) { e.preventDefault(); toggle(pop); return; }
@@ -1852,18 +1900,18 @@ export function createEditor({
   function swatches(value, onPick, { none = false, noneName = '없음', label }) {
     const custom = el('input', {
       class: 'fe-color', type: 'color', value: value || '#1c7ed6', 'aria-label': `${label} 직접 고르기`, title: '다른 색 고르기',
-      onChange: () => onPick(custom.value),
+      onChange: () => {paletteAction({type:'recent',color:custom.value});onPick(custom.value);},
     });
-    return el('div', { class: 'fe-swatches', role: 'group', 'aria-label': label },
+    return el('div', { class: 'fe-color-picker' },eyedropper(value,onPick,custom),el('div', { class: 'fe-swatches', role: 'group', 'aria-label': label },
       none ? el('button', { class: `fe-sw none${value ? '' : ' on'}`, type: 'button', 'aria-pressed': String(!value), title: noneName, 'aria-label': noneName, onClick: () => onPick('') }, icon('close')) : null,
       ...COLORS.map((c) => {
         const b = el('button', {
           class: `fe-sw${value === c.hex ? ' on' : ''}`, type: 'button', 'aria-label': c.name, 'aria-pressed': String(value === c.hex), title: c.name,
-          onClick: () => onPick(c.hex),
+          onClick: () => {paletteAction({type:'recent',color:c.hex});onPick(c.hex);},
         });
         b.style.background = c.hex;
         return b;
-      }), custom);
+      }), custom),savedColors(value,onPick));
   }
 
   // 막대: 끄는 동안에는 카드만 바꾸고(기록은 처음 한 번), 놓으면 알린다.
@@ -2041,6 +2089,7 @@ export function createEditor({
         tb([icon('palette'), el('span', { class: 'fe-lbl', text: '바탕색' }), ink], () => toggle('pagebg'), {
           title: '카드의 바탕색 바꾸기', name: '바탕색', on: pop === 'pagebg', cls: 'has-pop pagebg',
         }),
+        eyedropper(backgroundOf(card.bg).bg,setBg),
         el('span', { class: 'fe-sep' }),
         el('span', { class: 'fe-hint', text: items().length
           ? '조각을 누르면 꾸미는 도구가 나와요 · Shift 누르기나 빈 곳 끌기로 여럿 고르기' : '도구 칸에서 틀이나 글을 넣어 시작해요.' }));
@@ -2135,7 +2184,7 @@ export function createEditor({
     // 단추의 규칙: 글자 단추는 칸을 펼치고(색은 지금 색을 함께 보여 준다), 아이콘 단추는 누르면 바로 한다.
     const group = (name, ...kids) => el('span', { class: 'fe-group', role: 'group', 'aria-label': name }, ...kids.filter(Boolean));
     bar.replaceChildren(...always,
-      group('스타일', ...own, pick('opacity', '투명도', 'op', { title: '투명도: 낮출수록 비쳐 보여요' })),
+      group('스타일', ...own, colorTarget()?eyedropper(colorTarget().value,colorTarget().apply):null, pick('opacity', '투명도', 'op', { title: '투명도: 낮출수록 비쳐 보여요' })),
       el('span', { class: 'fe-sep' }),
       group('배치',
         it.t === 'text' ? null : pick('resize', '크기', 'size', { title: '조각의 크기 (가로세로 비율은 그대로)' }),      // 텍스트는 − 숫자 + 로 바꾼다
@@ -2315,9 +2364,9 @@ export function createEditor({
     const now = backgroundOf(card.bg);
     const custom = el('input', {
       class: `fe-bgsw fe-bgcustom${String(card.bg).startsWith('#') ? ' on' : ''}`, type: 'color', value: now.bg,
-      'aria-label': '배경 색 직접 고르기', title: '다른 색 고르기', onChange: () => setBg(custom.value),
+      'aria-label': '배경 색 직접 고르기', title: '다른 색 고르기', onChange: () => {paletteAction({type:'recent',color:custom.value});setBg(custom.value);},
     });
-    return el('div', { class: 'fe-bgs', role: 'group', 'aria-label': '배경 색' }, ...settings().backgrounds.map((b) => {
+    return el('div', {class:'fe-color-picker'},eyedropper(now.bg,setBg,custom),el('div', { class: 'fe-bgs', role: 'group', 'aria-label': '배경 색' }, ...settings().backgrounds.map((b) => {
       const sw = el('button', {
         class: `fe-bgsw${card.bg === b.id ? ' on' : ''}`, type: 'button', 'aria-label': `배경 ${b.name}`, 'aria-pressed': String(card.bg === b.id), title: b.name,
         onClick: () => setBg(b.id),
@@ -2325,7 +2374,7 @@ export function createEditor({
       sw.style.background = b.bg;
       sw.style.color = b.ink;
       return sw;
-    }), custom);
+    }), custom),savedColors(now.bg,setBg));
   }
 
   // ---------- 옆 메뉴 ----------
@@ -3084,6 +3133,7 @@ export function createEditor({
 
   /** 꾸밀 디자인을 바꾼다(다른 카드·다른 쪽으로 넘어갈 때). 고르기와 되돌리기 기록은 비워진다. */
   function setDesign(next) {
+    sampling?.controller.abort();sampling=null;
     card = next && typeof next === 'object' ? next : { bg: undefined, items: [] };
     card.bg = cleanBg(card.bg);
     card.items = cleanItems(card.items, { keepSpaces: true, strict: !!card.id });
@@ -3192,6 +3242,7 @@ export function createEditor({
     forget: () => { past = []; future = []; if (card) renderBar(); },
     /** 편집기를 치운다(열린 메뉴와 지켜보던 것들을 정리한다). 화면 조각은 프로젝트가 떼어 낸다. */
     destroy: () => {
+      sampling?.controller.abort();sampling=null;
       closeMenu();
       stopPress();
       stopDrag();

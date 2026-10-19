@@ -7,6 +7,7 @@ import {getDesign,putDesign} from '../store.js';
 import {designView} from '../../src/render.js';
 import {configure} from '../../src/model.js';
 import {aspectOf} from '../designs.js';
+import {orderPages} from '../page-order.js';
 import {createPptx} from '../pptx.js';
 
 const clone=value=>structuredClone(value);
@@ -69,7 +70,7 @@ export function mountPptxApp({root,storage='minican',fonts,fontServices=defaultI
   if(readOnly)return graph;
   const rows=await Promise.all(graph.documents.map(async row=>{const draft=await getDesign(row.id);return {...row,payload:draft||row.payload};}));
   const pages=rows.flatMap((row,partIndex)=>row.payload.slides.map((page,pageIndex)=>({page,pageIndex,partIndex,document:row,pageNumber:page.source?.pageNumber??null})));
-  return {...graph,documents:rows,pages};
+  return {...graph,documents:rows,pages:orderPages(pages,graph.manifest.pageOrder)};
  }
  async function edit(row,pageIndex=0){
   if(busy||disposed)return;locked(true);

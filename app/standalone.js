@@ -11,7 +11,7 @@ export async function startOnbatang({root=document.getElementById('app'),fonts=O
  if(isMinicanStarted())throw Error('minican already started');
  // Existing visitors may still have the previous CSS cached for an hour.
  // A release key fetches the matching editor layout without reloading a drawing.
- if(styles)for(const href of [new URL('../src/editor.css?v=0.25.0',import.meta.url).href,new URL('./app.css?v=0.25.0',import.meta.url).href,new URL('./brand.css?v=0.25.0',import.meta.url).href,new URL('./pptx-import/style.css?v=0.25.0',import.meta.url).href]){
+ if(styles)for(const href of [new URL('../src/editor.css?v=0.26.0',import.meta.url).href,new URL('./app.css?v=0.26.0',import.meta.url).href,new URL('./brand.css?v=0.26.0',import.meta.url).href,new URL('./pptx-import/style.css?v=0.26.0',import.meta.url).href]){
   if(![...document.querySelectorAll('link[rel=stylesheet]')].some(link=>link.href===href)){const link=document.createElement('link');link.rel='stylesheet';link.href=href;document.head.append(link);}
  }
  const editor=document.createElement('div'),workspace=document.createElement('section');workspace.className='op-root';workspace.hidden=true;root.classList.add('cv-standalone-shell');root.replaceChildren(editor,workspace);
@@ -65,7 +65,11 @@ export async function startOnbatang({root=document.getElementById('app'),fonts=O
   if(!graph)return null;
   const documents=[];
   for(const row of graph.documents){let draft=await getDesign(row.id);if(!draft)draft=await putDesign(row.payload);documents.push(draft);}
-  return {title:graph.manifest.title,documents};
+  return {title:graph.manifest.title,documents,materialRef:graph.materialRef,pageOrder:graph.pages.map(value=>value.page.id)};
+ },async reorder({designId,materialRef,pageIds}){
+  const graph=await controller.library.saveOrder({materialRef,pageOrder:pageIds});
+  await controller.restoreEditorContext(graph);
+  return materialNavigation.load({designId});
  }};
  await startMinican({...options,root:editor,fonts,titleFont,storage,materialNavigation,importAction:{label:'PPTX 가져오기',hideHome:true,editorLabel:'내 PPT 올리기',editorMode:'inline',open:openPptx},onView:next=>{
   view=next;onView?.(next);
