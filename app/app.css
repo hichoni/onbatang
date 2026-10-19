@@ -987,7 +987,7 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero-go { display: flex
 .cv-slide.drop-before:before,.cv-slide.drop-after:after{content:'';position:absolute;top:-6px;bottom:-6px;width:4px;background:var(--primary);border-radius:3px;z-index:4}
 .cv-slide.drop-before:before{left:-9px}.cv-slide.drop-after:after{right:-9px}
 .cv-slide-list.is-sorting{cursor:grabbing}
-@media(max-width:600px){.cv-strip{padding:10px}.cv-strip-guide{flex-basis:100%;order:3}.cv-slide-scroll{min-width:44px;min-height:44px}.cv-strip-size{margin-left:auto}}
+@media(max-width:600px){.cv-strip{padding:10px}.cv-strip-header{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px}.cv-strip-header .cv-slide-count{grid-column:1/-1;grid-row:1}.cv-strip-guide{grid-column:1/-1;grid-row:3}.cv-slide-scroll{grid-row:2;min-width:44px;min-height:44px}.cv-strip-size{grid-column:1;grid-row:2;margin:0}}
 @keyframes onba-assemble{0%,100%{transform:translate(var(--from-x),var(--from-y)) rotate(var(--from-r));opacity:.35}32%,78%{transform:translate(0,0) rotate(0deg);opacity:1}92%{opacity:.6}}
 @media(prefers-reduced-motion:reduce){.onba-loading-art *{animation:none!important;transform:none!important;opacity:1!important}}
 @media(max-width:480px){.onba-loading{padding:24px 16px}.onba-loading.is-compact{padding:12px;gap:12px}.onba-loading-title{font-size:15px}}

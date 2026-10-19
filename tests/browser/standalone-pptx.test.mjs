@@ -59,6 +59,7 @@ test('direct eyedropper, four named palettes, undo, cancel, stale selection and 
  assert.ok(await page.locator('.cv-side .fe-palette-color[aria-label="#224466 적용"]').count()>0);
  await page.evaluate(()=>{delete window.EyeDropper;window.pickerFallbacks=0;HTMLInputElement.prototype.showPicker=function(){window.pickerFallbacks++;};});await page.locator('.cv-side .fe-eyedropper').click();assert.equal(await page.evaluate(()=>window.pickerFallbacks),1);
  await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+ const arrowTop=await page.locator('.cv-slide-scroll').evaluateAll(nodes=>nodes.map(n=>n.getBoundingClientRect().top));assert.equal(arrowTop[0],arrowTop[1],'both scroll arrows stay on one row');
 });
 
 test('symbol assembly loading and whole editor rail preserve every split page, failed-save edits, reload and whole PPTX downloads',options,async t=>{
