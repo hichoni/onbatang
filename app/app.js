@@ -865,7 +865,10 @@ async function navigateMaterialPage(O,value) {
     const ready=migrateRecord(record);
     if(ready.slides[value.index]?.id!==value.page.id)throw Error('DOCUMENT_CHANGED');
     await tidyVideos(O.record.id,currentSlides(O));
-    O.materialDeck.documents=O.materialDeck.documents.map(row=>row.id===O.record.id?{...O.record,slides:currentSlides(O)}:row);
+    // The editor's render normalization is not a saved draft. Keep the exact
+    // snapshot written by this editor as the CAS basis when another part later
+    // needs room for an activity/result. Foreign drafts must still conflict.
+    O.materialDeck.documents=O.materialDeck.documents.map(row=>row.id===O.record.id?structuredClone(O.persistedRecord):row);
     clearTimeout(O.timer);clearTimeout(O.thumbTimer);O.editor.quiet();
     O.persistedRecord=structuredClone(ready);O.record={...ready};delete O.record.slides;O.slides=ready.slides;O.at=value.index;
     O.dirty=false;O.saved=true;O.localOk=true;O.accountOk=null;O.nameInput.value=ready.name;

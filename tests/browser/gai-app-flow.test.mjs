@@ -80,6 +80,36 @@ async function readLibrary(page){return page.evaluate(async()=>{
 });}
 async function reopen(page,name,count){await page.locator('.cv-back').click();await page.locator('.cv-home-title').waitFor();await page.reload();await page.getByRole('button',{name:name+' 열기',exact:true}).click();await waitPages(page,count);}
 const appFrame=scope=>scope.frameLocator('.gai-app-frame').frameLocator('[data-gai-app-content]');
+
+test('a visited part keeps its persisted draft basis when another full part sends an app there', {...options,skip:options.skip||sourcePages!==21},async t=>{
+ const {page,entry}=await setup(t,{width:1440,height:1000});await importDeck(page,entry);
+ const before=await readLibrary(page),first=page.locator('[data-material-page="0"]'),last=page.locator('[data-material-page="20"]');
+ const firstPart=await first.getAttribute('data-document-id'),lastPart=await last.getAttribute('data-document-id');
+ assert.notEqual(firstPart,lastPart,'the 21-page fixture spans two immutable parts');
+ // Merely visiting a PPT normalizes the editor view. It must not replace the
+ // stored comparison basis with that unsaved rendering when we leave it.
+ await last.click();
+ await page.locator('[data-material-page="20"][aria-pressed=true]').waitFor();
+ await first.click();await page.locator('[data-material-page="0"][aria-pressed=true]').waitFor();
+ await page.locator('[data-add-gai-app]').click();const maker=page.locator('.gai-maker');
+ await maker.getByRole('button',{name:'가이X 연결',exact:true}).click();
+ await maker.getByRole('button',{name:'가이X 연결됨',exact:true}).waitFor();
+ await maker.getByRole('textbox',{name:'가이X에게 요청',exact:true}).fill('이 쪽 뒤에 짧은 단계 활동 앱을 만들어줘.');
+ await maker.getByRole('button',{name:'보내기',exact:true}).click();await appFrame(maker).getByRole('button',{name:'다음 단계 실행',exact:true}).waitFor();
+ await maker.getByRole('button',{name:'이 앱을 슬라이드에 넣기',exact:true}).click();
+ try{await maker.waitFor({state:'detached',timeout:8000});}catch(error){throw new Error('cross-part app save: '+await maker.locator('.gai-maker-status').innerText(),{cause:error});}
+ await waitPages(page,22);
+ assert.equal(await page.locator('[data-material-page="1"]').getAttribute('data-document-id'),lastPart,'the full first part reserves app/result space in the previously visited part');
+ const after=await readLibrary(page);assert.deepEqual(after.originals,before.originals);assert.deepEqual(after.sources,before.sources);
+ const originalIds=before.graphs[0].pages.map(row=>row.page.id),pages=after.graphs[0].pages;
+ assert.equal(pages[1].page.activity.kind,'gai-app');
+ assert.deepEqual(pages.filter(row=>!row.page.activity).map(row=>row.page.id),originalIds);
+ await page.locator('.cv-show-btn').click();const show=page.locator('.cv-show'),runtime=appFrame(show);
+ await runtime.getByRole('button',{name:'다음 단계 실행',exact:true}).click();
+ await show.getByRole('button',{name:'결과를 다음 슬라이드에 저장',exact:true}).click();
+ await page.waitForFunction(()=>document.querySelector('.cv-show-count')?.textContent==='3 / 23');
+ assert.match(await show.locator('.cv-show-stage').innerText(),/1단계 완료/);
+});
 async function capture(page,width,name){if(!process.env.MINICAN_GAI_REPORT)return;const dir=resolve(root,'work',process.env.MINICAN_GAI_REPORT);assert.ok(dir.startsWith(resolve(root,'work')+sep));await mkdir(dir,{recursive:true});await page.screenshot({path:resolve(dir,`${width}-${name}.png`),fullPage:true,animations:'disabled'});}
 
 for(const [width,height]of [[1440,1000],[390,844]])test(`Gai conversation creates an app inside a PPT, restores its state and saves the next-slide result (${width}px)`,options,async t=>{
