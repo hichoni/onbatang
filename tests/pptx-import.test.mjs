@@ -11,6 +11,7 @@ import {importConvertedDocument} from '../app/import-document.js';
 import {migrateRecord} from '../app/designs.js';
 import {cleanDesign} from '../src/model.js';
 import {buildPptxImport} from '../tools/build-pptx-import.mjs';
+import {bulletChar,autoNumber} from '../app/pptx-import/bullets.js';
 
 const enc=new TextEncoder(),dec=new TextDecoder();
 const digest=bytes=>createHash('sha256').update(bytes).digest('hex');
@@ -140,4 +141,33 @@ test('a font missing on this device never fails a slide image, and browser error
  assert.match(source,/const fontFallback=\(await Promise\.allSettled\(loads\.values\(\)\)\)\.some\(load=>load\.status==='rejected'\)/);
  assert.doesNotMatch(source,/await Promise\.all\(\[?'학교안심|await Promise\.all\(loads\.values\(\)\)/);
  assert.match(source,/const own=typeof error\?\.code==='string';respond\('error',\{error:\{code:own\?error\.code:'PREVIEW_FAILED',message:own\?error\.message:'PPT의 일부 표현을 미리보기 도구에서 그리지 못했어요\.'\}\}\);/);
+});
+
+test('list markers stay visible: symbol-font bullets become their Unicode characters and numbers are counted',async()=>{
+ // Regression: a teacher's PPT used Wingdings "l" (●) and "-" bullets; the editable import dropped them
+ // and the PPT preview drew a literal "l" on devices without Wingdings.
+ assert.equal(bulletChar('l','Wingdings'),'●');assert.equal(bulletChar('\uf06c',''),'●');assert.equal(bulletChar('\u00b7','Symbol'),'•');
+ assert.equal(bulletChar('Ø','Wingdings'),'➢');assert.equal(bulletChar('ü','Wingdings'),'✓');assert.equal(bulletChar('k','Wingdings'),'•','unknown symbols fall back to a bullet');
+ assert.equal(bulletChar('-',''),'-');assert.equal(bulletChar('l','Arial'),'l','a letter in a text font stays a letter');
+ assert.deepEqual([autoNumber('arabicPeriod',3),autoNumber('alphaLcParenR',2),autoNumber('romanUcPeriod',4),autoNumber('arabicParenBoth',1),autoNumber('circleNumDbPlain',2)],['3.','b)','IV.','(1)','②']);
+ const parts=unzipSync(await baseBytes()),name='ppt/slides/slide1.xml';
+ const para=(pPr,text)=>`<a:p>${pPr}<a:r><a:rPr lang="ko-KR" sz="2400"/><a:t>${text}</a:t></a:r></a:p>`;
+ const body=[
+  para('<a:pPr marL="685800" indent="-685800"><a:buFont typeface="Wingdings" pitchFamily="2" charset="2"/><a:buChar char="l"/></a:pPr>','1997년 연구회 구성'),
+  para('<a:pPr marL="457200" indent="-457200"><a:buFontTx/><a:buChar char="-"/></a:pPr>','초등교사 모임'),
+  '<a:p><a:pPr><a:buFontTx/><a:buChar char="-"/></a:pPr><a:endParaRPr lang="ko-KR"/></a:p>',
+  para('<a:pPr><a:buAutoNum type="arabicPeriod"/></a:pPr>','첫째'),para('<a:pPr><a:buAutoNum type="arabicPeriod"/></a:pPr>','둘째'),
+  para('<a:pPr><a:buNone/></a:pPr>','기호 없음'),para('','그냥 문단')
+ ].join('');
+ parts[name]=enc.encode(dec.decode(parts[name]).replace(/<a:p>.*<\/a:p>/s,body));
+ const converted=await convertPptx(repack(parts),{selectedPages:[1]});
+ assert.equal(texts(converted.document)[0][0],'● 1997년 연구회 구성\n- 초등교사 모임\n\n1. 첫째\n2. 둘째\n기호 없음\n그냥 문단');
+ assert.ok(converted.report.warnings.some(warning=>warning.code==='BULLETS_AS_TEXT'));
+ assert.ok(!converted.report.warnings.some(warning=>warning.code==='BULLETS_OMITTED'));
+});
+
+test('the PPT preview frame swaps symbol-font bullets before drawing',async()=>{
+ const source=await readFile(new URL('../app/pptx-import/preview-frame.js',import.meta.url),'utf8');
+ assert.match(source,/import \{bulletChar\} from '\.\/bullets\.js';/);
+ assert.match(source,/if\(node\.localName==='buChar'\)\{[^\n]*shown=bulletChar\(char,face\);/);
 });

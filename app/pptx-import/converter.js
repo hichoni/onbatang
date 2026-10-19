@@ -3,6 +3,7 @@ import {DOMParser} from '@xmldom/xmldom';
 import {crc32} from '../zip.js';
 import {cleanSize,DOCUMENT_LIMITS,SLIDE_LIMITS,legacyId} from '../../src/document.js';
 import {importConvertedDocument} from '../import-document.js';
+import {bulletChar,autoNumber} from './bullets.js';
 
 export const PPTX_MIME='application/vnd.openxmlformats-officedocument.presentationml.presentation';
 export const PPTX_CONVERTER_VERSION='1.3.2';
@@ -124,6 +125,25 @@ function extractText(body){
   return all(body,'p').map(p=>children(p).map(n=>n.localName==='br'?'\n':n.localName==='tab'?'\t':all(n,'t').map(t=>t.textContent).join('')).join('')).join('\n');
 }
 function rawSlideText(slide){return extractText(slide);}
+const paragraphText=p=>children(p).map(n=>n.localName==='br'?'\n':n.localName==='tab'?'\t':all(n,'t').map(t=>t.textContent).join('')).join('');
+/** extractText with each paragraph's list marker (its own or inherited) written in front, since the editor has no lists. */
+function bulletedText(body,styles=[]){
+  const counters=new Map();
+  return all(body,'p').map(p=>{
+    const pPr=direct(p,'pPr'),level=Math.max(0,Math.min(8,Number(attr(pPr,'lvl'))||0)),text=paragraphText(p);
+    const chain=[pPr,...styles.flatMap(style=>[direct(style,`lvl${level+1}pPr`),direct(style,'defPPr')])].filter(Boolean);
+    const marker=chain.map(node=>direct(node,'buNone')?{none:true}:direct(node,'buChar')?{char:attr(direct(node,'buChar'),'char')}:direct(node,'buAutoNum')?{scheme:attr(direct(node,'buAutoNum'),'type'),start:Number(attr(direct(node,'buAutoNum'),'startAt'))||1}:null).find(Boolean);
+    for(const key of [...counters.keys()])if(key>level)counters.delete(key);
+    // PowerPoint draws no marker on an empty paragraph.
+    if(!marker||marker.none||!text.trim()){if(text.trim())counters.delete(level);return text;}
+    if(marker.char!==undefined){
+      const font=chain.map(node=>direct(node,'buFontTx')?'':direct(node,'buFont')?attr(direct(node,'buFont'),'typeface'):null).find(value=>value!==null)??'';
+      counters.delete(level);const char=bulletChar(marker.char,font);return char?`${char} ${text}`:text;
+    }
+    const last=counters.get(level),n=last?.scheme===marker.scheme?last.n+1:marker.start;
+    counters.set(level,{scheme:marker.scheme,n});return `${autoNumber(marker.scheme,n)} ${text}`;
+  }).join('\n');
+}
 const unit=value=>Math.max(0,Math.min(1,value));
 function colorTransforms(value,node,warn){
   let rgb=[1,3,5].map(at=>parseInt(value.slice(at,at+2),16)/255);
@@ -481,10 +501,14 @@ async function pageData(context,path,pageNumber){
         else warn('FONT_SUBSTITUTION','원본 글꼴을 포함하지 않아 온바탕 기본 글꼴로 표시해요.');
         warn('TEXT_LAYOUT_APPROXIMATE','문단 간격·줄바꿈·글상자 여백은 원본과 다를 수 있어요.');
         if(runs.length>1)warn('RICH_TEXT_FLATTENED','문단 안의 여러 서식은 첫 글자 서식으로 통일했어요.');
-        if(all(body,'buChar').length||all(body,'buAutoNum').length)warn('BULLETS_OMITTED','목록 기호와 자동 번호는 제외하고 본문을 보존했어요.');
         const placeholder=all(object,'ph',NS.p)[0],placeholderType=attr(placeholder,'type');
         const masterStyle=direct(masterTextStyles,['title','ctrTitle'].includes(placeholderType)?'titleStyle':placeholderType==='body'?'bodyStyle':'otherStyle',NS.p);
         const styles=[direct(body,'lstStyle'),masterStyle,defaultTextStyle];
+        // A placeholder without a type is a content placeholder, which takes the master's body (list) style.
+        const listStyles=placeholder&&!placeholderType?[direct(body,'lstStyle'),direct(masterTextStyles,'bodyStyle',NS.p),defaultTextStyle]:styles;
+        const listed=bulletedText(body,listStyles);
+        if(listed.length>SLIDE_LIMITS.text)fail('TEXT_LIMIT',`한 글상자가 ${SLIDE_LIMITS.text}자를 넘어요. 전체 문구는 검사 결과와 원본에 남아 있어요.`);
+        if(listed!==value)warn('BULLETS_AS_TEXT','목록 기호와 번호를 글자로 넣었어요. 들여쓰기 위치는 원본과 다를 수 있어요.');
         const hangingPunct=paragraphHanging(paragraph,styles);
         if(paragraphs.some(node=>paragraphHanging(direct(node,'pPr'),styles)!==hangingPunct))warn('PARAGRAPH_STYLE_FLATTENED','문단별 문장부호 내어쓰기가 달라 첫 문단의 설정으로 표시해요. 원문은 보존합니다.');
         const frame=textFrame(bodyPr,paragraph,g,size,points,warn,hangingPunct);
@@ -493,7 +517,7 @@ async function pageData(context,path,pageNumber){
         const style={t:'text',rot:g.rot,size:fontSize,font:'gothic',...(typeface?{typeface}:{}),color:color(textFill,'#222222',warn),bold:['1','true'].includes(attr(first,'b')),italic:['1','true'].includes(attr(first,'i')),under:attr(first,'u')==='sng',align};
         // Keep the original text box and its geometry. Paragraph splitting cannot
         // infer automatic wrapping and can introduce overlaps even when no text is lost.
-        items.push({...meta('text'),...style,...frame,text:value});
+        items.push({...meta('text'),...style,...frame,text:listed});
       }
     }catch(error){if(error instanceof PptxConversionError)reject(error.code,error.message);else throw error;}
   }

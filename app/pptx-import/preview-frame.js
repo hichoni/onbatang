@@ -2,6 +2,7 @@
 import {parseZipLazyMedia,buildPresentation,renderSlide} from '@aiden0z/pptx-renderer';
 import rendererPackage from './vendor/renderer-version.js';
 import {adaptPreviewPunctuation,previewTextBounds} from './preview-punctuation.js';
+import {bulletChar} from './bullets.js';
 
 const nonce=location.hash.slice(1),parentOrigin=new URL(location.href).origin,container=document.getElementById('slide');
 let files,busy=false,opened=false;
@@ -29,6 +30,9 @@ function safeXml(xml,mappings={}){
     if(node.localName==='Relationship'&&(node.getAttribute('TargetMode')?.toLowerCase()==='external'||/^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(node.getAttribute('Target')||''))){node.remove();continue;}
     // Embedded-face declarations retain their original identity; renaming one would substitute
     // the original bytes under the replacement family and silently undo the user's font choice.
+    // A Wingdings/Symbol bullet is a plain letter in that font; without the font the letter itself shows.
+    if(node.localName==='buChar'){const font=Array.from(node.parentElement?.children||[]).find(n=>n.localName==='buFont'),face=font?.getAttribute('typeface')||'',char=node.getAttribute('char')||'',shown=bulletChar(char,face);
+      if(shown&&shown!==char){node.setAttribute('char',shown);if(font)font.setAttribute('typeface','Arial');}}
     if(node.hasAttribute('typeface')&&!(node.localName==='font'&&node.parentElement?.localName==='embeddedFont')){const target=map.get(normalize(node.getAttribute('typeface')));if(target)node.setAttribute('typeface',target);}
   }
   return new XMLSerializer().serializeToString(doc);
