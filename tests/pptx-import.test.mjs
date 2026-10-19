@@ -131,3 +131,13 @@ test('static bundles rebuild byte-for-byte with package/source hashes, intact CS
  const script=html.match(/<script>([\s\S]*)<\/script>/)?.[1];assert.ok(script);assert.ok(html.includes("script-src 'sha256-"+createHash('sha256').update(script).digest('base64')+"'"));
  assert.equal(PPTX_LIMITS.zipBytes,50*1024*1024);assert.equal(PPTX_LIMITS.xmlDepth,64);assert.equal(PPTX_LIMITS.documentBytes,524288);
 });
+
+test('a font missing on this device never fails a slide image, and browser errors never reach the teacher raw',async()=>{
+ // Regression: on a device without the 학교안심 fonts installed, document.fonts.load rejected with
+ // "NetworkError: A network error occurred." and every image-mode slide failed to save.
+ const source=await readFile(new URL('../app/pptx-import/preview-frame.js',import.meta.url),'utf8');
+ assert.match(source,/await Promise\.allSettled\(\['학교안심 이어달리기 L','학교안심 바른돋움 B'\]\.map\(name=>document\.fonts\.load\(/);
+ assert.match(source,/const fontFallback=\(await Promise\.allSettled\(loads\.values\(\)\)\)\.some\(load=>load\.status==='rejected'\)/);
+ assert.doesNotMatch(source,/await Promise\.all\(\[?'학교안심|await Promise\.all\(loads\.values\(\)\)/);
+ assert.match(source,/const own=typeof error\?\.code==='string';respond\('error',\{error:\{code:own\?error\.code:'PREVIEW_FAILED',message:own\?error\.message:'PPT의 일부 표현을 미리보기 도구에서 그리지 못했어요\.'\}\}\);/);
+});

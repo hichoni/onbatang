@@ -100,7 +100,9 @@ async function render({pageNumber,width,fonts=[],mappings={}}){
   embeddedFaces.clear();embeddedBytes=0;embeddedCaptureFailure=false;
   validateFonts(fonts,mappings);
   if(!Number.isSafeInteger(pageNumber)||!Number.isInteger(width)||width<64||width>1600)fail('INVALID_PAGE','미리보기 쪽과 크기를 확인해 주세요.');
-  await Promise.all(['학교안심 이어달리기 L','학교안심 바른돋움 B'].map(name=>document.fonts.load(`16px "${name}"`,'글꼴 점검')));
+  // Warm-up only: these faces have local() sources, so a device without them installed rejects
+  // with a NetworkError. Text then falls back like any other missing font.
+  await Promise.allSettled(['학교안심 이어달리기 L','학교안심 바른돋움 B'].map(name=>document.fonts.load(`16px "${name}"`,'글꼴 점검')));
   const presentation=buildPresentation(mappedFiles(mappings),{lazySlides:true});
   if(pageNumber<1||pageNumber>presentation.slides.length)fail('INVALID_PAGE','미리보기 쪽 번호를 확인해 주세요.');
   if(!Number.isFinite(presentation.width)||!Number.isFinite(presentation.height)||presentation.width<1||presentation.height<1||presentation.width>20000||presentation.height>20000)fail('SLIDE_SIZE','PPT 쪽 크기를 확인해 주세요.');
@@ -113,12 +115,14 @@ async function render({pageNumber,width,fonts=[],mappings={}}){
     handle.element.getBoundingClientRect();
     await Promise.all(Array.from(handle.element.querySelectorAll('img')).map(img=>img.decode()));
     const loads=new Map();for(const element of handle.element.querySelectorAll('*')){if(!element.textContent.trim())continue;const style=getComputedStyle(element),font=`${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;if(!loads.has(font))loads.set(font,document.fonts.load(font,element.textContent));}
-    await Promise.all(loads.values());await document.fonts.ready;await new Promise(requestAnimationFrame);
+    // A face that cannot load (not installed, unreadable embedded bytes) falls back instead of failing the slide.
+    const fontFallback=(await Promise.allSettled(loads.values())).some(load=>load.status==='rejected');await document.fonts.ready;await new Promise(requestAnimationFrame);
     if(embeddedCaptureFailure)fail('EMBEDDED_FONT_LIMIT','PPT 미리보기의 삽입 글꼴 용량이 한도를 넘었어요.');
     adaptPreviewPunctuation({presentation,slide:presentation.slides[pageNumber-1],element:handle.element,rendererVersion:rendererPackage.version});
     const fitWarnings=fitClippedText(handle.element,pageNumber),usedEmbedded=new Set();
     for(const element of handle.element.querySelectorAll('*'))for(const family of getComputedStyle(element).fontFamily.match(/__pptx_embedded_[a-z\d_]+/gi)||[])usedEmbedded.add(family);
     if([...usedEmbedded].some(family=>![...embeddedFaces.values()].some(font=>font.family===family&&font.face.status==='loaded')))fitWarnings.push({code:'EMBEDDED_FONT_UNAVAILABLE',pageNumber,message:'일부 삽입 글꼴을 읽지 못해 이 기기의 대체 글꼴로 미리보기를 그렸어요.'});
+    else if(fontFallback)fitWarnings.push({code:'FONT_FALLBACK',pageNumber,message:'이 기기에 없는 글꼴은 대체 글꼴로 미리보기를 그렸어요.'});
     const canvas=await capture(handle.element,presentation.width,presentation.height,scale,fonts);
     let dataUrl=canvas.toDataURL('image/png'),quality=.9;
     while(dataUrl.length>341400&&quality>=.45){dataUrl=canvas.toDataURL('image/webp',quality);quality-=.1;}
@@ -144,6 +148,7 @@ window.addEventListener('message',async event=>{
       opened=true;result={pageCount:presentation.slides.length};
     }else{if(!opened)fail('PREVIEW_NOT_OPEN','PPT 파일을 먼저 열어 주세요.');result=await render(data);}
     respond('result',{result});
-  }catch(error){respond('error',{error:{code:error.code||'PREVIEW_FAILED',message:error.code?error.message:'PPT의 일부 표현을 미리보기 도구에서 그리지 못했어요.'}});}
+  // Only this frame's own string codes carry a message; browser errors (DOMException.code is a number) never reach the teacher raw.
+  }catch(error){const own=typeof error?.code==='string';respond('error',{error:{code:own?error.code:'PREVIEW_FAILED',message:own?error.message:'PPT의 일부 표현을 미리보기 도구에서 그리지 못했어요.'}});}
   finally{busy=false;}
 });
