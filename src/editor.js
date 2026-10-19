@@ -2400,15 +2400,24 @@ export function createEditor({
           if (!start || e.pointerId !== start.id || Math.hypot(e.clientX-start.x,e.clientY-start.y)>8) return;
           // Prefer the browser's click. After a captured slide drag it can be
           // omitted: replay only an unhandled tap, through host save/close guards.
-          const button = e.currentTarget, tap = pendingTap = {};
+          const button = e.currentTarget, tap = pendingTap = {}, doc = button.ownerDocument;
+          let replayed = false;
+          const unlisten = () => doc.removeEventListener('click', heard, true);
           // A host can consume the click before it reaches this button. Count
           // that as handled too, so a denied close is not requested twice.
-          const heard = event => { if (button.contains(event.target)) pendingTap = null; };
-          button.ownerDocument.addEventListener('click', heard, true);
+          const heard = event => {
+            const target = event.target.closest?.('.fe-tab');
+            if (!event.isTrusted || !target || target.dataset.tab !== id || !panel.contains(target)) return;
+            // Rendering may retarget a late native click to the new tab button.
+            // Suppress only the gesture we replayed; a new touch has a new ID.
+            if (replayed && event.pointerId === start.id) { event.preventDefault(); event.stopImmediatePropagation(); }
+            pendingTap = null; unlisten();
+          };
+          doc.addEventListener('click', heard, true);
           requestAnimationFrame(() => {
-            button.ownerDocument.removeEventListener('click', heard, true);
-            if (pendingTap !== tap || !button.isConnected) return;
-            pendingTap = null; button.click();
+            if (pendingTap !== tap || !button.isConnected) { unlisten(); return; }
+            pendingTap = null; replayed = true; button.click();
+            setTimeout(unlisten, 600);
           });
         },
         onClick: e => {

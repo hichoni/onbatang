@@ -21,6 +21,16 @@ test('touch tabs open a palette after PPT import',options,async t=>{
  const {page,entry}=await setup(t,{viewport:{width:390,height:844},touch:true});await enterImport(page,entry);await inspectFile(page,'self-authored-21-pages.pptx',21);await page.locator('[data-import-save]').tap();await page.locator('[data-inline-import]').waitFor({state:'detached'});await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);await page.locator('.fe-tab[data-tab=bg]').tap();await page.locator('.cv-side .fe-palettes').waitFor({timeout:3000});
 });
 
+test('a delayed native touch click cannot fold a replayed tool, while a second touch can fold it',options,async t=>{
+ const {page,entry}=await setup(t,{viewport:{width:1024,height:768},touch:true});await page.goto(entry);await page.locator('.cv-hero .cv-new-btn').tap();
+ // Force the fallback before Chromium delivers its trusted compatibility click.
+ // Only the next application frame is changed; the click itself remains native.
+ await page.evaluate(()=>{const raf=requestAnimationFrame;window.requestAnimationFrame=callback=>{window.requestAnimationFrame=raf;callback(performance.now());return 0;};});
+ await page.locator('.fe-tab[data-tab=bg]').tap();await page.locator('.cv-side .fe-palettes').waitFor();assert.equal(await page.locator('.cv-app.folded').count(),0);
+ await page.locator('.fe-tab[data-tab=bg]').tap();assert.equal(await page.locator('.cv-app.folded').count(),1,'a different gesture still folds the current tool');
+ await page.locator('.fe-tab[data-tab=bg]').tap();await page.locator('.cv-side .fe-palettes').waitFor();assert.equal(await page.locator('.cv-app.folded').count(),0);
+});
+
 test('touch tool swipes do not select a tab, and rotating or leaving import retains the selected slide',options,async t=>{
  const {page,context,entry,checkIsolation}=await setup(t,{viewport:{width:320,height:568},touch:true});
  await enterImport(page,entry);await inspectFile(page,'self-authored-4x3.pptx',2);
