@@ -8,6 +8,7 @@ import {designView} from '../../src/render.js';
 import {configure} from '../../src/model.js';
 import {aspectOf} from '../designs.js';
 import {orderPages} from '../page-order.js';
+import {materialPageLabel} from '../material-preview.js';
 import {createPptx} from '../pptx.js';
 
 const clone=value=>structuredClone(value);
@@ -106,7 +107,7 @@ export function mountPptxApp({root,storage='minican',fonts,fontServices=defaultI
   const selected=graph.pages[active];configure({aspect:aspectOf(selected.document.payload)});sheet.append(designView(selected.page));
   const rail=el('nav',undefined,{class:'op-pages','aria-label':'전체 슬라이드'});
   for(const [index,value]of graph.pages.entries()){
-   const node=button(`${index+1} · ${value.pageNumber?`원본 ${value.pageNumber}쪽`:'새 쪽'}`,async()=>{active=index;await paint();},{'data-pptx-page':String(index),'aria-current':String(index===active)});
+   const node=button(materialPageLabel(value.page,index+1),async()=>{active=index;await paint();},{'data-pptx-page':String(index),'aria-current':String(index===active)});
    node.prepend(designView(value.page));rail.append(node);
   }
   const history=el('details',undefined,{class:'op-history'});history.append(el('summary','원본과 저장 기록'));
