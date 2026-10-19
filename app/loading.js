@@ -1,5 +1,16 @@
 // Shared, local-only brand motion. Progress is shown only when work reports it.
-import {el} from './ui.js';
+// Use the active document's DOM directly, including when a host supplies an iframe.
+const el=(tag,attrs={},...children)=>{
+  const node=document.createElement(tag);
+  for(const [key,value]of Object.entries(attrs)){
+    if(value===false||value==null)continue;
+    if(key==='class')node.className=value;
+    else if(key==='text')node.textContent=value;
+    else if(key==='dataset')Object.assign(node.dataset,value);
+    else node.setAttribute(key,value===true?'':value);
+  }
+  node.append(...children);return node;
+};
 
 export function onbatangLoading({title='온바탕을 준비하고 있어요',detail='잠시만 기다려주세요.',compact=false}={}) {
   const heading=el('strong',{class:'onba-loading-title',text:title});
