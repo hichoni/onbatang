@@ -91,7 +91,7 @@ input:focus-visible, textarea:focus-visible, button:focus-visible { outline: 3px
 .cv-inline-import-body .oi-drop { padding:22px 18px; margin:20px 0 14px; }
 .cv-inline-import-body .oi-footer { position:sticky; bottom:0; z-index:2; gap:12px; padding:12px 18px; }
 .cv-inline-import-body .oi-footer .oi-primary { min-width:150px; }
-.cv-inline-import-body .oi-steps { padding:14px 20px; }
+.cv-inline-import-body .oi-steps { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; padding:14px 20px; }
 .cv-inline-import-body .oi-steps li { min-width:0; }
 .cv-inline-import-body .oi-steps strong { overflow-wrap:anywhere; }
 .cv-app.inline-importing .cv-work { display:flex; padding:0; overflow:hidden; }
