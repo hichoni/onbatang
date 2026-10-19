@@ -691,7 +691,16 @@ function slideLabel(i, design) {
 }
 function renderStrip(O) {
   if (!O.strip || O.closed) return;
-  O.stripDrag?.stop();
+  if(O.materialDeck&&O.strip.dataset.materialLayout==='1'){
+    renderMaterialNavigation(O,O.strip.querySelector('.cv-slide-list').scrollLeft);
+    const pages=materialPages(O),at=pages.findIndex(v=>v.record.id===O.record.id&&v.index===O.at),tools=O.strip.querySelectorAll('.cv-slide-tool');
+    tools[0].disabled=at<=0;tools[1].disabled=at>=pages.length-1;tools[2].disabled=O.slides.length>=MAX_SLIDES;
+    const del=tools[3];del.disabled=O.slides.length===1&&!O.editor.getDesign().items.length&&!hasVideo(O.editor.getDesign());
+    if(O.stripSelection!==O.editor.getDesign().id){del.dataset.armed='0';del.classList.remove('danger');del.parentElement.classList.remove('arming');relabel(del,'지우기');}
+    O.stripSelection=O.editor.getDesign().id;
+    return;
+  }
+  O.stripDrag?.destroy();
   const aspect = aspectOf(O.record);
   const n = O.slides.length;
   const full = n >= MAX_SLIDES;
@@ -745,6 +754,7 @@ function renderStrip(O) {
   }
   renderMaterialNavigation(O,left);
   decorateStrip(O);
+  if(O.materialDeck)O.strip.dataset.materialLayout='1';
 }
 function moveStripSelection(O,delta){if(O.materialDeck){const pages=materialPages(O),from=pages.findIndex(v=>v.record.id===O.record.id&&v.index===O.at);reorderStrip(O,from,from+delta);}else changeSlides(O,(slides,at)=>moveSlide(slides,at,delta));}
 async function reorderStrip(O,from,to){
@@ -774,7 +784,7 @@ function decorateStrip(O){
 async function loadMaterialNavigation(O) {
   if (!materialNavigation || O.record.source?.kind !== 'pptx') return;
   const loading=onbatangLoading({title:'PPT 전체 슬라이드를 불러오고 있어요',detail:'저장된 모든 쪽을 순서대로 연결해요.',compact:true});
-  O.strip.prepend(loading.node);
+  loading.node.classList.add('cv-material-loading');O.shell.querySelector('.cv-canvas').append(loading.node);
   try {
     const deck=await materialNavigation.load({designId:O.record.id});
     if(O.closed||S.open!==O)return;
@@ -792,20 +802,35 @@ function renderMaterialNavigation(O,left=0) {
   const at=pages.findIndex(value=>value.record.id===O.record.id&&value.index===O.at);
   const rail=O.strip.querySelector('.cv-slide-list');
   rail.setAttribute('aria-label','PPT 전체 슬라이드');
-  rail.replaceChildren(...pages.map((value,index)=>el('button',{
+  const existing=new Map([...rail.children].map(node=>[node.dataset.pageId,node]));
+  const nodes=pages.map((value,index)=>{
+   let node=existing.get(value.page.id);
+   if(!node){node=el('button',{
     class:`cv-slide${index===at?' on':''}`,type:'button','aria-label':`전체 자료 ${index+1}쪽${value.page.source?.pageNumber?` · 원본 ${value.page.source.pageNumber}쪽`:''}`,
-    'aria-pressed':String(index===at),dataset:{materialPage:String(index),documentId:value.record.id,...(value.record.id===O.record.id?{slide:String(value.index)}:{})},
-    onClick:()=>navigateMaterialPage(O,value)
-  },el('span',{class:'cv-slide-no',text:String(index+1)}),el('span',{class:'cv-slide-view','aria-hidden':'true'},slideView(value.page,aspectOf(value.record),240)))));
+    dataset:{pageId:value.page.id},onClick:()=>navigateMaterialPage(O,node.materialValue)
+   },el('span',{class:'cv-slide-no'}),el('span',{class:'cv-slide-view','aria-hidden':'true'}));}
+   node.materialValue=value;node.classList.toggle('on',index===at);node.setAttribute('aria-pressed',String(index===at));
+   node.setAttribute('aria-label',`전체 자료 ${index+1}쪽${value.page.source?.pageNumber?` · 원본 ${value.page.source.pageNumber}쪽`:''}`);
+   Object.assign(node.dataset,{materialPage:String(index),documentId:value.record.id});
+   if(value.record.id===O.record.id)node.dataset.slide=String(value.index);else delete node.dataset.slide;
+   node.querySelector('.cv-slide-no').textContent=String(index+1);
+   if(node.materialRendered!==value.page){node.querySelector('.cv-slide-view').replaceChildren(slideView(value.page,aspectOf(value.record),240));node.materialRendered=value.page;}
+   return node;
+  });
+  if(nodes.length!==rail.children.length||nodes.some((node,i)=>rail.children[i]!==node)){
+   O.stripDrag?.destroy();rail.replaceChildren(...nodes);
+   // Rebind only when the page set/order changes, never on selection.
+   for(const grip of rail.querySelectorAll('.cv-slide-grip'))grip.remove();
+   if(O.strip.dataset.materialLayout==='1')O.stripDrag=bindFilmstrip(rail,{reorder:(from,to)=>reorderStrip(O,from,to),busy:()=>O.closed||O.leaving||!!O.inlineImport||app.inert});
+  }
   const count=O.strip.querySelector('.cv-slide-count');
   count.textContent=`${at+1} / ${pages.length}쪽 · 전체 PPT`;
   count.dataset.materialCount='';
-  const hint=el('span',{class:'cv-material-hint',text:'모든 쪽을 이어서 편집할 수 있어요. 변경은 이 기기에 자동 저장돼요.'});
-  O.strip.append(hint);
+  if(!O.strip.querySelector('.cv-material-hint'))O.strip.append(el('span',{class:'cv-material-hint',text:'모든 쪽을 이어서 편집할 수 있어요. 변경은 이 기기에 자동 저장돼요.'}));
   const selected=rail.querySelector('.on');
   const key=`${O.record.id}:${O.at}`;
   rail.scrollLeft=left;
-  if(selected&&O.materialScrollTarget!==key)rail.scrollLeft=Math.max(0,selected.offsetLeft-rail.offsetLeft-rail.clientWidth/2+selected.clientWidth/2);
+  if(selected&&O.materialScrollTarget!==key){const box=rail.getBoundingClientRect(),r=selected.getBoundingClientRect();rail.scrollLeft+=r.left<box.left+8?r.left-box.left-8:r.right>box.right-8?r.right-box.right+8:0;}
   O.materialScrollTarget=key;
 }
 async function navigateMaterialPage(O,value) {
@@ -813,15 +838,20 @@ async function navigateMaterialPage(O,value) {
   if(value.record.id===O.record.id){goSlide(O,value.index);return;}
   O.leaving=true;app.inert=true;
   const loading=onbatangLoading({title:`${value.page.source?.pageNumber||value.index+1}쪽을 여는 중이에요`,detail:'지금 편집한 내용을 먼저 저장해요.',compact:true});
-  O.strip.prepend(loading.node);
+  loading.node.classList.add('cv-material-loading');O.shell.querySelector('.cv-canvas').append(loading.node);
   try{
     await persistEditorAction(O);
     const record=await getDesign(value.record.id);
     if(!record)throw Error('DOCUMENT_NOT_FOUND');
     const ready=migrateRecord(record);
-    if(!await leaveEditor(O,{requireSaved:true}))throw Error('EDITOR_SAVE_FAILED');
-    S.phase='home';upsert(ready);openDesign(ready,false);
-    if(value.index>0&&value.index<S.open.slides.length)goSlide(S.open,value.index);
+    if(ready.slides[value.index]?.id!==value.page.id)throw Error('DOCUMENT_CHANGED');
+    await tidyVideos(O.record.id,currentSlides(O));
+    O.materialDeck.documents=O.materialDeck.documents.map(row=>row.id===O.record.id?{...O.record,slides:currentSlides(O)}:row);
+    clearTimeout(O.timer);clearTimeout(O.thumbTimer);O.editor.quiet();
+    O.record={...ready};delete O.record.slides;O.slides=ready.slides;O.at=value.index;
+    O.dirty=false;O.saved=true;O.localOk=true;O.accountOk=null;O.nameInput.value=ready.name;
+    setupApp(ready);markRatio(O,O.shapes);O.editor.setUploads(libraryOf(ready.uploads,ready.slides));O.editor.setDesign(O.slides[O.at]);
+    setStatus(O,accountFor(ready)?'저장돼 있어요':'이 기기에 저장돼 있어요');upsert(ready);renderStrip(O);
   }catch{
     if(!O.closed&&S.open===O){setStatus(O,'현재 쪽을 저장하거나 다음 쪽을 열지 못했어요. 편집은 그대로 유지돼요.','bad');toast('저장 상태를 확인한 뒤 다시 이동해주세요.',5000);}
   }finally{loading.node.remove();O.leaving=false;if(!O.closed&&S.open===O)app.inert=false;}
@@ -842,12 +872,11 @@ function refreshThumb(O) {
 /** 다른 장으로 간다. 지금 장은 편집기에서 꺼내 두고, 그 장을 편집기에 끼운다(실행 취소 기록은 장마다 따로라 비워진다). */
 function goSlide(O, i) {
   if (O.closed || i === O.at || !O.slides[i] || videoBusy(O)) return;
-  const dir = i > O.at ? 1 : -1;
   O.slides[O.at] = O.editor.getDesign();
   O.at = i;
   O.editor.setDesign(O.slides[i]);
   renderStrip(O);
-  slideIn(stageCard(O), dir);            // 뒤의 장은 오른쪽에서, 앞의 장은 왼쪽에서 들어온다
+  // Selection is immediate; entrance motion belongs to presentation, not editing.
 }
 /** 슬라이드 목록을 바꾼다(더하기·복제·지우기·옮기기). change(slides, at) 는 [새 목록, 이어서 꾸밀 번호] 를 돌려준다. */
 function changeSlides(O, change) {
@@ -1200,7 +1229,7 @@ async function leaveEditor(O, { requireSaved = false, waitForSync = false } = {}
   // 그 그림은 지우려던 영상을 아직 쓰고 있을 수 있다.
   if (ok && !O.dirty && O.localOk !== false) await tidyVideos(O.record.id, currentSlides(O));
   O.closed = true;
-  O.stripDrag?.stop();
+  O.stripDrag?.destroy();
   if (accountFor(O.record)) {
     const uploading = pusher.flush(O.record.id);
     if (waitForSync) await uploading;            // 바깥 화면으로 가면 이 앱이 닫히므로 올리기까지 기다린다

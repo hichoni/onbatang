@@ -14,6 +14,28 @@ const options={skip:!process.env.MINICAN_PLAYWRIGHT_PATH,timeout:300000};
 const slideFiles=files=>Object.keys(files).filter(name=>/^ppt\/slides\/slide\d+\.xml$/.test(name));
 const xml=(files,path)=>new TextDecoder().decode(files[path]);
 
+test('slide selection keeps shell, rail, thumbnails and viewport steady within and across PPT parts',options,async t=>{
+ const {page,entry,base,checkIsolation}=await setup(t);await enterImport(page,entry);await inspectFile(page,'self-authored-21-pages.pptx',21);
+ await page.locator('[data-import-save]').click();await page.locator('[data-inline-import]').waitFor({state:'detached'});await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);
+ await page.emulateMedia({reducedMotion:'no-preference'});
+ const original=await readLibrary(page,base);
+ await page.evaluate(()=>{window.stableNodes=['.cv-app','.cv-strip','.cv-slide-list','.fe-stage','[data-material-page="0"]'].map(s=>document.querySelector(s));window.stabilitySamples=[];window.trackStability=true;const sample=()=>{if(!window.trackStability)return;const strip=document.querySelector('.cv-strip'),list=document.querySelector('.cv-slide-list');window.stabilitySamples.push({top:strip.getBoundingClientRect().top,height:strip.getBoundingClientRect().height,left:list.scrollLeft,scrollY});requestAnimationFrame(sample);};sample();});
+ for(const index of [1,0,2,1]){const before=await page.locator('.cv-slide-list').evaluate(n=>n.scrollLeft);await page.locator(`[data-material-page="${index}"]`).click();await page.waitForFunction(i=>document.querySelector(`[data-material-page="${i}"]`)?.getAttribute('aria-pressed')==='true',index);assert.equal(await page.locator('.cv-slide-list').evaluate(n=>n.scrollLeft),before,'visible selection does not center the rail');}
+ assert.equal(await page.evaluate(()=>window.stabilitySamples.every(s=>Math.abs(s.top-window.stabilitySamples[0].top)<1&&Math.abs(s.height-window.stabilitySamples[0].height)<1)),true,'selection and loading never resize the strip');
+ await page.locator('.cv-name').fill('흔들림 검사 첫 파트');
+ await page.locator('[data-material-page="20"]').scrollIntoViewIfNeeded();const left=await page.locator('.cv-slide-list').evaluate(n=>n.scrollLeft);
+ await page.locator('[data-material-page="20"]').click();await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='21 / 21쪽 · 전체 PPT');
+ assert.equal(await page.evaluate(()=>['.cv-app','.cv-strip','.cv-slide-list','.fe-stage','[data-material-page="0"]'].every((s,i)=>document.querySelector(s)===window.stableNodes[i])),true,'part navigation retains every stable DOM node');
+ assert.ok(Math.abs(await page.locator('.cv-slide-list').evaluate(n=>n.scrollLeft)-left)<1);
+ assert.equal(await page.locator('.cv-canvas .fe-card').evaluate(n=>n.getAnimations().filter(a=>a.playState==='running').length),0,'editing selection has no entrance animation');
+ await page.locator('.cv-name').fill('흔들림 검사 마지막 파트');
+ await page.setViewportSize({width:390,height:844});await page.locator('.cv-strip').scrollIntoViewIfNeeded();await page.locator('.cv-slide-list').evaluate(n=>n.scrollLeft=0);
+ const y=await page.evaluate(()=>scrollY);await page.locator('[data-material-page="0"]').click();await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='1 / 21쪽 · 전체 PPT');
+ assert.ok(Math.abs(await page.evaluate(()=>scrollY)-y)<1,'part navigation preserves mobile page scroll');assert.equal(await page.locator('.cv-name').inputValue(),'흔들림 검사 첫 파트');
+ await page.evaluate(()=>window.trackStability=false);await page.locator('.cv-back').click();await page.locator('.cv-home-title').waitFor();await page.reload();await page.getByRole('button',{name:'흔들림 검사 마지막 파트 열기',exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);
+ assert.equal(await page.locator('.cv-name').inputValue(),'흔들림 검사 마지막 파트');const after=await readLibrary(page,base);assert.deepEqual(after.originals,original.originals);assert.deepEqual(after.sources,original.sources);await checkIsolation();
+});
+
 test('large horizontal filmstrip reorders across parts, preserves fixed originals and exports in saved order',options,async t=>{
  const {page,entry,base,checkIsolation}=await setup(t);await enterImport(page,entry);await inspectFile(page,'self-authored-21-pages.pptx',21);
  await page.locator('[data-import-save]').click();await page.locator('[data-inline-import]').waitFor({state:'detached'});await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);
