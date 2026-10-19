@@ -27,3 +27,27 @@
 .op-root{--oi-ink:#163e3a;--oi-green:#226d62;--oi-line:#dce5e1;--oi-muted:#62736f}
 #app.cv-standalone-shell{max-width:none;margin:0;padding:0}.cv-standalone-shell>[hidden]{display:none!important}
 .oi-loading-region{padding:14px 26px}.oi-loading-region[hidden]{display:none}.oi-large-preview>.onba-loading{background:transparent;border:0;min-height:150px}.oi-large-preview>.onba-loading.is-compact{flex-direction:column;text-align:center}.oi-large-preview>.onba-loading .onba-loading-copy{justify-items:center}@media(max-width:680px){.oi-loading-region{padding:10px 16px}}
+
+/* Header and actions stay reachable while the license rows and comparisons scroll. */
+.oi-font-dialog[open]{display:flex;flex-direction:column;overflow:hidden}
+.oi-font-table{table-layout:fixed}.oi-font-table th:first-child{width:52%}.oi-font-table th:nth-child(2){width:34%}.oi-font-table th:last-child{width:14%}
+.oi-font-heading,.oi-font-actions{flex-shrink:0}
+.oi-font-body{min-height:0;overflow:auto;overscroll-behavior:contain;padding:10px 2px 2px}
+@media(max-width:680px){
+ .oi-font-table,.oi-font-table tbody{display:block;width:100%}
+ .oi-font-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+ .oi-font-table tr{display:grid;grid-template-columns:minmax(0,1fr) auto;padding:12px;gap:12px}
+ .oi-font-table tr+tr{border-top:1px solid var(--oi-line)}
+ .oi-font-table td{display:block;min-width:0;padding:0;border:0}
+ .oi-font-table td:first-child{grid-column:1/-1}
+ .oi-font-table td[colspan]{grid-column:1/-1}
+ .oi-font-table td[data-label]:before{content:attr(data-label);display:block;font-size:12px;margin-bottom:6px;color:var(--oi-muted)}
+ .oi-font-table select{font-size:16px;min-height:44px}
+ .oi-font-actions{gap:8px;margin-top:12px;padding-top:12px}
+ .oi-font-actions>span{font-size:11px}
+ .oi-font-actions button,.oi-font-heading button{min-height:44px}
+}
+@media(pointer:coarse){
+ .oi-page label,.oi-font-controls label{display:flex;align-items:center;min-height:44px;gap:6px}
+ .oi-preview-pagination button,.oi-segment button,.oi-top-nav button,.oi-select-row button{min-height:44px;min-width:44px}
+}

@@ -368,20 +368,21 @@ export function mountImportWorkspace({root, services, onClose, onOpenDocument, o
     const head = element('div', undefined, {class: 'oi-font-heading'});
     const close = () => { previewJob++; clearTimeout(fontPreviewTimer); fontPreviewController?.abort(); modal.close(); modal.remove(); restore?.focus(); };
     head.append(element('h2', '글꼴을 확인하고 바꿔요'), button('닫기', close, {'aria-label': '글꼴 설정 닫기'}));
-    modal.append(head, element('p', '이용 안내와 기기의 표시 상태는 별개예요. 공식 안내가 있는 이름도 원본 파일의 진위를 보장하지 않아요. 기본값은 원본 유지입니다.', {class: 'oi-help'}));
+    const fontBody = element('div', undefined, {class: 'oi-font-body'});
+    modal.append(head, fontBody); fontBody.append(element('p', '이용 안내와 기기의 표시 상태는 별개예요. 공식 안내가 있는 이름도 원본 파일의 진위를 보장하지 않아요. 기본값은 원본 유지입니다.', {class: 'oi-help'}));
     const controls = element('div', undefined, {class: 'oi-font-controls'});
     for (const [key, title] of [['all', `전체 ${state.inspection.pageCount}쪽`], ['selected', `선택한 ${state.selected.size}쪽`], ['current', `현재 ${state.active}쪽`]]) {
       const label = element('label'), input = element('input', undefined, {type: 'radio', name: 'font-scope', value: key}); input.checked = scope === key;
       input.addEventListener('change', () => { scope = key; refreshRows(); }); label.append(input, element('span', title)); controls.append(label);
     }
     const filterLabel = element('label'), filterInput = element('input', undefined, {type: 'checkbox'}); filterInput.checked = true;
-    filterInput.addEventListener('change', () => { filter = filterInput.checked ? 'review' : 'all'; refreshRows(); }); filterLabel.append(filterInput, element('span', '이용 안내·표시를 확인할 글꼴만')); controls.append(filterLabel); modal.append(controls);
+    filterInput.addEventListener('change', () => { filter = filterInput.checked ? 'review' : 'all'; refreshRows(); }); filterLabel.append(filterInput, element('span', '이용 안내·표시를 확인할 글꼴만')); controls.append(filterLabel); fontBody.append(controls);
     const table = element('table', undefined, {class: 'oi-font-table'}), thead = element('thead'), tr = element('tr');
-    for (const name of ['원본 지정 글꼴', '교체할 글꼴', '적용 범위']) tr.append(element('th', name, {scope: 'col'})); thead.append(tr); const tbody = element('tbody'); table.append(thead, tbody); modal.append(table);
+    for (const name of ['원본 지정 글꼴', '교체할 글꼴', '적용 범위']) tr.append(element('th', name, {scope: 'col'})); thead.append(tr); const tbody = element('tbody'); table.append(thead, tbody); fontBody.append(table);
     const comparisons = element('div', undefined, {class: 'oi-font-comparison'});
     const before = element('div', undefined, {class: 'oi-font-preview'}), after = element('div', undefined, {class: 'oi-font-preview'});
-    const currentBox = element('section'), nextBox = element('section'); currentBox.append(element('h3', '현재 미리보기'), before); nextBox.append(element('h3', '교체 후 미리보기'), after); comparisons.append(currentBox, nextBox); modal.append(comparisons);
-    const feedback = element('p', '줄바꿈과 배치가 달라지는 곳을 확인해주세요.', {class: 'oi-help', role: 'status'}); modal.append(feedback);
+    const currentBox = element('section'), nextBox = element('section'); currentBox.append(element('h3', '현재 미리보기'), before); nextBox.append(element('h3', '교체 후 미리보기'), after); comparisons.append(currentBox, nextBox); fontBody.append(comparisons);
+    const feedback = element('p', '줄바꿈과 배치가 달라지는 곳을 확인해주세요.', {class: 'oi-help', role: 'status'}); fontBody.append(feedback);
     const actions = element('div', undefined, {class: 'oi-font-actions'});
     const undo = button('이전 변경 되돌리기', () => { if (!state.priorPlans.length) return; state.fontPlan = state.priorPlans.pop(); close(); caches.clear(); render(); say('이전 글꼴 설정으로 되돌렸어요.'); }); undo.disabled = !state.priorPlans.length;
     const apply = button('선택 범위에 적용', async () => {
@@ -414,7 +415,7 @@ export function mountImportWorkspace({root, services, onClose, onOpenDocument, o
       tbody.replaceChildren(); const pages = scope === 'all' ? state.inspection.pages.map(value => value.pageNumber) : scope === 'current' ? [state.active] : selectedPages();
       const fonts = state.fonts.filter(font => (filter === 'all' || fontNeedsReview(font)) && (!font.pageNumbers?.length || font.pageNumbers.some(number => pages.includes(number))));
       for (const font of fonts) {
-        const row = element('tr'), original = element('td'), selectCell = element('td'), range = element('td');
+        const row = element('tr'), original = element('td'), selectCell = element('td', undefined, {'data-label': '교체할 글꼴'}), range = element('td', undefined, {'data-label': '적용 범위'});
         row.setAttribute('data-font-source', font.name);
         original.append(element('strong', font.name), element('span', `이용 안내: ${fontLicense(font).label}`, {class: 'oi-chip', 'data-font-license': fontLicense(font).status}),
           element('span', `표시: ${displayedFont(font, pages).label}`, {class: 'oi-chip', 'data-font-render': displayedFont(font, pages).status}));

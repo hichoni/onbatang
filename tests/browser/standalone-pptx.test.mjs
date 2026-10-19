@@ -14,6 +14,84 @@ const options={skip:!process.env.MINICAN_PLAYWRIGHT_PATH,timeout:300000};
 const slideFiles=files=>Object.keys(files).filter(name=>/^ppt\/slides\/slide\d+\.xml$/.test(name));
 const xml=(files,path)=>new TextDecoder().decode(files[path]);
 
+test('touch tabs open a palette from the horizontal tool rail',options,async t=>{
+ const {page,entry}=await setup(t,{viewport:{width:390,height:844},touch:true});await page.goto(entry);await page.locator('.cv-hero .cv-new-btn').tap();await page.locator('.fe-tab[data-tab=bg]').tap();await page.locator('.cv-side .fe-palettes').waitFor({timeout:3000});
+});
+test('touch tabs open a palette after PPT import',options,async t=>{
+ const {page,entry}=await setup(t,{viewport:{width:390,height:844},touch:true});await enterImport(page,entry);await inspectFile(page,'self-authored-21-pages.pptx',21);await page.locator('[data-import-save]').tap();await page.locator('[data-inline-import]').waitFor({state:'detached'});await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);await page.locator('.fe-tab[data-tab=bg]').tap();await page.locator('.cv-side .fe-palettes').waitFor({timeout:3000});
+});
+
+test('touch tool swipes do not select a tab, and rotating or leaving import retains the selected slide',options,async t=>{
+ const {page,context,entry,checkIsolation}=await setup(t,{viewport:{width:320,height:568},touch:true});
+ await enterImport(page,entry);await inspectFile(page,'self-authored-4x3.pptx',2);
+ await page.locator('[data-page-number="2"] .oi-thumbnail').tap();
+ await page.waitForFunction(()=>{const img=document.querySelector('[data-large-preview] img');return img?.complete&&img.naturalWidth>0;});
+ await page.evaluate(()=>window.retainedTouchPreview=document.querySelector('[data-large-preview] img'));
+ await page.setViewportSize({width:844,height:390});
+ assert.equal(await page.locator('[data-page-number="2"]').getAttribute('data-active'),'true');
+ await page.locator('.fe-tab[data-tab=text]').tap();await page.locator('[data-inline-import]').waitFor({state:'detached'});
+ await page.locator('.fe-tab[data-tab=text][aria-selected=true]').waitFor();
+ await page.setViewportSize({width:320,height:568});
+ const rail=page.locator('.cv-side .fe-tabs');await rail.scrollIntoViewIfNeeded();await rail.evaluate(n=>n.scrollLeft=0);
+ const box=await rail.boundingBox(),cdp=await context.newCDPSession(page),point={x:box.x+box.width*.8,y:box.y+box.height/2,id:1,radiusX:1,radiusY:1,force:1};
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point]});
+ for(let i=1;i<=8;i++){await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...point,x:point.x-box.width*.65*i/8}]});await page.evaluate(()=>new Promise(requestAnimationFrame));}
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await cdp.detach();
+ assert.equal(await page.locator('.fe-tab[aria-selected=true]').getAttribute('data-tab'),'text','scrolling the tools must not activate a crossed tab');
+ assert.ok(await rail.evaluate(n=>n.scrollLeft)>0,'the tool rail can be scrolled by touch');
+ await page.locator('.fe-tab[data-tab=upload]').tap();await page.locator('[data-upload-tab=ppt]').tap();await page.locator('[data-document-import]').tap();
+ await page.locator('[data-page-number="2"][data-active=true]').waitFor();
+ assert.equal(await page.evaluate(()=>document.querySelector('[data-large-preview] img')===window.retainedTouchPreview),true);
+ await checkIsolation();
+});
+
+// Touch input comes from Chromium's actual gesture dispatch, not mouse drag or
+// mocked DOM events. These cases emulate screen sizes; they are not device QA.
+for(const [label,width,height] of [['small-phone',320,568],['phone',390,844],['phone-landscape',844,390],['tablet',768,1024],['tablet-landscape',1024,768],['between-layouts',880,640]]){
+ test(`touch PPT workflow: ${label} ${width}x${height}`,options,async t=>{
+  const {page,context,entry,base,checkIsolation}=await setup(t,{viewport:{width,height},touch:true});
+  await enterImport(page,entry);await inspectFile(page,'self-authored-21-pages.pptx',21);
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+  await page.locator('[data-large-preview]').scrollIntoViewIfNeeded();
+  const preview=await page.locator('[data-large-preview]').boundingBox();assert.ok(preview.width>=Math.min(320,width*.5)&&preview.height>=130,'a real preview has usable room');
+  await page.locator('[data-font-settings]').tap();const fonts=page.getByRole('dialog',{name:'글꼴 교체 설정',exact:true});
+  const fontSelect=fonts.locator('select').first();assert.ok((await fontSelect.boundingBox()).width>=140,'font names are visible, not an arrow-only column');
+  await fontSelect.selectOption('gowun-dodum');await page.waitForFunction(()=>document.querySelector('[data-font-apply]')?.disabled===false);
+  const apply=await fonts.locator('[data-font-apply]').boundingBox();assert.ok(apply.y>=0&&apply.y+apply.height<=height,'font actions stay inside the viewport');
+  await fonts.locator('[data-font-apply]').tap();await page.locator('[data-import-save]').tap();await page.locator('[data-inline-import]').waitFor({state:'detached'});
+  await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);
+  const original=await readLibrary(page,base);
+  await page.locator('[data-material-page="20"]').tap();await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='21 / 21쪽 · 전체 PPT');
+  await page.locator('[data-material-page="0"]').tap();await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='1 / 21쪽 · 전체 PPT');
+  const grip=page.locator('[data-material-page="0"] .cv-slide-grip');await grip.scrollIntoViewIfNeeded();
+  const start=await grip.boundingBox(),end=await page.locator('[data-material-page="1"]').boundingBox();assert.ok(start.width>=44&&start.height>=44);
+  const cdp=await context.newCDPSession(page);const point={x:start.x+start.width/2,y:start.y+start.height/2,id:1,radiusX:1,radiusY:1,force:1};
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point]});
+  for(let i=1;i<=8;i++){await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...point,x:point.x+(end.x+end.width*.85-point.x)*i/8}]});await page.evaluate(()=>new Promise(requestAnimationFrame));}
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+  await cdp.detach();
+  await page.waitForFunction(()=>document.querySelector('[data-material-page="0"]')?.getAttribute('aria-label')?.includes('원본 2쪽'));
+  const reordered=await readLibrary(page,base);assert.deepEqual(reordered.originals,original.originals);assert.deepEqual(reordered.sources,original.sources);
+  await page.locator('.fe-tab[data-tab=bg]').scrollIntoViewIfNeeded();await page.evaluate(()=>new Promise(done=>requestAnimationFrame(()=>requestAnimationFrame(done))));
+  await page.locator('.fe-tab[data-tab=bg]').tap();const palette=page.locator('.cv-side .fe-palettes');
+  await palette.waitFor({timeout:3000});
+  assert.doesNotMatch(await palette.innerText(),/\bnull\b/,'empty palette must not print a null placeholder');
+  await palette.locator('.fe-palette-slots button').nth(3).tap();await palette.getByLabel('팔레트 이름').fill('터치 수업 색');await palette.getByLabel('팔레트 이름').press('Tab');
+  const color=await page.locator('.cv-side').getByLabel('배경 색 직접 고르기').inputValue();await palette.getByRole('button',{name:'현재 색 담기',exact:true}).tap();
+  assert.ok((await palette.locator('.fe-palette-color').first().boundingBox()).height>=44);assert.ok((await palette.locator('.fe-palette-remove').first().boundingBox()).height>=44);
+  const name=await page.locator('.cv-name').inputValue();await page.locator('.cv-back').tap();await page.locator('.cv-home-title').waitFor();await page.reload();await page.getByRole('button',{name:name+' 열기',exact:true}).tap();
+  await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);assert.match(await page.locator('[data-material-page="0"]').getAttribute('aria-label'),/원본 2쪽/);
+  if(!await page.locator('.fe-tab[data-tab=bg][aria-selected=true]').count()||await page.locator('.cv-app.folded').count())await page.locator('.fe-tab[data-tab=bg]').tap();assert.equal(await page.locator('.cv-side').getByLabel('팔레트 이름').inputValue(),'터치 수업 색');assert.equal(await page.locator('.cv-side .fe-palette-colors').first().getByRole('button',{name:color+' 적용',exact:true}).count(),1);
+  for(const mode of ['editable','image']){
+   await page.locator('.cv-down-btn').tap();const down=page.getByRole('dialog',{name:'내려받기',exact:true});await down.locator('[data-type=pptx]').tap();await down.locator('[data-scope=all]').tap();await down.locator(`[data-pptx=${mode}]`).tap();
+   const box=await down.locator('[data-pptx-save]').boundingBox();assert.ok(box.y>=0&&box.y+box.height<=height,'download action stays visible, including landscape');
+   const output=await downloadBy(page,()=>down.locator('[data-pptx-save]').tap()),files=unzipSync(output.bytes);assert.equal(slideFiles(files).length,21);if(mode==='editable')assert.match(xml(files,'ppt/slides/slide1.xml'),/직접 만든 2쪽/);
+   await page.locator('.cv-pptx-export').getByRole('button',{name:'닫기',exact:true}).tap();
+  }
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);assert.deepEqual((await readLibrary(page,base)).graphs,reordered.graphs);await checkIsolation();
+ });
+}
+
 test('local slide navigation suppresses brief loading notices but explains a genuinely slow save',options,async t=>{
  const {page,entry}=await setup(t);await enterImport(page,entry);await inspectFile(page,'self-authored-21-pages.pptx',21);
  await page.locator('[data-import-save]').click();await page.locator('[data-inline-import]').waitFor({state:'detached'});await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);
@@ -168,7 +246,7 @@ test('symbol assembly loading and whole editor rail preserve every split page, f
  await checkIsolation();
 });
 
-async function setup(t,{base=''}={}){
+async function setup(t,{base='',viewport={width:1440,height:1000},touch=false}={}){
  const unexpectedPaths=[],requests=[],errors=[],external=[],workers=[];let serviceWorkers=0;
  const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript','.css':'text/css','.json':'application/json','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png','.jpg':'image/jpeg'};
  const server=createServer(async(req,res)=>{try{
@@ -192,7 +270,7 @@ async function setup(t,{base=''}={}){
  // Playwright's built-in serviceWorkers:'block' probes navigator.serviceWorker
  // without a try/catch in opaque sandbox frames. Keep registration blocked
  // without manufacturing a SecurityError in the real PPT preview iframe.
- const context=await browser.newContext({viewport:{width:1440,height:1000},reducedMotion:'reduce',serviceWorkers:'allow',acceptDownloads:true});
+ const context=await browser.newContext({viewport,isMobile:touch,hasTouch:touch,reducedMotion:'reduce',serviceWorkers:'allow',acceptDownloads:true});
  await context.addInitScript(()=>{try{const api=navigator.serviceWorker;if(api)api.register=async()=>undefined;localStorage.setItem('onbatang-tour-seen-v1:editor','1');}catch{}});
  context.on('serviceworker',()=>serviceWorkers++);
  await context.route('**/*',route=>{

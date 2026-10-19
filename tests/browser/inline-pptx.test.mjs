@@ -27,7 +27,7 @@ await startMinican({storage:'inline-mock',sync,materialAction:{label:'전체 자
 }}});window.ready=true;
 </script></body></html>`;
 
-async function setup(t,{generic=false,missingFont=false}={}){
+async function setup(t,{generic=false,missingFont=false,touch=false}={}){
  const errors=[],external=[],requests=[],navigations=[],workers=[];let serviceWorkers=0;
  const server=createServer(async(req,res)=>{try{const pathname=new URL(req.url,'http://localhost').pathname;
   if(pathname==='/inline-mock.html'){res.setHeader('Content-Type','text/html; charset=utf-8');return res.end(genericHtml);}
@@ -35,7 +35,7 @@ async function setup(t,{generic=false,missingFont=false}={}){
   res.setHeader('Content-Type',({'.html':'text/html; charset=utf-8','.js':'text/javascript','.css':'text/css','.json':'application/json','.svg':'image/svg+xml','.png':'image/png','.webp':'image/webp','.woff2':'font/woff2','.woff':'font/woff'})[extname(file)]||'application/octet-stream');res.end(await readFile(file));
  }catch{res.writeHead(404);res.end();}});await new Promise(done=>server.listen(0,'127.0.0.1',done));t.after(()=>new Promise(done=>server.close(done)));
  const origin='http://127.0.0.1:'+server.address().port,{chromium}=await import(pathToFileURL(process.env.MINICAN_PLAYWRIGHT_PATH).href),browser=await chromium.launch({channel:process.env.MINICAN_BROWSER||'msedge',headless:true});t.after(()=>browser.close());
- const context=await browser.newContext({viewport:{width:1440,height:1000},reducedMotion:'reduce',acceptDownloads:true,serviceWorkers:'allow'});
+ const context=await browser.newContext({viewport:touch?{width:390,height:844}:{width:1440,height:1000},isMobile:touch,hasTouch:touch,reducedMotion:'reduce',acceptDownloads:true,serviceWorkers:'allow'});
  await context.addInitScript(({missingFont})=>{
   try{const api=navigator.serviceWorker;if(api)api.register=async()=>undefined;localStorage.setItem('onbatang-tour-seen-v1:editor','1');}catch{}
   if(self!==top&&missingFont){document.fonts.load=()=>Promise.reject(new DOMException('Synthetic missing font','NetworkError'));}
@@ -122,4 +122,13 @@ test('standalone inline file/slide/font/image workflow keeps editor DOM until co
  await page.locator('.cv-name').fill('새 인라인 PPT 저장');const finalDraft=await page.evaluate(async id=>(await import('/app/app.js')).flushSavedDesign(id),newGraph.documents[0].id);assert.equal(finalDraft.name,'새 인라인 PPT 저장');
  for(const mode of ['editable','image']){const files=await editorDownload(page,mode),xml=new TextDecoder().decode(files['ppt/presentation.xml']);assert.match(xml,/<p:sldSz cx="9144000" cy="6858000"/);assert.equal(Object.keys(files).filter(name=>/^ppt\/slides\/slide\d+\.xml$/.test(name)).length,2);}
  await page.reload();await page.getByRole('button',{name:'새 인라인 PPT 저장 열기',exact:true}).click();await page.locator('.cv-name').waitFor();assert.equal(await page.locator('.cv-name').inputValue(),'새 인라인 PPT 저장');assert.deepEqual(await draft(page,oldId),savedOld);assert.deepEqual(await readLibrary(page),imported);assert.equal(sha(await readFile(fixture)),inputHash);await isolated({worker:true});
+});
+
+
+test('a touch tab respects one denied host close and opens only after the host accepts',options,async t=>{
+ const {page,isolated}=await setup(t,{generic:true,touch:true});await page.getByRole('button',{name:'합성 인라인 계정 검증 열기',exact:true}).tap();
+ await page.evaluate(()=>{window.syncFail=false;window.allowClose=false;});await page.locator('.fe-tab[data-tab=upload]').tap();await page.locator('[data-upload-tab=ppt]').tap();await page.locator('[data-document-import]').tap();await page.locator('[data-synthetic-cancel]').waitFor();
+ await page.locator('.fe-tab[data-tab=text]').tap();await page.waitForFunction(()=>window.closeRequests.length===1);await page.evaluate(()=>new Promise(done=>requestAnimationFrame(()=>requestAnimationFrame(done))));
+ assert.equal(await page.evaluate(()=>window.closeRequests.length),1);assert.equal(await page.locator('[data-synthetic-cancel]').count(),1);assert.equal(await page.locator('.fe-tab[aria-selected=true]').getAttribute('data-tab'),'upload');
+ await page.evaluate(()=>window.allowClose=true);await page.locator('.fe-tab[data-tab=text]').tap();await page.locator('[data-inline-import]').waitFor({state:'detached'});await page.locator('.fe-tab[data-tab=text][aria-selected=true]').waitFor();assert.equal(await page.evaluate(()=>window.closeRequests.length),2);await isolated();
 });

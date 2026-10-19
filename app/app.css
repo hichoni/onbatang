@@ -120,8 +120,8 @@ input:focus-visible, textarea:focus-visible, button:focus-visible { outline: 3px
   .cv-inline-import-body .oi-steps li>span { width:24px; height:24px; flex:0 0 24px; font-size:12px; }
   .cv-inline-import-body .oi-steps li:not(:last-child):after { display:none; }
 }
-@media(max-width:860px) {
-  .cv-app.inline-importing { display:flex; flex-direction:column; height:100dvh; overflow:hidden; }
+@media(max-width:899px), (max-height:519px) {
+  .cv-app.inline-importing { display:flex; flex-direction:column; height:max(100dvh,560px); overflow:hidden; }
   .cv-app.inline-importing .cv-bar { flex-shrink:0; }
   .cv-app.inline-importing .cv-side { display:block; order:0; flex-shrink:0; padding:4px 8px; border:0; border-radius:0; }
   .cv-app.inline-importing .cv-side .fe-tabbody { display:none; }
@@ -992,3 +992,31 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero-go { display: flex
 @keyframes onba-assemble{0%,100%{transform:translate(var(--from-x),var(--from-y)) rotate(var(--from-r));opacity:.35}32%,78%{transform:translate(0,0) rotate(0deg);opacity:1}92%{opacity:.6}}
 @media(prefers-reduced-motion:reduce){.onba-loading-art *{animation:none!important;transform:none!important;opacity:1!important}}
 @media(max-width:480px){.onba-loading{padding:24px 16px}.onba-loading.is-compact{padding:12px;gap:12px}.onba-loading-title{font-size:15px}}
+
+/* The import workspace keeps its preview ahead of the rail on narrow screens.
+   A short landscape viewport may scroll the page rather than collapse content. */
+@media(max-width:899px), (max-height:519px){
+ .cv-app.inline-importing .cv-bar :is(.cv-show-btn,.cv-down-btn,.cv-shapes,.cv-bar-gap,.cv-status,.cv-tour-btn){display:none}
+ .cv-app.inline-importing .cv-bar{margin:0;min-height:56px;flex-wrap:nowrap;padding:6px 8px}
+ .cv-app.inline-importing .cv-name{flex:1;min-width:0}
+ .cv-app.inline-importing .cv-side{margin:0}
+ .cv-app.inline-importing{padding:0 0 env(safe-area-inset-bottom,0px);max-width:none;gap:0}
+ .cv-inline-import-header{padding:10px 12px}
+}
+@container(max-width:680px){
+ .cv-inline-import-body .oi-preview-column{order:0}
+ .cv-inline-import-body .oi-rail{order:1;max-height:180px}
+ .cv-inline-import-body .oi-options{order:2}
+ .cv-inline-import-body .oi-footer{padding-bottom:max(10px,env(safe-area-inset-bottom,0px))}
+}
+@media(pointer:coarse){
+ .cv-slide-grip{width:44px;height:44px}
+ .cv-slide-tool,.cv-slide-scroll,.cv-bar .btn,.cv-strip-size input{min-height:44px;min-width:44px}
+ .cv-slide-tool:not(.danger) .cv-lbl{display:inline}
+ .cv-strip .cv-slide-list{touch-action:pan-x pan-y}
+}
+@media(max-width:899px), (max-height:519px){
+ .cv-side .fe-tabs{display:flex;overflow-x:auto;overscroll-behavior-x:contain;gap:4px;padding:3px}
+ .cv-side .fe-tabs .fe-tab{flex:1 0 54px;min-height:56px;min-width:54px;font-size:12px}
+ .cv-side .fe-tab span:last-child{white-space:nowrap}
+}

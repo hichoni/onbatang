@@ -444,6 +444,9 @@
 .fe-tab:hover { background: #dfe3ff; }
 .fe-tab.on { background: var(--fe-primary); color: #fff; }
 .fe-tab .fe-tab-icon { width: 22px; height: 22px; }
+/* Decorative icon/text share the button's touch target, including nested SVG. */
+.fe-tab > * { pointer-events:none; }
+.fe-tab { touch-action:manipulation; }
 /* 칸이 여덟 개면 좁은 화면에서 세 글자 이름이 두 줄로 갈라진다. 글자를 조금 줄여 한 줄에 둔다 */
 @media (max-width: 520px) {
   .fe-tabs.many .fe-tab { padding-inline: 0; font-size: clamp(.66rem, 2.85vw, .8rem); letter-spacing: -.02em; }
@@ -689,3 +692,8 @@
 .fe-palette-color[aria-pressed=true]{outline:3px solid #276e61;outline-offset:2px}
 .fe-palette-remove{min-width:28px;min-height:24px;border:0;border-radius:6px;background:#f0f4f2;color:#53675e;font-size:18px;cursor:pointer}
 .fe-palettes button:focus-visible,.fe-eyedropper:focus-visible{outline:3px solid #276e61;outline-offset:3px}
+@media(pointer:coarse){
+ .fe-palette-slots button,.fe-palette-color,.fe-palette-remove,.fe-palette-name,.fe-eyedropper,.fe-palettes .fe-btn{min-height:44px;min-width:44px}
+ .fe-palette-color{width:44px;height:44px}.fe-palette-remove{font-size:22px}
+ .fe-palette-name{font-size:16px}
+}

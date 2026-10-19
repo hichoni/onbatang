@@ -129,11 +129,11 @@ export function createEditor({
         return el('span',{class:'fe-palette-cell'},pick,remove?el('button',{class:'fe-palette-remove',type:'button','aria-label':`${hex} 팔레트에서 지우기`,title:'팔레트에서 지우기',onClick:()=>{paletteAction({type:'remove',color:hex});fill();}},'×'):null);
       }));
       const name=el('input',{class:'fe-palette-name',value:slot.name,maxlength:'18','aria-label':'팔레트 이름',onChange:()=>{paletteAction({type:'rename',name:name.value});fill();}});
-      box.replaceChildren(el('div',{class:'fe-palette-heading'},el('b',{text:'나의 팔레트'}),el('small',{text:colorPalettes?'이 기기에 저장':'이번 화면에서 사용'})),
+      box.replaceChildren(...[el('div',{class:'fe-palette-heading'},el('b',{text:'나의 팔레트'}),el('small',{text:colorPalettes?'이 기기에 저장':'이번 화면에서 사용'})),
         el('div',{class:'fe-palette-slots',role:'group','aria-label':'팔레트 슬롯'},...palettes.slots.map((s,i)=>el('button',{type:'button','aria-label':`팔레트 ${i+1}: ${s.name}`,'aria-pressed':String(i===palettes.active),onClick:()=>{paletteAction({type:'select',index:i});fill();}},String(i+1)))),
         el('div',{class:'fe-palette-heading'},name,el('button',{class:'fe-btn',type:'button',disabled:!/^#[0-9a-f]{6}$/i.test(value||''),onClick:()=>{paletteAction({type:'add',color:value});fill();}},'현재 색 담기')),
         slot.colors.length?chips(slot.colors,true):el('p',{class:'fe-note',text:'스포이드로 찍거나 현재 색을 담아보세요. 최대 12색까지 모아요.'}),
-        palettes.recent.length?el('div',{},el('small',{text:'최근 사용한 색'}),chips(palettes.recent)):null);
+        palettes.recent.length?el('div',{},el('small',{text:'최근 사용한 색'}),chips(palettes.recent)):null].filter(Boolean));
     }fill();return box;
   }
   const blobs = new Map();    // 사진 주소 → 파일 내용
@@ -2388,10 +2388,36 @@ export function createEditor({
     const focusedYoutube = focused === youtubeInput;
     const was = panel.querySelector('.fe-tabbody');
     const keep = !top && was && shownTab === tab ? was.scrollTop : 0;
-    const tabs = el('div', { class: `fe-tabs${tabsHere().length > 7 ? ' many' : ''}`, role: 'tablist', 'aria-label': '넣을 것 고르기' }, ...tabsHere().map(([id, pic, name]) => el('button', {
-      class: `fe-tab${tab === id ? ' on' : ''}`, type: 'button', role: 'tab', 'aria-selected': String(tab === id), dataset: { tab: id },
-      onClick: () => { stopPreview(); tab = id; armed = null; armedFile = null; renderPanel(); },
-    }, icon(pic, 'fe-tab-icon'), el('span', { text: name }))));
+    const priorTabsLeft = panel.querySelector('.fe-tabs')?.scrollLeft || 0;
+    const tabButton = ([id, pic, name]) => {
+      let pressed = null, pendingTap = null;
+      return el('button', {
+        class: `fe-tab${tab === id ? ' on' : ''}`, type: 'button', role: 'tab', 'aria-selected': String(tab === id), dataset: { tab: id },
+        onPointerdown: e => { if (e.pointerType === 'touch' && e.isPrimary) pressed = {id:e.pointerId,x:e.clientX,y:e.clientY}; },
+        onPointercancel: () => { pressed = null; pendingTap = null; },
+        onPointerup: e => {
+          const start = pressed; pressed = null;
+          if (!start || e.pointerId !== start.id || Math.hypot(e.clientX-start.x,e.clientY-start.y)>8) return;
+          // Prefer the browser's click. After a captured slide drag it can be
+          // omitted: replay only an unhandled tap, through host save/close guards.
+          const button = e.currentTarget, tap = pendingTap = {};
+          // A host can consume the click before it reaches this button. Count
+          // that as handled too, so a denied close is not requested twice.
+          const heard = event => { if (button.contains(event.target)) pendingTap = null; };
+          button.ownerDocument.addEventListener('click', heard, true);
+          requestAnimationFrame(() => {
+            button.ownerDocument.removeEventListener('click', heard, true);
+            if (pendingTap !== tap || !button.isConnected) return;
+            pendingTap = null; button.click();
+          });
+        },
+        onClick: e => {
+          pendingTap = null;
+          stopPreview(); tab = id; armed = null; armedFile = null; renderPanel();
+        },
+      }, icon(pic, 'fe-tab-icon'), el('span', { text: name }));
+    };
+    const tabs = el('div', { class: `fe-tabs${tabsHere().length > 7 ? ' many' : ''}`, role: 'tablist', 'aria-label': '넣을 것 고르기' }, ...tabsHere().map(tabButton));
     // 칸의 머리말(이름 + 한 줄 설명)은 짧게, 그 아래에 바로 고를 것이 나온다.
     if (!tabsHere().some((t) => t[0] === tab)) tab = 'text';
     const [, , title, desc] = tabsHere().find((t) => t[0] === tab);
@@ -2399,6 +2425,7 @@ export function createEditor({
       el('div', { class: 'fe-panel-head' }, el('b', { class: 'fe-panel-title', text: title }), el('span', { class: 'fe-panel-desc', text: desc })),
       ...tabBody().filter(Boolean));
     panel.replaceChildren(tabs, body, fileInput, videoInput);
+    tabs.scrollLeft = priorTabsLeft;
     shownTab = tab;
     if (keep) body.scrollTop = keep;
     fileInput.multiple = libraryOn();        // 올린 파일 목록을 쓰면 여러 장을 한꺼번에 고를 수 있다
