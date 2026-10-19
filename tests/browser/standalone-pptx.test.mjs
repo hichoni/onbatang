@@ -39,7 +39,7 @@ async function setup(t,{base=''}={}){
  // without a try/catch in opaque sandbox frames. Keep registration blocked
  // without manufacturing a SecurityError in the real PPT preview iframe.
  const context=await browser.newContext({viewport:{width:1440,height:1000},reducedMotion:'reduce',serviceWorkers:'allow',acceptDownloads:true});
- await context.addInitScript(()=>{try{const api=navigator.serviceWorker;if(api)api.register=async()=>undefined;}catch{}});
+ await context.addInitScript(()=>{try{const api=navigator.serviceWorker;if(api)api.register=async()=>undefined;localStorage.setItem('onbatang-tour-seen-v1:editor','1');}catch{}});
  context.on('serviceworker',()=>serviceWorkers++);
  await context.route('**/*',route=>{
   const url=new URL(route.request().url());
@@ -61,23 +61,39 @@ async function setup(t,{base=''}={}){
  return {page,context,entry,origin,base,requests,checkIsolation};
 }
 
+async function openInline(page){
+ if(await page.locator('[data-inline-import]').count())return;
+ if(await page.locator('.cv-home-title').isVisible())await page.locator('.cv-hero .cv-new-btn').click();
+ if(!await page.locator('.fe-tab[data-tab=upload][aria-selected=true]').count())await page.locator('.fe-tab[data-tab=upload]').click();
+ await page.locator('[data-upload-tab=ppt]').click();await page.locator('[data-document-import]').click();
+ await page.locator('[data-inline-import]').waitFor();
+}
+async function showSavedMaterial(page,id){
+ await openInline(page);
+ const material=page.locator('[data-inline-import] .op-material');
+ if(await material.isVisible())await material.getByRole('button',{name:'내 PPT 자료',exact:true}).click();
+ else await page.getByRole('button',{name:'이미 가져온 자료 보기',exact:true}).click();
+ const cards=page.locator('[data-pptx-material]');await cards.first().waitFor();
+ await (id?page.locator('[data-pptx-material="'+id+'"]'):cards.first()).getByRole('button',{name:'자료 열기',exact:true}).click();
+ await page.locator('[data-pptx-page="0"]').waitFor();
+}
 async function enterImport(page,entry){
- await page.goto(entry);
- await page.getByRole('button',{name:'PPTX 가져오기',exact:true}).click();
- await page.getByLabel('PPTX 파일 선택',{exact:true}).waitFor({state:'attached'});
+ await page.goto(entry);await page.locator('.cv-home-title').waitFor();
+ assert.equal(await page.locator('.cv-import-btn').count(),0,'PPT import is available only inside My materials');
+ await openInline(page);await page.locator('[data-inline-import]').getByLabel('PPTX 파일 선택',{exact:true}).waitFor({state:'attached'});
 }
 async function inspectFile(page,name,count){
- const inline=page.locator('[data-inline-import]');
- await (await inline.count()?inline:page).getByLabel('PPTX 파일 선택',{exact:true}).setInputFiles(fixture(name));
+ const inline=page.locator('[data-inline-import]');await inline.waitFor();
+ await inline.getByLabel('PPTX 파일 선택',{exact:true}).setInputFiles(fixture(name));
  await page.waitForFunction(count=>document.querySelectorAll('[data-page-select]').length===count&&document.querySelector('[data-import-save]')?.disabled===false,count,{timeout:120000});
  assert.equal(await page.locator('[data-page-select]:checked').count(),count,'all available original pages are selected by default');
  await page.locator('[data-preview-mode=pptx][aria-pressed=true]').waitFor();
  await page.waitForFunction(()=>{const image=document.querySelector('[data-large-preview] img');return image?.complete&&image.naturalWidth>0;},null,{timeout:120000});
 }
 async function saveImport(page){
- await page.locator('[data-import-save]').click();
- await page.locator('[data-import-result=complete]').waitFor({timeout:120000});
- await page.locator('[data-open-material=view]').click();
+ await page.locator('[data-inline-import] [data-import-save]').click();
+ await page.locator('[data-inline-import]').waitFor({state:'detached',timeout:120000});
+ await showSavedMaterial(page);
  await page.locator('[data-pptx-page="0"][aria-current=true]').waitFor();
 }
 async function readLibrary(page,base,storage='minican'){
@@ -124,12 +140,12 @@ test('standalone UI keeps all 21 pages across automatic parts, real editing, imm
   assert.match(await page.locator('.op-sheet').innerText(),new RegExp(`직접 만든 ${index+1}쪽:`),'each part remains in original sequence in the actual viewer');
  }
  await page.locator('[data-pptx-page="0"]').click();await page.locator('[data-pptx-page="0"][aria-current=true]').waitFor();
- await page.locator('[data-pptx-edit]').click();await page.locator('.cv-name').waitFor();
- await page.getByRole('button',{name:'안내 닫기',exact:true}).click();
+ await page.locator('[data-pptx-edit]').click();await page.locator('[data-inline-import]').waitFor({state:'detached'});await page.locator('.cv-name').waitFor();
+
  await page.locator('.cv-name').fill('편집한 첫 파트 이름');
  await page.locator('.cv-canvas .fe-card > .fi-text').dblclick();
  await page.keyboard.press('Control+End');await page.keyboard.insertText(' · 편집한 본문');await page.keyboard.press('Escape');
- await page.locator('.cv-back').click();
+ await page.locator('.cv-back').click();await page.locator('.cv-home-title').waitFor();await showSavedMaterial(page);
  await page.locator('[data-pptx-save]').waitFor();await page.locator('[data-pptx-save]').click();
  await page.waitForFunction(()=>document.querySelector('[data-pptx-status]')?.textContent.includes('편집본을 저장했어요'));
  const edited=await readLibrary(page,base);assert.equal(edited.graphs[0].materialRef.revision,1);
@@ -138,7 +154,7 @@ test('standalone UI keeps all 21 pages across automatic parts, real editing, imm
  assert.match(edited.graphs[0].pages[0].page.items[0].text,/ · 편집한 본문$/);
  assert.deepEqual(edited.originals,original.originals,'every source page, element, source reference and asset descriptor stays identical in material revision zero');
  assert.deepEqual(edited.sources,original.sources);
- await enterImport(page,entry);await page.locator('[data-library-tab]').click();
+ await enterImport(page,entry);await page.getByRole('button',{name:'이미 가져온 자료 보기',exact:true}).click();
  await page.locator('[data-pptx-material]').waitFor();assert.equal(await page.locator('[data-pptx-material]').count(),1,'the library shows a single material, not two disconnected parts');
  await page.locator('[data-pptx-material]').getByRole('button',{name:'자료 열기',exact:true}).click();
  await page.locator('[data-pptx-page="20"]').waitFor();
@@ -167,9 +183,9 @@ test('standalone UI keeps all 21 pages across automatic parts, real editing, imm
  assert.match(await page.locator('.op-sheet').innerText(),/편집한 본문/);
  // A real editor aspect change affects only its 20-page part. The whole-deck
  // exporter must explain the mixed-size limitation instead of stretching it.
- await page.locator('[data-pptx-edit]').click();await page.locator('.cv-name').waitFor();
+ await page.locator('[data-pptx-edit]').click();await page.locator('[data-inline-import]').waitFor({state:'detached'});await page.locator('.cv-name').waitFor();
  await page.locator('.cv-shape[data-ratio="16:9"]').click();await page.locator('[data-fit=fit]').click();
- await page.locator('.cv-back').click();await page.locator('[data-pptx-save]').waitFor();
+ await page.locator('.cv-back').click();await page.locator('.cv-home-title').waitFor();await showSavedMaterial(page);await page.locator('[data-pptx-save]').waitFor();
  await page.locator('[data-pptx-save]').click();
  await page.waitForFunction(()=>document.querySelector('[data-pptx-status]')?.textContent.includes('편집본을 저장했어요'));
  const resized=await readLibrary(page,base);assert.equal(resized.graphs[0].materialRef.revision,2);
@@ -205,11 +221,11 @@ test('standalone import under a subpath uses local preview/font assets and keeps
  assert.ok(pages[1].page.items.some(item=>item.t==='text'&&item.font==='gowun-dodum'),'page two remains editable with the UI-selected OFL font');
  assert.ok(requests.some(path=>path.startsWith(base+'/app/fonts/')&&path.endsWith('.woff2')),'font bytes load from the deployment subpath');
  await page.goto(origin+base+'/isolated.html');
- await page.getByRole('button',{name:'PPTX 가져오기',exact:true}).click();await page.locator('[data-library-tab]').click();
+ await page.locator('.cv-home-title').waitFor();await openInline(page);await page.getByRole('button',{name:'이미 가져온 자료 보기',exact:true}).click();
  await page.getByText('가져온 PPT가 아직 없어요.',{exact:true}).waitFor();assert.equal(await page.locator('[data-pptx-material]').count(),0);
  const isolated=await readLibrary(page,base,'standalone-isolated');assert.deepEqual(isolated.graphs,[],'the second configured namespace never sees the first host material');
  assert.deepEqual(await readLibrary(page,base),saved,'opening another host namespace does not change the first one');
- await enterImport(page,entry);await page.locator('[data-library-tab]').click();await page.locator('[data-pptx-material]').waitFor();
+ await enterImport(page,entry);await page.getByRole('button',{name:'이미 가져온 자료 보기',exact:true}).click();await page.locator('[data-pptx-material]').waitFor();
  await page.locator('[data-pptx-material]').getByRole('button',{name:'자료 열기',exact:true}).click();await page.locator('[data-pptx-page="1"]').waitFor();
  await checkIsolation();
 });
@@ -247,7 +263,7 @@ test('a material transaction quota failure keeps its saved parts and retries the
    }finally{db.close();}
   }finally{await library.close();}
  });
- await page.locator('[data-import-save]').click();await page.locator('[data-import-result=partial]').waitFor();
+ await page.locator('[data-inline-import] [data-import-save]').click();await page.locator('[data-import-result=partial]').waitFor();
  assert.equal(await page.locator('[data-import-result=complete]').count(),0,'saving all parts is not falsely reported as a completed material');
  assert.equal(await page.locator('[data-result-document]').count(),2,'the recovery screen retains both already saved parts');
  const shown=await page.locator('[data-result-document] .oi-help').allTextContents();
@@ -261,15 +277,15 @@ test('a material transaction quota failure keeps its saved parts and retries the
   return {rejected,sameChildren:children.length===root.childNodes.length&&children.every((node,i)=>node===root.childNodes[i]),sameRetry:retry===root.querySelector('[data-import-retry]'),sameHtml:html===root.innerHTML,unwantedDatabase:(await indexedDB.databases()).some(db=>db.name.startsWith('must-not-start'))};
  });
  assert.deepEqual(guarded,{rejected:true,sameChildren:true,sameRetry:true,sameHtml:true,unwantedDatabase:false},'second initialization rejects before touching the current recovery UI or creating another database');
- await page.locator('[data-import-retry]').click();await page.locator('[data-import-result=complete]').waitFor();
+ await page.locator('[data-import-retry]').click();await page.locator('[data-inline-import]').waitFor({state:'detached',timeout:120000});
  const recovered=await durable();assert.deepEqual(recovered.counts,{heads:2,revisions:2,assets:1,materials:1,materialRevisions:1});
  assert.deepEqual(recovered.heads,failed.heads,'retry reuses the exact saved documents instead of writing new IDs or revisions');
  assert.equal(recovered.materials[0].manifest.batchId,batchIds[0],'retry finalizes the original batch');
  assert.deepEqual(recovered.materials[0].pages.map(row=>row.pageNumber),Array.from({length:21},(_,i)=>i+1));
  assert.deepEqual(await page.evaluate(()=>window.standaloneQuotaProbe),{failures:1,materialAttempts:2,documentAdds:2});
  await page.evaluate(()=>{window.restoreStandaloneQuotaProbe();delete window.restoreStandaloneQuotaProbe;delete window.standaloneQuotaProbe;});
- await page.locator('[data-open-material=view]').click();await page.locator('[data-pptx-page="20"]').waitFor();
- await enterImport(page,entry);await page.locator('[data-library-tab]').click();await page.locator('[data-pptx-material]').waitFor();
+ await showSavedMaterial(page);await page.locator('[data-pptx-page="20"]').waitFor();
+ await enterImport(page,entry);await page.getByRole('button',{name:'이미 가져온 자료 보기',exact:true}).click();await page.locator('[data-pptx-material]').waitFor();
  assert.equal(await page.locator('[data-pptx-material]').count(),1);assert.deepEqual(await durable(),recovered,'recovered material and its original receipts survive a full page reload');
  await checkIsolation();
 });
@@ -280,8 +296,8 @@ test('My materials imports preserve edited text, restore the same page on cancel
  const original=await readLibrary(page,base),oldGraph=original.graphs[0],oldId=oldGraph.documents[0].id;
  const readDraft=id=>page.evaluate(async({base,id})=>(await import(base+'/app/store.js')).getDesign(id),{base,id});
  await page.locator('[data-pptx-page="1"]').click();await page.locator('[data-pptx-page="1"][aria-current=true]').waitFor();
- await page.locator('[data-pptx-edit]').click();await page.locator('.cv-name').waitFor();
- await page.getByRole('button',{name:'안내 닫기',exact:true}).click();
+ await page.locator('[data-pptx-edit]').click();await page.locator('[data-inline-import]').waitFor({state:'detached'});await page.locator('.cv-name').waitFor();
+
  await page.locator('.cv-slide[data-slide="1"][aria-pressed=true]').waitFor();
  const beforeEdit=await readDraft(oldId),oldText=beforeEdit.slides[1].items.find(item=>item.t==='text').text;
  // Fail the actual storage transaction, including the editor's debounced
@@ -299,7 +315,7 @@ test('My materials imports preserve edited text, restore the same page on cancel
  });
  await page.locator('.cv-canvas .fe-card > .fi-text').first().dblclick();
  await page.keyboard.press('Control+End');await page.keyboard.insertText(' · 업로드 전 편집');await page.keyboard.press('Escape');
- await page.locator('.fe-tab[data-tab="upload"]').click();
+ if(!await page.locator('.fe-tab[data-tab="upload"][aria-selected=true]').count())await page.locator('.fe-tab[data-tab="upload"]').click();
  await page.locator('[data-upload-tab="ppt"]').click();
  await page.evaluate(()=>{window.editorImportCanvas=document.querySelector('.cv-canvas');});
  const importButton=page.getByRole('button',{name:'내 PPT 올리기',exact:true});
@@ -327,9 +343,9 @@ test('My materials imports preserve edited text, restore the same page on cancel
  assert.equal(await page.locator('.cv-name').inputValue(),beforeEdit.name);
  assert.equal(await page.locator('.op-root').isVisible(),false);
  assert.deepEqual(await readDraft(oldId),flushed,'cancel restores the saved document without another edit or revision');
- await page.locator('.cv-back').click();await page.locator('[data-pptx-save]').waitFor({state:'attached'});
- assert.equal(await page.locator('[data-pptx-save]').isVisible(),true,'leaving the restored editor returns to its original material, not the hidden material behind a new file screen');
- await page.locator('[data-pptx-page="1"][aria-current=true]').waitFor();
+ await page.locator('.cv-back').click();await page.locator('.cv-home-title').waitFor();await showSavedMaterial(page);await page.locator('[data-pptx-save]').waitFor({state:'attached'});
+ assert.equal(await page.locator('[data-pptx-save]').isVisible(),true,'the saved material remains accessible inside My materials after returning to My drawings');
+ await page.locator('[data-pptx-page="1"]').click();await page.locator('[data-pptx-page="1"][aria-current=true]').waitFor();
  assert.equal(await page.locator('[data-pptx-page]').count(),21);
  assert.match(await page.locator('.op-sheet').innerText(),/업로드 전 편집/);
  await page.locator('[data-pptx-save]').click();
@@ -338,11 +354,11 @@ test('My materials imports preserve edited text, restore the same page on cancel
  assert.equal(restored.graphs[0].pages[1].page.items.find(item=>item.t==='text').text,oldText+' · 업로드 전 편집');
  assert.deepEqual(restored.originals,original.originals,'saving after cancellation keeps the original material revision zero');
  assert.deepEqual(restored.sources,original.sources,'saving after cancellation keeps the original PPT bytes');
- await page.locator('[data-pptx-edit]').click();await page.locator('.cv-slide[data-slide="1"][aria-pressed=true]').waitFor();
- await page.locator('.fe-tab[data-tab="upload"]').click();
+ await page.locator('[data-pptx-edit]').click();await page.locator('[data-inline-import]').waitFor({state:'detached'});await page.locator('.cv-slide[data-slide="1"][aria-pressed=true]').waitFor();
+ if(!await page.locator('.fe-tab[data-tab="upload"][aria-selected=true]').count())await page.locator('.fe-tab[data-tab="upload"]').click();
  await page.locator('[data-upload-tab="ppt"]').click();
  await importButton.click();await inspectFile(page,'self-authored-4x3.pptx',2);
- await page.locator('[data-import-save]').click();
+ await page.locator('[data-inline-import] [data-import-save]').click();
  await page.waitForFunction(()=>!document.querySelector('[data-inline-import]')&&document.querySelector('.cv-name')?.value==='self-authored-4x3');
  assert.equal(await page.locator('.cv-slide[data-slide]').count(),2);
  const imported=await readLibrary(page,base),newGraph=imported.graphs.find(graph=>graph.materialRef.id!==oldGraph.materialRef.id);
@@ -354,21 +370,21 @@ test('My materials imports preserve edited text, restore the same page on cancel
  const newText=await page.locator('.cv-canvas .fe-card > .fi-text').first().innerText();
  await page.locator('.cv-canvas .fe-card > .fi-text').first().dblclick();
  await page.keyboard.press('Control+End');await page.keyboard.insertText(' · 새 PPT 편집');await page.keyboard.press('Escape');
- await page.locator('.cv-back').click();await page.locator('[data-pptx-save]').waitFor();await page.locator('[data-pptx-save]').click();
+ await page.locator('.cv-back').click();await page.locator('.cv-home-title').waitFor();await showSavedMaterial(page,newGraph.materialRef.id);await page.locator('[data-pptx-save]').waitFor();await page.locator('[data-pptx-save]').click();
  await page.waitForFunction(()=>document.querySelector('[data-pptx-status]')?.textContent.includes('편집본을 저장했어요'));
  const saved=await readLibrary(page,base),newSaved=saved.graphs.find(graph=>graph.materialRef.id===newGraph.materialRef.id);
  assert.equal(newSaved.materialRef.revision,1);assert.equal(newSaved.documents[0].payload.name,'내 자료에서 가져온 새 PPT');
  assert.equal(newSaved.pages[0].page.items.find(item=>item.t==='text').text,newText+' · 새 PPT 편집');
  assert.deepEqual(saved.originals,imported.originals,'saving the newly imported deck preserves both immutable source materials');
  assert.deepEqual(saved.sources,imported.sources);
- await enterImport(page,entry);await page.locator('[data-library-tab]').click();await page.locator('[data-pptx-material]').first().waitFor();
+ await enterImport(page,entry);await page.getByRole('button',{name:'이미 가져온 자료 보기',exact:true}).click();await page.locator('[data-pptx-material]').first().waitFor();
  assert.equal(await page.locator('[data-pptx-material]').count(),2);
  await page.locator(`[data-pptx-material="${newGraph.materialRef.id}"]`).getByRole('button',{name:'자료 열기',exact:true}).click();
  await page.locator('[data-pptx-page="0"][aria-current=true]').waitFor();
  assert.equal(await page.locator('[data-pptx-page]').count(),2);assert.match(await page.locator('.op-sheet').innerText(),/새 PPT 편집/);
  assert.deepEqual(await readLibrary(page,base),saved,'a reload reopens the exact new saved material and both source originals');
  assert.deepEqual(await readDraft(oldId),flushed,'the earlier editor draft survives import, cancellation, the new edit, and a full reload');
- await page.locator('[data-pptx-edit]').click();await page.locator('.cv-name').waitFor();
+ await page.locator('[data-pptx-edit]').click();await page.locator('[data-inline-import]').waitFor({state:'detached'});await page.locator('.cv-name').waitFor();
  assert.equal(await page.locator('.cv-name').inputValue(),'내 자료에서 가져온 새 PPT');
  assert.equal(await page.locator('.cv-canvas .fe-card > .fi-text').first().innerText(),newText+' · 새 PPT 편집');
  await checkIsolation();

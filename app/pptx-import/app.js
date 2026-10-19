@@ -15,10 +15,10 @@ const message=error=>({REVISION_CONFLICT:'다른 창에서 자료를 먼저 저�
 const download=(blob,name)=>{const url=URL.createObjectURL(blob),a=el('a','',{href:url,download:name});a.click();setTimeout(()=>URL.revokeObjectURL(url),30000);};
 
 /** Device-only import workspace. Hosts may add explicit actions without an account SDK. */
-export function mountPptxApp({root,storage='minican',fonts,fontServices=defaultImportFontServices,onEdit,onClose,onMaterialSaved,actions=[],embedded=false,autoEdit=false}={}){
+export function mountPptxApp({root,storage='minican',fonts,fontServices=defaultImportFontServices,onEdit,onClose,onMaterialSaved,actions=[],embedded=false,autoEdit=false,retainOnClose=false}={}){
  if(!root||typeof onEdit!=='function')throw new TypeError('root and onEdit are required');
  const library=createPptxLibrary({storage}),imports=createOnbatangImportStorage({repository:library.repository});
- const services=createImportUiServices({imports,fonts,fontServices});let current,active=0,busy=false,readOnly=false,exportDialog,latestImport,disposed=false,disposal;
+ const services=createImportUiServices({imports,fonts,fontServices});let current,active=0,busy=false,readOnly=false,exportDialog,latestImport,disposed=false,paused=false,disposal;
  const importRoot=el('section'),materialRoot=el('section',undefined,{class:'op-material',hidden:''});root.append(importRoot,materialRoot);
  const baseSave=services.saveAll;services.saveAll=async options=>{
   let result;try{result=await baseSave(options);}catch(error){latestImport=error.recovery||null;throw error;}
@@ -41,9 +41,10 @@ export function mountPptxApp({root,storage='minican',fonts,fontServices=defaultI
    card.append(text,button('자료 열기',()=>showMaterial(graph.materialRef)),button('원본 PPTX',()=>source(graph)));host.append(card);
   }
  }
- const workspace=mountImportWorkspace({root:importRoot,services,embedded,onClose:async()=>{
+ const workspace=mountImportWorkspace({root:importRoot,services,embedded,retainOnClose,onClose:async()=>{
   if(busy){say('작업이 끝난 뒤 돌아가주세요.');return false;}
-  return onClose?.();
+  paused=retainOnClose;
+  try{const accepted=await onClose?.();if(accepted===false)paused=false;return accepted;}catch(error){paused=false;throw error;}
  },onComplete:autoEdit?completeImport:undefined,onOpenDocument:async row=>{
   current=latestImport?.materialRef?await library.getMaterial(latestImport.materialRef):null;readOnly=false;active=0;await edit(row);
  },onOpenMaterial:ref=>showMaterial(ref),renderLibrary});
@@ -91,8 +92,8 @@ export function mountPptxApp({root,storage='minican',fonts,fontServices=defaultI
   current=graph;readOnly=fixed||current.materialRef.revision<latest.materialRef.revision;active=Math.min(active,current.pages.length-1);importRoot.hidden=true;materialRoot.hidden=false;await paint();
  }
  async function paint(){
-  if(disposed||!current)return;
-  const graph=await working(current);if(disposed)return;active=Math.max(0,Math.min(active,graph.pages.length-1));
+  if(disposed||paused||!current)return;
+  const graph=await working(current);if(disposed||paused)return;active=Math.max(0,Math.min(active,graph.pages.length-1));
   const header=el('header',undefined,{class:'op-header'}),title=el('div');title.append(el('h1',current.manifest.title),el('p',`${graph.pages.length}쪽 · 온바탕${readOnly?' · 이전 저장본 읽기 전용':''}`));
   header.append(button('내 PPT 자료',()=>showLibrary()),title,button('내 그림',requestClose));
   const tools=el('div',undefined,{class:'op-tools'});
@@ -141,7 +142,7 @@ export function mountPptxApp({root,storage='minican',fonts,fontServices=defaultI
   disposal=Promise.resolve().then(async()=>{workspace.dispose();services.dispose();exportDialog?.close();try{await library.close();}finally{root.replaceChildren();}});
   return disposal;
  }
- return {library,requestClose,getEditorContext:()=>({materialRef:current?clone(current.materialRef):null,active}),
+ return {library,requestClose,async resume(){paused=false;await workspace.resume();if(!materialRoot.hidden)await paint();},getEditorContext:()=>({materialRef:current?clone(current.materialRef):null,active}),
   async restoreEditorContext(context){current=context?.materialRef?await library.getMaterial(context.materialRef):null;active=context?.active||0;readOnly=false;},
   async open({newImport=false}={}){if(disposed)throw Error('가져오기 화면을 다시 열어주세요.');importRoot.hidden=false;materialRoot.hidden=true;if(newImport&&workspace.startNewImport())latestImport=null;},showMaterial,showLibrary,reportError:error=>say(message(error),true),async editorClosed(){if(current&&!disposed){importRoot.hidden=true;materialRoot.hidden=false;await paint();}},dispose};
 }

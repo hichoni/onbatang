@@ -9,7 +9,7 @@ const fontLicense = font => ({status: font.licenseStatus || 'unknown', label: fo
 const fontRendering = font => ({status: font.renderStatus || font.status || 'unknown', label: font.renderLabel || ({'app-provided': '앱 제공 글꼴 적용', 'verified-ofl': '앱 제공 글꼴 적용', device: '기기 글꼴 확인', substituted: '현재 대체 중'})[font.status] || '기기 표시 확인 전'});
 
 /** A device-only import flow. Dependencies own conversion, rendering and durable writes. */
-export function mountImportWorkspace({root, services, onClose, onOpenDocument, onOpenMaterial, onComplete, onLibrary, embedded = false, renderLibrary, materialActions = [['자료 전체 보기', 'view']]} = {}) {
+export function mountImportWorkspace({root, services, onClose, onOpenDocument, onOpenMaterial, onComplete, onLibrary, embedded = false, retainOnClose = false, renderLibrary, materialActions = [['자료 전체 보기', 'view']]} = {}) {
   if (!root || typeof services?.inspect !== 'function' || typeof services?.saveAll !== 'function') throw new TypeError('Import services are required');
   const doc = root.ownerDocument;
   const element = (tag, text, attrs = {}) => {
@@ -20,7 +20,7 @@ export function mountImportWorkspace({root, services, onClose, onOpenDocument, o
   const button = (text, action, attrs = {}) => { const node = element('button', text, {type: 'button', ...attrs}); node.addEventListener('click', action); return node; };
   const state = {step: 1, tab: 'import', file: null, inspection: null, selected: new Set(), modes: {}, active: 1,
     preview: 'editable', filter: 'all', busy: null, previewPreparing: false, result: null, retry: null, fonts: [], fontPlan: null, priorPlans: [], previewPages: new Map()};
-  let disposed = false, generation = 0, previewGeneration = 0, libraryGeneration = 0, actionController, previewController, fontDialog, thumbObserver;
+  let disposed = false, suspended = false, renderPending = false, generation = 0, previewGeneration = 0, libraryGeneration = 0, actionController, previewController, fontDialog, thumbObserver;
   const caches = new Map();
   const shell = element('section', undefined, {class: 'oi-workspace', 'aria-label': 'PPT 가져오기 작업 공간'});
   const header = element('header', undefined, {class: 'oi-header'});
@@ -59,10 +59,15 @@ export function mountImportWorkspace({root, services, onClose, onOpenDocument, o
   async function requestClose() {
     if (disposed) return true;
     if (state.busy === 'saving') { say('자료를 저장하고 있어요. 취소 후 저장 상태를 확인하거나 완료될 때까지 기다려주세요.'); return false; }
-    if (embedded && state.retry && state.result?.complete === false) { say('일부 자료는 저장됐지만 가져오기가 아직 끝나지 않았어요. 재시도할 작업을 보존하고 있으니 ‘이어서 다시 시도’를 눌러 완료해주세요.'); return false; }
-    actionController?.abort(); previewController?.abort();
-    try { return await onClose?.() !== false; }
-    catch (error) { say(errorText(error), true); return false; }
+    if (embedded && !retainOnClose && state.retry && state.result?.complete === false) { say('일부 자료는 저장됐지만 가져오기가 아직 끝나지 않았어요. 재시도할 작업을 보존하고 있으니 ‘이어서 다시 시도’를 눌러 완료해주세요.'); return false; }
+    // A retaining host detaches this exact session and resumes it later. In
+    // particular, its worker receipt and an inspection in flight must survive.
+    if (!retainOnClose) actionController?.abort();
+    previewController?.abort();
+    fontDialog?.close(); fontDialog?.remove(); fontDialog = null;
+    suspended = retainOnClose;
+    try { const accepted = await onClose?.() !== false; if (!accepted) { suspended = false; render(); } return accepted; }
+    catch (error) { suspended = false; render(); say(errorText(error), true); return false; }
   }
   function updateChrome() {
     const inImport = state.tab === 'import'; steps.hidden = !inImport;
@@ -91,7 +96,9 @@ export function mountImportWorkspace({root, services, onClose, onOpenDocument, o
     catch (error) { if (!disposed && job === libraryGeneration) say(errorText(error), true); }
   }
   function render() {
-    if (disposed || state.tab !== 'import') return; updateChrome(); body.replaceChildren(); footerActions.replaceChildren();
+    if (disposed || state.tab !== 'import') return;
+    if (suspended) { renderPending = true; return; }
+    renderPending = false; updateChrome(); body.replaceChildren(); footerActions.replaceChildren();
     if (state.step === 1) renderFile(); else if (state.step === 2) renderReview(); else renderResult();
   }
   function renderFile() {
@@ -431,7 +438,7 @@ export function mountImportWorkspace({root, services, onClose, onOpenDocument, o
       preview: 'editable', filter: 'all', busy: null, previewPreparing: false, result: null, retry: null, fonts: [], fontPlan: null, priorPlans: [], previewPages: new Map()});
     render(); say('새 PPT를 골라주세요. 편집하던 그림과 이전에 가져온 자료는 그대로 보관돼요.'); return true;
   }
-  return {requestClose, startNewImport, showLibrary: () => showTab('library'), showImport: () => showTab('import'), chooseFile, getState: () => ({step: state.step, tab: state.tab, selectedPages: selectedPages(), activePage: state.active, busy: state.busy, resumable: !!state.retry && state.result?.complete === false}),
+  return {requestClose, resume() { if (disposed) return; suspended = false; if (renderPending) return render(); }, startNewImport, showLibrary: () => showTab('library'), showImport: () => showTab('import'), chooseFile, getState: () => ({step: state.step, tab: state.tab, selectedPages: selectedPages(), activePage: state.active, busy: state.busy, resumable: !!state.retry && state.result?.complete === false}),
     dispose() { if (disposed) return; disposed = true; generation++; previewGeneration++; libraryGeneration++; thumbObserver?.disconnect(); actionController?.abort(); previewController?.abort(); services.disposePreview?.(); fontDialog?.close(); fontDialog?.remove(); root.replaceChildren(); }};
 }
 

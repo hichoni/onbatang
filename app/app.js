@@ -33,6 +33,7 @@ let app = null;
 let onView = () => {};
 let onBrandClick = null;
 let importAction = null;
+let materialAction = null;
 let brand = null;                // 들여 쓰는 곳의 표시 { name, logo } (없으면 표시하지 않는다)
 let sync = null;                 // 들여 쓰는 곳의 계정 저장(sync.js). 없으면 이 기기에만 저장한다
 let pusher = null;
@@ -363,7 +364,7 @@ function render() {
       el('ul', { class: 'cv-feats', 'aria-label': '만들 수 있는 것' }, ...FEATS.map(([pic, text, tone]) => el('li', { class: `cv-feat ${tone}` },
         el('span', { class: 'cv-feat-icon', 'aria-hidden': 'true' }, ic(pic)), el('span', { text })))),
       el('div', { class: 'cv-hero-go' }, start, tourButton('home'),
-        importAction ? el('button', { class: 'btn cv-import-btn', type: 'button', disabled: loading, onClick: async (event) => {
+        importAction && !importAction.hideHome ? el('button', { class: 'btn cv-import-btn', type: 'button', disabled: loading, onClick: async (event) => {
           const button = event.currentTarget; button.disabled = true;
           try { await importAction.open(); } catch (error) { console.warn(error); toast('가져오기 화면을 열지 못했어요. 다시 시도해주세요.'); }
           finally { button.disabled = false; }
@@ -565,6 +566,9 @@ function openDesign(record, isNew) {
     },
   });
   const down = el('button', { class: 'btn btn-primary cv-down-btn', type: 'button', title: '그림·영상·PPTX로 내려받아요', onClick: () => askDownload(O, down) }, ...face('download', '내려받기'));
+  let acceptsMaterial = false;
+  try { acceptsMaterial = !!materialAction && (!materialAction.accepts || materialAction.accepts(record)); } catch { /* An optional host action must fail closed. */ }
+  const material = acceptsMaterial ? el('button', {class: 'btn cv-material-btn', type: 'button', dataset: {materialAction: ''}, onClick: () => saveMaterialFromEditor(O)}, materialAction.label) : null;
   const show = el('button', { class: 'btn cv-show-btn', type: 'button', title: '화면 가득 보여 줘요', onClick: () => present(O) }, ...face('play', '발표'));
   // 그림의 모양: 꾸미는 화면 안에서 바로 바꾼다. 놓아 둔 도형과 사진은 찌그러지지 않게 편집기가 맞춰 준다.
   const shapes = el('div', { class: 'cv-shapes', role: 'group', 'aria-label': '그림의 모양' }, ...RATIOS.map((r) => {
@@ -588,7 +592,7 @@ function openDesign(record, isNew) {
     ...(mark ? [mark, el('span', { class: 'cv-bar-sep cv-brand-sep', 'aria-hidden': 'true' })] : []),
     el('button', { class: 'btn btn-ghost cv-back', type: 'button', title: '저장하고 내 그림으로 돌아가요', onClick: (e) => closeDesign(O, e.currentTarget) }, ...face('back', '내 그림')),
     el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' }),
-    name, O.status, el('span', { class: 'cv-bar-gap' }), shapes, el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' }), tourButton('editor', O), show, down);
+    name, O.status, ...(material ? [material] : []), el('span', { class: 'cv-bar-gap' }), shapes, el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' }), tourButton('editor', O), show, down);
   const shell = editorShell(O, bar);
   markRatio(O, shapes);
   setView('edit');
@@ -1154,6 +1158,51 @@ async function closeToHost(O, btn) {
 
 /** Import navigation is opt-in. Keep the existing editor intact until local and
  * account persistence have both succeeded; never drop a new blank drawing. */
+async function persistEditorAction(O) {
+  if (O.putting) await O.putting;
+  if (O.closed || S.open !== O) throw new Error('EDITOR_BUSY');
+  if (!O.saved) O.dirty = true;
+  let ok = await save(O, {preserveBlank: true});
+  if (O.dirty) ok = await save(O, {preserveBlank: true});
+  if (!ok || O.dirty || O.localOk === false) throw new Error('EDITOR_SAVE_FAILED');
+  const saved = await getDesign(O.record.id);
+  if (!saved) throw new Error('DOCUMENT_NOT_FOUND');
+  if (accountFor(saved)) {
+    // Background flush absorbs errors; observe this exact saved revision's result.
+    await pusher.flush(saved.id);
+    O.accountOk = null; pusher.queue(saved); await pusher.flush(saved.id);
+    if (O.accountOk !== true) throw new Error('EDITOR_SYNC_FAILED');
+  }
+  if (O.closed || S.open !== O) throw new Error('EDITOR_BUSY');
+  return saved;
+}
+
+async function saveMaterialFromEditor(O) {
+  if (!materialAction || S.open !== O || O.closed || O.inlineImport || O.leaving || moving || app.inert || hostFlush || videoBusy(O)) return;
+  try { if (materialAction.accepts && !materialAction.accepts(O.record)) return; } catch { return; }
+  const focus = app.contains(document.activeElement) ? document.activeElement : null;
+  O.leaving = true; app.inert = true;
+  try {
+    await persistEditorAction(O);
+    await materialAction.open({designId: O.record.id, slideIndex: O.at});
+  } catch (error) {
+    const note = error?.message === 'EDITOR_SYNC_FAILED'
+      ? '계정에 올리지 못했어요. 이 기기의 그림은 저장했고, 전체 자료 저장은 진행하지 않았어요.'
+      : '전체 자료에 저장하지 못했어요. 현재 그림은 그대로 있으니 저장 상태를 확인하고 다시 시도해주세요.';
+    if (S.open === O && !O.closed) setStatus(O, note, 'bad');
+    toast(note, 5000);
+  } finally {
+    O.leaving = false;
+    if (S.open === O && !O.closed) {
+      app.inert = false;
+      const target = focus?.isConnected ? focus : O.shell.querySelector('[data-material-action]');
+      if (target && document.activeElement === document.body && document.hasFocus()) {
+        try { target.focus({preventScroll: true}); } catch { /* Keep the save result. */ }
+      }
+    }
+  }
+}
+
 async function importFromEditor(O) {
   if (!importAction?.editorLabel || S.open !== O || O.closed || O.inlineImport || O.leaving || moving || app.inert || hostFlush || videoBusy(O)) return;
   const context = { from: 'editor', designId: O.record.id, slideIndex: O.at };
@@ -1161,22 +1210,7 @@ async function importFromEditor(O) {
   let left = false, restored = false;
   O.leaving = true; app.inert = true;
   try {
-    if (O.putting) await O.putting;
-    if (O.closed || S.open !== O) throw new Error('EDITOR_BUSY');
-    if (!O.saved) O.dirty = true;
-    let ok = await save(O, { preserveBlank: true });
-    if (O.dirty) ok = await save(O, { preserveBlank: true });
-    if (!ok || O.dirty || O.localOk === false) throw new Error('EDITOR_SAVE_FAILED');
-    const saved = await getDesign(context.designId);
-    if (!saved) throw new Error('DOCUMENT_NOT_FOUND');
-    if (accountFor(saved)) {
-      // flush() intentionally absorbs network errors for background retry.
-      // Queue this exact saved record and observe its final onDone while inert.
-      await pusher.flush(saved.id);
-      O.accountOk = null; pusher.queue(saved); await pusher.flush(saved.id);
-      if (O.accountOk !== true) throw new Error('EDITOR_SYNC_FAILED');
-    }
-    if (O.closed || S.open !== O) throw new Error('EDITOR_BUSY');
+    const saved = await persistEditorAction(O);
     if (importAction.editorMode === 'inline') {
       await openInlineImport(O, context);
       return;
@@ -1213,7 +1247,7 @@ async function importFromEditor(O) {
 async function openInlineImport(O, context) {
   const work = O.shell.querySelector('.cv-work');
   const protectedNodes = [O.shell.querySelector('.cv-bar'), O.shell.querySelector('.cv-side')];
-  const previousInert = protectedNodes.map(node => node.inert);
+  const readonlyInputs = protectedNodes.flatMap(node => [...node.querySelectorAll('input:not([type=file]),textarea')].map(input => [input, input.readOnly]));
   const previousChildren = [...work.children].map(node => [node, node.hidden]);
   const previousFocus = document.activeElement;
   const back = el('button', {class: 'btn btn-ghost', type: 'button', disabled: true, dataset: {inlineImportClose: ''}}, ...face('back', '편집으로 돌아가기'));
@@ -1221,12 +1255,69 @@ async function openInlineImport(O, context) {
   const header = el('header', {class: 'cv-inline-import-header'},
     el('div', {}, el('small', {text: '내 자료 / PPT'}), el('h2', {text: '내 PPT 가져오기'})), back);
   const region = el('section', {class: 'cv-inline-import', role: 'region', 'aria-label': '내 자료 · PPT 가져오기', dataset: {inlineImport: ''}}, header, outlet);
-  const session = {controller: null, disposed: false, closing: false};
+  const session = {controller: null, disposed: false, closing: false, navigating: false};
   O.inlineImport = session;
   O.editor.quiet();
-  for (const node of protectedNodes) node.inert = true;
+  // Keep navigation available, but do not mutate the drawing before the provider
+  // has accepted the transition (saving/partial work can refuse or suspend it).
+  for (const [input] of readonlyInputs) input.readOnly = true;
   for (const [node] of previousChildren) node.hidden = true;
   O.shell.classList.add('inline-importing'); work.append(region); app.inert = false;
+  const controlFor = event => {
+    const target = event.target instanceof Element ? event.target.closest('button,a,input,select,textarea,summary') : null;
+    return target && protectedNodes.some(node => node.contains(target)) ? target : null;
+  };
+  const releaseControls = () => {
+    O.shell.removeEventListener('pointerdown', guardPointer, true);
+    O.shell.removeEventListener('click', guardClick, true);
+    O.shell.removeEventListener('focusin', guardFocus, true);
+    readonlyInputs.forEach(([input, readonly]) => { input.readOnly = readonly; });
+  };
+  const replayControl = target => {
+    if (target.matches('.fe-tab[data-tab]')) {
+      const tab = target.dataset.tab;
+      return () => O.editor.openTab(tab);
+    }
+    const base = protectedNodes.find(node => node.contains(target)), path = [];
+    let cursor = target;
+    while (cursor && cursor !== base) { path.unshift([...cursor.parentElement.children].indexOf(cursor)); cursor = cursor.parentElement; }
+    const signature = node => node && [node.tagName, node.getAttribute('type'), node.getAttribute('aria-label'), node.textContent].join('|');
+    const expected = signature(target);
+    return () => {
+      let current = base;
+      for (const index of path) current = current?.children[index];
+      // refresh() rebuilds sidebar controls. Replay only the identical control,
+      // never a neighbouring action at the same position after a host change.
+      if (!current?.isConnected || current.disabled || signature(current) !== expected) return;
+      if (current.matches('input:not([type=file]),textarea,select')) current.focus({preventScroll: true});
+      else current.click();
+    };
+  };
+  const request = async (details, replay) => {
+    if (session.closing || session.disposed || session.navigating || !session.controller) return;
+    session.navigating = true;
+    try {
+      const accepted = typeof session.controller.requestClose === 'function'
+        ? await session.controller.requestClose(details) : (await close(), true);
+      if (accepted !== false && O.inlineImport !== session && S.open === O && !O.closed) replay?.();
+    } catch { toast('작업 상태를 확인하지 못했어요. 잠시 뒤 다시 눌러주세요.'); }
+    finally { session.navigating = false; }
+  };
+  const guardPointer = event => { if (controlFor(event)) event.preventDefault(); };
+  const guardClick = event => {
+    const target = controlFor(event); if (!target) return;
+    event.preventDefault(); event.stopImmediatePropagation();
+    if (target.matches('[data-document-import]')) return;
+    const action = target.dataset.tab ? `tool:${target.dataset.tab}` : target.dataset.uploadTab ? `upload:${target.dataset.uploadTab}` : target.matches('.cv-back') ? 'home' : target.matches('[data-material-action]') ? 'material' : 'control';
+    void request({reason: 'navigate', action}, replayControl(target));
+  };
+  const guardFocus = event => {
+    const target = controlFor(event);
+    if (target?.matches('input:not([type=file]),textarea,select')) void request({reason: 'navigate', action: 'field'}, replayControl(target));
+  };
+  O.shell.addEventListener('pointerdown', guardPointer, true);
+  O.shell.addEventListener('click', guardClick, true);
+  O.shell.addEventListener('focusin', guardFocus, true);
   const dispose = async () => {
     if (session.disposed) return;
     session.disposed = true;
@@ -1235,7 +1326,7 @@ async function openInlineImport(O, context) {
   const restore = () => {
     region.remove();
     previousChildren.forEach(([node, hidden]) => { node.hidden = hidden; });
-    protectedNodes.forEach((node, i) => { node.inert = previousInert[i]; });
+    releaseControls();
     O.shell.classList.remove('inline-importing');
     if (O.inlineImport === session) O.inlineImport = null;
     if (S.open === O && !O.closed) {
@@ -1262,6 +1353,7 @@ async function openInlineImport(O, context) {
       if (!await leaveEditor(O, {requireSaved: true})) throw new Error('EDITOR_SAVE_FAILED');
       S.phase = 'home'; // Internal readiness only: never render or emit the home view.
       await dispose();
+      releaseControls();
       upsert(ready); openDesign(ready, false);
       if (Number.isSafeInteger(slideIndex) && slideIndex > 0 && slideIndex < S.open.slides.length) goSlide(S.open, slideIndex);
       if (typeof tab === 'string') S.open.editor.openTab(tab);
@@ -1276,9 +1368,7 @@ async function openInlineImport(O, context) {
     }
   };
   back.addEventListener('click', async () => {
-    if (session.closing || !session.controller) return;
-    try { if (typeof session.controller.requestClose === 'function') await session.controller.requestClose(); else await close(); }
-    catch { toast('작업 상태를 확인하지 못했어요. 잠시 뒤 다시 눌러주세요.'); }
+    await request({reason: 'return'});
   });
   try {
     const controller = await importAction.open({...context, inline: {root: outlet, close, openDesign: openImported}});
@@ -1676,11 +1766,12 @@ function flush() {
  * - brand: 들여 쓰는 곳의 표시 { name, logo }. 꾸미는 화면 위 막대 맨 앞에 작게 보인다(없으면 표시하지 않는다)
  * - onBrandClick(): 표시를 누르면 기기 저장과 계정 올리기를 마친 뒤 부른다. 저장하지 못하면 이동하지 않는다
  * - sync: 계정 저장 { pull, push, drop, accepts? }(sync.js). accepts(record)는 선택적인 기기 전용 자료 제외 정책이다.
- * - importAction: 가져오기 연결 { label, open, editorLabel?, editorDescription?, editorMode?: 'inline' }.
+ * - importAction: 가져오기 연결 { label, open, editorLabel?, editorDescription?, editorMode?: 'inline', hideHome? }.
  *   inline이면 내 자료 안의 root/close/openDesign을 제공한다. open은 {requestClose,dispose}를 반환할 수 있다.
+ * - materialAction: {label, accepts?(record), open({designId,slideIndex})} 현재 그림 저장 후 같은 편집기에서 전체 자료 작업을 여는 선택 연결.
  *   기본 모드는 기존 호스트 이동 계약을 유지한다. 파일 해석과 저장은 호스트가 맡는다.
  */
-export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null } = {}) {
+export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null, materialAction: material = null } = {}) {
   if (app) throw new Error('minican already started');
   if (!root) throw new Error('minican root');
   app = root;
@@ -1689,6 +1780,7 @@ export function startMinican({ root = document.getElementById('app'), fonts = []
   brand = cleanBrand(mark);
   if (typeof hostHome === 'function') onBrandClick = hostHome;
   if (importing && typeof importing.open === 'function' && typeof importing.label === 'string' && importing.label.trim()) importAction = importing;
+  if (material && typeof material.open === 'function' && typeof material.label === 'string' && material.label.trim() && (!material.accepts || typeof material.accepts === 'function')) materialAction = material;
   if (account && ['pull', 'push', 'drop'].every((k) => typeof account[k] === 'function')) {
     sync = account;
     pusher = createPusher(sync, { onDone: pushed });

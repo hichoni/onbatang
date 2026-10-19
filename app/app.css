@@ -78,6 +78,7 @@ input:focus-visible, textarea:focus-visible, button:focus-visible { outline: 3px
 .cv-inline-import-header button { flex-shrink:0; }
 .cv-inline-import-body { flex:1; min-width:0; min-height:0; overflow:hidden; }
 .cv-inline-import-body>section:first-child { height:100%; min-height:0; }
+.cv-inline-import-body>.cv-retained-ppt>section:first-child { height:100%; min-height:0; }
 .cv-inline-import-body .oi-workspace { height:100%; min-height:0; border-radius:0; }
 .cv-inline-import-body .oi-header[hidden] { display:none!important; }
 .cv-inline-import-body .oi-content { min-height:0; }
@@ -97,7 +98,7 @@ input:focus-visible, textarea:focus-visible, button:focus-visible { outline: 3px
 .cv-app.inline-importing .cv-work { display:flex; padding:0; overflow:hidden; }
 .cv-app.inline-importing .cv-work>[hidden] { display:none!important; }
 .cv-app.inline-importing .cv-work>.cv-inline-import { flex:1; width:100%; }
-.cv-app.inline-importing .cv-side { opacity:.85; }
+.cv-app.inline-importing .cv-side { opacity:1; }
 @container (min-width:1080px) {
   .cv-inline-import-body .oi-review { grid-template-columns:210px minmax(280px,1fr) 250px; }
   .cv-inline-import-body .oi-options { grid-column:auto; display:block; }
@@ -120,8 +121,12 @@ input:focus-visible, textarea:focus-visible, button:focus-visible { outline: 3px
   .cv-inline-import-body .oi-steps li:not(:last-child):after { display:none; }
 }
 @media(max-width:860px) {
-  .cv-app.inline-importing .cv-side { display:none; }
-  .cv-app.inline-importing .cv-work { height:calc(100dvh - 160px); min-height:360px; }
+  .cv-app.inline-importing { display:flex; flex-direction:column; height:100dvh; overflow:hidden; }
+  .cv-app.inline-importing .cv-bar { flex-shrink:0; }
+  .cv-app.inline-importing .cv-side { display:block; order:0; flex-shrink:0; padding:4px 8px; border:0; border-radius:0; }
+  .cv-app.inline-importing .cv-side .fe-tabbody { display:none; }
+  .cv-app.inline-importing .cv-side .fe-panel { gap:0; }
+  .cv-app.inline-importing .cv-work { flex:1; height:auto; min-height:0; }
 }
 
 /* 미니캔 앱의 화면 — 편집기의 모양은 모듈(src/editor.css)에 있고, 여기는 화면의 짜임을 맡는다.

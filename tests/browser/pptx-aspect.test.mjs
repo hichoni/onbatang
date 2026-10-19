@@ -32,6 +32,17 @@ async function setup(t){
  return {page,origin,square,errors,external};
 }
 async function graph(page,id){return page.evaluate(async id=>{const library=(await import('/app/pptx-import/library.js')).createPptxLibrary({storage:'minican'});try{return id?await library.getMaterial({id}):await library.listMaterials();}finally{await library.close();}},id);}
+async function openLibrary(page){
+ if(!await page.locator('[data-inline-import]').count()){
+  if(await page.locator('.cv-home-title').isVisible())await page.locator('.cv-hero .cv-new-btn').click();
+  await page.locator('.cv-name').waitFor();await page.locator('.fe-tab[data-tab=upload]').click();await page.locator('[data-upload-tab=ppt]').click();await page.locator('[data-document-import]').click();
+ }
+ const inline=page.locator('[data-inline-import]');await inline.waitFor();
+ if(await inline.locator('.op-material').isVisible())await inline.getByRole('button',{name:'내 PPT 자료',exact:true}).click();
+ else if(!await inline.locator('[data-pptx-material]').count())await inline.getByRole('button',{name:'이미 가져온 자료 보기',exact:true}).click();
+ await inline.locator('[data-pptx-material]').first().waitFor();
+}
+async function openMaterial(page,id){await openLibrary(page);await page.locator(`[data-inline-import] [data-pptx-material="${id}"]`).getByRole('button',{name:'자료 열기',exact:true}).click();await page.locator('[data-inline-import] [data-pptx-page="0"]').waitFor();}
 async function assertCanvas(page,ratio,{label,preset}={}){
  await page.locator('.cv-canvas .fe-card').waitFor();
  await page.evaluate(()=>new Promise(done=>requestAnimationFrame(()=>requestAnimationFrame(done))));
@@ -50,29 +61,29 @@ test('imported 16:9, 4:3 and custom 17:10 canvases follow original dimensions ac
  const cases=[{id:'16:9',width:12192000,height:6858000,preset:'16:9'},{id:'4:3',width:9144000,height:6858000,preset:null},{id:'17:10',width:11658600,height:6858000,preset:null}];
  for(const entry of cases){
   const files=unzipSync(original);files['ppt/presentation.xml']=encode(decode(files['ppt/presentation.xml']).replace(/<p:sldSz\b[^>]*\/>/,`<p:sldSz cx="${entry.width}" cy="${entry.height}"/>`));const bytes=zipSync(files);
-  await page.goto(origin+'/app/index.html');await page.getByRole('button',{name:'PPTX 가져오기',exact:true}).click();await page.locator('[data-import-tab]').click();
-  await page.getByLabel('PPTX 파일 선택',{exact:true}).setInputFiles({name:`self-authored-${entry.id.replace(':','-')}.pptx`,mimeType:'application/vnd.openxmlformats-officedocument.presentationml.presentation',buffer:Buffer.from(bytes)});
-  await page.waitForFunction(()=>document.querySelectorAll('[data-page-select]').length===2&&document.querySelector('[data-import-save]')?.disabled===false,null,{timeout:120000});
-  await page.locator('[data-import-save]').click();await page.locator('[data-import-result=complete]').waitFor({timeout:120000});await page.locator('[data-open-material=view]').click();
+  await page.goto(origin+'/app/index.html');await page.locator('.cv-home-title').waitFor();assert.equal(await page.locator('.cv-import-btn').count(),0);await page.locator('.cv-hero .cv-new-btn').click();await page.locator('.cv-name').waitFor();await page.locator('.fe-tab[data-tab=upload]').click();await page.locator('[data-upload-tab=ppt]').click();await page.locator('[data-document-import]').click();
+  await page.locator('[data-inline-import]').getByLabel('PPTX 파일 선택',{exact:true}).setInputFiles({name:`self-authored-${entry.id.replace(':','-')}.pptx`,mimeType:'application/vnd.openxmlformats-officedocument.presentationml.presentation',buffer:Buffer.from(bytes)});
+  await page.waitForFunction(()=>document.querySelectorAll('[data-inline-import] [data-page-select]').length===2&&document.querySelector('[data-inline-import] [data-import-save]')?.disabled===false,null,{timeout:120000});
+  await page.locator('[data-inline-import] [data-import-save]').click();await page.locator('[data-inline-import]').waitFor({state:'detached',timeout:120000});await page.locator('.cv-name').waitFor();
   const imported=(await graph(page)).find(value=>value.documents[0].payload.originalSize.width===entry.width);assert.ok(imported);const payload=imported.documents[0].payload;
   assert.deepEqual(payload.originalSize,{width:entry.width,height:entry.height,unit:'emu'});assert.deepEqual(payload.size,{width:entry.width/9525,height:entry.height/9525,unit:'px'});assert.equal(payload.source.sha256,digest(bytes));
   // The live editor serializes its active page through cleanDesign (four-decimal
   // geometry/default fields); unopened pages retain the original payload.
   const expectedSlides=await page.evaluate(async slides=>{const {cleanDesign}=await import('/src/model.js');return slides.map((slide,index)=>index===0?cleanDesign(slide):slide);},payload.slides);
-  await page.locator('[data-pptx-edit]').click();await assertCanvas(page,entry.width/entry.height,{label:`원본 비율 · ${entry.id}`,preset:entry.preset});
-  const name=`크기 유지 ${entry.id}`;await page.getByRole('textbox',{name:'그림 이름',exact:true}).fill(name);await page.locator('.cv-back').click();await page.locator('[data-pptx-save]').click();
+  await assertCanvas(page,entry.width/entry.height,{label:`원본 비율 · ${entry.id}`,preset:entry.preset});
+  const name=`크기 유지 ${entry.id}`;await page.getByRole('textbox',{name:'그림 이름',exact:true}).fill(name);await page.locator('.cv-back').click();await page.locator('.cv-home-title').waitFor();await openMaterial(page,imported.materialRef.id);await page.locator('[data-inline-import] [data-pptx-save]').click();await page.waitForFunction(()=>document.querySelector('[data-inline-import] [data-pptx-status]')?.textContent.includes('편집본을 저장했어요'));
   const saved=await graph(page,imported.materialRef.id);assert.deepEqual(saved.documents[0].payload.size,payload.size);assert.deepEqual(saved.documents[0].payload.originalSize,payload.originalSize);assert.deepEqual(saved.documents[0].payload.assets,payload.assets);assert.deepEqual(saved.documents[0].payload.source,payload.source);
   assert.deepEqual(saved.documents[0].payload.slides,expectedSlides,'opening at the original ratio only applies the existing active-page serialization contract; it never reshapes authored geometry');
   for(const mode of ['editable','image']){const output=await exportDeck(page,mode);assert.deepEqual(dimensions(decode(output['ppt/presentation.xml'])),payload.originalSize);}
   records.push({...entry,materialId:imported.materialRef.id,documentId:payload.id,saved});
  }
  // Recreate the app/module realm, then alternate source sizes with a pre-existing square drawing.
- await page.reload();await page.getByRole('button',{name:'PPTX 가져오기',exact:true}).click();await page.locator('[data-library-tab]').click();
+ await page.reload();await page.locator('.cv-home-title').waitFor();await openLibrary(page);
  for(const entry of [records[2],records[0],records[1]]){
   await page.locator(`[data-pptx-material="${entry.materialId}"]`).getByRole('button',{name:'자료 열기',exact:true}).click();await page.locator('[data-pptx-edit]').click();await assertCanvas(page,entry.width/entry.height,{label:`원본 비율 · ${entry.id}`,preset:entry.preset});
-  await page.locator('.cv-back').click();await page.getByRole('button',{name:'내 그림',exact:true}).click();await page.locator('.cv-home-title').waitFor();
+  await page.locator('.cv-back').click();await page.locator('.cv-home-title').waitFor();
   await page.evaluate(async id=>(await import('/app/app.js')).openSavedDesign(id),square.id);await assertCanvas(page,1,{preset:'1:1'});await page.locator('.cv-back').click();
-  await page.getByRole('button',{name:'PPTX 가져오기',exact:true}).click();await page.locator('[data-library-tab]').click();assert.deepEqual(await graph(page,entry.materialId),entry.saved);
+  await page.locator('.cv-home-title').waitFor();await openLibrary(page);assert.deepEqual(await graph(page,entry.materialId),entry.saved);
  }
  // A deliberate teacher size change must stop claiming the original ratio.
  const changed=records[2];await page.locator(`[data-pptx-material="${changed.materialId}"]`).getByRole('button',{name:'자료 열기',exact:true}).click();await page.locator('[data-pptx-edit]').click();

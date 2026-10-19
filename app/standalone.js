@@ -10,11 +10,11 @@ export async function startOnbatang({root=document.getElementById('app'),fonts=O
  if(isMinicanStarted())throw Error('minican already started');
  // Existing visitors may still have the previous CSS cached for an hour.
  // A release key fetches the matching editor layout without reloading a drawing.
- if(styles)for(const href of [new URL('../src/editor.css?v=0.23.1',import.meta.url).href,new URL('./app.css?v=0.23.1',import.meta.url).href,new URL('./brand.css?v=0.23.1',import.meta.url).href,new URL('./pptx-import/style.css?v=0.23.1',import.meta.url).href]){
+ if(styles)for(const href of [new URL('../src/editor.css?v=0.24.0',import.meta.url).href,new URL('./app.css?v=0.24.0',import.meta.url).href,new URL('./brand.css?v=0.24.0',import.meta.url).href,new URL('./pptx-import/style.css?v=0.24.0',import.meta.url).href]){
   if(![...document.querySelectorAll('link[rel=stylesheet]')].some(link=>link.href===href)){const link=document.createElement('link');link.rel='stylesheet';link.href=href;document.head.append(link);}
  }
  const editor=document.createElement('div'),workspace=document.createElement('section');workspace.className='op-root';workspace.hidden=true;root.classList.add('cv-standalone-shell');root.replaceChildren(editor,workspace);
- let view='home',usingPptx=false,controller,returnToEditor,returning=false;
+ let view='home',usingPptx=false,controller,returnToEditor,returning=false,retainedInline;
  const showHome=async()=>{
   if(returnToEditor){
    if(returning)return;returning=true;
@@ -29,16 +29,28 @@ export async function startOnbatang({root=document.getElementById('app'),fonts=O
  const openPptx=async(context)=>{
   if(context?.inline){
    const inline=context.inline;
-   const local=mountPptxApp({root:inline.root,storage,fonts,fontServices,embedded:true,autoEdit:true,onMaterialSaved,actions:materialActions,onClose:()=>inline.close(),onEdit:async(id,pageIndex)=>{
-    const previous={usingPptx,returnToEditor,material:controller.getEditorContext()};
-    try{
-     await controller.restoreEditorContext(local.getEditorContext());usingPptx=true;returnToEditor=null;
-     await inline.openDesign(id,{slideIndex:pageIndex,tab:'upload'});
-    }catch(error){
-     usingPptx=previous.usingPptx;returnToEditor=previous.returnToEditor;await controller.restoreEditorContext(previous.material);throw error;
-    }
-   }});
-   return local;
+   let session=retainedInline;
+   if(session){retainedInline=null;session.inline=inline;inline.root.replaceChildren(session.mount);await session.local.resume();}
+   else{
+    const mount=document.createElement('section');mount.className='cv-retained-ppt';inline.root.append(mount);
+    session={mount,inline,completed:false,local:null};
+    session.local=mountPptxApp({root:mount,storage,fonts,fontServices,embedded:true,autoEdit:true,retainOnClose:true,onMaterialSaved,actions:materialActions,onClose:()=>session.inline?.close(),onEdit:async(id,pageIndex)=>{
+     const previous={usingPptx,returnToEditor,material:controller.getEditorContext()};
+     try{
+      await controller.restoreEditorContext(session.local.getEditorContext());usingPptx=true;returnToEditor=null;
+      session.completed=true;
+      await session.inline.openDesign(id,{slideIndex:pageIndex,tab:'upload'});
+     }catch(error){
+      session.completed=false;usingPptx=previous.usingPptx;returnToEditor=previous.returnToEditor;await controller.restoreEditorContext(previous.material);throw error;
+     }
+    }});
+   }
+   let disposed=false;
+   return {requestClose:()=>session.local.requestClose(),async dispose(){
+    if(disposed)return;disposed=true;
+    if(session.completed)await session.local.dispose();
+    else{session.inline=null;session.mount.remove();retainedInline=session;}
+   }};
   }
   if(view==='edit')throw Error('그림을 저장한 뒤 PPT를 가져와주세요.');
   const prior={usingPptx,returnToEditor};
@@ -47,9 +59,9 @@ export async function startOnbatang({root=document.getElementById('app'),fonts=O
   try{await controller.open({newImport:context?.from==='editor'});}
   catch(error){usingPptx=prior.usingPptx;returnToEditor=prior.returnToEditor;editor.hidden=false;workspace.hidden=true;throw error;}
  };
- await startMinican({...options,root:editor,fonts,titleFont,storage,importAction:{label:'PPTX 가져오기',editorLabel:'내 PPT 올리기',editorMode:'inline',open:openPptx},onView:next=>{
+ await startMinican({...options,root:editor,fonts,titleFont,storage,importAction:{label:'PPTX 가져오기',hideHome:true,editorLabel:'내 PPT 올리기',editorMode:'inline',open:openPptx},onView:next=>{
   view=next;onView?.(next);
-  if(next==='home'&&usingPptx){editor.hidden=true;workspace.hidden=false;controller?.editorClosed().catch(error=>controller.reportError(error));}
+  if(next==='home'){usingPptx=false;workspace.hidden=true;editor.hidden=false;}
  }});
  controller=mountPptxApp({root:workspace,storage,fonts,fontServices,onMaterialSaved,actions:materialActions,onClose:showHome,onEdit:async(id,pageIndex)=>{
   usingPptx=true;workspace.hidden=true;editor.hidden=false;
