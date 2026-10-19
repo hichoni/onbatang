@@ -1,6 +1,6 @@
 // 디자인 그리기(브라우저): 요소 하나(itemView)와 디자인 한 장(designView). 편집기와 "보기 전용" 화면이 함께 쓴다.
 import { el } from './dom.js';
-import { backgroundOf, cleanDesign, fontFamilyOf, settings } from './model.js';
+import { backgroundOf, cleanDesign, fontFamilyOf, settings, hangsPunctuation } from './model.js';
 import { shapeAsset, shapeSvg } from './shapes.js';
 import { artSvg, loadArt, artReady } from './art.js';
 import { sceneView } from './scene.js';
@@ -21,10 +21,11 @@ export function itemView(item) {
       text: item.text,
     });
     // 글꼴 파일을 받기 전이나 그 글꼴에 없는 글자는 기본 글꼴로 보인다.
-    const family = fontFamilyOf(item.font);
+    const family = item.typeface || fontFamilyOf(item.font);
     if (family) node.style.fontFamily = `"${family}", var(--fe-font, sans-serif)`;
     node.style.color = item.color;
     if (item.bgc) node.style.background = item.bgc;
+    if (!item.nowrap && hangsPunctuation(item)) hangParagraphEnds(node, item.text);
   } else if (item.t === 'emoji') {
     node = el('div', { class: 'fi fi-emoji', text: item.ch });
   } else if (item.t === 'shape') {
@@ -48,6 +49,24 @@ export function itemView(item) {
   return node;
 }
 
+// Chromium does not implement CSS hanging-punctuation. PresentationML's Office
+// default lets a paragraph-final stop remain on the preceding line. Exclude
+// just that glyph's advance from line fitting, without changing text, font size
+// or the stored frame. One flow wrapper keeps fixed-height flex text a single
+// flex item; literal newlines still separate the authored paragraphs.
+function hangParagraphEnds(node, text) {
+  const paragraphs = text.split('\n');
+  if (!paragraphs.some(line => /[!?,.;:、。，．！？；：]$/.test(line))) return;
+  const flow = el('span', {class:'fi-text-flow'});
+  paragraphs.forEach((line, index) => {
+    if (index) flow.append('\n');
+    if (/[!?,.;:、。，．！？；：]$/.test(line)) {
+      flow.append(line.slice(0, -1), el('span', {class:'fi-text-hang', text:line.slice(-1)}));
+    } else flow.append(line);
+  });
+  node.replaceChildren(flow);
+}
+
 /**
  * 고르는 칸에 보일 요소의 작은 그림. 카드에 놓일 때와 같은 그림·같은 색·같은 비율이다(칸의 크기는 CSS 가 정한다).
  * 모르는 이름이면 null.
@@ -69,7 +88,14 @@ export function placeItem(node, item) {
   node.style.opacity = item.op < 100 ? String(item.op / 100) : '';
   // 가운데 점에 맞추고 → 돌리고 → (좌우·상하) 뒤집는다.
   node.style.transform = `translate(-50%, -50%) rotate(${item.rot}deg)${item.fx || item.fy ? ` scale(${item.fx ? -1 : 1}, ${item.fy ? -1 : 1})` : ''}`;
-  if (item.t === 'text') { node.style.width = `${item.w}%`; node.style.fontSize = `${item.size}cqw`; }
+  if (item.t === 'text') {
+    node.style.width = `${item.w}%`; node.style.fontSize = `${item.size}cqw`;
+    node.style.height=item.h?`${item.h}%`:'';
+    node.style.display=item.h?'flex':'';node.style.flexDirection=item.h?'column':'';
+    node.style.justifyContent=item.h?({top:'flex-start',middle:'center',bottom:'flex-end'}[item.valign]||'flex-start'):'';
+    node.style.lineHeight=item.lh?String(item.lh):'';node.style.whiteSpace=item.nowrap?'pre':'';
+    node.style.fontWeight=item.source?.kind==='pptx'||item.layout==='slide'?(item.bold?'700':'400'):'';
+  }
   else if (item.t === 'emoji') node.style.fontSize = `${item.w}cqw`;
   else {
     node.style.width = `${item.w}%`;

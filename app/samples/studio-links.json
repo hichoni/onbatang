@@ -1,0 +1,14 @@
+{
+  "contractVersion": 1,
+  "activity": {"activityId": "achoice20261017", "kind": "quiz", "revision": 0, "documentRef": {"documentId": "dstudio20261017", "pageId": "pquestion20261017", "elementId": "equestion20261017", "revision": 0}},
+  "lesson": {"lessonId": "llesson20261017", "revision": 0, "scenes": [
+    {"sceneId": "sintro20261017", "durationMinutes": 5, "teacherNotes": "생각을 물어봅니다", "documentRef": {"documentId": "dstudio20261017", "pageId": "pintro20261017", "revision": 0}},
+    {"sceneId": "sexplain20261017", "durationMinutes": 7, "teacherNotes": "절차 설명"},
+    {"sceneId": "sactivity20261017", "durationMinutes": 10, "teacherNotes": "정답 확인 후 시작", "activityRef": {"activityId": "achoice20261017", "revision": 0}},
+    {"sceneId": "spractice20261017", "durationMinutes": 8, "teacherNotes": "실습"},
+    {"sceneId": "scompare20261017", "durationMinutes": 7, "teacherNotes": "선택 결과 비교"},
+    {"sceneId": "sclose20261017", "durationMinutes": 3, "teacherNotes": "정리"}
+  ]},
+  "result": {"lessonRunId": "rsample20261017", "sceneId": "sactivity20261017", "activityId": "achoice20261017", "activityRevision": 0, "participantId": "panonymous001", "attemptId": "tattempt001", "submissionId": "usubmit001"},
+  "notice": "계약 예시이며 수업 실행·학생 제출 런타임의 완성을 뜻하지 않습니다."
+}

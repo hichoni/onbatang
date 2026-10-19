@@ -1,0 +1,94 @@
+{
+  "checkedAt": "2026-10-18T17:59:29.179Z",
+  "url": "https://deploy-preview-76--gai-lab.netlify.app",
+  "expectedCommit": "41a610388d6e8566af70f9676b64c9894e33ab1f",
+  "status": "PASS",
+  "productionRequestsAllowed": 0,
+  "accountUsed": false,
+  "version": "0.66.0",
+  "commit": "41a610388d6e8566af70f9676b64c9894e33ab1f",
+  "common": {
+    "version": "0.22.0",
+    "commit": "c19e51505b99c007f24353c4de73b421b83d21f6",
+    "files": 143
+  },
+  "verifiedRemoteFiles": [
+    "app/app.js",
+    "app/standalone.js",
+    "src/editor.js",
+    "src/editor.css",
+    "app/pptx-import/app.js",
+    "app/pptx-import/workspace.js",
+    "app/pptx-import/converter.js",
+    "app/pptx-import/fonts.js",
+    "app/pptx-import/library.js",
+    "app/pptx-import/vendor/pptx-worker.js",
+    "app/pptx-import/vendor/preview-frame.html"
+  ],
+  "netlifyHtmlAddition": {
+    "observed": true,
+    "characters": 221,
+    "rawSha256": "7e868690a37a9c488bad82ea7e269271dbe69b845c513c732e955882ca61299f",
+    "originalInlineScriptCspHashMatches": true
+  },
+  "verifiedHostFiles": [
+    "minican-app.js",
+    "onbatang-import-app.js",
+    "onbatang-import-workspace.js"
+  ],
+  "displayedBadge": "테스트 v0.66.0",
+  "displayedCommit": "41a61038",
+  "visibleHostBrand": true,
+  "blockedOutsideOriginCount": 5,
+  "editorEntry": {
+    "realPreviewUi": true,
+    "blankDrawingSaved": true,
+    "fileStepVisible": true,
+    "cancelRestoresDrawingAndUploadTab": true,
+    "accountUsed": false
+  },
+  "myMaterials": {
+    "threeTabs": true,
+    "defaultPhoto": true,
+    "pptInformationVisible": true,
+    "youtubeDraftPreservedAcrossTabs": true,
+    "sourceAspect": {
+      "caption": "원본 비율 · 4:3",
+      "aspect": 1.3333333333333333,
+      "sourceAspect": 1.3333333333333333
+    },
+    "aspectScope": "locally seeded source dimension record; synthetic actual worker imports were checked separately"
+  },
+  "harnessCorrection": "Opening a different document through openSavedDesign while an editor was active correctly returned EDITOR_BUSY. The fixture now uses the normal host resume route in a fresh navigation. Product code was unchanged.",
+  "pageErrors": 0,
+  "scope": "actual-gailab-pr-preview-my-materials-tabs-no-account",
+  "netlifyStatus": {
+    "state": "success",
+    "context": "netlify/gai-lab/deploy-preview",
+    "exactHead": "41a610388d6e8566af70f9676b64c9894e33ab1f"
+  },
+  "fileComparisonScope": "Remote SOURCE equals official local manifest; eleven selected common files and three host files are compared. Only the observed 221-character Netlify toolbar addition is removed from preview HTML before source comparison; original inline CSP also matches. This is not a raw HTML equality or full 143-file Netlify HTTP byte comparison.",
+  "ci": {
+    "name": "verify",
+    "runId": 39151903764,
+    "jobId": 117747100130,
+    "status": "NOT_STARTED_ACCOUNT_BILLING_OR_SPENDING_LIMIT",
+    "conclusion": "failure",
+    "executedSteps": 0,
+    "annotation": "The job was not started because recent account payments have failed or your spending limit needs to be increased. Please check the Billing & plans section in your settings",
+    "localTestsAreNotCiSuccess": true
+  },
+  "boundaries": {
+    "accountQa": "NOT_RUN",
+    "mail": "NOT_RUN_USER_DECLINED",
+    "realVideoPlayback": "NOT_RUN",
+    "photoInsertion": "NOT_RUN_IN_THIS_PUBLIC_SMOKE",
+    "realPptWorkerImports": "SEPARATE_LOCAL_AND_FIREBASE_EVIDENCE",
+    "productionDatabaseChanged": false,
+    "mainMerged": false,
+    "existingUserTabTouched": false
+  },
+  "evidence": {
+    "privateReportSha256": "e14268ec8b3c8732767796ad7ad713b5fc6a3a19e573cbd639d0584fc82765b5"
+  }
+}

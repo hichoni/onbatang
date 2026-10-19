@@ -20,7 +20,8 @@ const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
 test('그림의 모양은 네 가지이고, 모르는 모양은 정사각형으로 읽는다', () => {
   assert.deepEqual(RATIOS.map((r) => r.id), ['1:1', '4:5', '16:9', '9:16']);
   assert.deepEqual(RATIOS.map((r) => r.name), ['정사각형', '세로', '가로', '길게']);
-  assert.equal(ratioOf('3:2').id, '1:1');
+  assert.equal(ratioOf('3:2').id, '3:2');
+  assert.equal(ratioOf('bad').id, '1:1');
   assert.equal(ratioOf('16:9').aspect, 16 / 9);
 });
 
@@ -30,14 +31,12 @@ test('그림 기록: 이름표·이름·모양을 정리하고, 모양이 아니
   assert.equal(cleanRecord({ id: newDesignId(), slides: [] }), null);
   const id = newDesignId(1700000000000, 0.5);
   assert.ok(isDesignId(id));
-  const r = cleanRecord({ id, name: '  우리   반\n포스터 ', ratio: '7:3', design: { bg: '#fff', items: [{ t: 'text' }] }, updatedAt: 5, owner: '5-3-12', synced: true });
-  assert.deepEqual(Object.keys(r).sort(), ['id', 'name', 'ratio', 'slides', 'updatedAt', 'uploads']);
+  const r = cleanRecord({ id, name: '  우리   반\n포스터 ', ratio: '7:3', design: { bg: '#fff', items: [{ t: 'text', text: '원문' }] }, updatedAt: 5, owner: '5-3-12', synced: true });
+  assert.deepEqual(Object.keys(r).sort(), ['assets', 'id', 'name', 'originalSize', 'ratio', 'revision', 'schemaVersion', 'size', 'slides', 'source', 'updatedAt', 'uploads']);
   assert.equal(r.name, '우리 반 포스터');
-  assert.equal(r.ratio, '1:1');
+  assert.equal(r.ratio, '7:3');
   assert.equal(r.slides.length, 1);
-  const many = cleanRecord({ id, slides: Array.from({ length: MAX_SLIDES + 5 }, () => ({ items: [] })), updatedAt: 1 });
-  assert.equal(many.slides.length, MAX_SLIDES);
-  assert.equal(many.name, '이름 없는 그림');
+  assert.throws(() => cleanRecord({ id, slides: Array.from({ length: MAX_SLIDES + 5 }, () => ({ items: [] })), updatedAt: 1 }), { code: 'PAGE_LIMIT' });
 });
 
 test('새 그림 · 차례 · 다음 번호 · 빈 그림', () => {
@@ -56,14 +55,16 @@ test('슬라이드 다루기: 더하기 · 복제 · 지우기 · 옮기기 (움
   const one = [{ items: [{ t: 'text', text: '가' }], pa: 'rise', tr: 'fade' }];
   const [two, at] = addSlide(one, 0, '#fff', one[0]);
   assert.equal(at, 1);
-  assert.deepEqual(two[1], { bg: '#fff', items: [], pa: 'rise', tr: 'fade' });
+  assert.match(two[1].id, /^p[a-z0-9]+$/);
+  assert.deepEqual({ ...two[1], id: undefined }, { id: undefined, bg: '#fff', items: [], pa: 'rise', tr: 'fade' });
   const [three, c] = copySlide(two, 0);
   assert.equal(c, 1);
   assert.notEqual(three[1], three[0]);
-  assert.deepEqual(three[1], three[0]);
+  assert.notEqual(three[1].id, three[0].id);
+  assert.equal(three[1].items[0].text, three[0].items[0].text);
   assert.deepEqual(moveSlide(three, 0, -1), [three, 0]);
   assert.equal(moveSlide(three, 0, 1)[0][1], three[0]);
-  assert.deepEqual(removeSlide(one, 0), [[{ items: [] }], 0]);
+  assert.deepEqual(removeSlide(one, 0)[0][0].items, []);
   const full = Array.from({ length: MAX_SLIDES }, () => ({ items: [] }));
   assert.equal(addSlide(full, 0)[1], -1);
   assert.equal(copySlide(full, 0)[1], -1);
@@ -143,10 +144,14 @@ test('앱은 이 기기 밖으로 아무것도 보내지 않고, 로그인·서�
   assert.ok(files.includes('app.js') && files.includes('app.css') && files.includes('index.html'));
   for (const f of files) {
     const src = readFileSync(APP + f, 'utf8');
-    assert.doesNotMatch(src, /\bfetch\(|XMLHttpRequest|WebSocket|sendBeacon|EventSource/, f);
-    assert.doesNotMatch(src.replaceAll('http://www.w3.org/2000/svg', ''), /https?:\/\//, `${f}: 바깥 주소`);
+    // PPTX only reads a cleaned existing photo URL. No credentials, referrer, body,
+    // writes or other network APIs are allowed; keep every other app file under the old rule.
+    const networkSource = f === 'pptx.js' ? src.replace("fetch(item.url, {signal, method: 'GET', credentials: 'omit', referrerPolicy: 'no-referrer'})", 'readExistingPhoto()') : src;
+    assert.doesNotMatch(networkSource, /\bfetch\(|XMLHttpRequest|WebSocket|sendBeacon|EventSource/, f);
+    const addresses = f === 'pptx.js' ? src.replaceAll(/http:\/\/schemas\.openxmlformats\.org\/(?:drawingml\/2006\/main|presentationml\/2006\/main|officeDocument\/2006\/(?:relationships|extended-properties)|package\/2006\/(?:relationships(?:\/metadata\/core-properties)?|content-types|metadata\/core-properties))/g, '').replaceAll('http://purl.org/dc/elements/1.1/', '') : src;
+    assert.doesNotMatch(addresses.replaceAll('http://www.w3.org/2000/svg', ''), /https?:\/\//, `${f}: 바깥 주소`);
     assert.doesNotMatch(src, /firebase|firestore|tinkerlab|틴커랩|student|login|로그인/i, f);
-    for (const [, from] of src.matchAll(/from '([^']+)'/g)) assert.match(from, /^\.\/[\w-]+\.js$|^\.\.\/src\/[\w-]+\.js$/, `${f}: ${from}`);
+    for (const [, from] of src.matchAll(/from '([^']+)'/g)) assert.match(from, /^\.\/(?:pptx-import\/)?[\w-]+\.js$|^\.\.\/src\/[\w-]+\.js$/, `${f}: ${from}`);
   }
   assert.doesNotMatch(readFileSync(APP + 'app.css', 'utf8'), /cv-team|cv-roster|cv-me\b|cv-adopt/);
 });

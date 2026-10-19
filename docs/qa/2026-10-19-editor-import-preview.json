@@ -1,0 +1,76 @@
+{
+  "checkedAt": "2026-10-18T16:06:34.027Z",
+  "url": "https://deploy-preview-76--gai-lab.netlify.app",
+  "expectedCommit": "2e3fbf29bbde2db1c02cc6371f2eb1400d3502d9",
+  "status": "PASS",
+  "productionRequestsAllowed": 0,
+  "accountUsed": false,
+  "version": "0.65.0",
+  "commit": "2e3fbf29bbde2db1c02cc6371f2eb1400d3502d9",
+  "common": {
+    "version": "0.21.1",
+    "commit": "cf951d671ff7f407b4a2246e6577269d58b63b7f",
+    "files": 143
+  },
+  "verifiedRemoteFiles": [
+    "app/app.js",
+    "app/standalone.js",
+    "src/editor.js",
+    "src/editor.css",
+    "app/pptx-import/app.js",
+    "app/pptx-import/workspace.js",
+    "app/pptx-import/converter.js",
+    "app/pptx-import/fonts.js",
+    "app/pptx-import/library.js",
+    "app/pptx-import/vendor/pptx-worker.js",
+    "app/pptx-import/vendor/preview-frame.html"
+  ],
+  "netlifyHtmlAddition": {
+    "observed": true,
+    "characters": 221,
+    "rawSha256": "05562dcddb8b3b062577b55ef9aba290b1535f50affad9051f936e22225c9561",
+    "originalInlineScriptCspHashMatches": true
+  },
+  "verifiedHostFiles": [
+    "minican-app.js",
+    "onbatang-import-app.js",
+    "onbatang-import-workspace.js"
+  ],
+  "displayedBadge": "테스트 v0.65.0",
+  "displayedCommit": "2e3fbf29",
+  "visibleHostBrand": true,
+  "blockedOutsideOriginCount": 4,
+  "editorEntry": {
+    "realPreviewUi": true,
+    "blankDrawingSaved": true,
+    "fileStepVisible": true,
+    "cancelRestoresDrawingAndUploadTab": true,
+    "accountUsed": false
+  },
+  "scope": "actual-gailab-pr-preview-no-account",
+  "netlifyStatus": {
+    "state": "success",
+    "context": "netlify/gai-lab/deploy-preview",
+    "exactHead": "2e3fbf29bbde2db1c02cc6371f2eb1400d3502d9"
+  },
+  "fileComparisonScope": "Remote SOURCE equals official local manifest; eleven selected common files and three changed host files are compared. Only the observed 221-character Netlify toolbar addition is removed from preview HTML before source comparison; the original inline CSP script hash also matches. This does not claim raw HTML equality or a full 143-file HTTP byte comparison on Netlify.",
+  "ci": {
+    "name": "verify",
+    "runId": 39143288192,
+    "jobId": 117721908509,
+    "status": "NOT_STARTED_ACCOUNT_BILLING_OR_SPENDING_LIMIT",
+    "conclusion": "failure",
+    "executedSteps": 0,
+    "annotation": "The job was not started because recent account payments have failed or your spending limit needs to be increased. Please check the Billing & plans section in your settings",
+    "localTestsAreNotCiSuccess": true
+  },
+  "isolation": {
+    "actualAccountUsed": false,
+    "productionRequestsAllowed": 0,
+    "offOriginRequestsBlocked": 4,
+    "existingUserTabTouched": false
+  },
+  "evidence": {
+    "privateReportSha256": "7964ec2cd922bf895ad7a2b9e61d99992ce09eb4c0989d78b2a5fb5631df65ee"
+  }
+}

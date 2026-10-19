@@ -1,0 +1,355 @@
+{
+  "checkedAt": "2026-10-18T17:57:42.698Z",
+  "status": "PASS",
+  "scope": "standalone-public-my-materials-tabs-and-original-ppt-size",
+  "release": {
+    "product": "onbatang",
+    "version": "0.22.0",
+    "sourceCommit": "c19e51505b99c007f24353c4de73b421b83d21f6",
+    "sourceFiles": 143,
+    "url": "https://onbatang.web.app/",
+    "project": "onbatang",
+    "site": "onbatang",
+    "hostingVersion": "5f254a6119664996"
+  },
+  "deploymentIntegrity": {
+    "status": "PASS",
+    "checkedAt": "2026-10-18T17:55:07.776Z",
+    "publicFiles": 146,
+    "totalBytes": 18660091,
+    "fileMapSha256": "0666ff808dbd34efb1cbe073219b933a72e4504192e4f1033189ba365c3f2624"
+  },
+  "preDeployment": {
+    "version": "0.21.1",
+    "sourceCommit": "cf951d671ff7f407b4a2246e6577269d58b63b7f",
+    "checksPassed": 11,
+    "isolatedPersistentProfile": true,
+    "browserClosedBeforeDeployment": true,
+    "selfAuthoredMaterials": 3,
+    "pagesPerMaterial": 2,
+    "pinnedRevisionPerMaterial": 1
+  },
+  "liveUi": {
+    "status": "PASS",
+    "passed": 12,
+    "failed": 0,
+    "checks": [
+      {
+        "name": "exact-public-version-and-source",
+        "passed": true
+      },
+      {
+        "name": "all-three-predeployment-ids-heads-revision-zero-source-and-sizes-unchanged",
+        "passed": true
+      },
+      {
+        "name": "4x3-legacy-size-dom-and-original-ratio-caption",
+        "passed": true
+      },
+      {
+        "name": "three-distinct-tabs-default-photo-keyboard-and-responsive-panels",
+        "passed": true
+      },
+      {
+        "name": "ppt-tab-import-cancel-restores-old-editor-and-material",
+        "passed": true
+      },
+      {
+        "name": "16x9-legacy-size-dom-and-original-ratio-caption",
+        "passed": true
+      },
+      {
+        "name": "custom-11x7-legacy-size-dom-and-original-ratio-caption",
+        "passed": true
+      },
+      {
+        "name": "tab-navigation-and-cancellation-do-not-write-material-revisions",
+        "passed": true
+      },
+      {
+        "name": "4x3-new-ppt-tab-import-edit-save-reload-keeps-original-size",
+        "passed": true
+      },
+      {
+        "name": "16x9-new-ppt-tab-import-edit-save-reload-keeps-original-size",
+        "passed": true
+      },
+      {
+        "name": "custom-11x7-new-ppt-tab-import-edit-save-reload-keeps-original-size",
+        "passed": true
+      },
+      {
+        "name": "six-materials-all-old-histories-preserved-zero-network-writes-and-errors",
+        "passed": true
+      }
+    ],
+    "measurements": [
+      {
+        "fixture": "4x3",
+        "stage": "predeployment-material-reopened",
+        "expectedAspect": 1.3333333333333333,
+        "settingsAspect": 1.3333333333333333,
+        "domWidth": 1012,
+        "domHeight": 759,
+        "domAspect": 1.3333333333333333,
+        "caption": "원본 비율 · 4:3",
+        "captionCurrent": "true",
+        "selectedPreset": []
+      },
+      {
+        "fixture": "4x3",
+        "stage": "cancelled-import-editor",
+        "expectedAspect": 1.3333333333333333,
+        "settingsAspect": 1.3333333333333333,
+        "domWidth": 1012,
+        "domHeight": 759,
+        "domAspect": 1.3333333333333333,
+        "caption": "원본 비율 · 4:3",
+        "captionCurrent": "true",
+        "selectedPreset": []
+      },
+      {
+        "fixture": "16x9",
+        "stage": "predeployment-material-reopened",
+        "expectedAspect": 1.7777777777777777,
+        "settingsAspect": 1.7777777777777777,
+        "domWidth": 1012,
+        "domHeight": 569.25,
+        "domAspect": 1.7777777777777777,
+        "caption": "원본 비율 · 16:9",
+        "captionCurrent": "false",
+        "selectedPreset": [
+          "16:9"
+        ]
+      },
+      {
+        "fixture": "custom-11x7",
+        "stage": "predeployment-material-reopened",
+        "expectedAspect": 1.5714285714285714,
+        "settingsAspect": 1.5714285714285714,
+        "domWidth": 1012,
+        "domHeight": 644,
+        "domAspect": 1.5714285714285714,
+        "caption": "원본 비율 · 11:7",
+        "captionCurrent": "true",
+        "selectedPreset": []
+      },
+      {
+        "fixture": "4x3",
+        "stage": "new-import",
+        "expectedAspect": 1.3333333333333333,
+        "settingsAspect": 1.3333333333333333,
+        "domWidth": 1012,
+        "domHeight": 759,
+        "domAspect": 1.3333333333333333,
+        "caption": "원본 비율 · 4:3",
+        "captionCurrent": "true",
+        "selectedPreset": []
+      },
+      {
+        "fixture": "4x3",
+        "stage": "new-import-after-save-reload",
+        "expectedAspect": 1.3333333333333333,
+        "settingsAspect": 1.3333333333333333,
+        "domWidth": 1012,
+        "domHeight": 759,
+        "domAspect": 1.3333333333333333,
+        "caption": "원본 비율 · 4:3",
+        "captionCurrent": "true",
+        "selectedPreset": []
+      },
+      {
+        "fixture": "16x9",
+        "stage": "new-import",
+        "expectedAspect": 1.7777777777777777,
+        "settingsAspect": 1.7777777777777777,
+        "domWidth": 1012,
+        "domHeight": 569.25,
+        "domAspect": 1.7777777777777777,
+        "caption": "원본 비율 · 16:9",
+        "captionCurrent": "false",
+        "selectedPreset": [
+          "16:9"
+        ]
+      },
+      {
+        "fixture": "16x9",
+        "stage": "new-import-after-save-reload",
+        "expectedAspect": 1.7777777777777777,
+        "settingsAspect": 1.7777777777777777,
+        "domWidth": 1012,
+        "domHeight": 569.25,
+        "domAspect": 1.7777777777777777,
+        "caption": "원본 비율 · 16:9",
+        "captionCurrent": "false",
+        "selectedPreset": [
+          "16:9"
+        ]
+      },
+      {
+        "fixture": "custom-11x7",
+        "stage": "new-import",
+        "expectedAspect": 1.5714285714285714,
+        "settingsAspect": 1.5714285714285714,
+        "domWidth": 1012,
+        "domHeight": 644,
+        "domAspect": 1.5714285714285714,
+        "caption": "원본 비율 · 11:7",
+        "captionCurrent": "true",
+        "selectedPreset": []
+      },
+      {
+        "fixture": "custom-11x7",
+        "stage": "new-import-after-save-reload",
+        "expectedAspect": 1.5714285714285714,
+        "settingsAspect": 1.5714285714285714,
+        "domWidth": 1012,
+        "domHeight": 644,
+        "domAspect": 1.5714285714285714,
+        "caption": "원본 비율 · 11:7",
+        "captionCurrent": "true",
+        "selectedPreset": []
+      }
+    ]
+  },
+  "compatibility": {
+    "materialIdsPreserved": true,
+    "documentIdsPreserved": true,
+    "exactOldHeadPayloadsPreserved": true,
+    "oldRevisionZeroPreserved": true,
+    "sourceBlobSha256Preserved": true,
+    "sizeAndOriginalSizePreserved": true,
+    "oldMaterials": 3,
+    "newMaterialsImportedThroughPptTab": 3,
+    "totalMaterials": 6
+  },
+  "uiVerified": {
+    "defaultTab": "photo",
+    "tabs": [
+      "photo",
+      "ppt",
+      "youtube"
+    ],
+    "oneVisiblePanel": true,
+    "pptActionOnlyInPptPanel": true,
+    "youTubeInputAndUsageHelpVisible": true,
+    "keyboardRovingTabs": true,
+    "pptImportCancelReturnsToOldEditorAndMaterial": true,
+    "originalRatioCaptions": [
+      "원본 비율 · 4:3",
+      "원본 비율 · 16:9",
+      "원본 비율 · 11:7"
+    ],
+    "newImportThenNameEditPinAndReload": true
+  },
+  "visualReview": {
+    "status": "PASS",
+    "desktopViewport": {
+      "width": 1440,
+      "height": 1000
+    },
+    "narrowViewport": {
+      "width": 390,
+      "height": 844
+    },
+    "checked": "Actual deployed teal UI: distinct selected tabs, main action and supporting help, original ratio indicator. Desktop all three panels and narrow all three panels plus a full narrow PPT page were inspected. No horizontal page overflow or clipped panel controls were observed.",
+    "screenshots": [
+      {
+        "file": "work/tabs-aspect-upgrade-ndi7Kj/v0220/desktop-photo.png",
+        "kind": "desktop",
+        "tab": "photo",
+        "sha256": "8721fa007a541ecfc6c0a17ae522551d1ac3fbde4102e698470b6f7a4b5ba58d",
+        "visuallyReviewed": true
+      },
+      {
+        "file": "work/tabs-aspect-upgrade-ndi7Kj/v0220/narrow-photo-panel.png",
+        "kind": "narrow-panel",
+        "tab": "photo",
+        "sha256": "03d65b6f8388207abc94c17e0562483337cbe0f6e1725687e56e8382e60a7cf4",
+        "visuallyReviewed": true
+      },
+      {
+        "file": "work/tabs-aspect-upgrade-ndi7Kj/v0220/narrow-photo-full.png",
+        "kind": "narrow-full",
+        "tab": "photo",
+        "sha256": "b535697977b9e7dac0f169f9f44a0f6d445ec6d86afd3f79bc92833a65db2d6f",
+        "visuallyReviewed": false
+      },
+      {
+        "file": "work/tabs-aspect-upgrade-ndi7Kj/v0220/desktop-ppt.png",
+        "kind": "desktop",
+        "tab": "ppt",
+        "sha256": "f8fd236f52cd40406482458d591581d11ee2807bb659d0089b0a6bfe86f61577",
+        "visuallyReviewed": true
+      },
+      {
+        "file": "work/tabs-aspect-upgrade-ndi7Kj/v0220/narrow-ppt-panel.png",
+        "kind": "narrow-panel",
+        "tab": "ppt",
+        "sha256": "44ef77f01ca591ceedd104c173d7876191ae827dd55629a33c8f6733dd91d9f9",
+        "visuallyReviewed": true
+      },
+      {
+        "file": "work/tabs-aspect-upgrade-ndi7Kj/v0220/narrow-ppt-full.png",
+        "kind": "narrow-full",
+        "tab": "ppt",
+        "sha256": "523540757a9459008824cf2b8dda05ff9b6b63ba51eb488435351b56049b4581",
+        "visuallyReviewed": true
+      },
+      {
+        "file": "work/tabs-aspect-upgrade-ndi7Kj/v0220/desktop-youtube.png",
+        "kind": "desktop",
+        "tab": "youtube",
+        "sha256": "f635c2418410e8894f870eece5d102a4560f761cc75cc2681845ef8f2767c1a1",
+        "visuallyReviewed": true
+      },
+      {
+        "file": "work/tabs-aspect-upgrade-ndi7Kj/v0220/narrow-youtube-panel.png",
+        "kind": "narrow-panel",
+        "tab": "youtube",
+        "sha256": "10598e4b6c66f7af703d1d22490fbbebd3e17d1d7333d68c5824508ba232ddde",
+        "visuallyReviewed": true
+      },
+      {
+        "file": "work/tabs-aspect-upgrade-ndi7Kj/v0220/narrow-youtube-full.png",
+        "kind": "narrow-full",
+        "tab": "youtube",
+        "sha256": "7139c12e7b5ad82805f84b539da200ead3cabe3badd640acbc68fa66dcfeccf9",
+        "visuallyReviewed": false
+      }
+    ]
+  },
+  "isolation": {
+    "pageErrors": 0,
+    "externalRequests": 0,
+    "remoteWrites": 0,
+    "serviceWorkers": 0
+  },
+  "boundaries": {
+    "accountStorage": "NOT_RUN",
+    "email": "NOT_RUN",
+    "teacherSource": "NOT_USED",
+    "youTubeSubmissionAndPlayback": "NOT_RUN",
+    "photoFileInsertion": "NOT_RUN_IN_THIS_PUBLIC_SMOKE",
+    "nativePowerPointRendering": "NOT_RUN",
+    "hostDeployment": "SEPARATE_VERIFICATION_REQUIRED"
+  },
+  "evidence": [
+    {
+      "file": "work/tabs-aspect-upgrade-ndi7Kj/seed-report.json",
+      "sha256": "8516fc5d34b3b66c03c7e618f2caa50297dfb47889b5d85eb99ed2eb56c798b7"
+    },
+    {
+      "file": "work/tabs-aspect-upgrade-ndi7Kj/v0220/report.json",
+      "sha256": "ab6042d46feba3babca385372b59cdf1a1730083cc775008160555da5ce1a85a"
+    },
+    {
+      "file": "work/tabs-aspect-upgrade-ndi7Kj/v0220/mobile-captures.json",
+      "sha256": "1b3fc5b54c9f0a178531cd9b61179f1a19ed6d1e401b77a1ddf00d16644a6cd5"
+    },
+    {
+      "file": "work/firebase-files-live.json",
+      "sha256": "db0f512b2299975201f4a57b5b6e5fb3b5ed96a0f2a1d7de186b5dc923d5f9bf"
+    }
+  ]
+}

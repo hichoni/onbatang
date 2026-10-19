@@ -14,6 +14,7 @@ import { SHAPE_ASSETS, SHAPE_GROUPS, shapeAsset } from './shapes.js';
 import { isArtId, artColorable, artAspect, artPack, artName } from './art.js';
 import { isYouTubeId, ytStart, ytTime } from './youtube.js';
 import { ENTER_IDS, COMBO_IDS, TRANSITION_IDS, STILL } from './motion.js';
+import { metadata, newId, fail, validatePageInput, isSlideItem, itemTextLimit, pageLimits } from './document.js';
 
 export { SHAPE_GROUPS };
 
@@ -145,6 +146,20 @@ export const SHAPES = SHAPE_ASSETS.map(({ id, name, group }) => ({ id, name, gro
 
 export const ALIGNS = ['l', 'c', 'r'];
 export const TEXT_SIZE = { min: 2.5, max: 30 };
+// Imported slides contain small labels and thin rules. Keep the ordinary editing
+// defaults, while preserving these authored dimensions through cleaning and edits.
+// The render-only layout marker survives guest projections that strip provenance.
+const pptxItem = isSlideItem;
+// Office defaults imported slide paragraphs to hanging punctuation. Keep an
+// explicit false: public render-only items lose private source metadata.
+export const hangsPunctuation = item => typeof item?.hangingPunct === 'boolean'
+  ? item.hangingPunct : pptxItem(item);
+export const textLimit = item => itemTextLimit(item, config.maxText);
+const textMin = item => pptxItem(item) ? 0.1 : TEXT_SIZE.min;
+const widthMin = item => pptxItem(item) ? 0.1 : 10;
+const shapeMin = item => pptxItem(item) ? 0.01 : SIZE.min;
+const heightMin = item => pptxItem(item) ? 0.01 : 0.6;
+const LOCAL_TYPEFACES = ['Arial','Calibri','Aptos','Malgun Gothic','맑은 고딕','돋움','Gulim','굴림','학교안심 이어달리기 L','학교안심 바른돋움 B'];
 /** 투명도: 100 이면 또렷하고, 낮을수록 비쳐 보인다. 아예 안 보이면 다시 고르기 어려워 10 까지만. */
 export const OPACITY = { min: 10, max: 100 };
 /** 사진의 테두리 모양. */
@@ -162,15 +177,20 @@ export const EDGE = { min: 0.4, max: 4, step: 0.4, base: 1.2 };
 const OLD_ROUND = 4;
 const SIZE = { min: 2, max: 140 };
 const PHOTO_MIN = 5;
+const photoMin = item => pptxItem(item) ? 0.1 : PHOTO_MIN;
 const PHOTO_MAX = 300;          // 사진은 카드보다 크게 키워 배경처럼 깔 수 있다
 const shapeIds = SHAPES.map((s) => s.id);
 const maskIds = MASKS.map((m) => m.id);
 
-const num = (v, lo, hi, fallback) => {
+const num = (v, lo, hi, fallback, precision = 10) => {
   const n = Number(v);
   if (!Number.isFinite(n)) return fallback;
-  return Math.round(Math.min(hi, Math.max(lo, n)) * 10) / 10;
+  return Math.round(Math.min(hi, Math.max(lo, n)) * precision) / precision;
 };
+const measure = (item, ...args) => num(...args, pptxItem(item) ? 10000 : 10);
+// Screen-pixel nudges and anchored resizing need sub-tenth-percent positions,
+// including after save/reopen. Dimension limits and their precision stay intact.
+const position = (value, fallback) => num(value, 0, 100, fallback, 10000);
 // 숫자로 적힌 값인가(없는 값·빈 글·글자는 아니다). "정하지 않음"과 0 을 가려야 하는 값에 쓴다.
 const given = (v) => (typeof v === 'number' || (typeof v === 'string' && v.trim() !== '')) && Number.isFinite(Number(v));
 
@@ -223,8 +243,10 @@ const lines = (raw) => String(raw ?? '').split(/\r\n|\r|\n/).map((l) => l.replac
 export function cleanItem(item, { keepSpaces = false } = {}) {
   const it = item && typeof item === 'object' ? item : {};
   const base = {
-    x: num(it.x, 0, 100, 50), y: num(it.y, 0, 100, 50), rot: Math.round(num(it.rot, -180, 180, 0)),
-    op: Math.round(num(it.op, OPACITY.min, OPACITY.max, OPACITY.max)),     // 투명도
+    ...metadata(it),
+    ...(pptxItem(it) ? {layout:'slide'} : {}),
+    x: position(it.x, 50), y: position(it.y, 50), rot: Math.round(num(it.rot, -180, 180, 0)),
+    op: Math.round(num(it.op, pptxItem(it) ? 0 : OPACITY.min, OPACITY.max, OPACITY.max)), // 빈 PPT 객체도 이름표를 보존한다.
     lock: it.lock === true,                                                // 잠금(실수로 움직이지 않게)
   };
   // 이름표(id)는 있을 때만 남긴다: 여럿이 함께 꾸미는 프로젝트가 요소를 가려낼 때 쓴다(틴커랩 미니캔의 "함께 만드는 그림"). 혼자 쓰는 그림에는 없다.
@@ -236,11 +258,18 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
   if (it.aw === true) base.aw = true;
   const flip = { fx: it.fx === true, fy: it.fy === true };                 // 좌우·상하 뒤집기
   if (it.t === 'text') {
-    const text = clip(keepSpaces ? String(it.text ?? '') : lines(it.text), config.maxText);
+    const text = clip(keepSpaces ? String(it.text ?? '') : lines(it.text), textLimit(it));
     if (!text && !keepSpaces) return null;
     return {
-      t: 'text', ...base, w: num(it.w, 10, 100, 80), text,
-      size: num(it.size, TEXT_SIZE.min, TEXT_SIZE.max, 7),
+      t: 'text', ...base, w: measure(base,it.w, widthMin(base), 100, 80), text,
+      size: measure(base,it.size, textMin(base), TEXT_SIZE.max, 7),
+      ...(typeof it.hangingPunct === 'boolean' ? {hangingPunct:it.hangingPunct} : {}),
+      ...(pptxItem(base) ? {
+        ...(given(it.h) ? {h:measure(base,it.h,0.01,140,10),valign:['top','middle','bottom'].includes(it.valign)?it.valign:'top'} : {}),
+        ...(given(it.lh) ? {lh:measure(base,it.lh,0.5,4,1.25)} : {}),
+        ...(it.nowrap===true ? {nowrap:true} : {}),
+        ...(LOCAL_TYPEFACES.includes(it.typeface) ? {typeface:it.typeface} : {}),
+      } : {}),
       color: cleanColor(it.color),
       font: cleanFont(it.font),
       bold: it.bold === true,
@@ -257,7 +286,7 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
   }
   if (it.t === 'shape') {
     const out = {
-      t: 'shape', ...base, ...flip, w: num(it.w, SIZE.min, SIZE.max, 30), h: num(it.h, 0.6, SIZE.max, 30),
+      t: 'shape', ...base, ...flip, w: measure(base,it.w, shapeMin(base), SIZE.max, 30), h: measure(base,it.h, heightMin(base), SIZE.max, 30),
       shape: shapeIds.includes(it.shape) ? it.shape : 'rect',
       color: cleanColor(it.color, '#1c7ed6'),
     };
@@ -267,7 +296,7 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
     if (asset.corner && given(it.r)) out.r = Math.round(num(it.r, 0, 100, 0));
     // line: 테두리 굵기 · lc: 테두리 색 · hollow: 속을 비운다(테두리만). 테두리가 없으면 속을 비울 수 없다(보이지 않게 되므로).
     if (asset.edge && Number(it.line) > 0) {
-      out.line = num(it.line, EDGE.min, EDGE.max, EDGE.base);
+      out.line = measure(base,it.line, pptxItem(base)?0.01:EDGE.min, EDGE.max, EDGE.base);
       out.lc = cleanColor(it.lc, out.color);
       if (it.hollow === true) out.hollow = true;
     }
@@ -293,7 +322,7 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
     const img = cleanImg(it);
     if (!img) return null;
     return {
-      t: 'image', ...base, ...flip, w: num(it.w, PHOTO_MIN, photoMax().w, 50), h: num(it.h, PHOTO_MIN, photoMax().h, 50),
+      t: 'image', ...base, ...flip, w: measure(base,it.w, photoMin(base), photoMax().w, 50), h: measure(base,it.h, photoMin(base), photoMax().h, 50),
       mask: maskIds.includes(it.mask) ? it.mask : 'none', ...img,
     };
   }
@@ -302,14 +331,16 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
 
 /** 요소들을 정리한다. 한도(기본 24개, 사진 3장)까지만 남긴다. */
 export function cleanItems(items, opts) {
+  const limits = pageLimits({items}, {items:config.maxItems,photos:config.maxPhotos,text:config.maxText});
+  if (opts?.strict) validatePageInput({ items }, limits);
   const out = [];
   let photos = 0;
   for (const raw of Array.isArray(items) ? items : []) {
     const it = cleanItem(raw, opts);
-    if (!it) continue;
-    if (it.t === 'image' && ++photos > config.maxPhotos) continue;
+    if (!it) { if (opts?.strict) fail('UNSUPPORTED_ELEMENT', 'items', items); continue; }
+    if (it.t === 'image' && ++photos > limits.photos) continue;
     out.push(it);
-    if (out.length >= config.maxItems) break;
+    if (out.length >= limits.items) break;
   }
   return out;
 }
@@ -320,7 +351,8 @@ export function cleanItems(items, opts) {
  */
 export function cleanDesign(design, opts) {
   const d = design && typeof design === 'object' ? design : {};
-  return { bg: cleanBg(d.bg), items: cleanItems(d.items, opts), ...designMotion(d), ...designVideo(d) };
+  const options = d.id ? { ...opts, strict: true, keepSpaces: true } : opts;
+  return { ...metadata(d, { identity: true }), bg: cleanBg(d.bg), items: cleanItems(d.items, options), ...designMotion(d), ...designVideo(d) };
 }
 /**
  * 디자인의 움직임: pa(요소들의 조합 효과) · tr(이 장이 넘어올 때의 전환 효과). 정해 둔 것만 담아 돌려준다(없으면 빈 객체).
@@ -496,35 +528,35 @@ export function snapCenter(v) {
 export function moveItem(item, x, y, { snap = true } = {}) {
   const [sx, onV] = snap ? snapCenter(x) : [x, false];
   const [sy, onH] = snap ? snapCenter(y) : [y, false];
-  return { item: { ...item, x: num(sx, 0, 100, 50), y: num(sy, 0, 100, 50) }, guides: { v: onV, h: onH } };
+  return { item: { ...item, x: position(sx, 50), y: position(sy, 50) }, guides: { v: onV, h: onH } };
 }
 
 /** 전체 크기를 k 배로(글상자는 글자 크기도 함께). 너무 작아지거나 커지지 않게 한계를 둔다. */
 export function scaleItem(item, k) {
   const f = Number.isFinite(k) && k > 0 ? k : 1;
   if (item.t === 'text') {
-    const size = num(item.size * f, TEXT_SIZE.min, TEXT_SIZE.max, item.size);
+    const size = measure(item,item.size * f, textMin(item), TEXT_SIZE.max, item.size);
     const real = size / item.size;
-    return { ...item, size, w: num(item.w * real, 10, 100, item.w) };
+    return { ...item, size, w: measure(item,item.w * real, widthMin(item), 100, item.w), ...(given(item.h)?{h:measure(item,item.h*real,0.01,140,item.h)}:{}) };
   }
   if (item.t === 'emoji') return { ...item, w: num(item.w * f, 4, SIZE.max, item.w) };
   // 도형·사진: 가로세로 비율을 지킨다.
   const max = item.t === 'image' ? photoMax() : { w: SIZE.max, h: SIZE.max };
-  const lo = item.t === 'image' ? Math.max(PHOTO_MIN / item.w, PHOTO_MIN / item.h) : Math.max(SIZE.min / item.w, 0.6 / item.h);
+  const lo = item.t === 'image' ? Math.max(photoMin(item) / item.w, photoMin(item) / item.h) : Math.max(shapeMin(item) / item.w, heightMin(item) / item.h);
   const hi = Math.min(max.w / item.w, max.h / item.h);
   const real = Math.min(hi, Math.max(lo, f));
-  return { ...item, w: num(item.w * real, 0, max.w, item.w), h: num(item.h * real, 0, max.h, item.h) };
+  return { ...item, w: measure(item,item.w * real, 0, max.w, item.w), h: measure(item,item.h * real, 0, max.h, item.h) };
 }
 
 /** 너비만(글상자·도형). */
 export function widenItem(item, w) {
-  if (item.t === 'text') return { ...item, w: num(w, 10, 100, item.w) };
-  if (item.t === 'shape') return { ...item, w: num(w, SIZE.min, SIZE.max, item.w) };
+  if (item.t === 'text') return { ...item, w: measure(item,w, widthMin(item), 100, item.w) };
+  if (item.t === 'shape') return { ...item, w: measure(item,w, shapeMin(item), SIZE.max, item.w) };
   return item;
 }
 /** 높이만(도형). */
 export function heightenItem(item, h) {
-  return item.t === 'shape' ? { ...item, h: num(h, 0.6, SIZE.max, item.h) } : item;
+  return item.t === 'shape' ? { ...item, h: measure(item,h, heightMin(item), SIZE.max, item.h) } : item;
 }
 
 /** 돌리기. 0·90·180·-90 도 가까이에서는 딱 붙인다. */
@@ -591,10 +623,11 @@ export function rebaseItems(list, { items: patch = new Map(), added = new Set(),
 /** 복사해서 조금 옆에 놓는다. 꽉 찼거나 사진이 한도까지 있으면 null. */
 export function duplicateItem(items, i) {
   const it = items[i];
-  if (!it || items.length >= config.maxItems) return null;
-  if (it.t === 'image' && items.filter((k) => k.t === 'image').length >= config.maxPhotos) return null;
+  const limits = pageLimits({items}, {items:config.maxItems,photos:config.maxPhotos,text:config.maxText});
+  if (!it || items.length >= limits.items) return null;
+  if (it.t === 'image' && items.filter((k) => k.t === 'image').length >= limits.photos) return null;
   const { id, ...copy } = it;            // 복제한 것은 다른 요소다: 이름표를 물려받지 않는다
-  return { ...copy, x: num(it.x + 4, 0, 100, 50), y: num(it.y + 4, 0, 100, 50) };
+  return { ...copy, ...(id ? { id: newId(), origin: { elementId: id } } : {}), x: position(it.x + 4, 50), y: position(it.y + 4, 50) };
 }
 
 /**
@@ -602,10 +635,11 @@ export function duplicateItem(items, i) {
  * 잠금은 풀어서 붙인다. 꽉 찼거나 사진이 3장이면 null.
  */
 export function pasteItem(items, item, at = null) {
-  if (!item || items.length >= config.maxItems) return null;
-  if (item.t === 'image' && items.filter((k) => k.t === 'image').length >= config.maxPhotos) return null;
+  const limits = pageLimits({items:[...items,item]}, {items:config.maxItems,photos:config.maxPhotos,text:config.maxText});
+  if (!item || items.length >= limits.items) return null;
+  if (item.t === 'image' && items.filter((k) => k.t === 'image').length >= limits.photos) return null;
   const { id, ...copy } = item;          // 붙여 넣은 것은 다른 요소다: 이름표를 물려받지 않는다
-  return cleanItem({ ...copy, x: at ? at.x : item.x + 4, y: at ? at.y : item.y + 4, lock: false }, { keepSpaces: true });
+  return cleanItem({ ...copy, ...(id ? { id: newId(), origin: { elementId: id } } : {}), x: at ? at.x : item.x + 4, y: at ? at.y : item.y + 4, lock: false }, { keepSpaces: true });
 }
 
 /** 화면에 보일 짧은 이름(레이어 목록용). */
@@ -629,9 +663,9 @@ export function resizeTo(item, value) {
 }
 /** 크기 막대의 범위. */
 export function sizeRange(item) {
-  if (item.t === 'text') return { min: TEXT_SIZE.min, max: TEXT_SIZE.max, step: 0.5 };
+  if (item.t === 'text') return { min: textMin(item), max: TEXT_SIZE.max, step: pptxItem(item)?0.1:0.5 };
   if (item.t === 'emoji') return { min: 4, max: 100, step: 1 };
-  return { min: item.t === 'image' ? PHOTO_MIN : SIZE.min, max: item.t === 'image' ? 200 : 100, step: 1 };
+  return { min: item.t === 'image' ? photoMin(item) : shapeMin(item), max: item.t === 'image' ? 200 : 100, step: 1 };
 }
 
 /**
@@ -641,7 +675,7 @@ export function sizeRange(item) {
 export function alignItem(item, where, hw = 0, hh = 0) {
   const x = where === 'left' ? hw : where === 'right' ? 100 - hw : where === 'center' ? 50 : item.x;
   const y = where === 'top' ? hh : where === 'bottom' ? 100 - hh : where === 'middle' ? 50 : item.y;
-  return { ...item, x: num(x, 0, 100, item.x), y: num(y, 0, 100, item.y) };
+  return { ...item, x: position(x, item.x), y: position(y, item.y) };
 }
 
 // ---------- 그룹 ----------
@@ -685,7 +719,7 @@ export function scaleItems(items, k, ax, ay) {
     k: f,
     items: items.map((it) => {
       const sized = scaleItem(it, f);
-      return { ...sized, x: num(ax + (it.x - ax) * f, 0, 100, it.x), y: num(ay + (it.y - ay) * f, 0, 100, it.y) };
+      return { ...sized, x: position(ax + (it.x - ax) * f, it.x), y: position(ay + (it.y - ay) * f, it.y) };
     }),
   };
 }
@@ -774,9 +808,9 @@ export function reshapeItems(items, from, to, { fit = false } = {}) {
     if (fit) {
       next = { ...it, x: (left + s * (it.x / 100)) * 100, y: (top + s * (it.y / 100) / a) * b * 100, w: it.w * s };
       if (it.t === 'text') next.size = it.size * s;
-      if (it.t === 'shape' || it.t === 'image' || it.t === 'art' || it.t === 'yt') next.h = it.h * k * s;
+      if (it.t === 'shape' || it.t === 'image' || it.t === 'art' || it.t === 'yt' || it.t==='text'&&given(it.h)) next.h = it.h * k * s;
       if (it.line) next.line = it.line * s;      // 테두리도 같은 비율로 가늘어진다(둥글기는 % 라 그대로)
-    } else if (it.t === 'shape' || it.t === 'image' || it.t === 'art' || it.t === 'yt') {
+    } else if (it.t === 'shape' || it.t === 'image' || it.t === 'art' || it.t === 'yt' || it.t==='text'&&given(it.h)) {
       next = { ...it, h: it.h * k };
     }
     if (next === it) return it;
