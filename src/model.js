@@ -15,7 +15,7 @@ import { isArtId, artColorable, artAspect, artPack, artName } from './art.js';
 import { isYouTubeId, ytStart, ytTime } from './youtube.js';
 import { ENTER_IDS, COMBO_IDS, TRANSITION_IDS, STILL } from './motion.js';
 import { metadata, newId, fail, validatePageInput, isSlideItem, itemTextLimit, pageLimits } from './document.js';
-import { cleanPixelActivity } from './pixel-art.js';
+import { cleanActivity } from './activity.js';
 
 export { SHAPE_GROUPS };
 
@@ -353,7 +353,7 @@ export function cleanItems(items, opts) {
 export function cleanDesign(design, opts) {
   const d = design && typeof design === 'object' ? design : {};
   const options = d.id ? { ...opts, strict: true, keepSpaces: true } : opts;
-  return { ...metadata(d, { identity: true }), bg: cleanBg(d.bg), items: cleanItems(d.items, options), ...designMotion(d), ...designVideo(d), ...(d.activity === undefined ? {} : {activity:cleanPixelActivity(d.activity)}) };
+  return { ...metadata(d, { identity: true }), bg: cleanBg(d.bg), items: cleanItems(d.items, options), ...designMotion(d), ...designVideo(d), ...(d.activity === undefined ? {} : {activity:cleanActivity(d.activity)}) };
 }
 /**
  * 디자인의 움직임: pa(요소들의 조합 효과) · tr(이 장이 넘어올 때의 전환 효과). 정해 둔 것만 담아 돌려준다(없으면 빈 객체).

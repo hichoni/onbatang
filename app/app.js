@@ -1,5 +1,5 @@
 // 미니캔 앱: 내 그림들 → 새 그림 → 꾸미기(그림의 모양은 꾸미는 화면에서 언제든 바꾼다) → 그림·영상 파일로 내려받기.
-// 편집기는 모듈(src/)의 것을 그대로 쓴다. 그림은 이 기기(브라우저의 IndexedDB)에만 저장되고, 서버로는 아무것도 보내지 않는다.
+// 편집기는 모듈(src/)의 것을 쓴다. 그림은 기기에 저장하며, 선택적 계정/가이X 연결은 호스트가 제공한다.
 // 들여 쓰는 곳은 startMinican({ fonts, titleFont, storage, onView, brand, sync })로 시작한다(index.html 이 그 예다).
 // 화면의 짜임: 첫 화면(소개·새로 만들기 + 템플릿 + 내 그림)과 꾸미는 화면(위 막대 · 왼쪽 도구 줄과 옆 칸 · 가운데 그림 · 아래 슬라이드 띠).
 //             꾸미는 화면은 넓은 화면에서 창을 꽉 채우고(스크롤 없음), 좁은 화면에서는 위에서 아래로 쌓인다(app.css).
@@ -13,6 +13,9 @@ import {newId} from '../src/document.js';
 import {newPixelActivity,pixelArtCover,pixelArtResult} from '../src/pixel-art.js';
 import {mountPixelArt,createPixelArtSetup,pixelArtImage} from './pixel-art.js';
 import {createHtmlLesson} from './html-lesson.js';
+import {cleanGaiActivity,gaiAppCover,gaiAppResult} from '../src/gai-app.js';
+import {mountGaiApp} from './gai-app.js';
+import {createGaiMaker,gaiLessonContext} from './gai-maker.js';
 import {
   createEditor, designView, designToBlob, configure, settings, reshapeItems, layoutList, layoutItems, icon, cleanDesign, hasMotion, playDesign, playTransition,
   COMBOS, TRANSITIONS, designsToVideo, canMakeVideo, canFilmScenes, filmPlan, MAX_FILM_SECONDS, videoSize, STAYS, DEFAULT_STAY, scenePlayer, dropScene, sceneUrl, youTubePlayers,
@@ -33,7 +36,7 @@ import {
 import { saveVideo, listVideos, removeVideos } from './videos.js';
 import { zipStore } from './zip.js';
 import { createPptx } from './pptx.js';
-import { listDesigns, getDesign, putDesign, removeDesign, setStorageName, storageName, listDesignIssues, getOriginalDesign } from './store.js';
+import { listDesigns, getDesign, putDesign, replaceDesignIfUnchanged, removeDesign, setStorageName, storageName, listDesignIssues, getOriginalDesign } from './store.js';
 import { setupApp, useFonts, photoToData, BASIC_GROUP } from './setup.js';
 import { mergeAccount, createPusher, syncsRecord } from './sync.js';
 
@@ -43,6 +46,7 @@ let onBrandClick = null;
 let importAction = null;
 let materialAction = null;
 let materialNavigation = null;
+let appMaker = null;
 let colorPalettes=null;
 let brand = null;                // 들여 쓰는 곳의 표시 { name, logo } (없으면 표시하지 않는다)
 let sync = null;                 // 들여 쓰는 곳의 계정 저장(sync.js). 없으면 이 기기에만 저장한다
@@ -750,6 +754,7 @@ function renderStrip(O) {
       tool('copy', '복제', '이 장을 복제하기', () => changeSlides(O, copySlide), full),
       del,
       el('button',{class:'btn cv-activity-add',type:'button',dataset:{addActivity:''},onClick:()=>configureActivity(O)},'+ 활동 추가'),
+      appMaker&&el('button',{class:'btn cv-activity-add',type:'button',dataset:{addGaiApp:''},onClick:()=>configureGaiActivity(O)},'가이X로 앱 만들기'),
       el('button',{class:'btn cv-activity-edit',type:'button',dataset:{editActivity:''},onClick:()=>configureActivity(O,true)},'활동 설정')));
   updateActivityTools(O);
   // 띠를 다시 그려도 옆으로 넘겨 둔 자리는 그대로 두고, 고른 장이 안 보일 때에만 그쪽으로 (부드럽게) 넘긴다.
@@ -954,11 +959,12 @@ async function commitActivityDocument(O,document,pageOrder,selectedPageId,expect
     if(deck.recoveryRequired){O.recoveryRequired=true;O.localOk=false;O.shell.inert=true;clearTimeout(O.timer);clearTimeout(O.thumbTimer);O.dirty=false;toast('전체 자료에는 저장했어요. 다른 창의 초안을 보존하기 위해 편집을 마쳐요. 내 자료에서 고정 저장본을 확인해주세요.',8000);}
     for(const warning of deck.warnings||[])toast(warning,6500);
   }else{
-    const ready=await putDesign({...document,revision:document.revision+1,updatedAt:Date.now()});
+    const ready=await replaceDesignIfUnchanged(document,expectedDocument);
     selectActivityRecord(O,ready,selectedPageId);if(accountFor(ready))pusher.queue(ready);
   }
 }
 async function configureActivity(O,editing=false){
+  if(editing&&O.editor.getDesign().activity?.kind==='gai-app')return configureGaiActivity(O,true);
   if(O.closed||O.leaving||O.inlineImport||O.activityBusy||videoBusy(O))return;
   if(O.materialLoadingPromise)await O.materialLoadingPromise;
   if(O.closed||S.open!==O||O.recoveryRequired)return;
@@ -994,6 +1000,53 @@ async function configureActivity(O,editing=false){
   }}));
   O.activityConfig=host;O.shell.querySelector('.cv-canvas').append(host);
   host.querySelector('input')?.focus({preventScroll:true});
+}
+
+async function configureGaiActivity(O,editing=false){
+  if(!appMaker||O.closed||O.leaving||O.inlineImport||O.activityBusy||videoBusy(O))return;
+  if(O.materialLoadingPromise)await O.materialLoadingPromise;
+  if(O.closed||S.open!==O||O.recoveryRequired)return;
+  if(O.materialLoadError){toast('PPT 전체 자료를 읽지 못했어요. 내 자료에서 다시 열어주세요.');return;}
+  try{await persistEditorAction(O);}catch{toast('현재 그림을 저장하지 못했어요. 저장 상태를 확인한 뒤 앱을 만들어주세요.');return;}
+  if(O.closed||S.open!==O)return;
+  clearTimeout(O.thumbTimer);O.activityConfig?.remove();
+  const selected=O.editor.getDesign(),activity=editing?selected.activity:undefined;
+  if(editing&&activity?.kind!=='gai-app')return;
+  const host=el('section',{class:'cv-activity-config','aria-label':'가이X 앱 만들기'});
+  const cancel=()=>{host.remove();if(O.activityConfig===host)O.activityConfig=null;};
+  const maker=createGaiMaker({provider:appMaker,activity,
+    context:gaiLessonContext(lessonPages(O),selected.id,O.materialDeck?.title||O.record.name),
+    draftKey:JSON.stringify([storageName(),O.record.id,selected.id,O.record.revision,editing?'edit':'new']),onCancel:cancel,
+    onApply:async value=>{
+      if(O.closed||O.activityBusy||S.open!==O)throw Error('현재 작업을 마친 뒤 다시 시도해주세요.');
+      O.activityBusy=true;app.inert=true;
+      try{
+        await persistEditorAction(O);
+        const entries=lessonPages(O),at=entries.findIndex(v=>v.page.id===selected.id);
+        if(at<0)throw Error('선택한 쪽이 바뀌었어요. 다시 선택해주세요.');
+        let record={...O.record,slides:currentSlides(O)};
+        const id=editing?selected.id:newId('p');
+        const makePage=row=>({...gaiAppCover(value,aspectOf(row)),id,source:editing?selected.source:{kind:'local'},origin:editing?selected.origin:{documentId:O.record.id,pageId:selected.id,revision:O.record.revision},activity:value});
+        const updated=row=>{
+          const slides=[...row.slides],page=makePage(row),local=slides.findIndex(p=>p.id===selected.id);
+          if(editing){if(local<0)throw Error('수정할 앱을 다시 선택해주세요.');slides[local]=page;}
+          else slides.splice(local<0?slides.length:local+1,0,page);
+          return {...row,slides};
+        };
+        if(!editing){
+          const candidates=O.materialDeck?[record,...O.materialDeck.documents.filter(row=>row.id!==record.id)]:[record];
+          record=candidates.find(row=>row.slides.length<=MAX_SLIDES-2&&new TextEncoder().encode(JSON.stringify(updated(row))).length<460000);
+          if(!record)throw Error('이 자료에 앱과 결과를 넣을 공간이 부족해요. 대화는 남아 있어요. 가이X에게 더 작은 앱으로 줄여 달라고 요청해주세요.');
+        }
+        const document=updated(record);
+        if(new TextEncoder().encode(JSON.stringify(document)).length>500000)throw Error('앱이 너무 커서 저장하지 않았어요. 더 작은 앱으로 줄여 달라고 요청해주세요.');
+        const ids=entries.map(v=>v.page.id);if(!editing)ids.splice(at+1,0,id);
+        await commitActivityDocument(O,document,ids,id,record.id===O.record.id?O.persistedRecord:record);cancel();
+        if(O.recoveryRequired)await closeDesign(O);
+      }finally{O.activityBusy=false;app.inert=false;}
+    }});
+  host.append(maker);const remove=host.remove.bind(host);host.remove=()=>{maker.dispose();remove();};
+  O.activityConfig=host;O.shell.querySelector('.cv-canvas').append(host);
 }
 
 // ---------- 발표: 화면 가득 한 장씩 보여 준다 ----------
@@ -1094,8 +1147,8 @@ async function present(O) {
     if(design.activity){
       for(const n of [...stage.children])drop(n);film?.pause();for(const p of tube)p.pause();film=null;tube=[];markFilm();parts=null;
       const host=el('section',{class:'cv-show-activity',dataset:{pixelApp:''}});stage.append(host);
-      const activity={...design.activity,cells:working.get(design.id)||design.activity.cells};
-      pixel=mountPixelArt(host,{activity,onChange:cells=>working.set(design.id,cells),onSave:async cells=>{
+      const gai=design.activity.kind==='gai-app',activity=gai?{...design.activity,state:working.get(design.id)||design.activity.state}:{...design.activity,cells:working.get(design.id)||design.activity.cells};
+      pixel=(gai?mountGaiApp:mountPixelArt)(host,{activity,onChange:value=>working.set(design.id,value),onSave:async cells=>{
         if(savingActivity||closed)return;
         savingActivity=true;
         try{
@@ -1103,12 +1156,13 @@ async function present(O) {
           if(prior&&slides.some(p=>p.id===prior)){i=slides.findIndex(p=>p.id===prior);draw(1);return;}
           const source=entries.find(v=>v.page.id===design.id),record=source.record.id===O.record.id?{...O.record,slides:currentSlides(O)}:source.record;
           if(record.slides.length>=MAX_SLIDES)throw Error('이 활동의 저장 공간이 가득 찼어요. 이전 결과 쪽을 정리한 뒤 다시 저장해주세요.');
-          const updated={...design.activity,cells:[...cells]},image=pixelArtImage(updated),result=pixelArtResult(updated,cells,aspectOf(record),image);
+          const updated=gai?cleanGaiActivity({...design.activity,state:cells.state}):{...design.activity,cells:[...cells]},result=gai?gaiAppResult(updated,cells,aspectOf(record)):pixelArtResult(updated,cells,aspectOf(record),pixelArtImage(updated));
           result.origin={documentId:record.id,pageId:design.id,revision:record.revision};
           const next=record.slides.map(p=>p.id===design.id?{...p,activity:updated}:p),index=next.findIndex(p=>p.id===design.id);
           next.splice(index+1,0,result);const ids=entries.map(v=>v.page.id);ids.splice(ids.indexOf(design.id)+1,0,result.id);
           await commitActivityDocument(O,{...record,slides:next},ids,result.id,record.id===O.record.id?O.persistedRecord:record);
-          working.set(design.id,[...cells]);savedResults.set(signature,result.id);
+          working.set(design.id,gai?cells.state:[...cells]);savedResults.set(signature,result.id);
+          if(gai&&cells.imageOmitted)toast('앱 화면 그림은 생략하고 답과 진행 상태를 저장했어요.');
           entries=lessonPages(O);slides=entries.map(v=>cleanDesign(v.page,{keepSpaces:true}));i=slides.findIndex(p=>p.id===result.id);draw(1);
         }finally{savingActivity=false;}
       }});
@@ -1348,6 +1402,7 @@ async function leaveEditor(O, { requireSaved = false, waitForSync = false } = {}
   // 그 그림은 지우려던 영상을 아직 쓰고 있을 수 있다.
   if (ok && !O.dirty && O.localOk !== false) await tidyVideos(O.record.id, currentSlides(O));
   O.closed = true;
+  O.activityConfig?.remove();O.activityConfig=null;
   O.materialLoading?.dispose();
   O.stripDrag?.destroy();
   if (accountFor(O.record)) {
@@ -2054,7 +2109,7 @@ function flush() {
  * - materialAction: {label, accepts?(record), open({designId,slideIndex})} 현재 그림 저장 후 같은 편집기에서 전체 자료 작업을 여는 선택 연결.
  *   기본 모드는 기존 호스트 이동 계약을 유지한다. 파일 해석과 저장은 호스트가 맡는다.
  */
-export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null, materialAction: material = null, materialNavigation: navigation = null } = {}) {
+export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null, materialAction: material = null, materialNavigation: navigation = null, appMaker: maker = null } = {}) {
   if (app) throw new Error('minican already started');
   if (!root) throw new Error('minican root');
   app = root;
@@ -2065,6 +2120,7 @@ export function startMinican({ root = document.getElementById('app'), fonts = []
   if (importing && typeof importing.open === 'function' && typeof importing.label === 'string' && importing.label.trim()) importAction = importing;
   if (material && typeof material.open === 'function' && typeof material.label === 'string' && material.label.trim() && (!material.accepts || typeof material.accepts === 'function')) materialAction = material;
   if(navigation&&typeof navigation.load==='function')materialNavigation=navigation;
+  if(maker&&typeof maker.connect==='function'&&typeof maker.generate==='function')appMaker=maker;
   if (account && ['pull', 'push', 'drop'].every((k) => typeof account[k] === 'function')) {
     sync = account;
     pusher = createPusher(sync, { onDone: pushed });

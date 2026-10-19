@@ -1,4 +1,6 @@
 @import url('./pixel-art.css');
+@import url('./gai-app.css');
+@import url('./gai-maker.css');
 /* 미니캔 앱의 바탕: 글자·단추·창(모달)·알림의 기본 모양과 색 값. 앱의 화면 짜임은 이 아래에, 편집기의 모양은 src/editor.css 에 있다.
    이 파일은 미니캔 앱 한 쪽(app/index.html, 또는 그것을 본뜬 쪽)에서만 쓴다: html · body 같은 요소 전체에 규칙을 건다. */
 body.mc-app {
@@ -466,6 +468,8 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"], body.mc-app :is(#app,.cv-a
 .cv-show-key { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 4px 12px; border: 0; border-radius: 999px; background: rgba(255, 255, 255, .16); color: #fff; font: inherit; font-weight: 800; cursor: pointer; }
 .cv-show-key:hover { background: rgba(255, 255, 255, .3); }
 .cv-show-key[hidden] { display: none; }      /* 영상 장면이 없는 장에서는 영상 단추를 감춘다 */
+.cv-show-key,.cv-show-count{white-space:nowrap;flex-shrink:0}
+@media(max-width:680px){.cv-show-bar{gap:6px;padding:8px;max-width:calc(100vw - 16px)}.cv-show-key{padding:8px 10px;min-height:44px}.cv-show-count{font-size:14px}}
 @media (pointer: coarse) { .cv-show-bar { opacity: .9; } }
 
 /* ---- 내려받기 창: 파일 종류 → 저장할 장 → 설정 → 내려받기 ----

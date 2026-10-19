@@ -139,7 +139,7 @@ test('WebM 길이 적어 넣기: 모양이 다르면 그대로 돌려준다', ()
   assert.equal(fixWebmDuration(junk, 2), junk);
 });
 
-test('앱은 이 기기 밖으로 아무것도 보내지 않고, 로그인·서버 저장·다른 서비스 연결이 없다', () => {
+test('편집기 자체에는 인증·서버 API가 없고 가이X 연결 주소는 명시적인 팝업 공급자에만 있다', () => {
   const files = readdirSync(APP).filter((f) => /\.(js|css|html)$/.test(f));
   assert.ok(files.includes('app.js') && files.includes('app.css') && files.includes('index.html'));
   for (const f of files) {
@@ -149,8 +149,9 @@ test('앱은 이 기기 밖으로 아무것도 보내지 않고, 로그인·서�
     const networkSource = f === 'pptx.js' ? src.replace("fetch(item.url, {signal, method: 'GET', credentials: 'omit', referrerPolicy: 'no-referrer'})", 'readExistingPhoto()') : src;
     assert.doesNotMatch(networkSource, /\bfetch\(|XMLHttpRequest|WebSocket|sendBeacon|EventSource/, f);
     const addresses = f === 'pptx.js' ? src.replaceAll(/http:\/\/schemas\.openxmlformats\.org\/(?:drawingml\/2006\/main|presentationml\/2006\/main|officeDocument\/2006\/(?:relationships|extended-properties)|package\/2006\/(?:relationships(?:\/metadata\/core-properties)?|content-types|metadata\/core-properties))/g, '').replaceAll('http://purl.org/dc/elements/1.1/', '') : src;
-    assert.doesNotMatch(addresses.replaceAll('http://www.w3.org/2000/svg', ''), /https?:\/\//, `${f}: 바깥 주소`);
-    assert.doesNotMatch(src, /firebase|firestore|tinkerlab|틴커랩|student|login|로그인/i, f);
+    const allowed = f === 'gai-provider.js' ? addresses.replaceAll('https://gai-lab.netlify.app/onbatang-gai-connect.html', '') : addresses;
+    assert.doesNotMatch(allowed.replaceAll('http://www.w3.org/2000/svg', ''), /https?:\/\//, `${f}: 바깥 주소`);
+    assert.doesNotMatch(src, /firebase|firestore|tinkerlab|틴커랩|signInWithPassword|access_token|service_role/i, f);
     for (const [, from] of src.matchAll(/from '([^']+)'/g)) assert.match(from, /^\.\/(?:pptx-import\/)?[\w-]+\.js$|^\.\.\/src\/[\w-]+\.js$/, `${f}: ${from}`);
   }
   assert.doesNotMatch(readFileSync(APP + 'app.css', 'utf8'), /cv-team|cv-roster|cv-me\b|cv-adopt/);

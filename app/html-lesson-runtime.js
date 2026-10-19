@@ -1,6 +1,9 @@
 import { cleanPixelActivity } from '../src/pixel-art.js';
+import { cleanActivity } from '../src/activity.js';
+import { cleanGaiResult } from '../src/gai-app.js';
 import { isId, newId } from '../src/document.js';
 import { mountPixelArt } from './pixel-art.js';
+import { mountGaiApp } from './gai-app.js';
 import { el } from '../src/dom.js';
 
 const png = value => typeof value === 'string' && /^data:image\/png;base64,[A-Za-z\d+/=]+$/.test(value) && value.length <= 4_000_000;
@@ -13,8 +16,13 @@ export function cleanHtmlLesson(raw) {
     seen.add(page.id); bytes += page.image.length;
     if (bytes > 200_000_000) throw new Error('수업 파일이 너무 커요. 그림 크기를 줄여 다시 내려받아 주세요.');
     const out = { id: page.id, image: page.image, aspect: page.aspect };
-    if (page.activity !== undefined) out.activity = cleanPixelActivity(page.activity);
-    if (page.result === true) out.result = true;
+    if (page.activity !== undefined) { out.activity = cleanActivity(page.activity); bytes += new TextEncoder().encode(JSON.stringify(out.activity)).length; }
+    if (bytes > 200_000_000) throw new Error('수업 파일이 너무 커요. 그림 크기를 줄여 다시 내려받아 주세요.');
+    if (page.result === true) {
+      out.result = true;
+      if(page.resultData!==undefined){out.resultData=cleanGaiResult(page.resultData);bytes+=new TextEncoder().encode(JSON.stringify(out.resultData)).length;}
+    }
+    if(bytes>200_000_000)throw new Error('수업 파일이 너무 커요. 그림 크기를 줄여 다시 내려받아 주세요.');
     return out;
   });
   return { version: 1, id: raw.id, title: raw.title, updatedAt: Number.isSafeInteger(raw.updatedAt) && raw.updatedAt >= 0 ? raw.updatedAt : 0, pages };
@@ -32,8 +40,10 @@ export function mountHtmlLesson(raw, host = document.getElementById('onbatang-le
       for (const result of cleanHtmlLesson({ ...seed, pages: stored.results.length ? stored.results : seed.pages.slice(0, 1) }).pages) if (result.result && !originals.has(result.id)) originals.set(result.id, result);
       if (stored.order.length !== originals.size || new Set(stored.order).size !== originals.size || stored.order.some(id => !originals.has(id))) throw new Error('저장된 순서가 달라요.');
       pages = stored.order.map(id => {
-        const page = originals.get(id), cells = stored.cells?.[id];
-        return page.activity && cells !== undefined ? { ...page, activity: cleanPixelActivity({ ...page.activity, cells }) } : page;
+        const page = originals.get(id), cells = stored.cells?.[id], state = stored.states?.[id];
+        if(page.activity?.kind==='pixel-art'&&cells!==undefined)return {...page,activity:cleanActivity({...page.activity,cells})};
+        if(page.activity?.kind==='gai-app'&&state!==undefined)return {...page,activity:cleanActivity({...page.activity,state})};
+        return page;
       });
       current = Math.max(0, pages.findIndex(p => p.id === stored.currentId)); update = stored.updatedAt;
       storageNotice = '이 브라우저에 저장한 활동과 결과를 다시 열었어요.';
@@ -62,9 +72,10 @@ export function mountHtmlLesson(raw, host = document.getElementById('onbatang-le
     el('footer', { class: 'lesson-footer', text: '활동과 결과는 이 브라우저에 저장돼요. 다른 기기에서는 현재 수업을 내려받아 여세요.' }));
   function persist() {
     update = Date.now();
-    const cells = Object.fromEntries(pages.filter(p => p.activity).map(p => [p.id, p.activity.cells]));
+    const cells = Object.fromEntries(pages.filter(p => p.activity?.kind==='pixel-art').map(p => [p.id, p.activity.cells]));
+    const states = Object.fromEntries(pages.filter(p => p.activity?.kind==='gai-app').map(p => [p.id, p.activity.state]));
     try {
-      localStorage.setItem(storageKey, JSON.stringify({ version: 1, originalIds, updatedAt: update, currentId: pages[current].id, order: pages.map(p => p.id), cells, results: pages.filter(p => p.result) }));
+      localStorage.setItem(storageKey, JSON.stringify({ version: 1, originalIds, updatedAt: update, currentId: pages[current].id, order: pages.map(p => p.id), cells, states, results: pages.filter(p => p.result) }));
       if (!persistent) status.textContent = '이 브라우저에 활동과 결과를 저장했어요.';
       persistent = true;
     } catch { persistent = false; status.textContent = '브라우저에 저장하지 못했어요. 지금 작업은 그대로 있어요. 현재 수업 내려받기로 결과를 보관해 주세요.'; }
@@ -84,6 +95,19 @@ export function mountHtmlLesson(raw, host = document.getElementById('onbatang-le
     if (page.activity) scene.append(el('button', { type: 'button', class: 'lesson-start', text: '활동 시작', onclick: () => {
       executing = true; returnToCover.hidden = false;
       const target = el('section', { class: 'lesson-scene lesson-activity' }); stage.replaceChildren(target);
+      if(page.activity.kind==='gai-app'){
+        app=mountGaiApp(target,{activity:page.activity,onChange:state=>{page.activity=cleanActivity({...page.activity,state});persist();},onSave:async rawResult=>{
+          const value=cleanGaiResult(rawResult);page.activity=cleanActivity({...page.activity,state:value.state});
+          const signature=JSON.stringify([page.id,value]),existing=pages.findIndex(p=>p.id===savedResults.get(signature));
+          if(existing>=0){app?.destroy();app=null;executing=false;current=existing;persist();render();return;}
+          if(pages.length>=500)throw new Error('이 수업은 최대 500쪽까지 저장할 수 있어요. 앱의 진행 기록은 그대로 있어요.');
+          const owner=app,result={id:newId('p'),result:true,image:await gaiResultImage(page.activity,value,page.aspect),aspect:page.aspect,resultData:value};
+          if(app!==owner||pages[current]?.id!==page.id)throw new Error('활동 화면이 바뀌었어요. 앱을 다시 열어 결과 저장을 눌러주세요.');
+          savedResults.set(signature,result.id);pages.splice(current+1,0,result);app?.destroy();app=null;executing=false;current++;persist();render();
+          if(persistent)status.textContent=value.imageOmitted?'앱 화면 그림은 생략하고 답과 진행 상태를 다음 슬라이드에 저장했어요.':'앱 결과를 다음 슬라이드에 저장했어요.';
+        }});
+        return;
+      }
       app = mountPixelArt(target, { activity: page.activity, onChange: cells => { page.activity = cleanPixelActivity({ ...page.activity, cells }); persist(); }, onSave: async cells => {
         page.activity = cleanPixelActivity({ ...page.activity, cells });
         const signature = JSON.stringify([page.id, page.activity.title, page.activity.palette, cells]);
@@ -104,12 +128,27 @@ export function mountHtmlLesson(raw, host = document.getElementById('onbatang-le
     stage.replaceChildren(scene);
   }
   const keys = event => {
-    if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || event.target.closest('button,input,textarea,select,[contenteditable=true],.pixel-app')) return;
+    if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || event.target.closest('button,input,textarea,select,[contenteditable=true],.pixel-app,.gai-app-runtime')) return;
     if (event.key === 'ArrowRight' || event.key === 'PageDown' || event.key === ' ') { event.preventDefault(); navigate(1); }
     else if (event.key === 'ArrowLeft' || event.key === 'PageUp') { event.preventDefault(); navigate(-1); }
   };
   document.addEventListener('keydown', keys); render();
   return { getPages: () => pages, destroy() { app?.destroy(); document.removeEventListener('keydown', keys); host.replaceChildren(); } };
+}
+
+async function gaiResultImage(activity,result,aspect){
+ const canvas=document.createElement('canvas');canvas.width=Math.round(aspect>=1?1280:1280*aspect);canvas.height=Math.round(canvas.width/aspect);
+ const c=canvas.getContext('2d');if(!c)throw new Error('결과 그림을 만들 수 없어요.');
+ c.fillStyle='#fffdf5';c.fillRect(0,0,canvas.width,canvas.height);c.fillStyle='#273f3a';c.textAlign='center';c.font=`bold ${Math.max(15,Math.min(38,canvas.width/20))}px sans-serif`;
+ c.fillText(`${activity.title} · 결과`,canvas.width/2,canvas.height*.1,canvas.width*.9);
+ let y=canvas.height*.28;
+ if(result.image){const image=new Image();image.src=result.image;await image.decode();const scale=Math.min(canvas.width*.84/image.width,canvas.height*.5/image.height),w=image.width*scale,h=image.height*scale;c.drawImage(image,(canvas.width-w)/2,canvas.height*.18,w,h);y=canvas.height*.77;}
+ const answer=result.answer||`진행 ${Math.round(result.progress)}%${result.completed?' · 완료':''}${result.score===null?'':` · 점수 ${result.score}`}`;
+ const font=Math.max(12,Math.min(24,canvas.width/30));c.font=`${font}px sans-serif`;c.fillStyle='#273f3a';
+ const lines=[];let line='';for(const char of answer){if(char==='\n'||c.measureText(line+char).width>canvas.width*.88){lines.push(line);line=char==='\n'?'':char;}else line+=char;}if(line)lines.push(line);
+ const max=Math.max(1,Math.floor((canvas.height*.94-y)/(font*1.45)));
+ lines.slice(0,max).forEach((value,i)=>c.fillText(i===max-1&&lines.length>max?value.slice(0,-1)+'…':value,canvas.width/2,y+i*font*1.45,canvas.width*.9));
+ return canvas.toDataURL('image/png');
 }
 
 function resultImage(activity, aspect) {

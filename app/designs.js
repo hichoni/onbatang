@@ -10,7 +10,7 @@
 
 /** 고를 수 있는 화면 비율(aspect 는 가로 ÷ 세로). */
 import { SCHEMA_VERSION, DOCUMENT_LIMITS, DocumentError, fail, isId, newId, legacyId, cleanSize, metadata, cleanAssets, validatePageInput, validateReferences } from '../src/document.js';
-import { cleanPixelActivity } from '../src/pixel-art.js';
+import { cleanActivity } from '../src/activity.js';
 export { SCHEMA_VERSION, DocumentError };
 
 export const RATIOS = [
@@ -108,7 +108,7 @@ export function slideVideo(slide) {
   return { video };
 }
 /** 장에 딸린 것 모두(움직임 · 영상 장면). 슬라이드를 새로 짜 맞추는 곳({ bg, items } 를 만드는 곳)마다 함께 펼쳐 넣는다(빠뜨리면 저장하면서 사라진다). */
-export const slideExtra = (slide) => ({ ...metadata(slide, { identity: true }), ...slideMotion(slide), ...slideVideo(slide), ...(slide?.activity === undefined ? {} : {activity:cleanPixelActivity(slide.activity)}) });
+export const slideExtra = (slide) => ({ ...metadata(slide, { identity: true }), ...slideMotion(slide), ...slideVideo(slide), ...(slide?.activity === undefined ? {} : {activity:cleanActivity(slide.activity)}) });
 export function withSlideMotion(slide, motion) {
   const { pa, tr, ...extra } = slideExtra(slide);
   return { bg: slide.bg, items: slide.items, ...extra, ...slideMotion(motion) };
