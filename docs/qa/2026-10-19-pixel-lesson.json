@@ -1,0 +1,183 @@
+{
+  "commonVersion": "0.27.0",
+  "gai": {
+    "scope": "isolated local browser",
+    "source": {
+      "pages": 19,
+      "bytes": 19627567,
+      "sha256": "c165d32bda450cec385e5bc916351c75d72b6acc69abdea5931d2d473f10d12d"
+    },
+    "result": {
+      "pages": 21,
+      "activityIndex": 10,
+      "resultIndex": 11,
+      "revision": 3
+    },
+    "exports": [
+      {
+        "mode": "editable",
+        "pages": 21,
+        "bytes": 4302835,
+        "sha256": "424b5a7166912d4ff02842f13755b440a3b99778616c2d0723a46547c8a4c74e"
+      },
+      {
+        "mode": "image",
+        "pages": 21,
+        "bytes": 4436627,
+        "sha256": "12bb6a9b6e80a9fefb6db377897ae25aa7002c5f54e3e171aad8c9a0a847658f"
+      }
+    ],
+    "htmlExport": {
+      "pages": 21,
+      "pagesAfterResult": 22,
+      "bytes": 10804094,
+      "sha256": "68dc9f9f57e2982f400c630dce89b500f48e508bb3fe4fbe3b1f4c5bbf92bebb",
+      "offline": true,
+      "freshContextReopen": true
+    },
+    "checks": [
+      "real worker import",
+      "middle activity insertion",
+      "whole material presentation",
+      "drawing and undo",
+      "keyboard isolation",
+      "next-slide result",
+      "duplicate save reuse",
+      "fixed revision zero preserved",
+      "two full reopens",
+      "editable and image PPTX",
+      "editor HTML export",
+      "offline HTML activity and next-slide result",
+      "HTML saved copy opens in fresh browser"
+    ],
+    "notRun": [
+      "physical device",
+      "native PowerPoint",
+      "account QA",
+      "production deployment"
+    ],
+    "paidQa": false
+  },
+  "common": {
+    "scope": "isolated local browser",
+    "source": {
+      "pages": 19,
+      "bytes": 19627567,
+      "sha256": "c165d32bda450cec385e5bc916351c75d72b6acc69abdea5931d2d473f10d12d"
+    },
+    "result": {
+      "pages": 21,
+      "activityIndex": 10,
+      "resultIndex": 11,
+      "revision": 2
+    },
+    "exports": [
+      {
+        "mode": "editable",
+        "pages": 21,
+        "bytes": 4302835,
+        "sha256": "f56ce37ae7c5aa4a8b05db902f6d84c4b41e97d7c23b630468980957db073150"
+      },
+      {
+        "mode": "image",
+        "pages": 21,
+        "bytes": 4436627,
+        "sha256": "6301a69f8eb61fdcfd6f0dfb223691cb0e606b525b7c14034f956d43f91d9db1"
+      }
+    ],
+    "htmlExport": {
+      "pages": 21,
+      "pagesAfterResult": 22,
+      "bytes": 10804074,
+      "sha256": "ad420e1cf8240d3ebe792944d2cc0ba5bb3a5aac9aedf07643eed0e39bcbf51d",
+      "offline": true,
+      "freshContextReopen": true
+    },
+    "checks": [
+      "real worker import",
+      "middle activity insertion",
+      "whole material presentation",
+      "drawing and undo",
+      "keyboard isolation",
+      "next-slide result",
+      "duplicate save reuse",
+      "fixed revision zero preserved",
+      "two full reopens",
+      "editable and image PPTX",
+      "editor HTML export",
+      "offline HTML activity and next-slide result",
+      "HTML saved copy opens in fresh browser"
+    ],
+    "notRun": [
+      "physical device",
+      "native PowerPoint",
+      "account QA",
+      "production deployment"
+    ],
+    "paidQa": false
+  },
+  "productionDbChanged": false,
+  "gaiRelatedUnitTests": 64,
+  "gaiVersion": "0.72.0",
+  "htmlStandaloneBrowserTests": 3,
+  "commonUnitTests": 189,
+  "sharedFiles": 156,
+  "deployment": {
+    "pullRequest": 87,
+    "existingPr76Head": "41a610388d6e8566af70f9676b64c9894e33ab1f",
+    "common": {
+      "origin": "https://onbatang.web.app",
+      "metadata": {
+        "version": "0.27.0",
+        "sourceCommit": "b2ed0091f7c2e5b2e7e95fed871d9a4d75e48891"
+      },
+      "commonSource": "b2ed0091f7c2e5b2e7e95fed871d9a4d75e48891",
+      "sharedFilesMatched": 156,
+      "paidQa": false,
+      "accountUsed": false,
+      "remoteWrites": 0,
+      "physicalDevice": "NOT_RUN",
+      "nativePowerPoint": "NOT_RUN",
+      "checks": [
+        "real PPT import",
+        "inline activity insertion",
+        "same URL/DOM presentation",
+        "next-slide result",
+        "full material save/reopen",
+        "whole HTML lesson export"
+      ],
+      "status": "PASS"
+    },
+    "gai": {
+      "origin": "https://gai-lab.netlify.app",
+      "metadata": {
+        "version": "0.72.0",
+        "context": "production",
+        "commit": "cdb1f30060771c420e6c9278556925deaa9a1fb8",
+        "buildId": "6ad62e63c595e14a3fd5a005"
+      },
+      "commonSource": "b2ed0091f7c2e5b2e7e95fed871d9a4d75e48891",
+      "sharedFilesMatched": 156,
+      "paidQa": false,
+      "accountUsed": false,
+      "remoteWrites": 0,
+      "physicalDevice": "NOT_RUN",
+      "nativePowerPoint": "NOT_RUN",
+      "checks": [
+        "production login gate retained; authenticated iframe not run",
+        "real PPT import",
+        "inline activity insertion",
+        "same URL/DOM presentation",
+        "next-slide result",
+        "full material save/reopen",
+        "whole HTML lesson export"
+      ],
+      "status": "PASS"
+    }
+  },
+  "commonDraftAndExistingUiBrowserTests": 15,
+  "paidQaUsed": false,
+  "gaiActivityAndSaveRaceBrowserTests": 16,
+  "commonSource": "b2ed0091f7c2e5b2e7e95fed871d9a4d75e48891",
+  "ci": "NOT_RUN: GitHub job did not start due to account payment/spending-limit restriction; local tests and Netlify build passed"
+}
