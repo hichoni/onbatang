@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { mergeAccount, createPusher } from '../app/sync.js';
+import { mergeAccount, createPusher, syncsRecord } from '../app/sync.js';
 import { newDesignId } from '../app/designs.js';
 
 const rec = (id, updatedAt, name = '그림') => ({ id, name, ratio: '1:1', slides: [{ bg: 'paper', items: [{ t: 'text', x: 50, y: 50, w: 80, text: name }] }], uploads: [], updatedAt });
@@ -10,6 +10,26 @@ function localStore(list) {
   const m = new Map(list.map((r) => [r.id, r]));
   return { m, list: async () => [...m.values()], put: async (r) => { m.set(r.id, r); return r; }, remove: async (id) => { m.delete(id); } };
 }
+
+test('optional account policy preserves local PPT originals through refresh/deletions without pushing or loading them', async () => {
+  const ids=[1,2,3,4].map(n=>newDesignId(1800000000000+n,n/10));
+  const localPpt={...rec(ids[0],100,'기기 PPT'),source:{kind:'pptx'}},drawing=rec(ids[1],200,'기존 그림');
+  const store=localStore([localPpt,drawing]),sent=[],loaded=[];
+  const out=await mergeAccount({accepts:r=>r.source?.kind!=='pptx',
+    pull:async()=>({records:[{...localPpt,source:{kind:'local'},updatedAt:999},rec(ids[2],300),{...rec(ids[3],400),source:{kind:'pptx'}}],deleted:[{id:ids[0],at:2000}]}),
+    push:async r=>sent.push(r.id),load:async r=>(loaded.push(r.id),r),drop:async()=>{}},store);
+  assert.deepEqual(out,{got:1,sent:1,removed:0});assert.deepEqual(sent,[drawing.id]);assert.deepEqual(loaded,[ids[2]]);
+  assert.deepEqual(store.m.get(localPpt.id),localPpt);assert.equal(store.m.has(ids[3]),false);
+});
+
+test('optional account policy excludes PPT from background pusher and fails closed on a host policy error', async () => {
+  const calls=[],done=[],p=createPusher({accepts:r=>r.source?.kind!=='pptx',push:async r=>calls.push(r.id)},{delay:10000,onDone:(...args)=>done.push(args)});
+  const local={...rec(newDesignId(),100),source:{kind:'pptx'}},drawing=rec(newDesignId(1800000000009,.8),200);
+  p.queue(local);assert.equal(p.pending(),false);await p.flush(local.id);assert.deepEqual(done,[]);
+  p.queue(drawing);await p.flush(drawing.id);assert.deepEqual(calls,[drawing.id]);assert.deepEqual(done,[[drawing.id,true]]);
+  assert.equal(syncsRecord({accepts:()=>{throw Error('policy unavailable');}},drawing),false);
+  assert.equal(syncsRecord({},local),true,'legacy hosts without a policy retain their exact sync contract');
+});
 
 test('맞추기: 더 늦게 고친 쪽이 이기고, 한쪽에만 있는 그림은 다른 쪽으로 간다', async () => {
   const [a, b, c, d] = [1, 2, 3, 4].map((n) => newDesignId(1700000000000 + n, n / 10));
@@ -75,8 +95,8 @@ test('올리기 줄: 짧은 사이의 저장은 마지막 것만 올리고, 실�
 
 test('앱은 sync 가 있으면 저장 뒤에 계정으로 올리고, 지울 때 계정에서도 지우고, 시작할 때 맞춘다', () => {
   const app = readFileSync(new URL('../app/app.js', import.meta.url), 'utf8');
-  assert.match(app, /if \(pusher\) pusher\.queue\(kept\);/);
-  assert.match(app, /if \(pusher\) pusher\.cancel\(record\.id\);\n\s+if \(sync\) sync\.drop\(record\.id\)/);
+  assert.match(app, /if \(accountFor\(kept\)\) pusher\.queue\(kept\);/);
+  assert.match(app, /if \(pusher\) pusher\.cancel\(record\.id\);\n\s+if \(sync && syncsRecord\(sync, record\)\) sync\.drop\(record\.id\)/);
   assert.match(app, /render\(\);\n  syncAccount\(\);\n\}/);
   assert.match(app, /\['pull', 'push', 'drop'\]\.every/);
 });

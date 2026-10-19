@@ -27,7 +27,7 @@ import { zipStore } from './zip.js';
 import { createPptx } from './pptx.js';
 import { listDesigns, getDesign, putDesign, removeDesign, setStorageName, listDesignIssues, getOriginalDesign } from './store.js';
 import { setupApp, useFonts, photoToData, BASIC_GROUP } from './setup.js';
-import { mergeAccount, createPusher } from './sync.js';
+import { mergeAccount, createPusher, syncsRecord } from './sync.js';
 
 let app = null;
 let onView = () => {};
@@ -36,6 +36,7 @@ let importAction = null;
 let brand = null;                // 들여 쓰는 곳의 표시 { name, logo } (없으면 표시하지 않는다)
 let sync = null;                 // 들여 쓰는 곳의 계정 저장(sync.js). 없으면 이 기기에만 저장한다
 let pusher = null;
+const accountFor = record => !!pusher && syncsRecord(sync, record);
 const SAVE_DELAY = 500;       // 마지막으로 고친 뒤 이만큼 지나면 이 기기에 저장한다(ms)
 const S = {
   phase: 'boot',              // 'boot'(그림을 읽는 중) · 'home'
@@ -158,7 +159,7 @@ async function syncAccount() {
 /** 계정에 다 올렸을 때 꾸미는 화면의 저장 상태를 알린다. */
 function pushed(id, ok) {
   const O = S.open;
-  if (!O || O.record.id !== id) return;
+  if (!O || O.record.id !== id || !accountFor(O.record)) return;
   O.accountOk = ok;
   if (O.dirty) return;
   setStatus(O, ok ? '계정에 저장했어요' : '계정에 올리지 못했어요 · 이 기기에는 저장됐어요', ok ? 'ok' : '');
@@ -458,7 +459,7 @@ function itemCard(record) {
       try {
         await removeDesign(record.id);
         if (pusher) pusher.cancel(record.id);
-        if (sync) sync.drop(record.id).catch((ex) => { console.warn(ex); toast('계정에서는 지우지 못했어요. 새로 고침하면 다시 나타날 수 있어요.', 5000); });
+        if (sync && syncsRecord(sync, record)) sync.drop(record.id).catch((ex) => { console.warn(ex); toast('계정에서는 지우지 못했어요. 새로 고침하면 다시 나타날 수 있어요.', 5000); });
       } catch (ex) {
         console.error(ex);
         toast('지우지 못했어요. 새로 고침하고 다시 해 봐요.', 4000);
@@ -477,7 +478,7 @@ function itemCard(record) {
     copy.disabled = true;
     try {
       const made = await putDesign({ ...copyRecord(await getDesign(record.id) || record), updatedAt: Date.now() });
-      upsert(made); if (pusher) pusher.queue(made); render();
+      upsert(made); if (accountFor(made)) pusher.queue(made); render();
     } catch (ex) { toast(`복사하지 못했어요 (${ex.code || '저장소 오류'}).`); copy.disabled = false; }
   } }, '복사');
   const busy = (on) => { for (const b of [edit, del, card.querySelector('.cv-thumb')]) if (b) b.disabled = on; };
@@ -515,7 +516,7 @@ function openDesign(record, isNew) {
   };
   delete O.record.slides;                // 슬라이드는 O.slides 가 맡는다(저장할 때 다시 넣는다)
   S.open = O;
-  const first = isNew ? '꾸미기 시작하면 저절로 저장돼요' : sync ? '저장돼 있어요' : '이 기기에 저장돼 있어요';
+  const first = isNew ? '꾸미기 시작하면 저절로 저장돼요' : accountFor(record) ? '저장돼 있어요' : '이 기기에 저장돼 있어요';
   O.status = el('span', { class: 'cv-status', role: 'status', text: first, title: first });
   // 저장하지 못했을 때는 위 막대 아래에 띠로 한 번 더 알린다(위 막대의 글은 자리가 좁아 잘릴 수 있다).
   O.alert = el('p', { class: 'cv-alert', 'aria-hidden': 'true', hidden: true });
@@ -1081,8 +1082,8 @@ async function save(O, { preserveBlank = false } = {}) {
   O.localOk = ok;                              // 이 기기에 적혔는지(영상 파일을 정리해도 되는지 볼 때 쓴다)
   if (ok) {
     upsert(kept);
-    if (pusher) pusher.queue(kept);
-    if (!O.dirty) setStatus(O, pusher ? '이 기기에 저장했어요 · 계정에 올리는 중…' : '이 기기에 저장했어요', 'ok');
+    if (accountFor(kept)) pusher.queue(kept);
+    if (!O.dirty) setStatus(O, accountFor(kept) ? '이 기기에 저장했어요 · 계정에 올리는 중…' : '이 기기에 저장했어요', 'ok');
     return true;
   }
   O.dirty = true;
@@ -1104,7 +1105,7 @@ async function leaveEditor(O, { requireSaved = false, waitForSync = false } = {}
   // 그 그림은 지우려던 영상을 아직 쓰고 있을 수 있다.
   if (ok && !O.dirty && O.localOk !== false) await tidyVideos(O.record.id, currentSlides(O));
   O.closed = true;
-  if (pusher) {
+  if (accountFor(O.record)) {
     const uploading = pusher.flush(O.record.id);
     if (waitForSync) await uploading;            // 바깥 화면으로 가면 이 앱이 닫히므로 올리기까지 기다린다
   }
@@ -1154,7 +1155,7 @@ async function closeToHost(O, btn) {
 /** Import navigation is opt-in. Keep the existing editor intact until local and
  * account persistence have both succeeded; never drop a new blank drawing. */
 async function importFromEditor(O) {
-  if (!importAction?.editorLabel || S.open !== O || O.closed || O.leaving || moving || app.inert || hostFlush || videoBusy(O)) return;
+  if (!importAction?.editorLabel || S.open !== O || O.closed || O.inlineImport || O.leaving || moving || app.inert || hostFlush || videoBusy(O)) return;
   const context = { from: 'editor', designId: O.record.id, slideIndex: O.at };
   const previousFocus = app.contains(document.activeElement) ? document.activeElement : null;
   let left = false, restored = false;
@@ -1168,7 +1169,7 @@ async function importFromEditor(O) {
     if (!ok || O.dirty || O.localOk === false) throw new Error('EDITOR_SAVE_FAILED');
     const saved = await getDesign(context.designId);
     if (!saved) throw new Error('DOCUMENT_NOT_FOUND');
-    if (pusher) {
+    if (accountFor(saved)) {
       // flush() intentionally absorbs network errors for background retry.
       // Queue this exact saved record and observe its final onDone while inert.
       await pusher.flush(saved.id);
@@ -1176,6 +1177,10 @@ async function importFromEditor(O) {
       if (O.accountOk !== true) throw new Error('EDITOR_SYNC_FAILED');
     }
     if (O.closed || S.open !== O) throw new Error('EDITOR_BUSY');
+    if (importAction.editorMode === 'inline') {
+      await openInlineImport(O, context);
+      return;
+    }
     if (!await leaveEditor(O, { requireSaved: true })) throw new Error('EDITOR_SAVE_FAILED');
     left = true;
     try { S.list = await listDesigns(); } catch { upsert(saved); }
@@ -1200,6 +1205,88 @@ async function importFromEditor(O) {
         try { previousFocus.focus({ preventScroll: true }); } catch { /* Preserve the persistence result. */ }
       }
     }
+  }
+}
+
+/** The host owns conversion; the editor owns its shell and the saved drawing.
+ * No navigation/home render occurs while a host imports inside My materials. */
+async function openInlineImport(O, context) {
+  const work = O.shell.querySelector('.cv-work');
+  const protectedNodes = [O.shell.querySelector('.cv-bar'), O.shell.querySelector('.cv-side')];
+  const previousInert = protectedNodes.map(node => node.inert);
+  const previousChildren = [...work.children].map(node => [node, node.hidden]);
+  const previousFocus = document.activeElement;
+  const back = el('button', {class: 'btn btn-ghost', type: 'button', disabled: true, dataset: {inlineImportClose: ''}}, ...face('back', '편집으로 돌아가기'));
+  const outlet = el('div', {class: 'cv-inline-import-body'});
+  const header = el('header', {class: 'cv-inline-import-header'},
+    el('div', {}, el('small', {text: '내 자료 / PPT'}), el('h2', {text: '내 PPT 가져오기'})), back);
+  const region = el('section', {class: 'cv-inline-import', role: 'region', 'aria-label': '내 자료 · PPT 가져오기', dataset: {inlineImport: ''}}, header, outlet);
+  const session = {controller: null, disposed: false, closing: false};
+  O.inlineImport = session;
+  O.editor.quiet();
+  for (const node of protectedNodes) node.inert = true;
+  for (const [node] of previousChildren) node.hidden = true;
+  O.shell.classList.add('inline-importing'); work.append(region); app.inert = false;
+  const dispose = async () => {
+    if (session.disposed) return;
+    session.disposed = true;
+    await session.controller?.dispose?.();
+  };
+  const restore = () => {
+    region.remove();
+    previousChildren.forEach(([node, hidden]) => { node.hidden = hidden; });
+    protectedNodes.forEach((node, i) => { node.inert = previousInert[i]; });
+    O.shell.classList.remove('inline-importing');
+    if (O.inlineImport === session) O.inlineImport = null;
+    if (S.open === O && !O.closed) {
+      setupApp(O.record); O.editor.refresh();
+      if (previousFocus?.isConnected && !previousFocus.disabled) previousFocus.focus({preventScroll: true});
+      else O.editor.panel.querySelector('[data-document-import]')?.focus({preventScroll: true});
+    }
+  };
+  const close = async () => {
+    if (session.closing || session.disposed) return;
+    session.closing = true; back.disabled = true;
+    try { await dispose(); } finally { restore(); }
+  };
+  const openImported = async (id, {slideIndex = 0, tab = 'upload'} = {}) => {
+    if (session.closing || session.disposed || S.open !== O) throw new Error('EDITOR_BUSY');
+    // Read and validate before replacing any active DOM. A failed host write
+    // leaves the previous editor and its undo stack available for cancellation.
+    const record = await getDesign(id);
+    if (!record) throw new Error('DOCUMENT_NOT_FOUND');
+    const ready = migrateRecord(record);
+    if (session.closing || session.disposed || S.open !== O) throw new Error('EDITOR_BUSY');
+    session.closing = true; back.disabled = true;
+    try {
+      if (!await leaveEditor(O, {requireSaved: true})) throw new Error('EDITOR_SAVE_FAILED');
+      S.phase = 'home'; // Internal readiness only: never render or emit the home view.
+      await dispose();
+      upsert(ready); openDesign(ready, false);
+      if (Number.isSafeInteger(slideIndex) && slideIndex > 0 && slideIndex < S.open.slides.length) goSlide(S.open, slideIndex);
+      if (typeof tab === 'string') S.open.editor.openTab(tab);
+    } catch (error) {
+      session.closing = false;
+      if (!O.closed) back.disabled = false;
+      else if (!S.open) {
+        // Recovery stays in the editor even when a host disposer rejects.
+        await openSavedDesign(context.designId, {slideIndex: context.slideIndex, tab: 'upload'});
+      }
+      throw error;
+    }
+  };
+  back.addEventListener('click', async () => {
+    if (session.closing || !session.controller) return;
+    try { if (typeof session.controller.requestClose === 'function') await session.controller.requestClose(); else await close(); }
+    catch { toast('작업 상태를 확인하지 못했어요. 잠시 뒤 다시 눌러주세요.'); }
+  });
+  try {
+    const controller = await importAction.open({...context, inline: {root: outlet, close, openDesign: openImported}});
+    session.controller = controller || {};
+    if (session.disposed) await session.controller.dispose?.();
+    else { back.disabled = false; outlet.querySelector('button:not(:disabled),input:not(:disabled)')?.focus({preventScroll: true}); }
+  } catch (error) {
+    await dispose().catch(() => {}); restore(); throw error;
   }
 }
 async function closeDesign(O, btn = null) {
@@ -1588,9 +1675,10 @@ function flush() {
  * - onView(view): 화면이 바뀔 때('home' · 'edit') 알려 준다(들여 쓰는 곳이 둘레를 맞출 때 쓴다)
  * - brand: 들여 쓰는 곳의 표시 { name, logo }. 꾸미는 화면 위 막대 맨 앞에 작게 보인다(없으면 표시하지 않는다)
  * - onBrandClick(): 표시를 누르면 기기 저장과 계정 올리기를 마친 뒤 부른다. 저장하지 못하면 이동하지 않는다
- * - sync: 계정 저장 { pull, push, drop }(sync.js). 주면 이 기기에 저장한 뒤 계정에도 올리고, 시작할 때 계정과 맞춘다
- * - importAction: 대문의 외부 가져오기 단추 { label, open, editorLabel?, editorDescription? }.
- *   editorLabel을 주면 내 자료에도 연결하며 저장 후 open({from:'editor',designId,slideIndex})를 부른다. 파일 해석은 호스트가 맡는다.
+ * - sync: 계정 저장 { pull, push, drop, accepts? }(sync.js). accepts(record)는 선택적인 기기 전용 자료 제외 정책이다.
+ * - importAction: 가져오기 연결 { label, open, editorLabel?, editorDescription?, editorMode?: 'inline' }.
+ *   inline이면 내 자료 안의 root/close/openDesign을 제공한다. open은 {requestClose,dispose}를 반환할 수 있다.
+ *   기본 모드는 기존 호스트 이동 계약을 유지한다. 파일 해석과 저장은 호스트가 맡는다.
  */
 export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null } = {}) {
   if (app) throw new Error('minican already started');

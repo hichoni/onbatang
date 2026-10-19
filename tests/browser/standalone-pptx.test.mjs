@@ -67,7 +67,8 @@ async function enterImport(page,entry){
  await page.getByLabel('PPTX 파일 선택',{exact:true}).waitFor({state:'attached'});
 }
 async function inspectFile(page,name,count){
- await page.getByLabel('PPTX 파일 선택',{exact:true}).setInputFiles(fixture(name));
+ const inline=page.locator('[data-inline-import]');
+ await (await inline.count()?inline:page).getByLabel('PPTX 파일 선택',{exact:true}).setInputFiles(fixture(name));
  await page.waitForFunction(count=>document.querySelectorAll('[data-page-select]').length===count&&document.querySelector('[data-import-save]')?.disabled===false,count,{timeout:120000});
  assert.equal(await page.locator('[data-page-select]:checked').count(),count,'all available original pages are selected by default');
  await page.locator('[data-preview-mode=pptx][aria-pressed=true]').waitFor();
@@ -315,11 +316,11 @@ test('My materials imports preserve edited text, restore the same page on cancel
  }
  assert.ok(await page.evaluate(()=>window.editorImportFailures>=2));
  await page.evaluate(()=>{window.restoreEditorImportStorage();delete window.restoreEditorImportStorage;});
- await importButton.click();await page.getByLabel('PPTX 파일 선택',{exact:true}).waitFor();
- assert.equal(await page.locator('[data-import-result]').count(),0,'editor import starts at fresh file selection instead of the previous completion screen');
+ await importButton.click();await page.locator('[data-inline-import]').getByLabel('PPTX 파일 선택',{exact:true}).waitFor({state:'attached'});
+ assert.equal(await page.locator('[data-inline-import] [data-import-result]').count(),0,'editor import starts at fresh file selection instead of the previous completion screen');
  const flushed=await readDraft(oldId);assert.equal(flushed.slides[1].items.find(item=>item.t==='text').text,oldText+' · 업로드 전 편집');
  assert.deepEqual(flushed.source,beforeEdit.source);assert.deepEqual(flushed.assetRefs,beforeEdit.assetRefs);
- await page.getByRole('button',{name:'PPT 가져오기 닫기',exact:true}).click();
+ await page.locator('[data-inline-import-close]').click();
  await page.locator('.cv-slide[data-slide="1"][aria-pressed=true]').waitFor();
  await page.locator('.fe-tab[data-tab="upload"][aria-selected=true]').waitFor();
  assert.equal(await page.locator('.cv-canvas .fe-card > .fi-text').first().innerText(),oldText+' · 업로드 전 편집');
@@ -341,14 +342,14 @@ test('My materials imports preserve edited text, restore the same page on cancel
  await page.locator('.fe-tab[data-tab="upload"]').click();
  await page.locator('[data-upload-tab="ppt"]').click();
  await importButton.click();await inspectFile(page,'self-authored-4x3.pptx',2);
- await page.locator('[data-import-save]').click();await page.locator('[data-import-result=complete]').waitFor();
- await page.locator('[data-open-material=view]').click();await page.locator('[data-pptx-page="1"]').waitFor();
- assert.equal(await page.locator('[data-pptx-page]').count(),2);
+ await page.locator('[data-import-save]').click();
+ await page.waitForFunction(()=>!document.querySelector('[data-inline-import]')&&document.querySelector('.cv-name')?.value==='self-authored-4x3');
+ assert.equal(await page.locator('.cv-slide[data-slide]').count(),2);
  const imported=await readLibrary(page,base),newGraph=imported.graphs.find(graph=>graph.materialRef.id!==oldGraph.materialRef.id);
  assert.ok(newGraph);assert.equal(newGraph.pages.length,2);assert.equal(imported.graphs.length,2);
  assert.deepEqual(imported.originals.find(graph=>graph.materialRef.id===oldGraph.materialRef.id),original.originals[0]);
  assert.deepEqual(await readDraft(oldId),flushed,'importing another deck does not overwrite the drawing left behind');
- await page.locator('[data-pptx-page="0"]').click();await page.locator('[data-pptx-edit]').click();await page.locator('.cv-name').waitFor();
+ await page.locator('.cv-slide[data-slide="0"]').click();await page.locator('.cv-name').waitFor();
  await page.locator('.cv-name').fill('내 자료에서 가져온 새 PPT');
  const newText=await page.locator('.cv-canvas .fe-card > .fi-text').first().innerText();
  await page.locator('.cv-canvas .fe-card > .fi-text').first().dblclick();

@@ -56,9 +56,13 @@ export function mountImportWorkspace({root, services, onClose, onOpenDocument, o
   function imageAvailable(number) { return state.previewPages.get(number)?.available === true; }
   function canSelect(item) { return item.canImport || imageAvailable(item.pageNumber); }
   function editableAvailable(item) { return item?.canImport === true; }
-  function requestClose() {
-    if (state.busy === 'saving') { say('자료를 저장하고 있어요. 취소 후 저장 상태를 확인하거나 완료될 때까지 기다려주세요.'); return; }
-    actionController?.abort(); previewController?.abort(); onClose?.();
+  async function requestClose() {
+    if (disposed) return true;
+    if (state.busy === 'saving') { say('자료를 저장하고 있어요. 취소 후 저장 상태를 확인하거나 완료될 때까지 기다려주세요.'); return false; }
+    if (embedded && state.retry && state.result?.complete === false) { say('일부 자료는 저장됐지만 가져오기가 아직 끝나지 않았어요. 재시도할 작업을 보존하고 있으니 ‘이어서 다시 시도’를 눌러 완료해주세요.'); return false; }
+    actionController?.abort(); previewController?.abort();
+    try { return await onClose?.() !== false; }
+    catch (error) { say(errorText(error), true); return false; }
   }
   function updateChrome() {
     const inImport = state.tab === 'import'; steps.hidden = !inImport;
@@ -323,8 +327,8 @@ export function mountImportWorkspace({root, services, onClose, onOpenDocument, o
       const card = element('article', undefined, {class: 'oi-result-part', 'data-result-document': row.id});
       const description = element('div'); description.append(element('strong', row.payload?.name || `자료 ${index + 1}`),
         element('p', part?.pages?.length ? `원본 ${part.pages.join(', ')}쪽 · 이 기기에 저장` : `${row.payload?.slides?.length || 0}쪽 · 이 기기에 저장`, {class: 'oi-help'}));
-      const open = button('온바탕에서 편집', async () => { if (state.busy === 'saving') return; try { await onOpenDocument?.(row); } catch (error) { say(errorText(error), true); } }, {'data-open-document': row.id});
-      open.disabled = state.busy === 'saving'; card.append(description, open); list.append(card);
+      const open = button('온바탕에서 편집', async () => { if (state.busy === 'saving' || embedded && !complete) return; try { await onOpenDocument?.(row); } catch (error) { say(errorText(error), true); } }, {'data-open-document': row.id});
+      open.disabled = state.busy === 'saving' || embedded && !complete; card.append(description, open); list.append(card);
     });
     if (complete && result.materialRef) { const details = element('details'); details.append(element('summary', `개별 파트 ${rows.length}개 보기`), list); section.append(details); }
     else section.append(list);
@@ -427,7 +431,7 @@ export function mountImportWorkspace({root, services, onClose, onOpenDocument, o
       preview: 'editable', filter: 'all', busy: null, previewPreparing: false, result: null, retry: null, fonts: [], fontPlan: null, priorPlans: [], previewPages: new Map()});
     render(); say('새 PPT를 골라주세요. 편집하던 그림과 이전에 가져온 자료는 그대로 보관돼요.'); return true;
   }
-  return {startNewImport, showLibrary: () => showTab('library'), showImport: () => showTab('import'), chooseFile, getState: () => ({step: state.step, tab: state.tab, selectedPages: selectedPages(), activePage: state.active, busy: state.busy, resumable: !!state.retry && state.result?.complete === false}),
+  return {requestClose, startNewImport, showLibrary: () => showTab('library'), showImport: () => showTab('import'), chooseFile, getState: () => ({step: state.step, tab: state.tab, selectedPages: selectedPages(), activePage: state.active, busy: state.busy, resumable: !!state.retry && state.result?.complete === false}),
     dispose() { if (disposed) return; disposed = true; generation++; previewGeneration++; libraryGeneration++; thumbObserver?.disconnect(); actionController?.abort(); previewController?.abort(); services.disposePreview?.(); fontDialog?.close(); fontDialog?.remove(); root.replaceChildren(); }};
 }
 

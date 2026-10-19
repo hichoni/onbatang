@@ -15,10 +15,10 @@ const message=error=>({REVISION_CONFLICT:'다른 창에서 자료를 먼저 저�
 const download=(blob,name)=>{const url=URL.createObjectURL(blob),a=el('a','',{href:url,download:name});a.click();setTimeout(()=>URL.revokeObjectURL(url),30000);};
 
 /** Device-only import workspace. Hosts may add explicit actions without an account SDK. */
-export function mountPptxApp({root,storage='minican',fonts,fontServices=defaultImportFontServices,onEdit,onClose,onMaterialSaved,actions=[]}={}){
+export function mountPptxApp({root,storage='minican',fonts,fontServices=defaultImportFontServices,onEdit,onClose,onMaterialSaved,actions=[],embedded=false,autoEdit=false}={}){
  if(!root||typeof onEdit!=='function')throw new TypeError('root and onEdit are required');
  const library=createPptxLibrary({storage}),imports=createOnbatangImportStorage({repository:library.repository});
- const services=createImportUiServices({imports,fonts,fontServices});let current,active=0,busy=false,readOnly=false,exportDialog,latestImport;
+ const services=createImportUiServices({imports,fonts,fontServices});let current,active=0,busy=false,readOnly=false,exportDialog,latestImport,disposed=false,disposal;
  const importRoot=el('section'),materialRoot=el('section',undefined,{class:'op-material',hidden:''});root.append(importRoot,materialRoot);
  const baseSave=services.saveAll;services.saveAll=async options=>{
   let result;try{result=await baseSave(options);}catch(error){latestImport=error.recovery||null;throw error;}
@@ -31,19 +31,39 @@ export function mountPptxApp({root,storage='minican',fonts,fontServices=defaultI
  };
  const button=(text,action,attrs={})=>{const node=el('button',text,{type:'button',...attrs});node.addEventListener('click',()=>Promise.resolve(action()).catch(error=>say(message(error),true)));return node;};
  const status=el('p','',{role:'status','aria-live':'polite','data-pptx-status':''});
- function say(text,failure=false){status.textContent=text;status.dataset.error=String(failure);}
+ function say(text,failure=false){if(disposed)return;status.textContent=text;status.dataset.error=String(failure);}
  function locked(value){busy=value;materialRoot.setAttribute('aria-busy',String(value));for(const node of materialRoot.querySelectorAll('button'))node.disabled=value;}
- async function source(graph){const row=await imports.reopenDocument({id:graph.documents[0].id,revision:0});download(row.sourceBlob,row.payload.source.filename||'original.pptx');}
+ async function source(graph){const row=await imports.reopenDocument({id:graph.documents[0].id,revision:0});if(!disposed)download(row.sourceBlob,row.payload.source.filename||'original.pptx');}
  async function renderLibrary(host){
-  const rows=await library.listMaterials();if(!rows.length){host.append(el('p','가져온 PPT가 아직 없어요.'));return;}
+  const rows=await library.listMaterials();if(disposed)return;if(!rows.length){host.append(el('p','가져온 PPT가 아직 없어요.'));return;}
   for(const graph of rows){const card=el('article',undefined,{class:'oi-result-part','data-pptx-material':graph.manifest.id});
    const text=el('div');text.append(el('strong',graph.manifest.title),el('p',`${graph.pages.length}쪽 · 이 기기에 저장`));
    card.append(text,button('자료 열기',()=>showMaterial(graph.materialRef)),button('원본 PPTX',()=>source(graph)));host.append(card);
   }
  }
- const workspace=mountImportWorkspace({root:importRoot,services,onClose,onOpenDocument:async row=>{
+ const workspace=mountImportWorkspace({root:importRoot,services,embedded,onClose:async()=>{
+  if(busy){say('작업이 끝난 뒤 돌아가주세요.');return false;}
+  return onClose?.();
+ },onComplete:autoEdit?completeImport:undefined,onOpenDocument:async row=>{
   current=latestImport?.materialRef?await library.getMaterial(latestImport.materialRef):null;readOnly=false;active=0;await edit(row);
  },onOpenMaterial:ref=>showMaterial(ref),renderLibrary});
+ async function prepareEdit(row,pageIndex){
+  const draft=await getDesign(row.id);if(disposed)return;
+  if(!draft)await putDesign(row.payload);if(disposed)return;
+  await onEdit(row.id,pageIndex);
+ }
+ async function completeImport(result){
+  if(disposed||result?.complete!==true)return;
+  if(busy)throw Error('작업이 끝난 뒤 새 자료를 열어주세요.');
+  locked(true);
+  try{
+   const graph=result.materialRef?await library.getMaterial(result.materialRef):await library.ensureMaterial(result);
+   if(disposed)return;
+   current=graph;readOnly=false;active=0;
+   const first=graph.pages[0];if(!first)throw Error('저장한 자료의 첫 쪽을 찾지 못했어요.');
+   await prepareEdit(first.document,first.pageIndex);
+  }finally{locked(false);}
+ }
  async function working(graph){
   if(readOnly)return graph;
   const rows=await Promise.all(graph.documents.map(async row=>{const draft=await getDesign(row.id);return {...row,payload:draft||row.payload};}));
@@ -51,8 +71,8 @@ export function mountPptxApp({root,storage='minican',fonts,fontServices=defaultI
   return {...graph,documents:rows,pages};
  }
  async function edit(row,pageIndex=0){
-  if(busy)return;locked(true);
-  try{if(!await getDesign(row.id))await putDesign(row.payload);await onEdit(row.id,pageIndex);}
+  if(busy||disposed)return;locked(true);
+  try{await prepareEdit(row,pageIndex);}
   finally{locked(false);}
  }
  async function pin(){
@@ -64,13 +84,17 @@ export function mountPptxApp({root,storage='minican',fonts,fontServices=defaultI
  }
  async function save(){if(busy)return;locked(true);try{await pin();await paint();say('편집본을 저장했어요. 원본 PPT와 이전 저장본은 보존됩니다.');}finally{locked(false);}}
  async function showMaterial(ref,{readOnly:fixed=false}={}){
+  if(disposed)return;
   if(busy)throw Error('작업이 끝난 뒤 이동해주세요.');
-  current=await library.getMaterial(ref);const latest=await library.getMaterial({id:ref.id});readOnly=fixed||current.materialRef.revision<latest.materialRef.revision;active=Math.min(active,current.pages.length-1);importRoot.hidden=true;materialRoot.hidden=false;await paint();
+  const graph=await library.getMaterial(ref);if(disposed)return;
+  const latest=await library.getMaterial({id:ref.id});if(disposed)return;
+  current=graph;readOnly=fixed||current.materialRef.revision<latest.materialRef.revision;active=Math.min(active,current.pages.length-1);importRoot.hidden=true;materialRoot.hidden=false;await paint();
  }
  async function paint(){
-  const graph=await working(current);active=Math.max(0,Math.min(active,graph.pages.length-1));
+  if(disposed||!current)return;
+  const graph=await working(current);if(disposed)return;active=Math.max(0,Math.min(active,graph.pages.length-1));
   const header=el('header',undefined,{class:'op-header'}),title=el('div');title.append(el('h1',current.manifest.title),el('p',`${graph.pages.length}쪽 · 온바탕${readOnly?' · 이전 저장본 읽기 전용':''}`));
-  header.append(button('내 PPT 자료',()=>showLibrary()),title,button('내 그림',()=>onClose?.()));
+  header.append(button('내 PPT 자료',()=>showLibrary()),title,button('내 그림',requestClose));
   const tools=el('div',undefined,{class:'op-tools'});
   if(readOnly)tools.append(button('최신 편집본 보기',async()=>showMaterial({id:current.manifest.id}),{'data-pptx-latest':''}));
   else tools.append(button('이 쪽 편집',()=>edit(graph.pages[active].document,graph.pages[active].pageIndex),{'data-pptx-edit':''}),button('편집본 저장',save,{'data-pptx-save':''}));
@@ -88,7 +112,7 @@ export function mountPptxApp({root,storage='minican',fonts,fontServices=defaultI
   history.append(button('처음 가져온 자료 보기',()=>showMaterial({id:current.manifest.id,revision:0},{readOnly:true}),{'data-pptx-original-material':''}));
   materialRoot.replaceChildren(header,tools,status,sheet,rail,history);say(readOnly?'이전 저장본을 그대로 보고 있어요. 최신 편집과 원본은 각각 보관됩니다.':'편집은 자동 저장됩니다. 편집본 저장을 누르면 전체 자료에도 반영돼요.');
  }
- function showLibrary(){if(busy)return;current=null;readOnly=false;materialRoot.hidden=true;importRoot.hidden=false;workspace.showLibrary();}
+ function showLibrary(){if(busy||disposed)return;current=null;readOnly=false;materialRoot.hidden=true;importRoot.hidden=false;workspace.showLibrary();}
  function askExport(){
   if(busy||exportDialog?.open)return;
   const dialog=exportDialog=el('dialog',undefined,{class:'op-export','aria-label':'PPTX 내려받기'});
@@ -106,7 +130,18 @@ export function mountPptxApp({root,storage='minican',fonts,fontServices=defaultI
    }catch(error){result.textContent=message(error);}finally{locked(false);close.disabled=false;go.disabled=false;}
   },{'data-pptx-export-confirm':''});dialog.append(result,close,go);dialog.addEventListener('cancel',event=>{if(busy)event.preventDefault();});dialog.addEventListener('close',()=>{dialog.remove();exportDialog=null;});root.append(dialog);dialog.showModal();
  }
- return {library,getEditorContext:()=>({materialRef:current?clone(current.materialRef):null,active}),
+ async function requestClose(){
+  if(disposed)return true;
+  if(busy){say('작업이 끝난 뒤 돌아가주세요.');return false;}
+  return workspace.requestClose();
+ }
+ function dispose(){
+  if(disposal)return disposal;
+  disposed=true;
+  disposal=Promise.resolve().then(async()=>{workspace.dispose();services.dispose();exportDialog?.close();try{await library.close();}finally{root.replaceChildren();}});
+  return disposal;
+ }
+ return {library,requestClose,getEditorContext:()=>({materialRef:current?clone(current.materialRef):null,active}),
   async restoreEditorContext(context){current=context?.materialRef?await library.getMaterial(context.materialRef):null;active=context?.active||0;readOnly=false;},
-  async open({newImport=false}={}){importRoot.hidden=false;materialRoot.hidden=true;if(newImport&&workspace.startNewImport())latestImport=null;},showMaterial,showLibrary,reportError:error=>say(message(error),true),async editorClosed(){if(current){importRoot.hidden=true;materialRoot.hidden=false;await paint();}},async dispose(){workspace.dispose();services.dispose();await library.close();root.replaceChildren();}};
+  async open({newImport=false}={}){if(disposed)throw Error('가져오기 화면을 다시 열어주세요.');importRoot.hidden=false;materialRoot.hidden=true;if(newImport&&workspace.startNewImport())latestImport=null;},showMaterial,showLibrary,reportError:error=>say(message(error),true),async editorClosed(){if(current&&!disposed){importRoot.hidden=true;materialRoot.hidden=false;await paint();}},dispose};
 }

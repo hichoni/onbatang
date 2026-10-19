@@ -70,6 +70,60 @@ input:focus-visible, textarea:focus-visible, button:focus-visible { outline: 3px
   .btn { transition: none !important; transform: none !important; }
 }
 
+/* PPT belongs to My materials: preserve the editor chrome and its drawing. */
+.cv-inline-import { --oi-ink:#243a35; --oi-green:#286f62; --oi-line:#dce5e1; --oi-muted:#62736f; display:flex; flex-direction:column; min-width:0; min-height:0; height:100%; background:#fafbf8; color:var(--oi-ink); container-type:inline-size; }
+.cv-inline-import-header { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-shrink:0; padding:16px 24px; background:#fffef9; border-bottom:1px solid var(--oi-line); }
+.cv-inline-import-header small { display:block; color:#62736f; font-size:12px; }
+.cv-inline-import-header h2 { margin:2px 0 0; font-size:20px; }
+.cv-inline-import-header button { flex-shrink:0; }
+.cv-inline-import-body { flex:1; min-width:0; min-height:0; overflow:hidden; }
+.cv-inline-import-body>section:first-child { height:100%; min-height:0; }
+.cv-inline-import-body .oi-workspace { height:100%; min-height:0; border-radius:0; }
+.cv-inline-import-body .oi-header[hidden] { display:none!important; }
+.cv-inline-import-body .oi-content { min-height:0; }
+.cv-inline-import-body .oi-review { grid-template-columns:180px minmax(220px,1fr); gap:12px; padding:0 16px 16px; min-height:0; }
+.cv-inline-import-body .oi-options { grid-column:1/-1; display:grid; grid-template-columns:1fr 1fr; gap:10px 16px; }
+.cv-inline-import-body .oi-options>h2,.cv-inline-import-body .oi-options>.oi-font-box { grid-column:1/-1; }
+.cv-inline-import-body .oi-large-preview { min-height:230px; }
+.cv-inline-import-body .oi-rail { max-height:420px; }
+.cv-inline-import-body .oi-file-step { margin:24px auto; }
+.cv-inline-import-body .oi-file-step h1 { font-size:25px; }
+.cv-inline-import-body .oi-drop { padding:22px 18px; margin:20px 0 14px; }
+.cv-inline-import-body .oi-footer { position:sticky; bottom:0; z-index:2; gap:12px; padding:12px 18px; }
+.cv-inline-import-body .oi-footer .oi-primary { min-width:150px; }
+.cv-inline-import-body .oi-steps { padding:14px 20px; }
+.cv-inline-import-body .oi-steps li { min-width:0; }
+.cv-inline-import-body .oi-steps strong { overflow-wrap:anywhere; }
+.cv-app.inline-importing .cv-work { display:flex; padding:0; overflow:hidden; }
+.cv-app.inline-importing .cv-work>[hidden] { display:none!important; }
+.cv-app.inline-importing .cv-work>.cv-inline-import { flex:1; width:100%; }
+.cv-app.inline-importing .cv-side { opacity:.85; }
+@container (min-width:1080px) {
+  .cv-inline-import-body .oi-review { grid-template-columns:210px minmax(280px,1fr) 250px; }
+  .cv-inline-import-body .oi-options { grid-column:auto; display:block; }
+}
+@container (max-width:620px) {
+  .cv-inline-import-header { padding:12px; gap:8px; }
+  .cv-inline-import-header h2 { font-size:17px; }
+  .cv-inline-import-header button { font-size:12px; padding:8px; }
+  .cv-inline-import-body .oi-review { grid-template-columns:1fr; padding:0 12px 12px; }
+  .cv-inline-import-body .oi-options { grid-template-columns:1fr; }
+  .cv-inline-import-body .oi-rail { max-height:230px; }
+  .cv-inline-import-body .oi-pages { grid-template-columns:repeat(4,minmax(0,1fr)); }
+  .cv-inline-import-body .oi-large-preview { min-height:180px; }
+  .cv-inline-import-body .oi-footer { flex-wrap:wrap; padding:10px 12px; }
+  .cv-inline-import-body .oi-footer-note { width:100%; }
+  .cv-inline-import-body .oi-actions { width:100%; justify-content:flex-end; }
+  .cv-inline-import-body .oi-steps { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; padding:12px; }
+  .cv-inline-import-body .oi-steps li { gap:5px; white-space:normal; font-size:11px; }
+  .cv-inline-import-body .oi-steps li>span { width:24px; height:24px; flex:0 0 24px; font-size:12px; }
+  .cv-inline-import-body .oi-steps li:not(:last-child):after { display:none; }
+}
+@media(max-width:860px) {
+  .cv-app.inline-importing .cv-side { display:none; }
+  .cv-app.inline-importing .cv-work { height:calc(100dvh - 160px); min-height:360px; }
+}
+
 /* 미니캔 앱의 화면 — 편집기의 모양은 모듈(src/editor.css)에 있고, 여기는 화면의 짜임을 맡는다.
    첫 화면: 공통 메뉴 → 소개 카드 → 템플릿 → 내 그림.
    꾸미는 화면: 넓은 화면에서는 창을 꽉 채운다(위 막대 · 왼쪽 도구 줄과 옆 칸 · 가운데 그림 · 아래 슬라이드 띠, 스크롤 없음).
