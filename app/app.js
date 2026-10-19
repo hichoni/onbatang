@@ -1277,6 +1277,9 @@ async function saveMaterialFromEditor(O) {
   try {
     await persistEditorAction(O);
     await materialAction.open({designId: O.record.id, slideIndex: O.at});
+    // The host may have committed a new fixed revision. Refresh only the rail
+    // context so the next reorder uses that revision without clearing undo.
+    if(S.open===O&&!O.closed)await loadMaterialNavigation(O);
   } catch (error) {
     const note = error?.message === 'EDITOR_SYNC_FAILED'
       ? '계정에 올리지 못했어요. 이 기기의 그림은 저장했고, 전체 자료 저장은 진행하지 않았어요.'
