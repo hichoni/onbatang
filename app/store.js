@@ -85,6 +85,24 @@ export async function putDesign(record) {
   }, [STORE, ORIGINALS]);
   return clean;
 }
+/** Replace a draft only if it is still the snapshot that was pinned. */
+export async function replaceDesignIfUnchanged(record, expected) {
+  const canonical=value=>JSON.stringify(value,(_,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.fromEntries(Object.keys(x).sort().map(k=>[k,x[k]])):x);
+  const clean=migrateRecord(record),before=expected?migrateRecord(expected):null,db=await open();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(STORE,'readwrite'),store=tx.objectStore(STORE),q=store.get(clean.id);let result,error;
+    q.onsuccess=()=>{try{
+      const current=q.result?migrateRecord(q.result):null;
+      if(canonical(current)!==canonical(before))throw Error('DRAFT_CHANGED');
+      const revision=Math.max(current?.revision||0,clean.revision)+1;
+      if(!Number.isSafeInteger(revision))throw Error('REVISION_LIMIT');
+      result={...clean,revision,updatedAt:Date.now()};
+      store.put(result,result.id);
+    }catch(ex){error=ex;tx.abort();}};
+    tx.oncomplete=()=>resolve(result);
+    tx.onerror=tx.onabort=()=>reject(error||tx.error||Error('DRAFT_SAVE_FAILED'));
+  });
+}
 /** 지우기. */
 export function removeDesign(id) {
   return run('readwrite', (s) => s.delete(id));

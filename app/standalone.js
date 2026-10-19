@@ -4,14 +4,15 @@ import {startMinican,openSavedDesign,isMinicanStarted} from './app.js';
 import {ONBATANG_FONTS,ONBATANG_TITLE_FONT} from './fonts.js';
 import {mountPptxApp} from './pptx-import/app.js';
 import {toast} from './ui.js';
-import {getDesign,putDesign} from './store.js';
+import {getDesign,putDesign,replaceDesignIfUnchanged} from './store.js';
+import {migrateRecord} from './designs.js';
 
 export async function startOnbatang({root=document.getElementById('app'),fonts=ONBATANG_FONTS,titleFont=ONBATANG_TITLE_FONT,storage='minican',onView,onMaterialSaved,materialActions=[],fontServices,styles=true,...options}={}){
  if(!root)throw Error('onbatang root');
  if(isMinicanStarted())throw Error('minican already started');
  // Existing visitors may still have the previous CSS cached for an hour.
  // A release key fetches the matching editor layout without reloading a drawing.
- if(styles)for(const href of [new URL('../src/editor.css?v=0.26.5',import.meta.url).href,new URL('./app.css?v=0.26.5',import.meta.url).href,new URL('./brand.css?v=0.26.5',import.meta.url).href,new URL('./pptx-import/style.css?v=0.26.5',import.meta.url).href]){
+ if(styles)for(const href of [new URL('../src/editor.css?v=0.27.0',import.meta.url).href,new URL('./app.css?v=0.27.0',import.meta.url).href,new URL('./brand.css?v=0.27.0',import.meta.url).href,new URL('./pptx-import/style.css?v=0.27.0',import.meta.url).href]){
   if(![...document.querySelectorAll('link[rel=stylesheet]')].some(link=>link.href===href)){const link=document.createElement('link');link.rel='stylesheet';link.href=href;document.head.append(link);}
  }
  const editor=document.createElement('div'),workspace=document.createElement('section');workspace.className='op-root';workspace.hidden=true;root.classList.add('cv-standalone-shell');root.replaceChildren(editor,workspace);
@@ -70,6 +71,19 @@ export async function startOnbatang({root=document.getElementById('app'),fonts=O
   const graph=await controller.library.saveOrder({materialRef,pageOrder:pageIds});
   await controller.restoreEditorContext(graph);
   return materialNavigation.load({designId});
+ },async saveActivity({designId,materialRef,document,pageOrder,expectedDocument}){
+  const canonical=value=>JSON.stringify(value,(_,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.fromEntries(Object.keys(x).sort().map(k=>[k,x[k]])):x);
+  const before=await getDesign(designId);
+  const content=raw=>{if(!raw)return null;const {updatedAt,...value}=raw;return canonical(value);};
+  if(expectedDocument&&content(before)!==content(migrateRecord(expectedDocument)))throw Error('다른 창에서 이 자료를 편집했어요. 다시 열어 확인해주세요.');
+  const graph=await controller.library.pinEdits({materialRef,drafts:[document],pageOrder});
+  const fixed=graph.documents.find(row=>row.id===designId).payload,warnings=[];let saved=fixed,recoveryRequired=false;
+  try{saved=await replaceDesignIfUnchanged(fixed,before);}catch{recoveryRequired=true;warnings.push('전체 자료에는 저장했지만 편집 사본은 갱신하지 않았어요. 다른 창의 편집과 저장 공간을 확인해주세요.');}
+  // After pinning, return an honest receipt even if a local draft cannot be read.
+  const documents=[];
+  for(const row of graph.documents){try{documents.push(row.id===designId?saved:(await getDesign(row.id)||row.payload));}catch{documents.push(row.payload);recoveryRequired=true;}}
+  try{await controller.restoreEditorContext(graph);}catch{recoveryRequired=true;warnings.push('전체 자료에는 저장했어요. 내 자료에서 다시 열어주세요.');}
+  return {title:graph.manifest.title,documents,materialRef:graph.materialRef,pageOrder:graph.pages.map(value=>value.page.id),warnings,recoveryRequired};
  }};
  await startMinican({...options,root:editor,fonts,titleFont,storage,materialNavigation,importAction:{label:'PPTX 가져오기',hideHome:true,editorLabel:'내 PPT 올리기',editorMode:'inline',open:openPptx},onView:next=>{
   view=next;onView?.(next);

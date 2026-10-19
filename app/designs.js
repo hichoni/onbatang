@@ -10,6 +10,7 @@
 
 /** 고를 수 있는 화면 비율(aspect 는 가로 ÷ 세로). */
 import { SCHEMA_VERSION, DOCUMENT_LIMITS, DocumentError, fail, isId, newId, legacyId, cleanSize, metadata, cleanAssets, validatePageInput, validateReferences } from '../src/document.js';
+import { cleanPixelActivity } from '../src/pixel-art.js';
 export { SCHEMA_VERSION, DocumentError };
 
 export const RATIOS = [
@@ -107,7 +108,7 @@ export function slideVideo(slide) {
   return { video };
 }
 /** 장에 딸린 것 모두(움직임 · 영상 장면). 슬라이드를 새로 짜 맞추는 곳({ bg, items } 를 만드는 곳)마다 함께 펼쳐 넣는다(빠뜨리면 저장하면서 사라진다). */
-export const slideExtra = (slide) => ({ ...metadata(slide, { identity: true }), ...slideMotion(slide), ...slideVideo(slide) });
+export const slideExtra = (slide) => ({ ...metadata(slide, { identity: true }), ...slideMotion(slide), ...slideVideo(slide), ...(slide?.activity === undefined ? {} : {activity:cleanPixelActivity(slide.activity)}) });
 export function withSlideMotion(slide, motion) {
   const { pa, tr, ...extra } = slideExtra(slide);
   return { bg: slide.bg, items: slide.items, ...extra, ...slideMotion(motion) };
@@ -193,7 +194,7 @@ export function migrateRecord(raw) {
 export function copyRecord(raw) {
   const r = migrateRecord(raw), id = newDesignId();
   return migrateRecord({ ...r, id, revision: 0, name: `${r.name} 복사`, origin: { documentId: r.id, revision: r.revision },
-    slides: r.slides.map(p => ({ ...p, id: newId('p'), origin: { documentId: r.id, pageId: p.id, revision: r.revision },
+    slides: r.slides.map(p => ({ ...p, id: newId('p'), ...(p.activity?{activity:{...p.activity,id:newId('a')}}:{}), origin: { documentId: r.id, pageId: p.id, revision: r.revision },
       items: p.items.map(e => ({ ...e, id: newId(), origin: { documentId: r.id, pageId: p.id, elementId: e.id, revision: r.revision } })) })) });
 }
 
@@ -279,6 +280,7 @@ export function copySlide(slides, at) {
   const next = slides.slice();
   const original = slides[at], page = JSON.parse(JSON.stringify(original));
   page.id = newId('p');
+  if(page.activity)page.activity.id=newId('a');
   if (original.id) page.origin = { pageId: original.id };
   page.items = page.items.map(e => ({ ...e, id: newId(), ...(e.id ? { origin: { elementId: e.id, ...(original.id ? { pageId: original.id } : {}) } } : {}) }));
   next.splice(at + 1, 0, page);

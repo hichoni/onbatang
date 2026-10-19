@@ -1,3 +1,4 @@
+@import url('./pixel-art.css');
 /* 미니캔 앱의 바탕: 글자·단추·창(모달)·알림의 기본 모양과 색 값. 앱의 화면 짜임은 이 아래에, 편집기의 모양은 src/editor.css 에 있다.
    이 파일은 미니캔 앱 한 쪽(app/index.html, 또는 그것을 본뜬 쪽)에서만 쓴다: html · body 같은 요소 전체에 규칙을 건다. */
 body.mc-app {
@@ -1020,3 +1021,16 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero-go { display: flex
  .cv-side .fe-tabs .fe-tab{flex:1 0 54px;min-height:56px;min-width:54px;font-size:12px}
  .cv-side .fe-tab span:last-child{white-space:nowrap}
 }
+/* Activity settings stay in the editor; playback occupies the same lesson stage. */
+.cv-activity-config{position:absolute;inset:0;z-index:8;overflow:auto;padding:20px;background:#eef4ef;overscroll-behavior:contain}
+.cv-canvas:has(>.cv-activity-config){position:relative}
+.cv-activity-add,.cv-activity-edit{min-height:44px;white-space:nowrap;padding:9px 14px}
+.cv-activity-edit[hidden]{display:none}
+.cv-show-stage:has(.cv-show-activity){aspect-ratio:auto!important;width:100%!important;height:calc(100dvh - 76px)!important;max-width:none!important;max-height:none!important}
+.cv-show-lesson{box-sizing:border-box;padding-bottom:76px}
+.cv-show-lesson .cv-show-stage{position:relative;width:min(100vw,calc((100dvh - 76px)*var(--cv-show-ratio,1)))}
+.cv-show-activity{position:absolute;inset:0;overflow:auto;background:#f1f7f3;display:flex;align-items:safe center;overscroll-behavior:contain}
+.cv-show-activity .pixel-app{margin:auto}
+.cv-show:has(.cv-show-activity){cursor:auto}
+@media(max-width:680px){.cv-activity-config{padding:8px}.cv-show-activity{align-items:start}.cv-show-activity .pixel-app{margin:0 auto}.cv-slide-tools{flex-wrap:wrap}}
+@media(prefers-reduced-motion:reduce){.cv-show-activity{animation:none!important}}

@@ -99,7 +99,7 @@ export function createPptxLibrary({storage='minican',indexedDB=globalThis.indexe
    await request(s.materialRevisions.add(manifest,key(manifest.id,manifest.revision)));await request(s.materials.put({id:manifest.id,revision:manifest.revision},manifest.id));return graph(s,{id:manifest.id,revision:manifest.revision});
   });
  }
- async function pinEdits({materialRef,drafts=[]}={}){
+ async function pinEdits({materialRef,drafts=[],pageOrder}={}){
   if(!Array.isArray(drafts))fail('INVALID_DRAFTS');const cleaned=new Map(drafts.filter(Boolean).map(row=>{const clean=migrateRecord(row);return [clean.id,clean];}));
   return transaction('readwrite',async s=>{
    const materialHead=await request(s.materials.get(materialRef.id));if(materialHead?.revision!==materialRef.revision)fail('REVISION_CONFLICT');
@@ -114,9 +114,11 @@ export function createPptxLibrary({storage='minican',indexedDB=globalThis.indexe
     await validateAssets(s,payload);const row={...base,revision:payload.revision,payload,createdAt:new Date().toISOString()};
     await request(s.revisions.add(row,key(base.id,row.revision)));await request(s.heads.put({id:base.id,revision:row.revision},base.id));parts.push({...part,revision:row.revision,pages:payload.slides.map(page=>({pageId:page.id,sourcePageNumber:page.source?.assetId===old.manifest.sourceAssetId?page.source.pageNumber??null:null}))});changed=true;
    }
-   if(!changed)return old;
+   if(pageOrder!==undefined)validatePageOrder(pageOrder,parts.flatMap(part=>part.pages.map(page=>typeof page==='number'?null:page.pageId)));
+   if(!changed&&pageOrder===undefined)return old;
    const manifest={...old.manifest,revision:old.manifest.revision+1,parts};
-   if(old.manifest.pageOrder){const ids=parts.flatMap(part=>part.pages.map(page=>page.pageId));manifest.pageOrder=orderPages(ids.map(id=>({id})),old.manifest.pageOrder).map(page=>page.id);}
+   if(pageOrder!==undefined)manifest.pageOrder=[...pageOrder];
+   else if(old.manifest.pageOrder){const ids=parts.flatMap(part=>part.pages.map(page=>page.pageId));manifest.pageOrder=orderPages(ids.map(id=>({id})),old.manifest.pageOrder).map(page=>page.id);}
    await request(s.materialRevisions.add(manifest,key(manifest.id,manifest.revision)));await request(s.materials.put({id:manifest.id,revision:manifest.revision},manifest.id));return graph(s,{id:manifest.id,revision:manifest.revision});
   });
  }
