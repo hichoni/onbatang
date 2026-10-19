@@ -1,0 +1,141 @@
+{
+  "checkedAt": "2026-10-19T11:20:56.296Z",
+  "version": "0.25.0",
+  "sourceCommit": "25925cbdbee7c449555a5e5c3d1f36b58d50870a",
+  "sourceFiles": 145,
+  "unit": {
+    "passed": 179,
+    "failed": 0
+  },
+  "browser": {
+    "relatedPassed": 9,
+    "failed": 0,
+    "rerunAfterSelectorCompatibility": 1
+  },
+  "localTeacherQa": [
+    {
+      "app": "standalone",
+      "pass": true,
+      "checks": [
+        {
+          "name": "original-hash-before",
+          "pass": true
+        },
+        {
+          "name": "all-original-pages-selected",
+          "pass": true
+        },
+        {
+          "name": "all-parts-visible-in-editor",
+          "pass": true,
+          "pages": 19,
+          "parts": 11
+        },
+        {
+          "name": "all-nineteen-pages-open-in-editor",
+          "pass": true
+        },
+        {
+          "name": "first-and-last-part-drafts-saved",
+          "pass": true
+        },
+        {
+          "name": "reload-keeps-all-pages-and-part-edits",
+          "pass": true
+        },
+        {
+          "name": "whole-editor-export-editable",
+          "pass": true,
+          "slides": 19,
+          "bytes": 4283807,
+          "sha256": "d325204bddb4eb1fda180cdbd1267b673cfa99907de87987bdb6de1a083f1766"
+        },
+        {
+          "name": "whole-editor-export-image",
+          "pass": true,
+          "slides": 19,
+          "bytes": 4358067,
+          "sha256": "61b529c9ab89c6d3f601a31519ce942020e195992cced4f1f3d5f6b84dab57d7"
+        },
+        {
+          "name": "original-fixed-graph-and-private-source-unchanged",
+          "pass": true
+        }
+      ],
+      "remoteRequests": 0,
+      "pageErrors": 0,
+      "accountQa": "NOT_RUN"
+    },
+    {
+      "app": "gai",
+      "pass": true,
+      "checks": [
+        {
+          "name": "original-hash-before",
+          "pass": true
+        },
+        {
+          "name": "all-original-pages-selected",
+          "pass": true
+        },
+        {
+          "name": "all-parts-visible-in-editor",
+          "pass": true,
+          "pages": 19,
+          "parts": 11
+        },
+        {
+          "name": "all-nineteen-pages-open-in-editor",
+          "pass": true
+        },
+        {
+          "name": "first-and-last-part-drafts-saved",
+          "pass": true
+        },
+        {
+          "name": "reload-keeps-all-pages-and-part-edits",
+          "pass": true
+        },
+        {
+          "name": "whole-editor-export-editable",
+          "pass": true,
+          "slides": 19,
+          "bytes": 4283807,
+          "sha256": "0cdf39cab01cad212d784c40c893dd722274ec0e9d20f53d7891ddffc6e9eb51"
+        },
+        {
+          "name": "whole-editor-export-image",
+          "pass": true,
+          "slides": 19,
+          "bytes": 4358067,
+          "sha256": "4c4c3f1ec6203dd4377a2167718e60b5dd5cb450f5069ae28b99df4739649709"
+        },
+        {
+          "name": "original-fixed-graph-and-private-source-unchanged",
+          "pass": true
+        }
+      ],
+      "remoteRequests": 0,
+      "pageErrors": 0,
+      "accountQa": "NOT_RUN"
+    }
+  ],
+  "public": {
+    "url": "https://onbatang.web.app/app/",
+    "pass": true,
+    "checks": 17,
+    "httpFileMap": {
+      "files": 148,
+      "sha256": "5aeac1b97133ea70468ad4eda099dbff03529a9693c3c3b1dddf4204aa7ffa40",
+      "allBytesMatch": true
+    },
+    "remoteWrites": 0,
+    "accountUsed": false,
+    "teacherFileUsed": false
+  },
+  "accountQa": "NOT_RUN_THIS_SESSION",
+  "realDevicesAndThirtyFiveParticipants": "NOT_RUN",
+  "nativePowerPoint": "NOT_RUN_THIS_SESSION",
+  "productionDatabaseChanged": false,
+  "privateTeacherInputsAndOutputsPublished": false
+}
