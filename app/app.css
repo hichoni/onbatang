@@ -950,3 +950,24 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero-go { display: flex
   .onba-tour, .onba-tour-shade > i, .onba-tour-shade > b { transition: none; }
   .onba-tour-shade > b, .onba-tour-msg, .onba-tour-msg img, .onba-tour.playing .onba-tour-glass .sand-stream, .btn.cv-tour-btn.invite { animation: none; }
 }
+/* 온바탕: 종이 조각이 모여 한 자료가 되는 로딩. 작업 영역 안에서만 표시한다. */
+.onba-loading{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;min-height:220px;padding:32px 24px;border:1px solid #dce9e2;border-radius:20px;background:linear-gradient(145deg,#f4f9f5,#fffdf7);color:#25463d;text-align:center;box-sizing:border-box;width:100%}
+.onba-loading-art{position:relative;display:block;width:144px;height:102px;flex:none;isolation:isolate}
+.onba-loading-art svg{display:block;width:100%;height:100%;overflow:visible}
+.onba-loading-piece{transform-box:fill-box;transform-origin:center;animation:onba-assemble 2.8s cubic-bezier(.22,.7,.3,1) infinite}
+.onba-loading-piece.piece-0{--from-x:-18px;--from-y:12px;--from-r:-12deg}
+.onba-loading-piece.piece-1{--from-x:17px;--from-y:-13px;--from-r:15deg;animation-delay:.12s}
+.onba-loading-piece.piece-2{--from-x:13px;--from-y:15px;--from-r:16deg;animation-delay:.22s}
+.onba-loading-copy{display:grid;justify-items:center;gap:7px;min-width:0;max-width:100%}
+.onba-loading-title{font-size:17px;line-height:1.5;word-break:keep-all;overflow-wrap:anywhere}
+.onba-loading-detail{font-size:13px;line-height:1.6;color:#65786e;overflow-wrap:anywhere}
+.onba-loading progress{display:block;width:min(260px,100%);height:6px;margin-top:8px;accent-color:#286f62}
+.onba-loading progress[hidden]{display:none}
+.onba-loading.is-compact{flex-direction:row;min-height:82px;gap:16px;padding:12px 20px;text-align:left;border-radius:14px}
+.onba-loading.is-compact .onba-loading-art{width:76px;height:56px}
+.onba-loading.is-compact .onba-loading-copy{justify-items:start}.onba-loading.is-compact .onba-loading-title{font-size:14px}
+.cv-material-hint{display:block;margin:2px 8px 4px;color:#65786e;font-size:12px;line-height:1.5}
+.cv-strip>.onba-loading{margin-bottom:8px}
+@keyframes onba-assemble{0%,100%{transform:translate(var(--from-x),var(--from-y)) rotate(var(--from-r));opacity:.35}32%,78%{transform:translate(0,0) rotate(0deg);opacity:1}92%{opacity:.6}}
+@media(prefers-reduced-motion:reduce){.onba-loading-art *{animation:none!important;transform:none!important;opacity:1!important}}
+@media(max-width:480px){.onba-loading{padding:24px 16px}.onba-loading.is-compact{padding:12px;gap:12px}.onba-loading-title{font-size:15px}}

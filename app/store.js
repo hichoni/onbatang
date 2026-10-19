@@ -71,13 +71,15 @@ export async function putDesign(record) {
   await run('readwrite', (s, tx) => {
     const q = s.get(clean.id);
     q.onsuccess = () => {
+      try {
       const previous = q.result;
       const original = previous && previous.schemaVersion === undefined ? previous : record.schemaVersion === undefined ? record : null;
       if (original) {
         const originals = tx.objectStore(ORIGINALS), backup = originals.get(clean.id);
-        backup.onsuccess = () => { if (backup.result === undefined) originals.put(original, clean.id); };
+        backup.onsuccess = () => { try { if (backup.result === undefined) originals.put(original, clean.id); } catch { tx.abort(); } };
       }
       s.put(clean, clean.id);
+      } catch { tx.abort(); }
     };
     return q;
   }, [STORE, ORIGINALS]);

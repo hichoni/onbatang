@@ -1,4 +1,5 @@
 import {designView} from '../../src/render.js';
+import {onbatangLoading} from '../loading.js';
 
 const copy = value => value == null ? value : structuredClone(value);
 const errorText = error => error?.message || error?.code || '작업을 마치지 못했어요.';
@@ -37,13 +38,23 @@ export function mountImportWorkspace({root, services, onClose, onOpenDocument, o
   }
   const status = element('p', '', {class: 'oi-status', role: 'status', 'aria-live': 'polite', 'data-import-status': ''});
   const body = element('div', undefined, {class: 'oi-content'});
+  let busyView;
+  const loading = element('div', undefined, {class:'oi-loading-region',hidden:'','data-import-loading':''});
   const footer = element('footer', undefined, {class: 'oi-footer'});
   const footerNote = element('div', undefined, {class: 'oi-footer-note'}), footerActions = element('div', undefined, {class: 'oi-actions'});
-  footer.append(footerNote, footerActions); shell.append(header, steps, status, body, footer); root.replaceChildren(shell);
+  footer.append(footerNote, footerActions); shell.append(header, steps, status, loading, body, footer); root.replaceChildren(shell);
   const fileInput = element('input', undefined, {type: 'file', accept: '.pptx', 'aria-label': 'PPTX 파일 선택', class: 'oi-file-input'});
   fileInput.addEventListener('change', () => { if (fileInput.files?.[0]) chooseFile(fileInput.files[0]); });
 
-  function say(message, failure = false) { if (disposed) return; status.textContent = message; status.dataset.error = String(failure); }
+  function say(message, failure = false) { if (disposed) return; status.textContent = message; status.dataset.error = String(failure); if(!failure)busyView?.update({detail:message}); }
+  function updateLoading(){
+    const visible=state.tab==='import'&&(!!state.busy||state.previewPreparing);
+    loading.hidden=!visible;body.setAttribute('aria-busy',String(visible));
+    if(!visible){busyView=null;loading.replaceChildren();return;}
+    const title=state.busy==='saving'?'슬라이드를 온바탕에 담고 있어요':state.busy==='inspecting'?'PPT를 펼쳐보고 있어요':'PPT 화면을 준비하고 있어요';
+    busyView=onbatangLoading({title,detail:state.busy==='saving'?`${state.selected.size}쪽을 순서대로 저장해요. 원본은 그대로 보관돼요.`:'슬라이드와 글꼴을 확인해요. 원본 파일은 바뀌지 않아요.',compact:state.step!==1});
+    loading.replaceChildren(busyView.node);
+  }
   function page(number = state.active) { return state.inspection?.pages.find(item => item.pageNumber === number); }
   function selectedPages() { return [...state.selected].sort((a, b) => a - b); }
   function displayedFont(font, pages = font.pageNumbers || []) {
@@ -83,7 +94,7 @@ export function mountImportWorkspace({root, services, onClose, onOpenDocument, o
   async function showTab(tab) {
     if (disposed || state.busy === 'saving') return;
     if (tab === 'library' && onLibrary) return onLibrary();
-    state.tab = tab; updateChrome();
+    state.tab = tab; updateChrome(); updateLoading();
     if (tab === 'import') { render(); return; }
     const job = ++libraryGeneration; body.replaceChildren(); footerActions.replaceChildren();
     footerNote.textContent = '이 기기에 저장된 자료 · 원본과 고정 버전을 보관해요.';
@@ -91,17 +102,20 @@ export function mountImportWorkspace({root, services, onClose, onOpenDocument, o
     const title = element('div', undefined, {class: 'oi-library-heading'});
     title.append(element('h2', '가져온 자료 보관함'), element('p', '전체 슬라이드를 다시 열어 편집하고 PPTX로 내려받을 수 있어요.', {class: 'oi-help'}));
     body.append(title); const host = element('div', undefined, {class: 'oi-library'}); body.append(host);
+    const pending=onbatangLoading({title:'내 PPT 자료를 불러오고 있어요',detail:'저장된 원본과 전체 슬라이드를 확인해요.'});host.append(pending.node);
     say('기기 보관함을 여는 중이에요…');
     try { await renderLibrary?.(host, {report: say, refresh: () => showTab('library'), close: requestClose}); if (!disposed && job === libraryGeneration) say('원본 PPT와 고정 자료는 이 브라우저에 저장되어 있어요.'); }
     catch (error) { if (!disposed && job === libraryGeneration) say(errorText(error), true); }
+    finally{pending.node.remove();}
   }
   function render() {
     if (disposed || state.tab !== 'import') return;
     if (suspended) { renderPending = true; return; }
-    renderPending = false; updateChrome(); body.replaceChildren(); footerActions.replaceChildren();
+    renderPending = false; updateChrome(); updateLoading(); body.replaceChildren(); footerActions.replaceChildren();
     if (state.step === 1) renderFile(); else if (state.step === 2) renderReview(); else renderResult();
   }
   function renderFile() {
+    if(state.busy){footerNote.textContent=state.file?.name||'원본은 그대로 보관해요.';footerActions.append(button('확인 취소',cancelWork,{'data-import-cancel':''}));return;}
     const intro = element('section', undefined, {class: 'oi-file-step'});
     intro.append(element('span', 'PPT에서 온바탕으로', {class: 'oi-eyebrow'}), element('h1', '수업 자료를 가져와요'),
       element('p', '슬라이드를 살펴보고, 필요한 모습으로 온바탕에서 이어서 편집하세요.', {class: 'oi-lead'}));
@@ -285,7 +299,7 @@ export function mountImportWorkspace({root, services, onClose, onOpenDocument, o
   }
   async function loadLargePreview(host) {
     previewController?.abort(); previewController = new AbortController(); const job = ++previewGeneration, generationAtStart = generation;
-    host.append(element('span', '슬라이드를 준비하고 있어요…', {class: 'oi-preview-empty'}));
+    host.append(onbatangLoading({title:`${state.active}쪽을 그리는 중이에요`,detail:state.preview==='pptx'?'PPT 화면을 준비해요.':'편집할 글과 요소를 준비해요.',compact:true}).node);
     try {
       const result = await previewData(state.active, state.preview, 'large', state.fontPlan, previewController.signal);
       if (!disposed && job === previewGeneration && generationAtStart === generation && host.isConnected) paintPreview(host, result);
@@ -297,7 +311,7 @@ export function mountImportWorkspace({root, services, onClose, onOpenDocument, o
     try {
       const result = await services.saveAll({file: state.file, inspection: state.inspection, selectedPages: selectedPages(), importModes: copy(state.modes),
         fontPlan: copy(state.fontPlan), retry: state.retry, signal: actionController.signal, onProgress: progress => {
-          if (!disposed && job === generation) say(progress.message || `${progress.completed || 0} / ${progress.total || state.selected.size}쪽 처리 중…`);
+          if (!disposed && job === generation) {const detail=progress.message || `${progress.completed || 0} / ${progress.total || state.selected.size}쪽 저장 완료`;say(detail);busyView?.update({...progress,detail});}
         }});
       if (disposed || job !== generation) return;
       state.result = result; state.retry = result.complete === true ? null : result.retry || result.recovery || (result.retryToken ? {retryToken: result.retryToken} : null); state.step = 3;

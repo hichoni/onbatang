@@ -5,6 +5,7 @@
 //             꾸미는 화면은 넓은 화면에서 창을 꽉 채우고(스크롤 없음), 좁은 화면에서는 위에서 아래로 쌓인다(app.css).
 import { el, toast, openModal, closeModal } from './ui.js';
 import { onbatangLogo } from './brand.js';
+import { onbatangLoading } from './loading.js';
 import {
   createEditor, designView, designToBlob, configure, settings, reshapeItems, layoutList, layoutItems, icon, cleanDesign, hasMotion, playDesign, playTransition,
   COMBOS, TRANSITIONS, designsToVideo, canMakeVideo, canFilmScenes, filmPlan, MAX_FILM_SECONDS, videoSize, STAYS, DEFAULT_STAY, scenePlayer, dropScene, sceneUrl, youTubePlayers,
@@ -34,6 +35,7 @@ let onView = () => {};
 let onBrandClick = null;
 let importAction = null;
 let materialAction = null;
+let materialNavigation = null;
 let brand = null;                // 들여 쓰는 곳의 표시 { name, logo } (없으면 표시하지 않는다)
 let sync = null;                 // 들여 쓰는 곳의 계정 저장(sync.js). 없으면 이 기기에만 저장한다
 let pusher = null;
@@ -405,9 +407,7 @@ function render() {
         el('span', { class: 'cv-account-icon', 'aria-hidden': 'true' }, ic(sync ? 'cloud' : 'screen')),
         el('span', { class: 'cv-account-text' }, ...accountNote()))));
   if (loading) {
-    mine.append(el('div', { class: 'cv-state', role: 'status' },
-      el('span', { class: 'cv-spin', 'aria-hidden': 'true' }),
-      el('b', { text: sync ? '저장된 그림을 불러오는 중이에요…' : '이 기기에 저장된 그림을 불러오는 중이에요…' })));
+    mine.append(onbatangLoading({title:'내 그림을 불러오고 있어요',detail:sync?'이 기기와 계정의 저장 자료를 확인해요.':'이 기기에 저장된 그림을 확인해요.'}).node);
   } else if (!list.length) {
     mine.append(el('div', { class: 'cv-state cv-empty', role: 'status' },
       el('span', { class: 'cv-state-icon', 'aria-hidden': 'true' }, el('i'), el('i'), el('i')),
@@ -599,6 +599,7 @@ function openDesign(record, isNew) {
   app.replaceChildren(shell);
   O.editor.refresh();                    // 화면에 놓은 뒤에 다시 그려서 테두리·손잡이의 자리를 맞춘다
   renderStrip(O);
+  loadMaterialNavigation(O);
   // 처음 꾸미는 화면을 열면 사용법 안내를 한 번 보여 준다(이 기기에서 한 번). 언제든 ? 단추로 다시 본다.
   if (!tourSeen('editor')) {
     markTourSeen('editor');
@@ -736,11 +737,68 @@ function renderStrip(O) {
     const by = r.left < box.left + 8 ? r.left - box.left - 8 : r.right > box.right - 8 ? r.right - box.right + 8 : 0;
     if (by) list.scrollBy({ left: by, behavior: CALM.matches ? 'auto' : 'smooth' });
   }
+  renderMaterialNavigation(O);
+}
+
+// Stored PPT parts stay independent. The editor shows their pages as one deck
+// without exceeding per-document size limits or rewriting fixed revisions.
+async function loadMaterialNavigation(O) {
+  if (!materialNavigation || O.record.source?.kind !== 'pptx') return;
+  const loading=onbatangLoading({title:'PPT 전체 슬라이드를 불러오고 있어요',detail:'저장된 모든 쪽을 순서대로 연결해요.',compact:true});
+  O.strip.prepend(loading.node);
+  try {
+    const deck=await materialNavigation.load({designId:O.record.id});
+    if(O.closed||S.open!==O)return;
+    if(deck?.documents?.some(record=>record.id===O.record.id)){
+      O.materialDeck={title:deck.title,documents:deck.documents.map(migrateRecord)};
+      renderStrip(O);
+    }
+  }catch{if(!O.closed&&S.open===O)toast('PPT 전체 목록을 열지 못했어요. 현재 편집과 저장 자료는 유지돼요. 내 자료에서 다시 열어주세요.',5000);}
+  finally{loading.node.remove();}
+}
+function renderMaterialNavigation(O) {
+  if(!O.materialDeck)return;
+  const pages=O.materialDeck.documents.flatMap(record=>(record.id===O.record.id?currentSlides(O):record.slides).map((page,index)=>({record,page,index})));
+  const at=pages.findIndex(value=>value.record.id===O.record.id&&value.index===O.at);
+  const rail=O.strip.querySelector('.cv-slide-list');
+  rail.setAttribute('aria-label','PPT 전체 슬라이드');
+  rail.replaceChildren(...pages.map((value,index)=>el('button',{
+    class:`cv-slide${index===at?' on':''}`,type:'button','aria-label':`전체 자료 ${index+1}쪽${value.page.source?.pageNumber?` · 원본 ${value.page.source.pageNumber}쪽`:''}`,
+    'aria-pressed':String(index===at),dataset:{materialPage:String(index),documentId:value.record.id,...(value.record.id===O.record.id?{slide:String(value.index)}:{})},
+    onClick:()=>navigateMaterialPage(O,value)
+  },el('span',{class:'cv-slide-no',text:String(index+1)}),el('span',{class:'cv-slide-view','aria-hidden':'true'},slideView(value.page,aspectOf(value.record),240)))));
+  const count=O.strip.querySelector('.cv-slide-count');
+  count.textContent=`${at+1} / ${pages.length}쪽 · 전체 PPT`;
+  count.dataset.materialCount='';
+  const hint=el('span',{class:'cv-material-hint',text:'모든 쪽을 이어서 편집할 수 있어요. 변경은 이 기기에 자동 저장돼요.'});
+  O.strip.append(hint);
+  const selected=rail.querySelector('.on');
+  if(selected)rail.scrollLeft=Math.max(0,selected.offsetLeft-rail.offsetLeft-rail.clientWidth/2+selected.clientWidth/2);
+}
+async function navigateMaterialPage(O,value) {
+  if(O.closed||O.leaving||O.inlineImport||moving||app.inert||hostFlush||videoBusy(O))return;
+  if(value.record.id===O.record.id){goSlide(O,value.index);return;}
+  O.leaving=true;app.inert=true;
+  const loading=onbatangLoading({title:`${value.page.source?.pageNumber||value.index+1}쪽을 여는 중이에요`,detail:'지금 편집한 내용을 먼저 저장해요.',compact:true});
+  O.strip.prepend(loading.node);
+  try{
+    await persistEditorAction(O);
+    const record=await getDesign(value.record.id);
+    if(!record)throw Error('DOCUMENT_NOT_FOUND');
+    const ready=migrateRecord(record);
+    if(!await leaveEditor(O,{requireSaved:true}))throw Error('EDITOR_SAVE_FAILED');
+    S.phase='home';upsert(ready);openDesign(ready,false);
+    if(value.index>0&&value.index<S.open.slides.length)goSlide(S.open,value.index);
+  }catch{
+    if(!O.closed&&S.open===O){setStatus(O,'현재 쪽을 저장하거나 다음 쪽을 열지 못했어요. 편집은 그대로 유지돼요.','bad');toast('저장 상태를 확인한 뒤 다시 이동해주세요.',5000);}
+  }finally{loading.node.remove();O.leaving=false;if(!O.closed&&S.open===O)app.inert=false;}
 }
 // 지금 장의 작은 그림만 다시 그린다(꾸미는 동안 띠를 통째로 다시 그리지 않는다).
 function refreshThumb(O) {
   const box = O.strip?.querySelector(`.cv-slide[data-slide="${O.at}"] .cv-slide-view`);
-  if (!box || O.closed) return;
+  if (O.closed) return;
+  if(O.materialDeck){renderStrip(O);return;}
+  if (!box) return;
   const design = O.editor.getDesign();
   box.replaceChildren(slideView(design, aspectOf(O.record)));
   const tile = box.closest('.cv-slide');
@@ -1503,6 +1561,8 @@ function askDownload(O, btn) {
     const scrollTop = body.scrollTop;
     const video = pick.kind === 'video';
     const pptx = pick.kind === 'pptx';
+    const scopeN=pptx&&O.materialDeck?O.materialDeck.documents.reduce((total,row)=>total+(row.id===O.record.id?O.slides.length:row.slides.length),0):n;
+    const scopeAt=pptx&&O.materialDeck?O.materialDeck.documents.slice(0,O.materialDeck.documents.findIndex(row=>row.id===O.record.id)).reduce((total,row)=>total+row.slides.length,0)+O.at:O.at;
     const ms = video ? filmMs(pick.stay) : 0;
     const long = ms > MAX_FILM_SECONDS * 1000;
     const rows = [section('파일 형식', el('div', {class: 'cv-down-formats'},
@@ -1512,9 +1572,9 @@ function askDownload(O, btn) {
       choice('cv-down-format', '영상', '움직임까지 담기', video, {type: 'video'}, {kind: 'video'}, can ? {} : {disabled: true, title: NO_VIDEO})))];
     rows.push(section('저장할 쪽', video
       ? el('p', {class: 'cv-down-note', text: `모든 장 (${n}장)을 순서대로 영상 하나에 담아요.`})
-      : n > 1 ? el('div', {class: 'cv-down-chips'},
-        chip(`지금 장 (${O.at + 1}번째)`, !pick.all, () => set({all: false}), {scope: 'one'}),
-        chip(`모든 장 (${n}장)`, pick.all, () => set({all: true}), {scope: 'all'}))
+      : scopeN > 1 ? el('div', {class: 'cv-down-chips'},
+        chip(`지금 장 (${scopeAt + 1}번째)`, !pick.all, () => set({all: false}), {scope: 'one'}),
+        chip(`모든 장 (${scopeN}장)`, pick.all, () => set({all: true}), {scope: 'all'}))
         : el('p', {class: 'cv-down-note', text: '지금 장 (1장)'})));
     if (pptx) rows.push(section('PPTX 방식', el('div', {class: 'cv-down-modes'},
       choice('cv-down-mode', '편집형', '글·기본 도형·사진을 따로 수정해요.', pick.pptxMode === 'editable', {pptx: 'editable'}, {pptxMode: 'editable'}),
@@ -1540,7 +1600,7 @@ function askDownload(O, btn) {
     body.replaceChildren(...rows);
     body.scrollTop = scrollTop;
     if (active && Object.keys(active).length) body.querySelector(Object.entries(active).map(([k, v]) => `button[data-${k}="${v}"]`).join(''))?.focus({preventScroll: true});
-    const range = video || pick.all ? `모든 장 ${n}장` : `지금 장 (${O.at + 1}/${n})`;
+    const range = video || pick.all ? `모든 장 ${scopeN}장` : `지금 장 (${scopeAt + 1}/${scopeN})`;
     const label = video ? '영상' : pptx ? `PPTX ${pick.pptxMode === 'editable' ? '편집형' : '이미지형'}` : pick.kind.toUpperCase();
     summaryTitle.textContent = `${label} · ${range}`;
     const px = video ? videoSize(aspect, VIDEO_SIZES.find(size => size.id === pick.vsize).short) : exportSize(pick.size, aspect);
@@ -1594,7 +1654,17 @@ async function makePptx(O, {all, mode}) {
   try {
     await flushSavedDesign(O.record.id);
     if (controller.signal.aborted || O.closed) return;
-    const slides = structuredClone(currentSlides(O)), selected = all ? slides : [slides[O.at]];
+    const slides = structuredClone(currentSlides(O));let selected=all?slides:[slides[O.at]];
+    if(all&&O.materialDeck){
+      selected=[];
+      for(const row of O.materialDeck.documents){
+        const draft=row.id===O.record.id?{...O.record,slides}:await getDesign(row.id);
+        if(!draft)throw Error('다른 쪽을 불러오지 못했어요. 전체 자료를 다시 열어주세요.');
+        if(Math.abs(aspectOf(draft)-aspectOf(O.record))>.001)throw Error('슬라이드 비율이 서로 달라요. 원본과 편집 자료는 보존돼요.');
+        selected.push(...structuredClone(draft.slides));
+      }
+      progress.max=selected.length;
+    }
     const result = await createPptx({slides: selected, aspect: aspectOf(O.record), size: O.record.size,
       title: O.record.name || '온바탕', mode, signal: controller.signal,
       onProgress: ({completed, total}) => { progress.value = completed; label.textContent = `${completed} / ${total}장을 만들었어요…`; }});
@@ -1771,7 +1841,7 @@ function flush() {
  * - materialAction: {label, accepts?(record), open({designId,slideIndex})} 현재 그림 저장 후 같은 편집기에서 전체 자료 작업을 여는 선택 연결.
  *   기본 모드는 기존 호스트 이동 계약을 유지한다. 파일 해석과 저장은 호스트가 맡는다.
  */
-export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null, materialAction: material = null } = {}) {
+export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null, materialAction: material = null, materialNavigation: navigation = null } = {}) {
   if (app) throw new Error('minican already started');
   if (!root) throw new Error('minican root');
   app = root;
@@ -1781,6 +1851,7 @@ export function startMinican({ root = document.getElementById('app'), fonts = []
   if (typeof hostHome === 'function') onBrandClick = hostHome;
   if (importing && typeof importing.open === 'function' && typeof importing.label === 'string' && importing.label.trim()) importAction = importing;
   if (material && typeof material.open === 'function' && typeof material.label === 'string' && material.label.trim() && (!material.accepts || typeof material.accepts === 'function')) materialAction = material;
+  if(navigation&&typeof navigation.load==='function')materialNavigation=navigation;
   if (account && ['pull', 'push', 'drop'].every((k) => typeof account[k] === 'function')) {
     sync = account;
     pusher = createPusher(sync, { onDone: pushed });
