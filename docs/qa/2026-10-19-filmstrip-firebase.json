@@ -1,0 +1,119 @@
+{
+  "checkedAt": "2026-10-19T11:50:19.306Z",
+  "status": "PASS",
+  "scope": "public-fresh-device-self-authored-only",
+  "expectedRelease": {
+    "product": "onbatang",
+    "version": "0.26.2",
+    "sourceCommit": "cad823c0d5f410ed09dfb1734b36b114ce7bebc1",
+    "sourceFiles": 149
+  },
+  "httpFileMap": {
+    "files": 152,
+    "sha256": "ecc92238d9d7881e6f30f95e756af9605d0fc1c1af176b9aba49150ffa79b86c",
+    "allBytesMatch": true
+  },
+  "checks": [
+    {
+      "name": "exact-version-source-commit-and-file-count-before-browser",
+      "passed": true
+    },
+    {
+      "name": "all-public-source-entry-html-and-metadata-bytes-match-committed-release",
+      "passed": true,
+      "sourceFiles": 149,
+      "entryHtmlFiles": 2,
+      "metadataFiles": 1,
+      "publicFiles": 152
+    },
+    {
+      "name": "public-css-revalidation-prevents-hour-old-styles",
+      "passed": true
+    },
+    {
+      "name": "home-has-no-import-and-my-materials-keeps-editor-shell-and-url",
+      "passed": true
+    },
+    {
+      "name": "file-step-tool-switch-closes-safely-and-resumes-the-same-workspace",
+      "passed": true
+    },
+    {
+      "name": "both-original-previews-and-complete-import-auto-open-without-navigation",
+      "passed": true
+    },
+    {
+      "name": "desktop-and-390px-step-labels-and-footer-buttons-visible",
+      "passed": true,
+      "visualIssues": 0
+    },
+    {
+      "name": "mobile-tool-switch-restores-identical-editor-page-and-undo",
+      "passed": true
+    },
+    {
+      "name": "resumed-preview-font-plan-and-image-mode-use-the-same-DOM",
+      "passed": true
+    },
+    {
+      "name": "applied-fonts-and-image-page-import-auto-opens-new-drawing-preserving-old",
+      "passed": true
+    },
+    {
+      "name": "my-drawings-goes-to-real-home-without-an-external-ppt-layer",
+      "passed": true
+    },
+    {
+      "name": "my-materials-library-fixed-save-keeps-both-revision-zero-and-source-bytes",
+      "passed": true
+    },
+    {
+      "name": "reload-reopens-exact-two-materials-with-library-inside-my-materials",
+      "passed": true
+    },
+    {
+      "name": "original-pptx-download-is-byte-identical",
+      "passed": true
+    },
+    {
+      "name": "two-page-editable-pptx-download-preserves-original-four-to-three",
+      "passed": true
+    },
+    {
+      "name": "two-page-image-pptx-download-preserves-original-four-to-three",
+      "passed": true
+    },
+    {
+      "name": "zero-external-requests-writes-websockets-serviceworkers-and-page-errors",
+      "passed": true
+    },
+    {
+      "name": "public-filmstrip-order-palette-persistence-and-mobile",
+      "passed": true
+    }
+  ],
+  "downloads": [
+    {
+      "mode": "editable",
+      "bytes": 70493,
+      "sha256": "885be04c6c5072dd4ccf70abf18e8913477519b7d270af5e423b4cd1eacea5ce",
+      "slides": 2,
+      "originalSizePreserved": true
+    },
+    {
+      "mode": "image",
+      "bytes": 96287,
+      "sha256": "94fcece91af9c35040325c9b2561bf049b1cedc6a97d66c796a1ba3ac8d68a7b",
+      "slides": 2,
+      "originalSizePreserved": true
+    }
+  ],
+  "accountVerification": "NOT_RUN",
+  "nativeScreenEyedropper": "NOT_RUN_API_MOCK_ONLY",
+  "nativePowerPointRendering": "NOT_RUN",
+  "teacherInputUsed": false,
+  "existingBrowserProfileUsed": false,
+  "pageErrors": 0,
+  "externalRequestsBlocked": 0,
+  "writeRequestsBlocked": 0
+}
