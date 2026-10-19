@@ -1,0 +1,334 @@
+{
+  "report": {
+    "contractVersion": 1,
+    "jobId": "jfixture21",
+    "status": "ready",
+    "sourceDocumentId": "sfixture21",
+    "sourceAssetId": "afixture21",
+    "converter": {
+      "name": "self-authored-expected-data",
+      "version": "1",
+      "fonts": []
+    },
+    "selectedPages": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21
+    ],
+    "pageCount": 21,
+    "warnings": [
+      {
+        "code": "SYNTHETIC_SAMPLE",
+        "message": "직접 작성한 예상 데이터. 실제 PPTX 변환 결과가 아닙니다."
+      }
+    ]
+  },
+  "document": {
+    "id": "dfixture21",
+    "schemaVersion": 1,
+    "revision": 0,
+    "name": "self-authored-21-pages",
+    "originalSize": {
+      "width": 9144000,
+      "height": 6858000,
+      "unit": "emu"
+    },
+    "size": {
+      "width": 960,
+      "height": 720,
+      "unit": "px"
+    },
+    "source": {
+      "kind": "pptx",
+      "sourceDocumentId": "sfixture21",
+      "assetId": "afixture21",
+      "filename": "self-authored-21-pages.pptx",
+      "sha256": "5541075147146b8d6dde0430ff8c52e685b45635954d5bf3883e6d643f769884"
+    },
+    "assets": [
+      {
+        "id": "afixture21",
+        "kind": "source",
+        "mimeType": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "sha256": "5541075147146b8d6dde0430ff8c52e685b45635954d5bf3883e6d643f769884",
+        "byteLength": 47632,
+        "storageKey": "fixtures/self-authored-21-pages.pptx"
+      }
+    ],
+    "assetRefs": [
+      "afixture21"
+    ],
+    "slides": [
+      {
+        "items": [
+          {
+            "t": "text",
+            "text": "직접 만든 1쪽: 쪽 선택과 원본 순서 검증",
+            "x": 50,
+            "y": 45,
+            "w": 85,
+            "size": 5
+          }
+        ]
+      },
+      {
+        "items": [
+          {
+            "t": "text",
+            "text": "직접 만든 2쪽: 쪽 선택과 원본 순서 검증",
+            "x": 50,
+            "y": 45,
+            "w": 85,
+            "size": 5
+          }
+        ]
+      },
+      {
+        "items": [
+          {
+            "t": "text",
+            "text": "직접 만든 3쪽: 쪽 선택과 원본 순서 검증",
+            "x": 50,
+            "y": 45,
+            "w": 85,
+            "size": 5
+          }
+        ]
+      },
+      {
+        "items": [
+          {
+            "t": "text",
+            "text": "직접 만든 4쪽: 쪽 선택과 원본 순서 검증",
+            "x": 50,
+            "y": 45,
+            "w": 85,
+            "size": 5
+          }
+        ]
+      },
+      {
+        "items": [
+          {
+            "t": "text",
+            "text": "직접 만든 5쪽: 쪽 선택과 원본 순서 검증",
+            "x": 50,
+            "y": 45,
+            "w": 85,
+            "size": 5
+          }
+        ]
+      },
+      {
+        "items": [
+          {
+            "t": "text",
+            "text": "직접 만든 6쪽: 쪽 선택과 원본 순서 검증",
+            "x": 50,
+            "y": 45,
+            "w": 85,
+            "size": 5
+          }
+        ]
+      },
+      {
+        "items": [
+          {
+            "t": "text",
+            "text": "직접 만든 7쪽: 쪽 선택과 원본 순서 검증",
+            "x": 50,
+            "y": 45,
+            "w": 85,
+            "size": 5
+          }
+        ]
+      },
+      {
+        "items": [
+          {
+            "t": "text",
+            "text": "직접 만든 8쪽: 쪽 선택과 원본 순서 검증",
+            "x": 50,
+            "y": 45,
+            "w": 85,
+            "size": 5
+          }
+        ]
+      },
+      {
+        "items": [
+          {
+            "t": "text",
+            "text": "직접 만든 9쪽: 쪽 선택과 원본 순서 검증",
+            "x": 50,
+            "y": 45,
+            "w": 85,
+            "size": 5
+          }
+        ]
+      },
+      {
+        "items": [
+          {
+            "t": "text",
+            "text": "직접 만든 10쪽: 쪽 선택과 원본 순서 검증",
+            "x": 50,
+            "y": 45,
+            "w": 85,
+            "size": 5
+          }
+        ]
+      },
+      {
+        "items": [
+          {
+            "t": "text",
+            "text": "직접 만든 11쪽: 쪽 선택과 원본 순서 검증",
+            "x": 50,
+            "y": 45,
+            "w": 85,
+            "size": 5
+          }
+        ]
+      },
+      {
+        "items": [
+          {
+            "t": "text",
+            "text": "직접 만든 12쪽: 쪽 선택과 원본 순서 검증",
+            "x": 50,
+            "y": 45,
+            "w": 85,
+            "size": 5
+          }
+        ]
+      },
+      {
+        "items": [
+          {
+            "t": "text",
+            "text": "직접 만든 13쪽: 쪽 선택과 원본 순서 검증",
+            "x": 50,
+            "y": 45,
+            "w": 85,
+            "size": 5
+          }
+        ]
+      },
+      {
+        "items": [
+          {
+            "t": "text",
+            "text": "직접 만든 14쪽: 쪽 선택과 원본 순서 검증",
+            "x": 50,
+            "y": 45,
+            "w": 85,
+            "size": 5
+          }
+        ]
+      },
+      {
+        "items": [
+          {
+            "t": "text",
+            "text": "직접 만든 15쪽: 쪽 선택과 원본 순서 검증",
+            "x": 50,
+            "y": 45,
+            "w": 85,
+            "size": 5
+          }
+        ]
+      },
+      {
+        "items": [
+          {
+            "t": "text",
+            "text": "직접 만든 16쪽: 쪽 선택과 원본 순서 검증",
+            "x": 50,
+            "y": 45,
+            "w": 85,
+            "size": 5
+          }
+        ]
+      },
+      {
+        "items": [
+          {
+            "t": "text",
+            "text": "직접 만든 17쪽: 쪽 선택과 원본 순서 검증",
+            "x": 50,
+            "y": 45,
+            "w": 85,
+            "size": 5
+          }
+        ]
+      },
+      {
+        "items": [
+          {
+            "t": "text",
+            "text": "직접 만든 18쪽: 쪽 선택과 원본 순서 검증",
+            "x": 50,
+            "y": 45,
+            "w": 85,
+            "size": 5
+          }
+        ]
+      },
+      {
+        "items": [
+          {
+            "t": "text",
+            "text": "직접 만든 19쪽: 쪽 선택과 원본 순서 검증",
+            "x": 50,
+            "y": 45,
+            "w": 85,
+            "size": 5
+          }
+        ]
+      },
+      {
+        "items": [
+          {
+            "t": "text",
+            "text": "직접 만든 20쪽: 쪽 선택과 원본 순서 검증",
+            "x": 50,
+            "y": 45,
+            "w": 85,
+            "size": 5
+          }
+        ]
+      },
+      {
+        "items": [
+          {
+            "t": "text",
+            "text": "직접 만든 21쪽: 쪽 선택과 원본 순서 검증",
+            "x": 50,
+            "y": 45,
+            "w": 85,
+            "size": 5
+          }
+        ]
+      }
+    ]
+  }
+}

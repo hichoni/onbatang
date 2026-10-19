@@ -1,0 +1,87 @@
+{
+  "report": {
+    "contractVersion": 1,
+    "jobId": "jfixture43",
+    "status": "ready",
+    "sourceDocumentId": "sfixture43",
+    "sourceAssetId": "afixture43",
+    "converter": {
+      "name": "self-authored-expected-data",
+      "version": "1",
+      "fonts": []
+    },
+    "selectedPages": [
+      1,
+      2
+    ],
+    "pageCount": 2,
+    "warnings": [
+      {
+        "code": "SYNTHETIC_SAMPLE",
+        "message": "직접 작성한 예상 데이터. 실제 PPTX 변환 결과가 아닙니다."
+      }
+    ]
+  },
+  "document": {
+    "id": "dfixture43",
+    "schemaVersion": 1,
+    "revision": 0,
+    "name": "self-authored-4x3",
+    "originalSize": {
+      "width": 9144000,
+      "height": 6858000,
+      "unit": "emu"
+    },
+    "size": {
+      "width": 960,
+      "height": 720,
+      "unit": "px"
+    },
+    "source": {
+      "kind": "pptx",
+      "sourceDocumentId": "sfixture43",
+      "assetId": "afixture43",
+      "filename": "self-authored-4x3.pptx",
+      "sha256": "739854765f14c5e3ca852399b1d6bc80879ce520d94eb7670f483667bf04254f"
+    },
+    "assets": [
+      {
+        "id": "afixture43",
+        "kind": "source",
+        "mimeType": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "sha256": "739854765f14c5e3ca852399b1d6bc80879ce520d94eb7670f483667bf04254f",
+        "byteLength": 11185,
+        "storageKey": "fixtures/self-authored-4x3.pptx"
+      }
+    ],
+    "assetRefs": [
+      "afixture43"
+    ],
+    "slides": [
+      {
+        "items": [
+          {
+            "t": "text",
+            "text": "절차대로 선물 포장하기",
+            "x": 50,
+            "y": 45,
+            "w": 85,
+            "size": 5
+          }
+        ]
+      },
+      {
+        "items": [
+          {
+            "t": "text",
+            "text": "가장 먼저 해야 할 일은 무엇일까요?",
+            "x": 50,
+            "y": 45,
+            "w": 85,
+            "size": 5
+          }
+        ]
+      }
+    ]
+  }
+}

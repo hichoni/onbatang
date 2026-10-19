@@ -9,19 +9,19 @@
   <meta name="application-name" content="온바탕">
   <link rel="icon" type="image/svg+xml" href="./brand/app-icon.svg?v=b1">
   <link rel="apple-touch-icon" href="./brand/app-icon-192.png?v=b1">
-  <link rel="stylesheet" href="../src/editor.css" />
-  <link rel="stylesheet" href="./app.css" />
-  <link rel="stylesheet" href="./brand.css" />
+  <link rel="stylesheet" href="../src/editor.css?v=0.28.2" />
+  <link rel="stylesheet" href="./app.css?v=0.28.2" />
+  <link rel="stylesheet" href="./brand.css?v=0.28.2" />
 </head>
 <body class="mc-app">
   <main id="app"><div class="mc-boot" role="status"><img class="onba-boot-mark" src="./brand/app-icon.svg?v=b1" width="64" height="64" alt=""><p>온바탕을 여는 중이에요…</p></div></main>
   <script type="module">
     // 미니캔 앱 시작하기. 들여 쓰는 곳에서는 이 쪽을 본떠 글꼴 목록(그 프로젝트가 가진 글꼴 파일)과 저장소 이름만 바꾼다.
     // 글꼴은 app/fonts/ 의 OFL 무료 글꼴 15종이다(목록과 사용 조건은 app/fonts.js · app/fonts/*-OFL.txt).
-    import { startMinican } from './app.js';
+    import { startOnbatang } from './standalone.js';
     import { ONBATANG_FONTS, ONBATANG_TITLE_FONT } from './fonts.js';
 
-    startMinican({
+    startOnbatang({
       fonts: ONBATANG_FONTS,
       titleFont: ONBATANG_TITLE_FONT,
       storage: 'minican',

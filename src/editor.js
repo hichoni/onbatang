@@ -3,9 +3,10 @@
 // 계산과 규칙은 model.js·cutout.js(순수 함수)에 있고, 여기는 화면과 손가락·마우스·키보드만 다룬다.
 // 저장소는 모른다: 사진을 어디에 올릴지는 uploadImage 로, 무엇이 바뀌었는지는 onChange 로 프로젝트가 정한다.
 import { el, toast } from './dom.js';
+import { newId } from './document.js';
 import {
-  COLORS, SHAPES, SHAPE_GROUPS, MASKS, OPACITY, TEXT_PRESETS, settings, configure, reshapeItems, backgroundOf, fontList, fontFamilyOf, layoutList,
-  cleanBg, cleanItems, cleanDesign, emptyDesign, cleanItem, cleanImg, moveLayer, newPresetText, newEmoji, newShape, newArt, newYouTube, newPhoto, moveItem, scaleItem, widenItem, heightenItem, rotateItem,
+  COLORS, SHAPES, SHAPE_GROUPS, MASKS, OPACITY, TEXT_PRESETS, settings, configure, reshapeItems, backgroundOf, fontList, fontFamilyOf, layoutList, textLimit, clip,
+  cleanBg, cleanItems, cleanDesign, emptyDesign, cleanItem, cleanImg, moveLayer, newPresetText, newEmoji, newShape, newArt, newYouTube, newPhoto, moveItem, rotateItem,
   designMotion, reorder, duplicateItem, pasteItem, itemLabel, sizeOf, resizeTo, sizeRange, alignItem, coverItem, layoutItems, EDGE, canEdge, canRound, cornerOf, THICK, isLine, thickOf, thicken,
   designVideo, cleanVideo, trimVideo, videoSeconds, videoTime, VIDEO_FITS, MIN_VIDEO, rebaseItems, alignBoxes, distributeBoxes, clampShift, scaleItems, regroup, newGroupId,
 } from './model.js';
@@ -19,6 +20,8 @@ import { parseYouTube, ytStart, ytTime, ytWatch } from './youtube.js';
 import { ACCEPT_IMAGES, PHOTO_EDGE, readPixels, canvasToPng, shrinkImage } from './images.js';
 import { fontReady } from './fonts.js';
 import { TOLERANCE, colorAlpha, prepareAlpha, finishCutout, resizeMask, plainBorder } from './cutout.js';
+import { anchorResizedItem, resizeItemFromHandle } from './resize.js';
+import {cleanPalettes,updatePalettes} from './palettes.js';
 
 const HISTORY = 40;
 // 옆 메뉴의 칸: [이름, 아이콘(icons.js), 보이는 이름, 한 줄 설명]
@@ -26,7 +29,7 @@ const TABS = [
   ['layout', 'template', '틀', '만들어 둔 틀을 눌러 시작해요. 글을 눌러 내 글로 바꿔요.'],
   ['text', 'text', '글', '넣은 글은 두 번 눌러 고쳐요.'],
   ['element', 'shapes', '꾸미기', '도형과 그림 조각을 눌러 놓아요. 색과 크기는 위 도구에서 바꿔요.'],
-  ['upload', 'upload', '내 자료', '내 사진을 올리거나 유튜브 영상을 넣어요.'],
+  ['upload', 'upload', '내 자료', '사진·영상을 넣어요.'],
   ['bg', 'palette', '바탕색', '이 장의 바탕색을 골라요.'],
   ['layer', 'layers', '겹 순서', '앞에 보이는 조각부터 차례로 나와요.'],
 ];
@@ -60,6 +63,7 @@ const BLOB_CACHE = 12;         // 이번에 올린 사진의 파일 내용을 �
  *   - uploadImage({ blob, ext, type, ratio }): 사진을 저장하고 { url, path? } 를 돌려주는 함수(비동기 가능).
  *       편집기가 미리 줄여서(긴 쪽 800) 넘겨준다. 주지 않으면 이 화면에서만 보이는 임시 주소(blob:)를 쓴다(새로 고침하면 사라진다).
  *   - loadImageBlob(item): 저장해 둔 사진의 파일 내용을 돌려주는 함수(배경 제거용). 주지 않으면 fetch(item.url) 로 받는다.
+ *   - documentImport: { label, description?, open() } 내 자료에 문서 가져오기 단추를 보이는 선택 연결. 파일 해석·저장·이동은 호스트가 맡는다.
  *   - fonts(): 지금 고를 수 있는 글꼴 목록을 돌려주는 함수(주지 않으면 configure 에 준 전부).
  *   - onAspect(aspect): 카드의 모양(가로 ÷ 세로)이 실행 취소·다시 실행으로 바뀌었을 때(setAspect 로 모양을 바꾸는 프로젝트만 쓴다).
  *   - notify(message, ms): 알림을 보여 주는 함수(주지 않으면 화면 아래의 작은 알림).
@@ -80,11 +84,58 @@ const BLOB_CACHE = 12;         // 이번에 올린 사진의 파일 내용을 �
  */
 export function createEditor({
   design = null, onChange = () => {}, uploadImage = null, loadImageBlob = null, fonts = fontList, notify = toast, onAspect = () => {},
-  uploads = null, usedElsewhere = null, onRemoveUpload = null, onMotionAll = null,
+  uploads = null, usedElsewhere = null, onRemoveUpload = null, onMotionAll = null, canPaste = () => true,
+  documentImport = null, colorPalettes = null,
   saveVideo = null, createCamera = null, videoLimits = null, videoNote = '', videoHint = '',
   onSelect = null, lockedBy = null,
 } = {}) {
   let card = null;            // 지금 꾸미는 디자인(card.items 를 새 목록으로, card.bg 를 새 값으로 바꿔 끼운다)
+  let palettes;try{palettes=cleanPalettes(colorPalettes?.read());}catch{palettes=cleanPalettes();}
+  let sampling=null;
+  function paletteAction(action){
+    palettes=updatePalettes(palettes,action);
+    try{colorPalettes?.write(palettes);}catch{notify('이 기기에 팔레트를 저장하지 못했어요. 이번 화면에서는 계속 쓸 수 있어요.',4000);}
+  }
+  function colorTarget(){const it=cur();if(many.length||it?.lock)return null;if(!it)return {value:backgroundOf(card.bg).bg,apply:setBg};if(['text','shape','art'].includes(it.t)&&it.color)return {value:it.color,apply:it.t==='shape'?fillWith:hex=>change({color:hex})};return null;}
+  function eyedropper(value,onPick,fallback){
+    return el('button',{class:'fe-btn fe-eyedropper',type:'button','aria-label':'화면에서 색 추출',title:'화면에서 색 추출 (I) · Esc로 취소',onClick:()=>sampleColor(value,onPick,fallback)},icon('eyedropper'),el('span',{text:'스포이드'}));
+  }
+  async function sampleColor(value,onPick,fallback){
+    if(sampling||!card)return;
+    if(typeof globalThis.EyeDropper!=='function'){
+      notify('이 브라우저는 화면 스포이드를 지원하지 않아 색 선택 창을 열어요.',4000);
+      if(fallback){try{fallback.showPicker?fallback.showPicker():fallback.click();}catch{fallback.click();}}
+      else{pop=cur()?'color':'pagebg';renderBar();const input=popBox.querySelector('input[type=color]');try{input?.showPicker?input.showPicker():input?.click();}catch{input?.click();}}
+      return;
+    }
+    const job={card,sel:cur(),controller:new AbortController()};sampling=job;
+    try{
+      // Invoke open directly from the user gesture; do not await anything first.
+      const result=await new globalThis.EyeDropper().open({signal:job.controller.signal});
+      if(sampling!==job||card!==job.card||cur()!==job.sel||many.length)return;
+      if(!/^#[0-9a-f]{6}$/i.test(result.sRGBHex))return;
+      paletteAction({type:'add',color:result.sRGBHex});onPick(result.sRGBHex.toLowerCase());renderBar();renderPanel();
+      notify(`색을 적용하고 팔레트 ${palettes.active+1}에 담았어요.`);
+    }catch(error){if(error?.name!=='AbortError')notify('색을 추출하지 못했어요. 다시 누르거나 직접 색을 골라주세요.');}
+    finally{if(sampling===job)sampling=null;}
+  }
+  function savedColors(value,onPick){
+    const box=el('section',{class:'fe-palettes','aria-label':'나의 팔레트'});
+    function fill(){
+      const slot=palettes.slots[palettes.active];
+      const choose=hex=>{paletteAction({type:'recent',color:hex});onPick(hex);};
+      const chips=(colors,remove=false)=>el('div',{class:'fe-palette-colors'},...colors.map(hex=>{
+        const pick=el('button',{class:'fe-palette-color',type:'button',title:hex,'aria-label':`${hex} 적용`,'aria-pressed':String(value===hex),onClick:()=>choose(hex)});pick.style.background=hex;
+        return el('span',{class:'fe-palette-cell'},pick,remove?el('button',{class:'fe-palette-remove',type:'button','aria-label':`${hex} 팔레트에서 지우기`,title:'팔레트에서 지우기',onClick:()=>{paletteAction({type:'remove',color:hex});fill();}},'×'):null);
+      }));
+      const name=el('input',{class:'fe-palette-name',value:slot.name,maxlength:'18','aria-label':'팔레트 이름',onChange:()=>{paletteAction({type:'rename',name:name.value});fill();}});
+      box.replaceChildren(...[el('div',{class:'fe-palette-heading'},el('b',{text:'나의 팔레트'}),el('small',{text:colorPalettes?'이 기기에 저장':'이번 화면에서 사용'})),
+        el('div',{class:'fe-palette-slots',role:'group','aria-label':'팔레트 슬롯'},...palettes.slots.map((s,i)=>el('button',{type:'button','aria-label':`팔레트 ${i+1}: ${s.name}`,'aria-pressed':String(i===palettes.active),onClick:()=>{paletteAction({type:'select',index:i});fill();}},String(i+1)))),
+        el('div',{class:'fe-palette-heading'},name,el('button',{class:'fe-btn',type:'button',disabled:!/^#[0-9a-f]{6}$/i.test(value||''),onClick:()=>{paletteAction({type:'add',color:value});fill();}},'현재 색 담기')),
+        slot.colors.length?chips(slot.colors,true):el('p',{class:'fe-note',text:'스포이드로 찍거나 현재 색을 담아보세요. 최대 12색까지 모아요.'}),
+        palettes.recent.length?el('div',{},el('small',{text:'최근 사용한 색'}),chips(palettes.recent)):null].filter(Boolean));
+    }fill();return box;
+  }
   const blobs = new Map();    // 사진 주소 → 파일 내용
   let sel = -1;               // 고른 것의 번호(없으면 -1)
   let many = [];              // 여럿을 함께 골랐을 때 그 번호들(둘 이상일 때만. 그동안 sel 은 -1). 잠근 것은 넣지 않는다
@@ -97,6 +148,11 @@ export function createEditor({
   let tab = 'layout';         // 옆 메뉴에서 열려 있는 칸
   let pop = null;             // 도구 막대 아래에 펼쳐진 칸: 'color' · 'bgc' · 'edge' · 'corner' · 'thick' · 'size' · 'op' · 'flip' · 'pos' · 'swap' · 'mask' · 'cut' · null
   let busy = false;           // 사진 올리는 중
+  let importingDocument = false;
+  let uploadTab = 'photo';     // 내 자료의 종류는 같은 편집기를 다시 그려도 유지한다.
+  let youtubeInput = null;
+  const uploadTabsId = newId('u');
+  const uploadHelpOpen = {photo: false, ppt: false, youtube: false};
   let editing = -1;           // 카드 위에서 바로 글을 고치는 중인 글상자의 번호
   let typed = false;          // 이번에 고치기 시작한 뒤 기록을 남겼는지(처음 한 번만 남긴다)
   let cut = null;             // 배경 제거 작업(openCut 의 job): 방식(AI · 단색) · 막대 값 · 붓질 · 미리보기
@@ -116,8 +172,9 @@ export function createEditor({
   let others = [];            // 다른 사람이 고른 요소들 [{ id, name, color }] (함께 꾸밀 때. markOthers 로 받는다)
   let lastSelId = '';         // 마지막으로 onSelect 에 알린 이름표
   const limits = { ...VIDEO_LIMITS, ...(videoLimits && typeof videoLimits === 'object' ? videoLimits : {}) };
+  const hasDocumentImport = typeof documentImport?.open === 'function' && typeof documentImport.label === 'string' && !!documentImport.label.trim();
   const tabsHere = () => {
-    const list = tabList();
+    const list = tabList().map(row => hasDocumentImport && row[0] === 'upload' ? [...row.slice(0, 3), '사진·PPT·영상을 넣어요.'] : row);
     if (!saveVideo) return list;
     const at = list.findIndex((t) => t[0] === 'upload') + 1;
     return [...list.slice(0, at), VIDEO_TAB, ...list.slice(at)];
@@ -125,15 +182,16 @@ export function createEditor({
 
   const guideV = el('div', { class: 'fe-guide v', hidden: true });
   const guideH = el('div', { class: 'fe-guide h', hidden: true });
-  const handle = (h, cls, label, pic = null) => el('span', { class: `fe-h fe-${cls}`, dataset: { h }, title: label }, pic);
-  const hWide = handle('wide', 'wide', '너비 바꾸기');
-  const hTall = handle('tall', 'tall', '높이 바꾸기');
+  const handle = (h, cls, label, pic = null) => el('span', { class: `fe-h fe-${cls}`, dataset: { h, ...(h === 'scale' ? { corner: cls.split(' ').at(-1) } : {}) }, title: label }, pic);
+  const hWide = handle('wide', 'wide', '너비 바꾸기 · 왼쪽 변 고정 · Ctrl: 가운데 기준');
+  const hTall = handle('tall', 'tall', '높이 바꾸기 · 위쪽 변 고정 · Ctrl: 가운데 기준');
+  const resizeHint = '가로·세로 바꾸기 · Shift: 비율 유지 · Ctrl: 가운데 기준';
   // 손잡이의 차례: 변의 손잡이를 먼저, 모서리의 손잡이를 나중에 둔다(작은 요소에서 닿는 자리가 겹치면 모서리가 위에 온다).
   const selBox = el('div', { class: 'fe-sel', hidden: true },
     handle('rot', 'rot', '돌리기', icon('upright')),
     hWide, hTall,
-    handle('scale', 'scale nw', '크기 바꾸기'), handle('scale', 'scale ne', '크기 바꾸기'),
-    handle('scale', 'scale sw', '크기 바꾸기'), handle('scale', 'scale se', '크기 바꾸기'),
+    handle('scale', 'scale nw', resizeHint), handle('scale', 'scale ne', resizeHint),
+    handle('scale', 'scale sw', resizeHint), handle('scale', 'scale se', resizeHint),
     el('span', { class: 'fe-lockmark', 'aria-hidden': 'true' }, icon('lock')));
   // 고른 테두리의 가장 작은 크기(px). 요소가 이보다 작으면 테두리를 넉넉하게 둘러서, 손잡이끼리 겹치지 않고 따로 잡힌다.
   const coarse = typeof matchMedia === 'function' ? matchMedia('(pointer: coarse)') : null;
@@ -147,7 +205,7 @@ export function createEditor({
   // 여럿을 골랐을 때: 하나하나의 가는 테두리(manyBox)와 모두를 감싸는 상자(groupBox). 빈 곳을 끌어 고를 때의 네모(marquee).
   const manyBox = el('div', { class: 'fe-many', 'aria-hidden': 'true' });
   // 모두를 감싸는 상자의 네 모서리 손잡이: 끌면 고른 것들이 맞은편 모서리를 기준으로 함께 커지고 작아진다.
-  const groupHandle = (corner) => el('span', { class: `fe-h fe-scale ${corner}`, dataset: { h: 'gscale', corner }, title: '함께 크기 바꾸기' });
+  const groupHandle = (corner) => el('span', { class: `fe-h fe-scale ${corner}`, dataset: { h: 'gscale', corner }, title: '함께 크기 바꾸기 · 모양 비율 유지 · Ctrl: 가운데 기준' });
   const groupBox = el('div', { class: 'fe-groupbox', hidden: true }, groupHandle('nw'), groupHandle('ne'), groupHandle('sw'), groupHandle('se'));
   const marquee = el('div', { class: 'fe-marquee', hidden: true });
   const overlay = el('div', { class: 'fe-overlay' }, othersBox, manyBox, guideV, guideH, selBox, groupBox, marquee, sceneFlag);
@@ -277,7 +335,7 @@ export function createEditor({
         el('div', { class: 'fe-empty-go', role: 'group', 'aria-label': '빠르게 시작하기' },
           quick('text', '큰 제목 쓰기', () => add(newPresetText('title'))),
           quick('shapes', '꾸미기', () => openTab('element')),
-          quick('upload', '사진 · 영상', () => openTab('upload')),
+          quick('upload', hasDocumentImport ? '내 자료' : '사진 · 영상', () => openTab('upload')),
           quick('template', '틀 고르기', () => openTab('layout'))))]));
     syncSel();
   }
@@ -571,8 +629,11 @@ export function createEditor({
     const tiny = it.t === 'shape' && w < least && h < least;
     selBox.style.transform = `translate(-50%, -50%) rotate(${it.rot}deg)`;
     selBox.classList.toggle('locked', it.lock);
-    hWide.hidden = (it.t !== 'text' && it.t !== 'shape') || tiny;
-    hTall.hidden = it.t !== 'shape' || tiny;
+    hWide.hidden = it.t === 'emoji' || tiny;
+    hTall.hidden = it.t === 'emoji' || (it.t === 'text' && !Number.isFinite(it.h)) || tiny;
+    const hint = it.t === 'emoji' ? '이모지 크기 바꾸기 · 모양 비율 유지 · Ctrl: 가운데 기준'
+      : it.t === 'text' && !Number.isFinite(it.h) ? '글상자 너비 바꾸기 · Shift: 글자도 함께 확대 · Ctrl: 가운데 기준' : resizeHint;
+    selBox.querySelectorAll('[data-h="scale"]').forEach(h => { h.title = hint; });
   }
 
   // 다른 사람이 고른 요소마다 그 사람의 색 테두리와 이름표를 두른다(내 테두리와 같은 자리 계산).
@@ -737,6 +798,7 @@ export function createEditor({
 
   // 목록이 통째로 바뀌는 일(넣기·삭제·순서·복제·템플릿)을 한 뒤에 부른다.
   function listChanged(nextSel, nextMany = []) {
+    if (card.id) card.items = card.items.map(it => it.id ? it : { ...it, id: newId() });
     sel = nextMany.length >= 2 ? -1 : nextSel;
     many = nextMany.length >= 2 ? nextMany : [];
     pop = null;
@@ -746,7 +808,7 @@ export function createEditor({
     onChange();
   }
 
-  function add(item, { edit = true } = {}) {
+  function add(item, { edit = true, focus = true } = {}) {
     if (!item) return;
     if (items().length >= settings().maxItems) { notify(`카드 한 장에는 조각을 ${settings().maxItems}개까지 놓을 수 있어요.`); return; }
     endEdit();
@@ -759,7 +821,7 @@ export function createEditor({
     card.items = [...items(), placed];
     listChanged(card.items.length - 1);
     // 텍스트는 바로 글을 쓸 수 있게(글 전체가 골라진 채로), 나머지는 화살표 키로 옮길 수 있게.
-    if (placed.t === 'text' && edit) startEdit(true); else focusStage();
+    if (placed.t === 'text' && edit) startEdit(true); else if (focus) focusStage();
   }
 
   function remove() {
@@ -870,6 +932,10 @@ export function createEditor({
   // at({ x, y })을 주면 그 자리에(오른쪽 누르기 메뉴로 빈 곳에 붙일 때. 여럿이면 그 가운데가 거기에), 아니면 원래 자리에서 조금 옆에.
   function clipPaste(at = null) {
     if (!clipboard?.length) { notify('먼저 조각을 복사해요 (오른쪽 누르기 → 복사).'); return; }
+    if (!clipboard.every(item => canPaste(item))) {
+      notify('이 그림에 없는 원본 자료가 연결되어 있어요. 원래 그림을 복사해서 사용해 주세요.', 5000);
+      return;
+    }
     const cx = clipboard.reduce((n, k) => n + k.x, 0) / clipboard.length;
     const cy = clipboard.reduce((n, k) => n + k.y, 0) / clipboard.length;
     let list = items();
@@ -994,7 +1060,7 @@ export function createEditor({
     } else if (!it) {
       groups = [
         [row('paste', '붙여넣기', 'Ctrl+V', () => clipPaste(at), { disabled: !clipboard })],
-        [row('undo', '실행 취소', 'Ctrl+Z', undo, { disabled: !past.length }), row('redo', '다시 실행', 'Ctrl+Shift+Z', redo, { disabled: !future.length })],
+        [row('undo', '실행 취소', 'Ctrl+Z', undo, { disabled: !past.length }), row('redo', '다시 실행', 'Ctrl+Y / Ctrl+Shift+Z', redo, { disabled: !future.length })],
       ];
     } else if (it.lock) {
       groups = [[row('unlock', '잠금 해제', '', () => change({ lock: false })), row('copy', '복사', 'Ctrl+C', () => { clipCopy(); focusStage(); })]];
@@ -1169,6 +1235,8 @@ export function createEditor({
     if (!it || it.t !== 'text' || it.lock || !node || editing === sel) return;
     editing = sel;
     typed = false;
+    // Render-only punctuation spans must never trap the caret or an IME range.
+    if (node.querySelector('.fi-text-flow')) node.textContent = it.text;
     try { node.contentEditable = 'plaintext-only'; } catch { /* 아래에서 다시 */ }
     if (node.contentEditable !== 'plaintext-only') node.contentEditable = 'true';
     node.classList.add('editing');
@@ -1217,7 +1285,8 @@ export function createEditor({
     if (!node || !it) return;
     if (!typed) { typed = true; remember(); }
     const text = node.innerText.replace(/ /g, ' ');
-    if ([...text].length > settings().maxText) notify(`글상자 하나에는 ${settings().maxText}자까지 쓸 수 있어요.`);
+    const limit = textLimit(it);
+    if (text.length > limit) notify(`글상자 하나에는 ${limit}자까지 쓸 수 있어요.`);
     const list = items().slice();
     list[editing] = cleanItem({ ...it, text }, { keepSpaces: true });
     card.items = list;
@@ -1239,7 +1308,7 @@ export function createEditor({
   cardEl.addEventListener('paste', (e) => {
     if (editing < 0) return;
     e.preventDefault();
-    const text = (e.clipboardData?.getData('text/plain') || '').slice(0, settings().maxText);
+    const text = clip(e.clipboardData?.getData('text/plain') || '', textLimit(cur()));
     if (text) document.execCommand('insertText', false, text);
   });
   cardEl.addEventListener('drop', (e) => { if (editing >= 0) e.preventDefault(); });
@@ -1301,7 +1370,7 @@ export function createEditor({
     const h = e.target.closest?.('.fe-h');
     const top = e.target.closest?.('.fi') ? itemAt(e.clientX, e.clientY, !!e.pointerType && e.pointerType !== 'mouse') : -1;
     if (h && h.dataset.h === 'gscale' && many.length) startGroupScale(e, h.dataset.corner);
-    else if (h && sel >= 0 && !cur().lock) start(h.dataset.h, e);
+    else if (h && sel >= 0 && !cur().lock) start(h.dataset.h, e, h.dataset.corner);
     // Shift 를 누른 채 누르면 그 요소를 고른 것에 넣거나 뺀다. 빈 곳에서 끌면 고른 것에 더한다.
     else if (e.shiftKey && top >= 0 && !items()[top].lock) { e.preventDefault(); focusStage(); toggleChosen(top); }
     // 여럿 고른 것 가운데 하나를 잡으면 모두 함께 옮긴다(끌지 않고 떼면 그것 하나만 고른다).
@@ -1352,7 +1421,7 @@ export function createEditor({
     const ay = corner.includes('n') ? g.bottom : g.top;
     drag = {
       mode: 'gscale', id: e.pointerId, px: e.clientX, py: e.clientY, idx: many.slice(), from: many.map((i) => items()[i]), moved: false,
-      ax, ay, at: [(ax - s.left) / (s.width || 1) * 100, (ay - s.top) / (s.height || 1) * 100], reach: Math.max(1, Math.hypot(e.clientX - ax, e.clientY - ay)),
+      rect: s, box: g, corner, ax, ay,
     };
   }
   // 여럿을 함께 옮기기 시작한다. tap: 끌지 않고 떼면 이것 하나만 고른다.
@@ -1363,7 +1432,7 @@ export function createEditor({
     try { stage.setPointerCapture(e.pointerId); } catch { /* 잡지 못해도 계속한다 */ }
     drag = { mode: 'group', id: e.pointerId, rect: stage.getBoundingClientRect(), px: e.clientX, py: e.clientY, idx: many.slice(), from: many.map((i) => items()[i]), moved: false, tap };
   }
-  function start(mode, e) {
+  function start(mode, e, corner) {
     e.preventDefault();
     focusStage();
     const it = cur();
@@ -1372,19 +1441,13 @@ export function createEditor({
     const rect = stage.getBoundingClientRect();
     const cx = rect.left + rect.width * it.x / 100;
     const cy = rect.top + rect.height * it.y / 100;
-    // 손잡이를 잡은 곳이 가운데에서 떨어진 거리(along·across 는 기울어진 방향으로 잰 것). 끄는 동안 "여기서 얼마나 더 갔는지"만큼 늘이고 줄인다.
-    // (작은 요소는 테두리를 넉넉하게 두르므로 손잡이가 요소의 끝보다 바깥에 있다. 잡은 자리에서 움직인 만큼으로 재야
-    //  잡는 순간 크기가 튀지 않고, 손가락이 간 만큼 요소의 끝이 따라온다)
-    const rad = it.rot * Math.PI / 180;
-    const [dx, dy] = [e.clientX - cx, e.clientY - cy];
+    // 넉넉한 선택 테두리 대신 실제 요소 크기를 기억한다. 잡은 자리에서
+    // 움직인 만큼만 바꾸므로 작은 조각도 손잡이를 잡는 순간 튀지 않는다.
     const node = nodes[sel];
     drag = {
       mode, id: e.pointerId, rect, from: it, moved: false,
       px: e.clientX, py: e.clientY, cx, cy,
-      along: Math.abs(dx * Math.cos(rad) + dy * Math.sin(rad)),
-      across: Math.abs(-dx * Math.sin(rad) + dy * Math.cos(rad)),
-      reach: Math.hypot(dx, dy),
-      half: Math.max(1, Math.hypot(node?.offsetWidth || 0, node?.offsetHeight || 0) / 2),      // 요소의 가운데에서 모서리까지(px)
+      corner: corner || mode, width: node?.offsetWidth || 1, height: node?.offsetHeight || 1,
     };
   }
   stage.addEventListener('pointermove', (e) => {
@@ -1402,8 +1465,12 @@ export function createEditor({
         drag.moved = true;
         remember();
       }
-      const k = Math.max(0.05, Math.hypot(e.clientX - drag.ax, e.clientY - drag.ay) / drag.reach);
-      const made = scaleItems(drag.from, k, drag.at[0], drag.at[1]).items;
+      const { box, rect, corner } = drag;
+      const dx = e.clientX - drag.px, dy = e.clientY - drag.py;
+      const k = Math.max(0.000001, 1 + (e.ctrlKey ? 2 : 1) * ((corner.includes('w') ? -1 : 1) * box.width * dx + (corner.includes('n') ? -1 : 1) * box.height * dy) / Math.max(1, box.width ** 2 + box.height ** 2));
+      const ax = e.ctrlKey ? box.left + box.width / 2 : drag.ax;
+      const ay = e.ctrlKey ? box.top + box.height / 2 : drag.ay;
+      const made = scaleItems(drag.from, k, (ax - rect.left) / rect.width * 100, (ay - rect.top) / rect.height * 100).items;
       putMany(new Map(drag.idx.map((i, n) => [i, made[n]])));
       return;
     }
@@ -1440,18 +1507,21 @@ export function createEditor({
       next = moved.item;
       guideV.hidden = !moved.guides.v;
       guideH.hidden = !moved.guides.h;
-    } else if (mode === 'scale') {
-      // 모서리가 손가락을 따라온다: 가운데에서 모서리까지의 길이가 손가락이 간 만큼 늘고 준다.
-      next = scaleItem(from, Math.max(0.01, (drag.half + Math.hypot(e.clientX - cx, e.clientY - cy) - drag.reach) / drag.half));
     } else if (mode === 'rot') {
       next = rotateItem(from, Math.atan2(e.clientY - cy, e.clientX - cx) * 180 / Math.PI + 90);
     } else {
-      // 너비·높이: 기울어진 방향에 맞춰 가운데에서 손가락까지의 거리를 잰다.
-      const rad = from.rot * Math.PI / 180;
-      const dx = e.clientX - cx;
-      const dy = e.clientY - cy;
-      if (mode === 'wide') next = widenItem(from, from.w + (Math.abs(dx * Math.cos(rad) + dy * Math.sin(rad)) - drag.along) * 2 / rect.width * 100);
-      else next = heightenItem(from, from.h + (Math.abs(-dx * Math.sin(rad) + dy * Math.cos(rad)) - drag.across) * 2 / rect.height * 100);
+      const box = {
+        width: drag.width, height: drag.height, stageWidth: rect.width, stageHeight: rect.height,
+        handle: drag.corner, dx: e.clientX - drag.px, dy: e.clientY - drag.py,
+        proportional: e.shiftKey, centered: e.ctrlKey,
+      };
+      next = resizeItemFromHandle(from, box);
+      // Text can wrap differently at its new width. Anchor against the actual
+      // rendered height so its opposite corner stays still after that reflow.
+      const node = nodes[sel];
+      placeItem(node, next);
+      next = anchorResizedItem(from, next, { ...box, afterWidth: node.offsetWidth, afterHeight: node.offsetHeight });
+      if (next.x < 0 || next.x > 100 || next.y < 0 || next.y > 100) next = items()[sel];
     }
     put(next);
   });
@@ -1510,6 +1580,7 @@ export function createEditor({
     // 글쇠의 자리(e.code)로 견준다. 한글 입력 상태에서는 e.key 가 'ㅋ' 처럼 와서 Ctrl+Z 를 놓친다.
     const key = e.code;
     const mod = e.ctrlKey || e.metaKey;
+    if(!mod&&!e.altKey&&!e.shiftKey&&!e.isComposing&&key==='KeyI'){const target=colorTarget();if(target){e.preventDefault();sampleColor(target.value,target.apply);}return;}
     if (mod && key === 'KeyZ') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
     if (mod && key === 'KeyY') { e.preventDefault(); redo(); return; }
     if (e.key === 'Escape' && pop) { e.preventDefault(); toggle(pop); return; }
@@ -1532,9 +1603,9 @@ export function createEditor({
       else if (mod && key === 'KeyG') { e.preventDefault(); if (e.shiftKey) ungroupMany(); else groupMany(); }
       else if (arrows[e.key]) {
         e.preventDefault();
-        const step = e.shiftKey ? 5 : 1;
+        const rect = stage.getBoundingClientRect(), step = e.shiftKey ? 10 : 1;
         remember();
-        shiftMany(many.map((i) => items()[i]), many.slice(), arrows[e.key][0] * step, arrows[e.key][1] * step);
+        shiftMany(many.map((i) => items()[i]), many.slice(), arrows[e.key][0] * step / rect.width * 100, arrows[e.key][1] * step / rect.height * 100);
         onChange();
       } else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); remove(); }
       else if (e.key === 'Escape') select(-1);
@@ -1546,8 +1617,8 @@ export function createEditor({
     if (mod && key === 'KeyX') { e.preventDefault(); clipCut(); return; }
     if (mod && key === 'KeyD') { e.preventDefault(); copy(); return; }
     if (it.lock) { if (e.key === 'Escape') select(-1); return; }
-    const step = e.shiftKey ? 5 : 1;
-    const arrows = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
+    const rect = stage.getBoundingClientRect(), step = e.shiftKey ? 10 : 1;
+    const arrows = { ArrowLeft: [-step / rect.width * 100, 0], ArrowRight: [step / rect.width * 100, 0], ArrowUp: [0, -step / rect.height * 100], ArrowDown: [0, step / rect.height * 100] };
     if (arrows[e.key]) {
       e.preventDefault();
       remember();
@@ -1676,7 +1747,13 @@ export function createEditor({
         if (keep && !library.some(sameUrl(photo.url))) library.push(photo.path ? { url: photo.url, path: photo.path } : { url: photo.url });
         // 카드에 자리가 있으면 바로 놓는다. 사진이 꽉 찬 카드라면 목록에만 둔다(올린 것은 남는다).
         if (card === target) {
-          if (!keep || photosHere() < settings().maxPhotos) add(photo);
+          if (!keep || photosHere() < settings().maxPhotos) {
+            // The photo may finish while a user is choosing a material tab or
+            // entering a video URL. Preserve that newer keyboard task.
+            const focused = document.activeElement;
+            const keepUploadFocus = panel.contains(focused) && (focused === youtubeInput || !!focused?.dataset.uploadTab);
+            add(photo, { focus: !keepUploadFocus });
+          }
           else listed += 1;
         }
       } catch (ex) {
@@ -1823,18 +1900,18 @@ export function createEditor({
   function swatches(value, onPick, { none = false, noneName = '없음', label }) {
     const custom = el('input', {
       class: 'fe-color', type: 'color', value: value || '#1c7ed6', 'aria-label': `${label} 직접 고르기`, title: '다른 색 고르기',
-      onChange: () => onPick(custom.value),
+      onChange: () => {paletteAction({type:'recent',color:custom.value});onPick(custom.value);},
     });
-    return el('div', { class: 'fe-swatches', role: 'group', 'aria-label': label },
+    return el('div', { class: 'fe-color-picker' },eyedropper(value,onPick,custom),el('div', { class: 'fe-swatches', role: 'group', 'aria-label': label },
       none ? el('button', { class: `fe-sw none${value ? '' : ' on'}`, type: 'button', 'aria-pressed': String(!value), title: noneName, 'aria-label': noneName, onClick: () => onPick('') }, icon('close')) : null,
       ...COLORS.map((c) => {
         const b = el('button', {
           class: `fe-sw${value === c.hex ? ' on' : ''}`, type: 'button', 'aria-label': c.name, 'aria-pressed': String(value === c.hex), title: c.name,
-          onClick: () => onPick(c.hex),
+          onClick: () => {paletteAction({type:'recent',color:c.hex});onPick(c.hex);},
         });
         b.style.background = c.hex;
         return b;
-      }), custom);
+      }), custom),savedColors(value,onPick));
   }
 
   // 막대: 끄는 동안에는 카드만 바꾸고(기록은 처음 한 번), 놓으면 알린다.
@@ -1984,7 +2061,7 @@ export function createEditor({
     const it = cur();
     const always = [
       tb(icon('undo'), undo, { title: '실행 취소 (Ctrl+Z)', name: '실행 취소', disabled: !past.length, cls: 'icon undo' }),
-      tb(icon('redo'), redo, { title: '다시 실행 (Ctrl+Shift+Z)', name: '다시 실행', disabled: !future.length, cls: 'icon redo' }),
+      tb(icon('redo'), redo, { title: '다시 실행 (Ctrl+Y / Ctrl+Shift+Z)', name: '다시 실행', disabled: !future.length, cls: 'icon redo' }),
       el('span', { class: 'fe-sep' }),
     ];
     if (many.length) {
@@ -2012,6 +2089,7 @@ export function createEditor({
         tb([icon('palette'), el('span', { class: 'fe-lbl', text: '바탕색' }), ink], () => toggle('pagebg'), {
           title: '카드의 바탕색 바꾸기', name: '바탕색', on: pop === 'pagebg', cls: 'has-pop pagebg',
         }),
+        eyedropper(backgroundOf(card.bg).bg,setBg),
         el('span', { class: 'fe-sep' }),
         el('span', { class: 'fe-hint', text: items().length
           ? '조각을 누르면 꾸미는 도구가 나와요 · Shift 누르기나 빈 곳 끌기로 여럿 고르기' : '도구 칸에서 틀이나 글을 넣어 시작해요.' }));
@@ -2033,7 +2111,10 @@ export function createEditor({
     const own = [];
     if (it.t === 'text') {
       const choices = fonts();
-      const font = el('select', { class: 'fe-font', 'aria-label': '글꼴', title: '글꼴', onChange: () => change({ font: font.value }) },
+      const font = el('select', { class: 'fe-font', 'aria-label': '글꼴', title: '글꼴', onChange: () => {
+        if (font.value) change({ font: font.value, typeface: undefined });
+      } },
+        it.typeface ? el('option', { value: '', text: `${it.typeface} (원본 글꼴)` }) : null,
         ...choices.map((f) => {
           const o = el('option', { value: f.id, text: f.name });
           const family = fontFamilyOf(f.id);
@@ -2041,7 +2122,7 @@ export function createEditor({
           return o;
         }),
         choices.some((f) => f.id === it.font) ? null : el('option', { value: it.font, text: '(지금은 고를 수 없는 글꼴)' }));
-      font.value = it.font;
+      font.value = it.typeface ? '' : it.font;
       const size = sizeRange(it);
       const ink = el('span', { class: 'fe-ink' });
       ink.style.background = it.color;
@@ -2103,7 +2184,7 @@ export function createEditor({
     // 단추의 규칙: 글자 단추는 칸을 펼치고(색은 지금 색을 함께 보여 준다), 아이콘 단추는 누르면 바로 한다.
     const group = (name, ...kids) => el('span', { class: 'fe-group', role: 'group', 'aria-label': name }, ...kids.filter(Boolean));
     bar.replaceChildren(...always,
-      group('스타일', ...own, pick('opacity', '투명도', 'op', { title: '투명도: 낮출수록 비쳐 보여요' })),
+      group('스타일', ...own, colorTarget()?eyedropper(colorTarget().value,colorTarget().apply):null, pick('opacity', '투명도', 'op', { title: '투명도: 낮출수록 비쳐 보여요' })),
       el('span', { class: 'fe-sep' }),
       group('배치',
         it.t === 'text' ? null : pick('resize', '크기', 'size', { title: '조각의 크기 (가로세로 비율은 그대로)' }),      // 텍스트는 − 숫자 + 로 바꾼다
@@ -2283,9 +2364,9 @@ export function createEditor({
     const now = backgroundOf(card.bg);
     const custom = el('input', {
       class: `fe-bgsw fe-bgcustom${String(card.bg).startsWith('#') ? ' on' : ''}`, type: 'color', value: now.bg,
-      'aria-label': '배경 색 직접 고르기', title: '다른 색 고르기', onChange: () => setBg(custom.value),
+      'aria-label': '배경 색 직접 고르기', title: '다른 색 고르기', onChange: () => {paletteAction({type:'recent',color:custom.value});setBg(custom.value);},
     });
-    return el('div', { class: 'fe-bgs', role: 'group', 'aria-label': '배경 색' }, ...settings().backgrounds.map((b) => {
+    return el('div', {class:'fe-color-picker'},eyedropper(now.bg,setBg,custom),el('div', { class: 'fe-bgs', role: 'group', 'aria-label': '배경 색' }, ...settings().backgrounds.map((b) => {
       const sw = el('button', {
         class: `fe-bgsw${card.bg === b.id ? ' on' : ''}`, type: 'button', 'aria-label': `배경 ${b.name}`, 'aria-pressed': String(card.bg === b.id), title: b.name,
         onClick: () => setBg(b.id),
@@ -2293,7 +2374,7 @@ export function createEditor({
       sw.style.background = b.bg;
       sw.style.color = b.ink;
       return sw;
-    }), custom);
+    }), custom),savedColors(now.bg,setBg));
   }
 
   // ---------- 옆 메뉴 ----------
@@ -2302,12 +2383,50 @@ export function createEditor({
   let shownTab = '';
   function renderPanel({ top = false } = {}) {
     if (!card) { panel.replaceChildren(); shownTab = ''; return; }
+    const focused = panel.contains(document.activeElement) ? document.activeElement : null;
+    const focusedUploadTab = focused?.dataset.uploadTab;
+    const focusedYoutube = focused === youtubeInput;
     const was = panel.querySelector('.fe-tabbody');
     const keep = !top && was && shownTab === tab ? was.scrollTop : 0;
-    const tabs = el('div', { class: `fe-tabs${tabsHere().length > 7 ? ' many' : ''}`, role: 'tablist', 'aria-label': '넣을 것 고르기' }, ...tabsHere().map(([id, pic, name]) => el('button', {
-      class: `fe-tab${tab === id ? ' on' : ''}`, type: 'button', role: 'tab', 'aria-selected': String(tab === id), dataset: { tab: id },
-      onClick: () => { stopPreview(); tab = id; armed = null; armedFile = null; renderPanel(); },
-    }, icon(pic, 'fe-tab-icon'), el('span', { text: name }))));
+    const priorTabsLeft = panel.querySelector('.fe-tabs')?.scrollLeft || 0;
+    const tabButton = ([id, pic, name]) => {
+      let pressed = null, pendingTap = null;
+      return el('button', {
+        class: `fe-tab${tab === id ? ' on' : ''}`, type: 'button', role: 'tab', 'aria-selected': String(tab === id), dataset: { tab: id },
+        onPointerdown: e => { if (e.pointerType === 'touch' && e.isPrimary) pressed = {id:e.pointerId,x:e.clientX,y:e.clientY}; },
+        onPointercancel: () => { pressed = null; pendingTap = null; },
+        onPointerup: e => {
+          const start = pressed; pressed = null;
+          if (!start || e.pointerId !== start.id || Math.hypot(e.clientX-start.x,e.clientY-start.y)>8) return;
+          // Prefer the browser's click. After a captured slide drag it can be
+          // omitted: replay only an unhandled tap, through host save/close guards.
+          const button = e.currentTarget, tap = pendingTap = {}, doc = button.ownerDocument;
+          let replayed = false;
+          const unlisten = () => doc.removeEventListener('click', heard, true);
+          // A host can consume the click before it reaches this button. Count
+          // that as handled too, so a denied close is not requested twice.
+          const heard = event => {
+            const target = event.target.closest?.('.fe-tab');
+            if (!event.isTrusted || !target || target.dataset.tab !== id || !panel.contains(target)) return;
+            // Rendering may retarget a late native click to the new tab button.
+            // Suppress only the gesture we replayed; a new touch has a new ID.
+            if (replayed && event.pointerId === start.id) { event.preventDefault(); event.stopImmediatePropagation(); }
+            pendingTap = null; unlisten();
+          };
+          doc.addEventListener('click', heard, true);
+          requestAnimationFrame(() => {
+            if (pendingTap !== tap || !button.isConnected) { unlisten(); return; }
+            pendingTap = null; replayed = true; button.click();
+            setTimeout(unlisten, 600);
+          });
+        },
+        onClick: e => {
+          pendingTap = null;
+          stopPreview(); tab = id; armed = null; armedFile = null; renderPanel();
+        },
+      }, icon(pic, 'fe-tab-icon'), el('span', { text: name }));
+    };
+    const tabs = el('div', { class: `fe-tabs${tabsHere().length > 7 ? ' many' : ''}`, role: 'tablist', 'aria-label': '넣을 것 고르기' }, ...tabsHere().map(tabButton));
     // 칸의 머리말(이름 + 한 줄 설명)은 짧게, 그 아래에 바로 고를 것이 나온다.
     if (!tabsHere().some((t) => t[0] === tab)) tab = 'text';
     const [, , title, desc] = tabsHere().find((t) => t[0] === tab);
@@ -2315,9 +2434,14 @@ export function createEditor({
       el('div', { class: 'fe-panel-head' }, el('b', { class: 'fe-panel-title', text: title }), el('span', { class: 'fe-panel-desc', text: desc })),
       ...tabBody().filter(Boolean));
     panel.replaceChildren(tabs, body, fileInput, videoInput);
+    tabs.scrollLeft = priorTabsLeft;
     shownTab = tab;
     if (keep) body.scrollTop = keep;
     fileInput.multiple = libraryOn();        // 올린 파일 목록을 쓰면 여러 장을 한꺼번에 고를 수 있다
+    if (tab === 'upload') {
+      if (focusedUploadTab) panel.querySelector(`[data-upload-tab="${uploadTab}"]`)?.focus({ preventScroll: true });
+      else if (focusedYoutube && uploadTab === 'youtube') youtubeInput?.focus({ preventScroll: true });
+    }
   }
 
   // 템플릿을 묶음(group)별로 나눈다. 묶음이 적히지 않은 목록은 한 덩어리다.
@@ -2568,23 +2692,7 @@ export function createEditor({
         ...shapePicker((shape) => add(newShape(shape, visibleColor(shape)))),
       ];
     }
-    if (tab === 'upload' && libraryOn()) return uploadBody();
-    if (tab === 'upload') {
-      const photos = photosHere();
-      return [
-        el('button', {
-          class: 'fe-btn primary fe-upload', type: 'button', disabled: busy,
-          onClick: () => {
-            if (photos >= settings().maxPhotos) { notify(`사진은 카드 한 장에 ${settings().maxPhotos}장까지예요.`); return; }
-            fileInput.click();
-          },
-        }, ...(busy ? ['올리는 중…'] : [icon('upload'), '사진 올리기'])),
-        el('p', { class: 'fe-note', text: `PNG·JPG 사진이나 그림을 올려요. 이 카드에 ${photos}/${settings().maxPhotos}장 있어요.` }),
-        el('p', { class: 'fe-note', text: '올린 사진을 누르면 도구 막대에서 배경 제거, 테두리 모양, 크기, 투명도, 뒤집기를 쓸 수 있어요.' }),
-        el('p', { class: 'fe-note', text: '내가 찍거나 그린 것, 허락을 받은 것만 올리고, 얼굴·이름 같은 개인 정보가 없는지 살펴봐요.' }),
-        ytAdder(),
-      ];
-    }
+    if (tab === 'upload') return uploadPane();
     if (tab === 'bg') return [bgPicker(), el('p', { class: 'fe-note', text: bgNote })];
     // 레이어: 겹친 순서대로(위에 보이는 것부터). 가려져서 누르기 어려운 것도 여기서 고를 수 있다.
     // 줄을 끌어서 순서를 바꾼다: 마우스는 줄 어디든, 손가락은 왼쪽의 손잡이(목록을 넘기는 것과 헷갈리지 않게). 손잡이에서 ↑ ↓ 글쇠로도 옮긴다.
@@ -2720,7 +2828,63 @@ export function createEditor({
     ];
   }
 
-  // 업로드 칸(올린 파일 목록을 쓸 때): 올리기 단추 → 올린 파일들(새것부터) → 안내.
+  // 내 자료: 종류를 먼저 고르고, 고른 자료의 작업만 보여 준다.
+  function uploadPane() {
+    const choices = [['photo', '사진'], ...(hasDocumentImport ? [['ppt', 'PPT']] : []), ['youtube', '유튜브']];
+    const choose = id => {
+      if (importingDocument || !choices.some(([key]) => key === id)) return;
+      uploadTab = id; armedFile = null; renderPanel({ top: true });
+      panel.querySelector(`[data-upload-tab="${id}"]`)?.focus({ preventScroll: true });
+    };
+    const tabs = el('div', { class: 'fe-upload-tabs', role: 'tablist', 'aria-label': '자료 종류', dataset: { uploadTabs: '' } },
+      ...choices.map(([id, name], index) => el('button', {
+        class: `fe-upload-tab${uploadTab === id ? ' on' : ''}`, type: 'button', role: 'tab', id: `${uploadTabsId}-tab-${id}`,
+        'aria-selected': String(uploadTab === id), 'aria-controls': `${uploadTabsId}-panel-${id}`, tabindex: uploadTab === id ? '0' : '-1',
+        dataset: { uploadTab: id }, disabled: importingDocument,
+        onClick: () => choose(id), onKeydown: event => {
+          const next = event.key === 'ArrowRight' ? (index + 1) % choices.length : event.key === 'ArrowLeft' ? (index + choices.length - 1) % choices.length
+            : event.key === 'Home' ? 0 : event.key === 'End' ? choices.length - 1 : -1;
+          if (next < 0) return; event.preventDefault(); choose(choices[next][0]);
+        },
+      }, name)));
+    const content = uploadTab === 'photo' ? (libraryOn() ? uploadBody() : directPhotoBody()) : uploadTab === 'ppt' ? pptUploadBody() : [ytAdder()];
+    return [tabs, ...choices.map(([id]) => el('div', {
+      class: 'fe-upload-panel', role: 'tabpanel', id: `${uploadTabsId}-panel-${id}`, 'aria-labelledby': `${uploadTabsId}-tab-${id}`,
+      dataset: { uploadPanel: id }, hidden: uploadTab !== id,
+    }, ...(uploadTab === id ? content : [])))];
+  }
+  function uploadHelp(id, title, ...notes) {
+    const details = el('details', { class: 'fe-upload-help', open: uploadHelpOpen[id], dataset: { uploadHelp: id } },
+      el('summary', { text: title }), el('div', { class: 'fe-upload-help-body' }, ...notes.filter(Boolean)));
+    details.addEventListener('toggle', () => { uploadHelpOpen[id] = details.open; }); return details;
+  }
+  function photoHelp(note) {
+    return uploadHelp('photo', '사진 올리기 안내',
+      note ? el('p', { class: 'fe-note', text: note }) : null,
+      el('p', { class: 'fe-note', text: '사진을 고르면 배경 제거, 테두리 모양, 크기, 투명도, 뒤집기를 쓸 수 있어요.' }),
+      el('p', { class: 'fe-note', text: '내가 찍거나 그린 것, 허락을 받은 것만 올려요. 얼굴·이름 같은 개인 정보도 살펴봐요.' }));
+  }
+  function directPhotoBody() {
+    const photos = photosHere();
+    return [el('button', {
+      class: 'fe-btn primary fe-upload', type: 'button', disabled: busy,
+      onClick: () => { if (photos >= settings().maxPhotos) { notify(`사진은 카드 한 장에 ${settings().maxPhotos}장까지예요.`); return; } fileInput.click(); },
+    }, ...(busy ? ['올리는 중…'] : [icon('upload'), '사진 올리기'])),
+    el('p', { class: 'fe-note', text: `이 장에 사진 ${photos}/${settings().maxPhotos}장` }), photoHelp('PNG·JPG 사진이나 그림을 올려요.')];
+  }
+  function pptUploadBody() {
+    return [el('div', { class: 'fe-ppt-intro' }, icon('screen'),
+      el('b', { text: 'PPT를 온바탕으로' }), el('p', { class: 'fe-note', text: '글·도형·사진을 편집할 수 있어요.' })),
+    ...documentImportBody(),
+    el('div', { class: 'fe-ppt-size' }, icon('cover'), el('div', {}, el('b', { text: '원본 비율로 자동 맞춤' }),
+      el('p', { class: 'fe-note', text: '16:9·4:3 등 PPT 크기에 맞춰 열어요.' }))),
+    el('p', { class: 'fe-note', text: '현재 그림은 저장한 뒤 새 자료로 열어요.' }),
+    uploadHelp('ppt', '가져오기 안내',
+      el('p', { class: 'fe-note', text: 'PPTX 파일의 슬라이드를 살펴보고 가져올 쪽을 골라요. 원본 파일은 바뀌지 않아요.' }),
+      typeof documentImport?.description === 'string' && documentImport.description.trim()
+        ? el('p', { class: 'fe-note', text: documentImport.description.trim() }) : null)];
+  }
+
   // ---------- 유튜브 영상 넣기 ----------
   // 주소를 붙여 넣으면 카드 가운데에 영상이 놓인다(영상의 이름표와 시작 시각만 저장한다). 발표할 때 누르면 그 자리에서 틀어진다.
   function addYouTube(text) {
@@ -2731,15 +2895,15 @@ export function createEditor({
     return true;
   }
   function ytAdder() {
-    const input = el('input', {
+    const go = () => { if (addYouTube(youtubeInput.value)) youtubeInput.value = ''; };
+    const input = youtubeInput ||= el('input', {
       class: 'fe-search fe-yt-input', type: 'url', inputmode: 'url', placeholder: 'https://youtu.be/…', 'aria-label': '유튜브 영상 주소', autocomplete: 'off', spellcheck: 'false',
       onKeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); go(); } },
     });
-    const go = () => { if (addYouTube(input.value)) input.value = ''; };
     return el('div', { class: 'fe-yt-add', role: 'group', 'aria-label': '유튜브 영상 넣기' },
-      el('div', { class: 'fe-head', text: '유튜브 영상' }),
       el('div', { class: 'fe-row fe-yt-row' }, input, el('button', { class: 'fe-btn', type: 'button', onClick: go }, icon('plus'), '넣기')),
-      el('p', { class: 'fe-note', text: '유튜브의 "공유 → 복사" 주소를 붙여 넣어요. 꾸미기 판에서 Ctrl+V 로 붙여 넣어도 돼요. 발표할 때 스페이스 바로 틀고 멈춰요(인터넷 필요).' }));
+      el('p', { class: 'fe-note', text: '공개된 유튜브 영상을 넣을 수 있어요.' }),
+      uploadHelp('youtube', '유튜브 사용 안내', el('p', { class: 'fe-note', text: '유튜브의 "공유 → 복사" 주소를 붙여 넣어요. 꾸미기 판에서 Ctrl+V로 붙여 넣어도 돼요. 발표할 때 스페이스 바로 틀고 멈춰요(인터넷 필요).' })));
   }
   // 시작 시각 칸: "1:30" · "90" · "1m30s" 를 받는다. 비우면 처음부터.
   function ytStartBody(it) {
@@ -2756,6 +2920,31 @@ export function createEditor({
         pbtn('장이 열리면 바로 틀기', () => change({ auto: true }), { 'aria-pressed': String(!!it.auto), class: `fe-btn${it.auto ? ' on' : ''}` })),
       el('p', { class: 'fe-note', text: '발표 중 스페이스 바: 영상 틀기 → 멈추기 → 다시 틀기. 다음 장은 → 글쇠나 화면 누르기로 넘어가요.' }),
     ];
+  }
+
+  function documentImportBody() {
+    if (!hasDocumentImport) return [];
+    const button = el('button', {
+      class: 'fe-btn primary fe-upload fe-document-import', type: 'button', dataset: { documentImport: '' },
+      disabled: busy || importingDocument || filing || !!cam,
+      'aria-busy': importingDocument ? 'true' : null,
+      onClick: async () => {
+        if (!card || busy || importingDocument || filing || cam) return;
+        importingDocument = true; button.disabled = true; button.setAttribute('aria-busy', 'true');
+        for (const control of panel.querySelectorAll('[data-upload-tab]')) control.disabled = true;
+        try { await documentImport.open(); }
+        catch { notify('가져오기 화면을 열지 못했어요. 지금 그림을 확인하고 다시 시도해주세요.', 4500); }
+        finally {
+          importingDocument = false;
+          if (card) {
+            const current = panel.querySelector('[data-document-import]');
+            if (current) { current.disabled = busy || filing || !!cam; current.removeAttribute('aria-busy'); }
+            for (const control of panel.querySelectorAll('[data-upload-tab]')) control.disabled = false;
+          }
+        }
+      },
+    }, icon('upload'), documentImport.label.trim());
+    return [button];
   }
 
   function uploadBody() {
@@ -2807,11 +2996,8 @@ export function createEditor({
           pbtn('그만두기', () => { armedFile = null; renderPanel(); }))) : null,
       files.length
         ? el('div', { class: 'fe-files' }, ...files.map((img, i) => tile(img, i + 1)).reverse())
-        : el('p', { class: 'fe-note fe-files-empty', text: '아직 올린 파일이 없어요. PNG·JPG 사진이나 그림을 올려요.' }),
-      files.length ? el('p', { class: 'fe-note', text: `누르면 카드에 놓여요(한 장에 ${settings().maxPhotos}장까지). 여러 번 넣어도 올린 파일은 하나예요.` }) : null,
-      el('p', { class: 'fe-note', text: '놓은 사진을 누르면 도구 막대에서 배경 제거, 테두리 모양, 크기, 투명도, 뒤집기를 쓸 수 있어요.' }),
-      el('p', { class: 'fe-note', text: '내가 찍거나 그린 것, 허락을 받은 것만 올리고, 얼굴·이름 같은 개인 정보가 없는지 살펴봐요.' }),
-      ytAdder(),
+        : el('div', { class: 'fe-files-empty' }, icon('image'), el('p', { class: 'fe-note', text: '아직 올린 사진이 없어요.' })),
+      photoHelp(`사진을 누르면 이 장에 놓여요(한 장에 ${settings().maxPhotos}장까지). 여러 번 넣어도 올린 파일은 하나예요.`),
     ];
   }
 
@@ -2983,9 +3169,11 @@ export function createEditor({
 
   /** 꾸밀 디자인을 바꾼다(다른 카드·다른 쪽으로 넘어갈 때). 고르기와 되돌리기 기록은 비워진다. */
   function setDesign(next) {
+    sampling?.controller.abort();sampling=null;
     card = next && typeof next === 'object' ? next : { bg: undefined, items: [] };
     card.bg = cleanBg(card.bg);
-    card.items = cleanItems(card.items, { keepSpaces: true });
+    card.items = cleanItems(card.items, { keepSpaces: true, strict: !!card.id });
+    if (card.id) card.items = card.items.map(it => it.id ? it : { ...it, id: newId() });
     setMotion(card);
     setVideo(card);
     closeCamera();                     // 찍던 것은 그만둔다(다른 장의 바탕이 되면 안 된다)
@@ -3056,6 +3244,8 @@ export function createEditor({
 
   const api = {
     stage, toolbar, panel, mount, setDesign,
+    /** Host navigation can restore an existing tool without knowing its DOM selectors. */
+    openTab: id => { if (card && tabsHere().some(([name]) => name === id)) openTab(id); },
     /** 함께 꾸밀 때: 다른 사람이 바꾼 것을 끼워 넣는다 merge(design, patch) · 지금 끼워 넣어도 되는지 idle() */
     merge, idle,
     /** 함께 꾸밀 때: 다른 사람이 고른 요소들 [{ id, name, color }] 에 그 사람의 색 테두리를 두른다(빈 목록이면 지운다). */
@@ -3088,6 +3278,7 @@ export function createEditor({
     forget: () => { past = []; future = []; if (card) renderBar(); },
     /** 편집기를 치운다(열린 메뉴와 지켜보던 것들을 정리한다). 화면 조각은 프로젝트가 떼어 낸다. */
     destroy: () => {
+      sampling?.controller.abort();sampling=null;
       closeMenu();
       stopPress();
       stopDrag();

@@ -1,0 +1,74 @@
+{
+  "report": {
+    "contractVersion": 1,
+    "jobId": "jfixturelong",
+    "status": "ready",
+    "sourceDocumentId": "sfixturelong",
+    "sourceAssetId": "afixturelong",
+    "converter": {
+      "name": "self-authored-expected-data",
+      "version": "1",
+      "fonts": []
+    },
+    "selectedPages": [
+      1
+    ],
+    "pageCount": 1,
+    "warnings": [
+      {
+        "code": "SYNTHETIC_SAMPLE",
+        "message": "직접 작성한 예상 데이터. 실제 PPTX 변환 결과가 아닙니다."
+      }
+    ]
+  },
+  "document": {
+    "id": "dfixturelong",
+    "schemaVersion": 1,
+    "revision": 0,
+    "name": "self-authored-long-text",
+    "originalSize": {
+      "width": 9144000,
+      "height": 6858000,
+      "unit": "emu"
+    },
+    "size": {
+      "width": 960,
+      "height": 720,
+      "unit": "px"
+    },
+    "source": {
+      "kind": "pptx",
+      "sourceDocumentId": "sfixturelong",
+      "assetId": "afixturelong",
+      "filename": "self-authored-long-text.pptx",
+      "sha256": "c5c4765f71a89193964850dd5b6f04a61f3a37deb1415d01392ad7e8587cb9ec"
+    },
+    "assets": [
+      {
+        "id": "afixturelong",
+        "kind": "source",
+        "mimeType": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "sha256": "c5c4765f71a89193964850dd5b6f04a61f3a37deb1415d01392ad7e8587cb9ec",
+        "byteLength": 9760,
+        "storageKey": "fixtures/self-authored-long-text.pptx"
+      }
+    ],
+    "assetRefs": [
+      "afixturelong"
+    ],
+    "slides": [
+      {
+        "items": [
+          {
+            "t": "text",
+            "text": "긴 원문은 잘라서 성공으로 표시하지 않습니다. 긴 원문은 잘라서 성공으로 표시하지 않습니다. 긴 원문은 잘라서 성공으로 표시하지 않습니다. 긴 원문은 잘라서 성공으로 표시하지 않습니다. 긴 원문은 잘라서 성공으로 표시하지 않습니다. 긴 원문은 잘라서 성공으로 표시하지 않습니다. 긴 원문은 잘라서 성공으로 표시하지 않습니다. 긴 원문은 잘라서 성공으로 표시하지 않습니다. ",
+            "x": 50,
+            "y": 45,
+            "w": 85,
+            "size": 5
+          }
+        ]
+      }
+    ]
+  }
+}

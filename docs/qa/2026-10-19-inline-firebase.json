@@ -1,0 +1,171 @@
+{
+  "checkedAt": "2026-10-19T08:45:29.874Z",
+  "scope": "actual public Firebase; isolated synthetic browser-local operations",
+  "hostingVersion": "97a9d5faa467a761",
+  "staticFiles": {
+    "checkedAt": "2026-10-19T08:44:26.190Z",
+    "status": "PASS",
+    "url": "https://onbatang.web.app",
+    "project": "onbatang",
+    "site": "onbatang",
+    "product": "onbatang",
+    "version": "0.23.1",
+    "sourceCommit": "3135abf2bd17a9b3801e9ee9d63dd32dce605249",
+    "sourceFiles": 144,
+    "publicFilesVerified": 147,
+    "totalBytes": 18682220,
+    "fileMapSha256": "b543ddcb36c325266906c83587cd4d384a5a7adc34063699b9b52b10edd6b980",
+    "productionDatabaseChanged": false,
+    "teacherOrQaFilesPublished": false
+  },
+  "ui": {
+    "checkedAt": "2026-10-19T08:41:14.887Z",
+    "scope": "public-fresh-device-self-authored-only",
+    "expectedRelease": {
+      "product": "onbatang",
+      "version": "0.23.1",
+      "sourceCommit": "3135abf2bd17a9b3801e9ee9d63dd32dce605249",
+      "sourceFiles": 144
+    },
+    "checks": [
+      {
+        "name": "exact-version-source-commit-and-file-count-before-browser",
+        "passed": true
+      },
+      {
+        "name": "all-public-source-files-and-entry-html-byte-match-committed-release",
+        "passed": true,
+        "sourceFiles": 144,
+        "entryHtmlFiles": 2
+      },
+      {
+        "name": "public-css-revalidation-prevents-hour-old-styles",
+        "passed": true
+      },
+      {
+        "name": "inline-file-step-keeps-shell-canvas-name-sidebar-and-url",
+        "passed": true
+      },
+      {
+        "name": "both-original-previews-and-complete-import-auto-open-without-navigation",
+        "passed": true
+      },
+      {
+        "name": "desktop-and-390px-step-labels-and-footer-buttons-visible",
+        "passed": true,
+        "visualIssues": 0
+      },
+      {
+        "name": "font-plan-image-mode-cancel-restores-identical-editor-page-and-undo",
+        "passed": true
+      },
+      {
+        "name": "applied-fonts-and-image-page-import-auto-opens-new-drawing-preserving-old",
+        "passed": true
+      },
+      {
+        "name": "local-save-and-fixed-revision-one-keep-both-revision-zero-and-source-bytes",
+        "passed": true
+      },
+      {
+        "name": "reload-reopens-exact-two-materials-and-all-immutable-revisions",
+        "passed": true
+      },
+      {
+        "name": "original-pptx-download-is-byte-identical",
+        "passed": true
+      },
+      {
+        "name": "two-page-editable-pptx-download-preserves-original-four-to-three",
+        "passed": true
+      },
+      {
+        "name": "two-page-image-pptx-download-preserves-original-four-to-three",
+        "passed": true
+      },
+      {
+        "name": "zero-external-requests-writes-websockets-serviceworkers-and-page-errors",
+        "passed": true
+      }
+    ],
+    "source": {
+      "bytes": 11185,
+      "sha256": "739854765f14c5e3ca852399b1d6bc80879ce520d94eb7670f483667bf04254f"
+    },
+    "pageErrors": 0,
+    "externalRequestsBlocked": 0,
+    "writeRequestsBlocked": 0,
+    "webSocketsBlocked": 0,
+    "serviceWorkers": 0,
+    "accountVerification": "NOT_RUN",
+    "teacherInputUsed": false,
+    "existingBrowserProfileUsed": false,
+    "nativePowerPointRendering": "NOT_RUN",
+    "downloads": [
+      {
+        "mode": "editable",
+        "bytes": 70489,
+        "sha256": "b9ce57e87b8426e38d4d904b4f46684bff6ea22b18a99d7613b0b5d31398df06",
+        "slides": 2,
+        "originalSizePreserved": true
+      },
+      {
+        "mode": "image",
+        "bytes": 96283,
+        "sha256": "9ce17b530112677934c4c38f0c621fe44b270b14c08df8060bc1a48ad61558c1",
+        "slides": 2,
+        "originalSizePreserved": true
+      }
+    ],
+    "screenshots": [
+      {
+        "file": "desktop.png",
+        "width": 1440,
+        "height": 1000,
+        "footerInViewport": true,
+        "footerBottom": 1000,
+        "actionButtonsInViewport": true,
+        "stepsFit": true,
+        "horizontalOverflow": false
+      },
+      {
+        "file": "narrow.png",
+        "width": 390,
+        "height": 844,
+        "footerInViewport": false,
+        "footerBottom": 849,
+        "actionButtonsInViewport": true,
+        "stepsFit": true,
+        "horizontalOverflow": false
+      }
+    ],
+    "visualIssues": [],
+    "checkedOrigin": "https://onbatang.web.app",
+    "cssCachePolicies": [
+      {
+        "path": "/app/app.css",
+        "cacheControl": "no-cache"
+      },
+      {
+        "path": "/app/pptx-import/style.css",
+        "cacheControl": "no-cache"
+      },
+      {
+        "path": "/src/editor.css",
+        "cacheControl": "no-cache"
+      }
+    ],
+    "editorRatio": {
+      "aspect": 1.3333333333333333,
+      "caption": "원본 비율 · 4:3"
+    },
+    "functionalPassed": true,
+    "passed": true
+  },
+  "productionDatabaseChanged": false,
+  "teacherFileOrOutputPublished": false,
+  "accountQa": "NOT_RUN_THIS_VERSION",
+  "nativePowerPoint": "NOT_RUN_THIS_VERSION",
+  "physicalDevices35Students": "NOT_RUN",
+  "mail": "NOT_RUN_USER_DECLINED"
+}

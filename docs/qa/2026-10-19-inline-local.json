@@ -1,0 +1,142 @@
+{
+  "checkedAt": "2026-10-19T08:32:11.960Z",
+  "scope": "local-implementation-and-browser-only",
+  "source": {
+    "commit": "45bf5c879362cbe00f151c335b5e61d02d031f15",
+    "version": "0.23.0",
+    "commonFiles": 144
+  },
+  "unit": {
+    "passed": 179,
+    "failed": 0,
+    "skipped": 0
+  },
+  "edge": {
+    "passed": 22,
+    "failed": 0,
+    "skipped": 0,
+    "latestCssInlineRecheck": {
+      "passed": 2,
+      "failed": 0
+    },
+    "runtime": "actual Edge, isolated profile"
+  },
+  "vendor": {
+    "files": 17,
+    "reproducibleBuildAndCsp": true
+  },
+  "teacher": {
+    "scope": "private local file, loopback only; no teacher bytes or screenshots published",
+    "reportSha256": "bbc922f6f300f482e4446ba4a41c63630a87c2dfd08fdcc75584495a99dadd8d",
+    "passed": true,
+    "checks": [
+      {
+        "name": "source-sha256-matches-local-original",
+        "passed": true,
+        "bytes": 19627567
+      },
+      {
+        "name": "import-keeps-editor-shell-and-url",
+        "passed": true
+      },
+      {
+        "name": "all-nineteen-original-ppt-previews",
+        "passed": true,
+        "pages": 19,
+        "allRasterDecoded": true
+      },
+      {
+        "name": "all-parts-import-directly-opens-editor-without-navigation",
+        "passed": true
+      },
+      {
+        "name": "automatic-parts-keep-every-original-page",
+        "passed": true,
+        "pages": 19,
+        "parts": 11,
+        "partRevisions": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "all-nineteen-material-pages-render",
+        "passed": true,
+        "pages": 19,
+        "elements": 251
+      },
+      {
+        "name": "edited-name-pinned-with-original-revision-zero-unchanged",
+        "passed": true
+      },
+      {
+        "name": "reload-library-reopens-one-material-with-nineteen-pages",
+        "passed": true
+      },
+      {
+        "name": "original-download-bytes-identical",
+        "passed": true
+      },
+      {
+        "name": "whole-nineteen-page-editable-pptx-downloaded",
+        "passed": true,
+        "slideCount": 19,
+        "bytes": 4283834
+      },
+      {
+        "name": "whole-nineteen-page-image-pptx-downloaded",
+        "passed": true,
+        "slideCount": 19,
+        "bytes": 4358094
+      },
+      {
+        "name": "source-and-pinned-history-unchanged-after-both-exports",
+        "passed": true
+      }
+    ],
+    "inputBytes": 19627567,
+    "sourceSha256": "c165d32bda450cec385e5bc916351c75d72b6acc69abdea5931d2d473f10d12d",
+    "downloads": [
+      {
+        "mode": "editable",
+        "slideCount": 19,
+        "bytes": 4283834,
+        "sha256": "f6970d0d56485e44c3fe8ada9274ecc4162d1195853c7d49d06facdbac75ee83"
+      },
+      {
+        "mode": "image",
+        "slideCount": 19,
+        "bytes": 4358094,
+        "sha256": "8bb03b4b834d65521177409436cc5c5572c50c3f4463184586f4b5ebde49550b"
+      }
+    ],
+    "originalSourceAndRevisionZeroUnchanged": true,
+    "editorRatio": {
+      "aspect": 1.7777777777777777,
+      "caption": "원본 비율 · 16:9"
+    },
+    "pageErrors": 0,
+    "externalRequests": 0,
+    "serviceWorkers": 0
+  },
+  "productionDatabaseChanged": false,
+  "accountQa": "NOT_RUN_THIS_VERSION",
+  "physicalDevices35Students": "NOT_RUN",
+  "nativePowerPoint": "NOT_RUN_THIS_VERSION",
+  "mail": "NOT_RUN_USER_DECLINED",
+  "notes": [
+    "Claude 866aa23 missing-font fallback and 076d685 list markers retained.",
+    "Actual browser injected font-load NetworkError produced FONT_FALLBACK and completed image import.",
+    "Common embedded partial import refuses closing until retry completes; legacy home workspace behavior remains available.",
+    "Inherited Wingdings XML normalization edge is separately documented in docs/inline-pptx.md."
+  ]
+}

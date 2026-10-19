@@ -1,0 +1,442 @@
+{
+  "checkedAt": "2026-10-19T12:57:52.981Z",
+  "dateInSeoul": "2026-10-19",
+  "status": "PASS",
+  "scope": "latest-public-common-and-gai-runtime-private-teacher-file-browser-local-storage-and-native-PowerPoint-copies",
+  "productCodeChanged": false,
+  "deploymentChanged": false,
+  "source": {
+    "bytes": 19627567,
+    "sha256": "c165d32bda450cec385e5bc916351c75d72b6acc69abdea5931d2d473f10d12d"
+  },
+  "sourcePreserved": true,
+  "originalDownloadCopiesPreserved": true,
+  "teacherFileOrScreenshotPublished": false,
+  "applications": [
+    {
+      "app": "common",
+      "browserChecks": [
+        {
+          "name": "original-hash-before",
+          "pass": true
+        },
+        {
+          "name": "exact-current-public-release-and-critical-runtime-bytes",
+          "pass": true
+        },
+        {
+          "name": "all-original-pages-selected",
+          "pass": true
+        },
+        {
+          "name": "all-parts-visible-in-editor",
+          "pass": true,
+          "pages": 19,
+          "parts": 11
+        },
+        {
+          "name": "fast-slide-navigation-never-flashes-notices",
+          "pass": true,
+          "fastSlides": 19
+        },
+        {
+          "name": "all-nineteen-pages-open-in-editor",
+          "pass": true
+        },
+        {
+          "name": "all-nineteen-pages-keep-editor-rail-and-frame-layout",
+          "pass": true,
+          "sameNodes": true,
+          "topDelta": 0,
+          "heightDelta": 0
+        },
+        {
+          "name": "first-and-last-part-drafts-saved",
+          "pass": true
+        },
+        {
+          "name": "pointer-drag-order-and-keyboard-restore",
+          "pass": true
+        },
+        {
+          "name": "four-named-palettes-saved-with-distinct-colors",
+          "pass": true
+        },
+        {
+          "name": "order-saved-across-parts-original-revision-unchanged",
+          "pass": true
+        },
+        {
+          "name": "reload-keeps-all-pages-and-part-edits",
+          "pass": true
+        },
+        {
+          "name": "four-palettes-and-colors-survive-reload",
+          "pass": true
+        },
+        {
+          "name": "whole-editor-export-editable",
+          "pass": true,
+          "slides": 19,
+          "bytes": 4283807,
+          "sha256": "869adf94b822e067564bfc0d254c50a74a24b14b0fb301d71d92e0023c98f302"
+        },
+        {
+          "name": "whole-editor-export-image",
+          "pass": true,
+          "slides": 19,
+          "bytes": 4358067,
+          "sha256": "2c00ebdac6ddd4bcd7d68ebf30a0b9f12da6dad85d6320b618cb6842cf52c44a"
+        },
+        {
+          "name": "original-fixed-graph-and-private-source-unchanged",
+          "pass": true
+        }
+      ],
+      "browserReportSha256": "364ae59252b9f59765c47a4c3521bcea752169c8e89fb9aa2151fcc3914a4d5d",
+      "release": {
+        "version": "0.26.4",
+        "commit": "42facf4dd26da21392c40d792a8cc8de62d95c8e",
+        "commonVersion": "0.26.4",
+        "commonCommit": "42facf4dd26da21392c40d792a8cc8de62d95c8e"
+      },
+      "palettes": {
+        "slots": 4,
+        "namesAndColorsReopened": true,
+        "nativeEyedropper": "NOT_RUN"
+      },
+      "publicOrigin": "https://onbatang.web.app",
+      "runtimeHashes": [
+        {
+          "file": "app/app.js",
+          "sha256": "db021e480bddf9e6c07843250a45b8070efd76520320558818fbb4eddec6a82f"
+        },
+        {
+          "file": "app/loading.js",
+          "sha256": "4a915c3f80e321a8233d4969828e12fe337c0840830db9183291d16006465f46"
+        },
+        {
+          "file": "app/filmstrip.js",
+          "sha256": "54068a1527eeb1a6f8ea17b1967b50a61d25e382c376d6f1e761a3fdb005b876"
+        },
+        {
+          "file": "src/editor.js",
+          "sha256": "d87601b466e0194b39ee21cddc5afaa03ef5bdf66b67933e31d8cb173a277bcc"
+        },
+        {
+          "file": "src/editor.css",
+          "sha256": "def086ca50ffaa1bbc64a56e400785b91c9e9e6e289e131870c32ad11fd66ce4"
+        },
+        {
+          "file": "app/app.css",
+          "sha256": "b7e3b5e2f1d5dc581ca2a503c5d8c62b33ae8cb4d9891649effa606b4aecc7f7"
+        }
+      ],
+      "remoteRequests": 0,
+      "pageErrors": [],
+      "nativeCopies": [
+        {
+          "mode": "editable",
+          "originalBytes": 4283807,
+          "originalSha256": "869adf94b822e067564bfc0d254c50a74a24b14b0fb301d71d92e0023c98f302",
+          "savedBytes": 4062979,
+          "savedSha256": "64c208644079ffd650ebe7d39645ca33fb54f2435dd7e06e6882d3e6f15f1b39",
+          "slides": 19,
+          "sizeEmu": [
+            12192000,
+            6858000
+          ],
+          "downloadedCopyUnchanged": true,
+          "textEdit": {
+            "from": "p.105",
+            "to": "p.106",
+            "saved": true
+          },
+          "movedShapes": [
+            {
+              "name": "e8ba637bad8078bda",
+              "dx": 4028,
+              "before": {
+                "x": 1511302,
+                "y": 1062973,
+                "cx": 222248,
+                "cy": 222247
+              },
+              "after": {
+                "x": 1515330,
+                "y": 1062973,
+                "cx": 222248,
+                "cy": 222247
+              }
+            }
+          ],
+          "latinFont": "Arial",
+          "fontSizePt": 28,
+          "otherEighteenSlideTextPreserved": true,
+          "openedEditedSavedClosedReopened": true,
+          "allNineteenThumbnailsRendered": true
+        },
+        {
+          "mode": "image",
+          "originalBytes": 4358067,
+          "originalSha256": "2c00ebdac6ddd4bcd7d68ebf30a0b9f12da6dad85d6320b618cb6842cf52c44a",
+          "savedBytes": 4337101,
+          "savedSha256": "cb45424060ae0e4081e99ee8bbc1de1b19aff73857e0ea9a15da41d211dfbdaf",
+          "slides": 19,
+          "sizeEmu": [
+            12192000,
+            6858000
+          ],
+          "downloadedCopyUnchanged": true,
+          "firstPicture": {
+            "before": {
+              "x": 0,
+              "y": 0,
+              "cx": 12192000,
+              "cy": 6858000
+            },
+            "after": {
+              "x": 0,
+              "y": 0,
+              "cx": 11759184,
+              "cy": 6614541
+            }
+          },
+          "allNineteenPictureBytesPreserved": true,
+          "otherEighteenPictureGeometriesPreserved": true,
+          "individualTextEditing": false,
+          "openedEditedSavedClosedReopened": true,
+          "allNineteenThumbnailsRendered": true
+        }
+      ]
+    },
+    {
+      "app": "gai",
+      "browserChecks": [
+        {
+          "name": "original-hash-before",
+          "pass": true
+        },
+        {
+          "name": "exact-current-public-release-and-critical-runtime-bytes",
+          "pass": true
+        },
+        {
+          "name": "all-original-pages-selected",
+          "pass": true
+        },
+        {
+          "name": "all-parts-visible-in-editor",
+          "pass": true,
+          "pages": 19,
+          "parts": 11
+        },
+        {
+          "name": "fast-slide-navigation-never-flashes-notices",
+          "pass": true,
+          "fastSlides": 19
+        },
+        {
+          "name": "all-nineteen-pages-open-in-editor",
+          "pass": true
+        },
+        {
+          "name": "all-nineteen-pages-keep-editor-rail-and-frame-layout",
+          "pass": true,
+          "sameNodes": true,
+          "topDelta": 0,
+          "heightDelta": 0
+        },
+        {
+          "name": "first-and-last-part-drafts-saved",
+          "pass": true
+        },
+        {
+          "name": "pointer-drag-order-and-keyboard-restore",
+          "pass": true
+        },
+        {
+          "name": "four-named-palettes-saved-with-distinct-colors",
+          "pass": true
+        },
+        {
+          "name": "order-saved-across-parts-original-revision-unchanged",
+          "pass": true
+        },
+        {
+          "name": "reload-keeps-all-pages-and-part-edits",
+          "pass": true
+        },
+        {
+          "name": "four-palettes-and-colors-survive-reload",
+          "pass": true
+        },
+        {
+          "name": "whole-editor-export-editable",
+          "pass": true,
+          "slides": 19,
+          "bytes": 4283807,
+          "sha256": "eae396d878c8a52e9eceb09d1db49e791fef81618e070501be1de397b6049295"
+        },
+        {
+          "name": "whole-editor-export-image",
+          "pass": true,
+          "slides": 19,
+          "bytes": 4358067,
+          "sha256": "11e92bd37137fbce0fc98ee205ce33b427bc4dda870b82ceef07455c3abe34a0"
+        },
+        {
+          "name": "original-fixed-graph-and-private-source-unchanged",
+          "pass": true
+        }
+      ],
+      "browserReportSha256": "5d51567642c8987f05b8167d250cbea51aa97a2f96deeeec929f78df2373e3e0",
+      "release": {
+        "version": "0.71.2",
+        "commit": "4407ffc572e16bf2571ebb1935c6a07c769a0647",
+        "commonVersion": "0.26.4",
+        "commonCommit": "42facf4dd26da21392c40d792a8cc8de62d95c8e"
+      },
+      "palettes": {
+        "slots": 4,
+        "namesAndColorsReopened": true,
+        "nativeEyedropper": "NOT_RUN"
+      },
+      "publicOrigin": "https://gai-lab.netlify.app",
+      "runtimeHashes": [
+        {
+          "file": "app/app.js",
+          "sha256": "db021e480bddf9e6c07843250a45b8070efd76520320558818fbb4eddec6a82f"
+        },
+        {
+          "file": "app/loading.js",
+          "sha256": "4a915c3f80e321a8233d4969828e12fe337c0840830db9183291d16006465f46"
+        },
+        {
+          "file": "app/filmstrip.js",
+          "sha256": "54068a1527eeb1a6f8ea17b1967b50a61d25e382c376d6f1e761a3fdb005b876"
+        },
+        {
+          "file": "src/editor.js",
+          "sha256": "d87601b466e0194b39ee21cddc5afaa03ef5bdf66b67933e31d8cb173a277bcc"
+        },
+        {
+          "file": "src/editor.css",
+          "sha256": "def086ca50ffaa1bbc64a56e400785b91c9e9e6e289e131870c32ad11fd66ce4"
+        },
+        {
+          "file": "app/app.css",
+          "sha256": "b7e3b5e2f1d5dc581ca2a503c5d8c62b33ae8cb4d9891649effa606b4aecc7f7"
+        }
+      ],
+      "remoteRequests": 0,
+      "pageErrors": [],
+      "nativeCopies": [
+        {
+          "mode": "editable",
+          "originalBytes": 4283807,
+          "originalSha256": "eae396d878c8a52e9eceb09d1db49e791fef81618e070501be1de397b6049295",
+          "savedBytes": 4062911,
+          "savedSha256": "2c3213ccdc7a3bbabf3a80e57333275d2387c30dafded2945fc1c8dc0440aec9",
+          "slides": 19,
+          "sizeEmu": [
+            12192000,
+            6858000
+          ],
+          "downloadedCopyUnchanged": true,
+          "textEdit": {
+            "from": "p.105",
+            "to": "p.107",
+            "saved": true
+          },
+          "movedShapes": [
+            {
+              "name": "e8ba637bad8078bda",
+              "dx": 18288,
+              "before": {
+                "x": 1511302,
+                "y": 1062973,
+                "cx": 222248,
+                "cy": 222247
+              },
+              "after": {
+                "x": 1529590,
+                "y": 1062973,
+                "cx": 222248,
+                "cy": 222247
+              }
+            }
+          ],
+          "otherEighteenSlideTextPreserved": true,
+          "openedEditedSavedClosedReopened": true,
+          "allNineteenThumbnailsRendered": true
+        },
+        {
+          "mode": "image",
+          "originalBytes": 4358067,
+          "originalSha256": "11e92bd37137fbce0fc98ee205ce33b427bc4dda870b82ceef07455c3abe34a0",
+          "savedBytes": 4337099,
+          "savedSha256": "93b6a5bea5617c093447331f11fb082ec131f2f1325635c80e845aad59bbdbc2",
+          "slides": 19,
+          "sizeEmu": [
+            12192000,
+            6858000
+          ],
+          "downloadedCopyUnchanged": true,
+          "firstPicture": {
+            "before": {
+              "x": 0,
+              "y": 0,
+              "cx": 12192000,
+              "cy": 6858000
+            },
+            "after": {
+              "x": 0,
+              "y": 0,
+              "cx": 11704320,
+              "cy": 6583680
+            }
+          },
+          "allNineteenPictureBytesPreserved": true,
+          "otherEighteenPictureGeometriesPreserved": true,
+          "individualTextEditing": false,
+          "openedEditedSavedClosedReopened": true,
+          "allNineteenThumbnailsRendered": true
+        }
+      ]
+    }
+  ],
+  "nativePowerPoint": {
+    "status": "PASS",
+    "method": "Windows GUI through computer-use sky; inspection of saved OOXML after native Save As",
+    "filesOpened": 4,
+    "filesEditedAndSaved": 4,
+    "filesClosedBeforeReopen": 4,
+    "filesReopened": 4,
+    "allNineteenSlideThumbnailsRenderedForEachFile": true,
+    "repairDialogObserved": false,
+    "safetyBarrierBypassed": false
+  },
+  "isolation": {
+    "paidQaEnvironmentUsed": false,
+    "accountUsed": false,
+    "credentialsRead": false,
+    "remoteWrites": 0,
+    "productionDatabaseChanged": false,
+    "qaProjectOrBillingChanged": false,
+    "userExistingBrowserProfileUsed": false
+  },
+  "notRun": [
+    "Actual-account save/new-device account recovery",
+    "Physical devices and 35 participants",
+    "Native screen eyedropper",
+    "Pixel-by-pixel comparison of all original slides",
+    "Cross-device font availability"
+  ],
+  "limits": [
+    "Native first-slide edits plus all-slide thumbnails; not pixel-by-pixel comparison of every original slide",
+    "Latin Arial font edit checked in common copy; cross-device font availability not checked",
+    "Image slides remain one picture, without individual text editing",
+    "No account QA, paid QA, physical-device or 35-student test"
+  ]
+}

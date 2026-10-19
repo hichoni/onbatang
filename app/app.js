@@ -1,10 +1,21 @@
 // 미니캔 앱: 내 그림들 → 새 그림 → 꾸미기(그림의 모양은 꾸미는 화면에서 언제든 바꾼다) → 그림·영상 파일로 내려받기.
-// 편집기는 모듈(src/)의 것을 그대로 쓴다. 그림은 이 기기(브라우저의 IndexedDB)에만 저장되고, 서버로는 아무것도 보내지 않는다.
+// 편집기는 모듈(src/)의 것을 쓴다. 그림은 기기에 저장하며, 선택적 계정/가이X 연결은 호스트가 제공한다.
 // 들여 쓰는 곳은 startMinican({ fonts, titleFont, storage, onView, brand, sync })로 시작한다(index.html 이 그 예다).
 // 화면의 짜임: 첫 화면(소개·새로 만들기 + 템플릿 + 내 그림)과 꾸미는 화면(위 막대 · 왼쪽 도구 줄과 옆 칸 · 가운데 그림 · 아래 슬라이드 띠).
 //             꾸미는 화면은 넓은 화면에서 창을 꽉 채우고(스크롤 없음), 좁은 화면에서는 위에서 아래로 쌓인다(app.css).
 import { el, toast, openModal, closeModal } from './ui.js';
 import { onbatangLogo } from './brand.js';
+import { onbatangLoading,deferredOnbatangLoading } from './loading.js';
+import {bindFilmstrip} from './filmstrip.js';
+import {orderPages,movePage} from './page-order.js';
+import {createLocalPalettes} from './palettes.js';
+import {newId} from '../src/document.js';
+import {newPixelActivity,pixelArtCover,pixelArtResult} from '../src/pixel-art.js';
+import {mountPixelArt,createPixelArtSetup,pixelArtImage} from './pixel-art.js';
+import {createHtmlLesson} from './html-lesson.js';
+import {cleanGaiActivity,gaiAppCover,gaiAppResult} from '../src/gai-app.js';
+import {mountGaiApp} from './gai-app.js';
+import {createGaiMaker,gaiLessonContext} from './gai-maker.js';
 import {
   createEditor, designView, designToBlob, configure, settings, reshapeItems, layoutList, layoutItems, icon, cleanDesign, hasMotion, playDesign, playTransition,
   COMBOS, TRANSITIONS, designsToVideo, canMakeVideo, canFilmScenes, filmPlan, MAX_FILM_SECONDS, videoSize, STAYS, DEFAULT_STAY, scenePlayer, dropScene, sceneUrl, youTubePlayers,
@@ -20,19 +31,27 @@ import {
   RATIOS, RATIO_KEY, MAX_DESIGNS, MAX_SLIDES, MAX_NAME, EXPORT_SIZES, DEFAULT_EXPORT, EXPORT_KEY, VIDEO_SIZES, DEFAULT_VIDEO, exportSize, ratioOf, newRecord, nextNumber,
   isBlank, fileName, whenText, sortRecords, addSlide, copySlide, removeSlide, moveSlide,
   libraryOf, dropPhoto, slideMotion, slideVideo, slideExtra, hasVideo, deckVideos, unusedVideos, cleanBrand,
+  migrateRecord, aspectOf, canvasRatioOf, copyRecord, withSlideMotion,
 } from './designs.js';
 import { saveVideo, listVideos, removeVideos } from './videos.js';
 import { zipStore } from './zip.js';
-import { listDesigns, getDesign, putDesign, removeDesign, setStorageName } from './store.js';
+import { createPptx } from './pptx.js';
+import { listDesigns, getDesign, putDesign, replaceDesignIfUnchanged, removeDesign, setStorageName, storageName, listDesignIssues, getOriginalDesign } from './store.js';
 import { setupApp, useFonts, photoToData, BASIC_GROUP } from './setup.js';
-import { mergeAccount, createPusher } from './sync.js';
+import { mergeAccount, createPusher, syncsRecord } from './sync.js';
 
 let app = null;
 let onView = () => {};
 let onBrandClick = null;
+let importAction = null;
+let materialAction = null;
+let materialNavigation = null;
+let appMaker = null;
+let colorPalettes=null;
 let brand = null;                // 들여 쓰는 곳의 표시 { name, logo } (없으면 표시하지 않는다)
 let sync = null;                 // 들여 쓰는 곳의 계정 저장(sync.js). 없으면 이 기기에만 저장한다
 let pusher = null;
+const accountFor = record => !!pusher && syncsRecord(sync, record);
 const SAVE_DELAY = 500;       // 마지막으로 고친 뒤 이만큼 지나면 이 기기에 저장한다(ms)
 const S = {
   phase: 'boot',              // 'boot'(그림을 읽는 중) · 'home'
@@ -155,7 +174,9 @@ async function syncAccount() {
 /** 계정에 다 올렸을 때 꾸미는 화면의 저장 상태를 알린다. */
 function pushed(id, ok) {
   const O = S.open;
-  if (!O || O.record.id !== id || O.dirty) return;
+  if (!O || O.record.id !== id || !accountFor(O.record)) return;
+  O.accountOk = ok;
+  if (O.dirty) return;
   setStatus(O, ok ? '계정에 저장했어요' : '계정에 올리지 못했어요 · 이 기기에는 저장됐어요', ok ? 'ok' : '');
 }
 /** 목록의 그 그림을 새 기록으로 바꿔 끼운다(없으면 맨 앞에 더한다). */
@@ -246,7 +267,7 @@ function startNew(layoutId = '', tile = null) {
     record.slides = [{ bg: layout.bg, items: layoutItems(layout.id) }];
   }
   // 작은 그림과 새 그림의 모양이 같을 때에만 그 그림을 키워서 연다(모양이 다르면 찌그러져 보인다).
-  const from = Math.abs(ratioOf(record.ratio).aspect - thumbAspect(layout)) < 0.01 ? tile?.querySelector('.fe-card') : null;
+  const from = Math.abs(aspectOf(record) - thumbAspect(layout)) < 0.01 ? tile?.querySelector('.fe-card') : null;
   transit(() => { if (!S.open) openDesign(record, true); }, 'open', from);
 }
 
@@ -357,6 +378,11 @@ function render() {
       el('ul', { class: 'cv-feats', 'aria-label': '만들 수 있는 것' }, ...FEATS.map(([pic, text, tone]) => el('li', { class: `cv-feat ${tone}` },
         el('span', { class: 'cv-feat-icon', 'aria-hidden': 'true' }, ic(pic)), el('span', { text })))),
       el('div', { class: 'cv-hero-go' }, start, tourButton('home'),
+        importAction && !importAction.hideHome ? el('button', { class: 'btn cv-import-btn', type: 'button', disabled: loading, onClick: async (event) => {
+          const button = event.currentTarget; button.disabled = true;
+          try { await importAction.open(); } catch (error) { console.warn(error); toast('가져오기 화면을 열지 못했어요. 다시 시도해주세요.'); }
+          finally { button.disabled = false; }
+        } }, importAction.label) : null,
         full ? el('p', { class: 'cv-hero-full', text: `그림은 ${MAX_DESIGNS}장까지 저장돼요. 안 쓰는 그림을 지워 주세요.` }) : null),
       el('p', { class: 'cv-hero-tag', text: `작은 생각도 멋진 작품이 되도록 · ${sync ? '내 계정에 자동 저장' : '이 기기에 자동 저장'}` })),
     heroShowcase()));
@@ -393,9 +419,7 @@ function render() {
         el('span', { class: 'cv-account-icon', 'aria-hidden': 'true' }, ic(sync ? 'cloud' : 'screen')),
         el('span', { class: 'cv-account-text' }, ...accountNote()))));
   if (loading) {
-    mine.append(el('div', { class: 'cv-state', role: 'status' },
-      el('span', { class: 'cv-spin', 'aria-hidden': 'true' }),
-      el('b', { text: sync ? '저장된 그림을 불러오는 중이에요…' : '이 기기에 저장된 그림을 불러오는 중이에요…' })));
+    mine.append(onbatangLoading({title:'내 그림을 불러오고 있어요',detail:sync?'이 기기와 계정의 저장 자료를 확인해요.':'이 기기에 저장된 그림을 확인해요.'}).node);
   } else if (!list.length) {
     mine.append(el('div', { class: 'cv-state cv-empty', role: 'status' },
       el('span', { class: 'cv-state-icon', 'aria-hidden': 'true' }, el('i'), el('i'), el('i')),
@@ -406,6 +430,12 @@ function render() {
     mine.append(el('div', { class: 'cv-list' }, ...list.map((r) => itemCard(r))));
   }
   if (S.error) mine.append(el('p', { class: 'warn-box', text: S.error }));
+  for (const issue of listDesignIssues()) mine.append(el('div', { class: 'warn-box', role: 'status' },
+    el('p', { text: `${issue.name || '그림'}: 지금 열 수 없는 자료예요 (${issue.code}). 원본은 그대로 남아 있어요.` }),
+    el('button', { class: 'btn', type: 'button', onClick: async () => {
+      try { saveBlob(new Blob([JSON.stringify(await getOriginalDesign(issue.id), null, 2)], { type: 'application/json' }), 'onbatang-original.json'); }
+      catch { toast('원본을 읽지 못했어요. 다시 시도해 주세요.'); }
+    } }, '원본 내려받기')));
 
   app.replaceChildren(hero, el('div', { class: 'cv-home' }, templates, mine,
     el('p', { class: 'cv-note', text: `${sync ? '그림은 이 기기에 먼저 저장한 뒤 내 계정에도 저장돼요. 바탕에 깐 영상만 이 기기에 남아요.' : '그림은 이 기기(이 브라우저)에만 저장돼요(서버로 올라가지 않아요). 다른 기기에서는 보이지 않으니, 다 만든 그림은 내려받아 두세요.'} 그림의 모양(정사각형·세로·가로·길게)은 꾸미는 화면에서 언제든 바꿀 수 있어요.` })));
@@ -424,7 +454,7 @@ function fitView(view, aspect) {
 }
 function thumb(record) {
   setupApp();
-  return fitView(designView(record.slides[0], { empty: '빈 그림' }), ratioOf(record.ratio).aspect);
+  return fitView(designView(record.slides[0], { empty: '빈 그림' }), aspectOf(record));
 }
 function itemCard(record) {
   const del = el('button', {
@@ -442,7 +472,7 @@ function itemCard(record) {
       try {
         await removeDesign(record.id);
         if (pusher) pusher.cancel(record.id);
-        if (sync) sync.drop(record.id).catch((ex) => { console.warn(ex); toast('계정에서는 지우지 못했어요. 새로 고침하면 다시 나타날 수 있어요.', 5000); });
+        if (sync && syncsRecord(sync, record)) sync.drop(record.id).catch((ex) => { console.warn(ex); toast('계정에서는 지우지 못했어요. 새로 고침하면 다시 나타날 수 있어요.', 5000); });
       } catch (ex) {
         console.error(ex);
         toast('지우지 못했어요. 새로 고침하고 다시 해 봐요.', 4000);
@@ -457,6 +487,13 @@ function itemCard(record) {
   }, ...face('trash', '지우기'));
   const open = (btn) => openEntry(record, btn);
   const edit = el('button', { class: 'btn btn-primary small cv-item-open', type: 'button', onClick: () => open(edit) }, '꾸미기');
+  const copy = el('button', { class: 'btn small', type: 'button', disabled: (S.list || []).length >= MAX_DESIGNS, onClick: async () => {
+    copy.disabled = true;
+    try {
+      const made = await putDesign({ ...copyRecord(await getDesign(record.id) || record), updatedAt: Date.now() });
+      upsert(made); if (accountFor(made)) pusher.queue(made); render();
+    } catch (ex) { toast(`복사하지 못했어요 (${ex.code || '저장소 오류'}).`); copy.disabled = false; }
+  } }, '복사');
   const busy = (on) => { for (const b of [edit, del, card.querySelector('.cv-thumb')]) if (b) b.disabled = on; };
   const pages = record.slides.length;
   const card = el('article', { class: 'cv-item', dataset: { id: record.id } },
@@ -465,7 +502,7 @@ function itemCard(record) {
     el('div', { class: 'cv-item-body' },
       el('span', { class: 'cv-item-name', text: record.name }),
       el('span', { class: 'cv-item-when' }, el('span', { text: ratioOf(record.ratio).name }), el('span', { text: whenText(record.updatedAt) })),
-      el('div', { class: 'cv-item-row' }, edit, del)));
+      el('div', { class: 'cv-item-row' }, edit, copy, del)));
   return card;
 }
 // 목록의 그림을 연다. 이 기기에 저장된 가장 새것을 읽는다(읽지 못하면 목록이 기억하는 것).
@@ -473,7 +510,7 @@ async function openEntry(entry, btn) {
   if (S.open || moving) return;
   btn.disabled = true;
   let record = entry;
-  try { record = (await getDesign(entry.id)) || entry; } catch (ex) { console.warn(ex); }
+  try { record = (await getDesign(entry.id)) || entry; } catch (ex) { console.warn(ex); toast(`열지 못했어요 (${ex.code || '저장소 오류'}). 원본은 그대로 남아 있어요.`); btn.disabled = false; return; }
   const ready = () => !S.open && S.phase === 'home';
   if (!ready()) return;
   upsert(record);
@@ -483,15 +520,16 @@ async function openEntry(entry, btn) {
 
 // ---------- 꾸미기 ----------
 function openDesign(record, isNew) {
-  setupApp(record.ratio);
+  record = migrateRecord(record);
+  setupApp(record);
   const O = {
-    record: { ...record }, timer: 0, dirty: false, saved: !isNew, closed: false, editor: null, status: null, nameInput: null,
+    record: { ...record }, persistedRecord:structuredClone(record), timer: 0, dirty: false, saved: !isNew, closed: false, editor: null, status: null, nameInput: null,
     // 슬라이드: slides 는 모든 장, at 은 지금 꾸미는 장의 번호. 편집기는 한 번에 한 장만 꾸민다(장을 바꿀 때 바꿔 끼운다).
     slides: record.slides.map((d) => ({ bg: d.bg, items: d.items, ...slideExtra(d) })), at: 0, strip: null, thumbTimer: 0, shapes: null, shell: null, alert: null,
   };
   delete O.record.slides;                // 슬라이드는 O.slides 가 맡는다(저장할 때 다시 넣는다)
   S.open = O;
-  const first = isNew ? '꾸미기 시작하면 저절로 저장돼요' : sync ? '저장돼 있어요' : '이 기기에 저장돼 있어요';
+  const first = isNew ? '꾸미기 시작하면 저절로 저장돼요' : accountFor(record) ? '저장돼 있어요' : '이 기기에 저장돼 있어요';
   O.status = el('span', { class: 'cv-status', role: 'status', text: first, title: first });
   // 저장하지 못했을 때는 위 막대 아래에 띠로 한 번 더 알린다(위 막대의 글은 자리가 좁아 잘릴 수 있다).
   O.alert = el('p', { class: 'cv-alert', 'aria-hidden': 'true', hidden: true });
@@ -501,10 +539,18 @@ function openDesign(record, isNew) {
     onKeydown: (e) => { if (e.key === 'Enter') name.blur(); },
   });
   O.editor = createEditor({
+    colorPalettes,
     design: O.slides[0],
     onChange: () => touched(O),
     uploadImage: photoToData,
+    documentImport: importAction?.editorLabel ? {
+      label: importAction.editorLabel,
+      description: importAction.editorDescription || '지금 그림을 저장한 뒤 PPT 자료를 가져와요.',
+      open: () => importFromEditor(O),
+    } : null,
     notify: toast,
+    canPaste: item => [...(item.assetRefs || []), ...(item.source?.assetId ? [item.source.assetId] : [])]
+      .every(id => O.record.assets.some(asset => asset.id === id)),
     // 올린 파일 목록: 이 그림에 올린 사진들(슬라이드가 여러 장이어도 목록은 하나다). 저장할 때 편집기에서 꺼내 기록에 넣는다.
     uploads: libraryOf(record.uploads, record.slides),
     // 지금 꾸미는 장 말고 다른 장에서 그 사진을 쓴 곳의 수("쓰는 중" 표시와, 지우기 전에 알려 줄 때 쓴다).
@@ -526,12 +572,16 @@ function openDesign(record, isNew) {
     },
     // 실행 취소·다시 실행으로 그림의 모양이 되돌아갔을 때: 고른 모양 표시와 기록을 맞춘다.
     onAspect: (aspect) => {
-      O.record.ratio = RATIOS.reduce((best, r) => (Math.abs(r.aspect - aspect) < Math.abs(best.aspect - aspect) ? r : best)).id;
+      O.record.size = { width: aspect * O.record.size.height, height: O.record.size.height, unit: O.record.size.unit };
+      O.record.ratio = `${O.record.size.width}:${O.record.size.height}`;
       keepRatio(O.record.ratio);
       markRatio(O, shapes);
     },
   });
-  const down = el('button', { class: 'btn btn-primary cv-down-btn', type: 'button', title: '그림이나 영상으로 내려받아요(크기를 고를 수 있어요)', onClick: () => askDownload(O, down) }, ...face('download', '내려받기'));
+  const down = el('button', { class: 'btn btn-primary cv-down-btn', type: 'button', title: '그림·영상·PPTX로 내려받아요', onClick: () => askDownload(O, down) }, ...face('download', '내려받기'));
+  let acceptsMaterial = false;
+  try { acceptsMaterial = !!materialAction && (!materialAction.accepts || materialAction.accepts(record)); } catch { /* An optional host action must fail closed. */ }
+  const material = acceptsMaterial ? el('button', {class: 'btn cv-material-btn', type: 'button', dataset: {materialAction: ''}, onClick: () => saveMaterialFromEditor(O)}, materialAction.label) : null;
   const show = el('button', { class: 'btn cv-show-btn', type: 'button', title: '화면 가득 보여 줘요', onClick: () => present(O) }, ...face('play', '발표'));
   // 그림의 모양: 꾸미는 화면 안에서 바로 바꾼다. 놓아 둔 도형과 사진은 찌그러지지 않게 편집기가 맞춰 준다.
   const shapes = el('div', { class: 'cv-shapes', role: 'group', 'aria-label': '그림의 모양' }, ...RATIOS.map((r) => {
@@ -543,6 +593,8 @@ function openDesign(record, isNew) {
     }, icon, el('span', { class: 'cv-shape-name', text: r.name }));
   }));
   O.shapes = shapes;
+  const canvasRatio = O.ratioLabel = el('span', { class: 'cv-ratio-current', role: 'status', 'aria-live': 'polite', dataset: { canvasRatio: '' } });
+  shapes.prepend(canvasRatio);
   // 위 막대: 나가기 · 이름 · 저장 상태 | 모양 · 발표 · 내려받기
   const mark = brand ? el(onBrandClick ? 'button' : 'span', onBrandClick ? {
     class: 'cv-brand cv-brand-link', type: 'button', title: `저장하고 ${brand.name} 홈으로`,
@@ -553,13 +605,14 @@ function openDesign(record, isNew) {
     ...(mark ? [mark, el('span', { class: 'cv-bar-sep cv-brand-sep', 'aria-hidden': 'true' })] : []),
     el('button', { class: 'btn btn-ghost cv-back', type: 'button', title: '저장하고 내 그림으로 돌아가요', onClick: (e) => closeDesign(O, e.currentTarget) }, ...face('back', '내 그림')),
     el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' }),
-    name, O.status, el('span', { class: 'cv-bar-gap' }), shapes, el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' }), tourButton('editor', O), show, down);
+    name, O.status, ...(material ? [material] : []), el('span', { class: 'cv-bar-gap' }), shapes, el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' }), tourButton('editor', O), show, down);
   const shell = editorShell(O, bar);
   markRatio(O, shapes);
   setView('edit');
   app.replaceChildren(shell);
   O.editor.refresh();                    // 화면에 놓은 뒤에 다시 그려서 테두리·손잡이의 자리를 맞춘다
   renderStrip(O);
+  O.materialLoadingPromise=loadMaterialNavigation(O);
   // 처음 꾸미는 화면을 열면 사용법 안내를 한 번 보여 준다(이 기기에서 한 번). 언제든 ? 단추로 다시 본다.
   if (!tourSeen('editor')) {
     markTourSeen('editor');
@@ -590,6 +643,7 @@ function editorShell(O, bar) {
   side.addEventListener('click', (e) => {
     const tab = e.target.closest('.fe-tab');
     if (!tab) return;
+    O.activityConfig?.remove();O.activityConfig=null;
     const same = tab.classList.contains('on');
     const wasFolded = shell.classList.contains('folded');
     closePop();
@@ -646,7 +700,19 @@ function slideLabel(i, design) {
 }
 function renderStrip(O) {
   if (!O.strip || O.closed) return;
-  const aspect = ratioOf(O.record.ratio).aspect;
+  O.activityConfig?.remove();O.activityConfig=null;
+  if(O.materialDeck&&O.strip.dataset.materialLayout==='1'){
+    renderMaterialNavigation(O,O.strip.querySelector('.cv-slide-list').scrollLeft);
+    const pages=materialPages(O),at=pages.findIndex(v=>v.record.id===O.record.id&&v.index===O.at),tools=O.strip.querySelectorAll('.cv-slide-tool');
+    tools[0].disabled=at<=0;tools[1].disabled=at>=pages.length-1;tools[2].disabled=O.slides.length>=MAX_SLIDES;
+    const del=tools[3];del.disabled=O.slides.length===1&&!O.editor.getDesign().items.length&&!hasVideo(O.editor.getDesign());
+    if(O.stripSelection!==O.editor.getDesign().id){del.dataset.armed='0';del.classList.remove('danger');del.parentElement.classList.remove('arming');relabel(del,'지우기');}
+    O.stripSelection=O.editor.getDesign().id;
+    updateActivityTools(O);
+    return;
+  }
+  O.stripDrag?.destroy();
+  const aspect = aspectOf(O.record);
   const n = O.slides.length;
   const full = n >= MAX_SLIDES;
   const left = O.strip.querySelector('.cv-slide-list')?.scrollLeft || 0;
@@ -683,10 +749,14 @@ function renderStrip(O) {
       }, el('span', { class: 'cv-slide-plus', 'aria-hidden': 'true' }, ic('plus')), el('span', { class: 'cv-slide-add-text', text: '새 장' }))),
     el('div', { class: 'cv-slide-tools' },
       el('span', { class: 'cv-slide-count', text: `${O.at + 1} / ${n}장` }),
-      tool('left', '앞으로', '이 장을 앞으로 옮기기', () => changeSlides(O, (slides, at) => moveSlide(slides, at, -1)), O.at === 0),
-      tool('right', '뒤로', '이 장을 뒤로 옮기기', () => changeSlides(O, (slides, at) => moveSlide(slides, at, 1)), O.at === n - 1),
+      tool('left', '앞으로', '이 장을 앞으로 옮기기', () => moveStripSelection(O,-1), O.materialDeck?materialPages(O).findIndex(v=>v.record.id===O.record.id&&v.index===O.at)===0:O.at===0),
+      tool('right', '뒤로', '이 장을 뒤로 옮기기', () => moveStripSelection(O,1), O.materialDeck?materialPages(O).findIndex(v=>v.record.id===O.record.id&&v.index===O.at)===materialPages(O).length-1:O.at===n-1),
       tool('copy', '복제', '이 장을 복제하기', () => changeSlides(O, copySlide), full),
-      del));
+      del,
+      el('button',{class:'btn cv-activity-add',type:'button',dataset:{addActivity:''},onClick:()=>configureActivity(O)},'+ 활동 추가'),
+      appMaker&&el('button',{class:'btn cv-activity-add',type:'button',dataset:{addGaiApp:''},onClick:()=>configureGaiActivity(O)},'가이X로 앱 만들기'),
+      el('button',{class:'btn cv-activity-edit',type:'button',dataset:{editActivity:''},onClick:()=>configureActivity(O,true)},'활동 설정')));
+  updateActivityTools(O);
   // 띠를 다시 그려도 옆으로 넘겨 둔 자리는 그대로 두고, 고른 장이 안 보일 때에만 그쪽으로 (부드럽게) 넘긴다.
   const list = O.strip.querySelector('.cv-slide-list');
   const on = list.querySelector('.cv-slide.on');
@@ -697,13 +767,125 @@ function renderStrip(O) {
     const by = r.left < box.left + 8 ? r.left - box.left - 8 : r.right > box.right - 8 ? r.right - box.right + 8 : 0;
     if (by) list.scrollBy({ left: by, behavior: CALM.matches ? 'auto' : 'smooth' });
   }
+  renderMaterialNavigation(O,left);
+  decorateStrip(O);
+  if(O.materialDeck)O.strip.dataset.materialLayout='1';
+}
+function moveStripSelection(O,delta){if(O.materialDeck){const pages=materialPages(O),from=pages.findIndex(v=>v.record.id===O.record.id&&v.index===O.at);reorderStrip(O,from,from+delta);}else changeSlides(O,(slides,at)=>moveSlide(slides,at,delta));}
+async function reorderStrip(O,from,to){
+  if(O.closed||O.leaving||O.inlineImport||app.inert||videoBusy(O))return;
+  if(!O.materialDeck){changeSlides(O,(slides,at)=>{const next=[...slides];next.splice(to,0,...next.splice(from,1));const selected=slides[at];return [next,next.indexOf(selected)];});return;}
+  if(!materialNavigation.reorder){toast('이 자료의 순서를 저장하는 기능을 연결하지 못했어요.');return;}
+  const pages=materialPages(O);if(from<0||to<0||from>=pages.length||to>=pages.length||from===to)return;
+  O.leaving=true;app.inert=true;
+  try{await persistEditorAction(O);const deck=await materialNavigation.reorder({designId:O.record.id,materialRef:O.materialDeck.materialRef,pageIds:movePage(pages.map(v=>v.page.id),from,to)});
+    if(!O.closed&&S.open===O){O.materialDeck={...deck,documents:deck.documents.map(migrateRecord)};renderStrip(O);toast('슬라이드 순서를 저장했어요. 원본과 이전 저장본은 그대로예요.');}
+  }catch(error){toast(error?.message||'순서를 저장하지 못했어요. 원래 순서와 편집은 유지돼요.',5000);}
+  finally{O.leaving=false;if(!O.closed&&S.open===O)app.inert=false;}
+}
+function decorateStrip(O){
+  const list=O.strip.querySelector('.cv-slide-list'),count=O.strip.querySelector('.cv-slide-count');
+  const key=`onbatang.filmstrip-size.v1.${storageName()}`;let height=92;try{height=Math.max(64,Math.min(152,Number(localStorage.getItem(key))||92));}catch{}
+  O.strip.style.setProperty('--cv-thumb-height',`${height}px`);
+  const size=el('input',{type:'range',min:'64',max:'152',step:'8',value:String(height),'aria-label':'슬라이드 미리보기 크기',onInput:()=>{O.strip.style.setProperty('--cv-thumb-height',`${size.value}px`);try{localStorage.setItem(key,size.value);}catch{}}});
+  const scroll=(text,dir)=>el('button',{class:'cv-slide-scroll',type:'button','aria-label':text,onClick:()=>list.scrollBy({left:dir*list.clientWidth*.75,behavior:CALM.matches?'auto':'smooth'})},dir<0?'‹':'›');
+  const guide=window.matchMedia('(pointer: coarse)').matches?'손잡이로 순서 변경 · 목록을 밀어 이동':'끌어서 순서 변경 · 휠로 가로 이동';
+  const header=el('div',{class:'cv-strip-header'},count,el('span',{class:'cv-strip-guide',text:guide}),el('label',{class:'cv-strip-size'},'크기',size),scroll('목록 왼쪽 보기',-1),scroll('목록 오른쪽 보기',1));
+  O.strip.prepend(header);list.tabIndex=0;
+  O.stripDrag=bindFilmstrip(list,{reorder:(from,to)=>reorderStrip(O,from,to),busy:()=>O.closed||O.leaving||!!O.inlineImport||app.inert});
+}
+
+// Stored PPT parts stay independent. The editor shows their pages as one deck
+// without exceeding per-document size limits or rewriting fixed revisions.
+function materialLoading(O,options){
+  O.materialLoading?.dispose();
+  return O.materialLoading=deferredOnbatangLoading(O.shell.querySelector('.cv-canvas'),{...options,compact:true,className:'cv-material-loading',active:()=>!O.closed&&S.open===O});
+}
+async function loadMaterialNavigation(O) {
+  if (!materialNavigation || O.record.source?.kind !== 'pptx') return;
+  const loading=materialLoading(O,{title:'PPT 전체 슬라이드를 불러오고 있어요',detail:'저장된 모든 쪽을 순서대로 연결해요.'});
+  try {
+    const deck=await materialNavigation.load({designId:O.record.id});
+    O.materialLoadError=null;
+    if(O.closed||S.open!==O)return;
+    if(deck?.documents?.some(record=>record.id===O.record.id)){
+      O.materialDeck={...deck,documents:deck.documents.map(migrateRecord)};
+      renderStrip(O);
+    }
+  }catch(error){O.materialLoadError=error;if(!O.closed&&S.open===O)toast('PPT 전체 목록을 열지 못했어요. 현재 편집과 저장 자료는 유지돼요. 내 자료에서 다시 열어주세요.',5000);}
+  finally{loading.finish();}
+}
+function materialPages(O){return orderPages(O.materialDeck.documents.flatMap(record=>(record.id===O.record.id?currentSlides(O):record.slides).map((page,index)=>({record,page,index}))),O.materialDeck.pageOrder);}
+function renderMaterialNavigation(O,left=0) {
+  if(!O.materialDeck)return;
+  const pages=materialPages(O);
+  const at=pages.findIndex(value=>value.record.id===O.record.id&&value.index===O.at);
+  const rail=O.strip.querySelector('.cv-slide-list');
+  rail.setAttribute('aria-label','PPT 전체 슬라이드');
+  const existing=new Map([...rail.children].map(node=>[node.dataset.pageId,node]));
+  const nodes=pages.map((value,index)=>{
+   let node=existing.get(value.page.id);
+   if(!node){node=el('button',{
+    class:`cv-slide${index===at?' on':''}`,type:'button','aria-label':`전체 자료 ${index+1}쪽${value.page.source?.pageNumber?` · 원본 ${value.page.source.pageNumber}쪽`:''}`,
+    dataset:{pageId:value.page.id},onClick:()=>navigateMaterialPage(O,node.materialValue)
+   },el('span',{class:'cv-slide-no'}),el('span',{class:'cv-slide-view','aria-hidden':'true'}));}
+   node.materialValue=value;node.classList.toggle('on',index===at);node.setAttribute('aria-pressed',String(index===at));
+   node.setAttribute('aria-label',`전체 자료 ${index+1}쪽${value.page.source?.pageNumber?` · 원본 ${value.page.source.pageNumber}쪽`:''}`);
+   Object.assign(node.dataset,{materialPage:String(index),documentId:value.record.id});
+   if(value.record.id===O.record.id)node.dataset.slide=String(value.index);else delete node.dataset.slide;
+   node.querySelector('.cv-slide-no').textContent=String(index+1);
+   if(node.materialRendered!==value.page){node.querySelector('.cv-slide-view').replaceChildren(slideView(value.page,aspectOf(value.record),240));node.materialRendered=value.page;}
+   return node;
+  });
+  if(nodes.length!==rail.children.length||nodes.some((node,i)=>rail.children[i]!==node)){
+   O.stripDrag?.destroy();rail.replaceChildren(...nodes);
+   // Rebind only when the page set/order changes, never on selection.
+   for(const grip of rail.querySelectorAll('.cv-slide-grip'))grip.remove();
+   if(O.strip.dataset.materialLayout==='1')O.stripDrag=bindFilmstrip(rail,{reorder:(from,to)=>reorderStrip(O,from,to),busy:()=>O.closed||O.leaving||!!O.inlineImport||app.inert});
+  }
+  const count=O.strip.querySelector('.cv-slide-count');
+  count.textContent=`${at+1} / ${pages.length}쪽 · 전체 PPT`;
+  count.dataset.materialCount='';
+  if(!O.strip.querySelector('.cv-material-hint'))O.strip.append(el('span',{class:'cv-material-hint',text:'모든 쪽을 이어서 편집할 수 있어요. 변경은 이 기기에 자동 저장돼요.'}));
+  const selected=rail.querySelector('.on');
+  const key=`${O.record.id}:${O.at}`;
+  rail.scrollLeft=left;
+  if(selected&&O.materialScrollTarget!==key){const box=rail.getBoundingClientRect(),r=selected.getBoundingClientRect();rail.scrollLeft+=r.left<box.left+8?r.left-box.left-8:r.right>box.right-8?r.right-box.right+8:0;}
+  O.materialScrollTarget=key;
+}
+async function navigateMaterialPage(O,value) {
+  if(O.closed||O.leaving||O.inlineImport||moving||app.inert||hostFlush||videoBusy(O))return;
+  if(value.record.id===O.record.id){goSlide(O,value.index);return;}
+  O.leaving=true;app.inert=true;
+  const loading=materialLoading(O,{title:`${value.page.source?.pageNumber||value.index+1}쪽을 여는 중이에요`,detail:'지금 편집한 내용을 먼저 저장해요.'});
+  try{
+    await persistEditorAction(O);
+    const record=await getDesign(value.record.id);
+    if(!record)throw Error('DOCUMENT_NOT_FOUND');
+    const ready=migrateRecord(record);
+    if(ready.slides[value.index]?.id!==value.page.id)throw Error('DOCUMENT_CHANGED');
+    await tidyVideos(O.record.id,currentSlides(O));
+    // The editor's render normalization is not a saved draft. Keep the exact
+    // snapshot written by this editor as the CAS basis when another part later
+    // needs room for an activity/result. Foreign drafts must still conflict.
+    O.materialDeck.documents=O.materialDeck.documents.map(row=>row.id===O.record.id?structuredClone(O.persistedRecord):row);
+    clearTimeout(O.timer);clearTimeout(O.thumbTimer);O.editor.quiet();
+    O.persistedRecord=structuredClone(ready);O.record={...ready};delete O.record.slides;O.slides=ready.slides;O.at=value.index;
+    O.dirty=false;O.saved=true;O.localOk=true;O.accountOk=null;O.nameInput.value=ready.name;
+    setupApp(ready);markRatio(O,O.shapes);O.editor.setUploads(libraryOf(ready.uploads,ready.slides));O.editor.setDesign(O.slides[O.at]);
+    setStatus(O,accountFor(ready)?'저장돼 있어요':'이 기기에 저장돼 있어요');upsert(ready);renderStrip(O);
+  }catch{
+    if(!O.closed&&S.open===O){setStatus(O,'현재 쪽을 저장하거나 다음 쪽을 열지 못했어요. 편집은 그대로 유지돼요.','bad');toast('저장 상태를 확인한 뒤 다시 이동해주세요.',5000);}
+  }finally{loading.finish();O.leaving=false;if(!O.closed&&S.open===O)app.inert=false;}
 }
 // 지금 장의 작은 그림만 다시 그린다(꾸미는 동안 띠를 통째로 다시 그리지 않는다).
 function refreshThumb(O) {
   const box = O.strip?.querySelector(`.cv-slide[data-slide="${O.at}"] .cv-slide-view`);
-  if (!box || O.closed) return;
+  if (O.closed) return;
+  if(O.materialDeck){renderStrip(O);return;}
+  if (!box) return;
   const design = O.editor.getDesign();
-  box.replaceChildren(slideView(design, ratioOf(O.record.ratio).aspect));
+  box.replaceChildren(slideView(design, aspectOf(O.record)));
   const tile = box.closest('.cv-slide');
   tile.classList.toggle('moves', hasMotion(design));
   tile.classList.toggle('film', hasVideo(design));
@@ -712,12 +894,11 @@ function refreshThumb(O) {
 /** 다른 장으로 간다. 지금 장은 편집기에서 꺼내 두고, 그 장을 편집기에 끼운다(실행 취소 기록은 장마다 따로라 비워진다). */
 function goSlide(O, i) {
   if (O.closed || i === O.at || !O.slides[i] || videoBusy(O)) return;
-  const dir = i > O.at ? 1 : -1;
   O.slides[O.at] = O.editor.getDesign();
   O.at = i;
   O.editor.setDesign(O.slides[i]);
   renderStrip(O);
-  slideIn(stageCard(O), dir);            // 뒤의 장은 오른쪽에서, 앞의 장은 왼쪽에서 들어온다
+  // Selection is immediate; entrance motion belongs to presentation, not editing.
 }
 /** 슬라이드 목록을 바꾼다(더하기·복제·지우기·옮기기). change(slides, at) 는 [새 목록, 이어서 꾸밀 번호] 를 돌려준다. */
 function changeSlides(O, change) {
@@ -744,7 +925,7 @@ function applyMotionAll(O, motion) {
   const others = O.slides.length - 1;
   if (others < 1) { toast('아직 한 장뿐이에요. 새 장을 더하면 이 장의 움직임을 이어받아요.', 3500); return; }
   const same = slideMotion(motion);
-  O.slides = O.slides.map((d, i) => (i === O.at ? d : { bg: d.bg, items: d.items, ...slideVideo(d), ...same }));
+  O.slides = O.slides.map((d, i) => (i === O.at ? d : withSlideMotion(d, same)));
   // 다른 장까지 바꿨으므로 실행 취소로는 지금 장만 되돌아가 어긋난다. 되돌리기 기록을 비운다(모양을 바꿀 때와 같다).
   O.editor.forget();
   renderStrip(O);
@@ -753,20 +934,140 @@ function applyMotionAll(O, motion) {
   toast(`다른 ${others}장도 맞췄어요. 조합 효과: ${nameOf(COMBOS, same.pa)} · 전환 효과: ${nameOf(TRANSITIONS, same.tr)}`, 4000);
 }
 
+// Activities are local, typed page data. Both hosts use the same runtime and
+// pin a new material revision before acknowledging a result. No app URL opens.
+function updateActivityTools(O){
+  const edit=O.strip.querySelector('[data-edit-activity]');if(edit)edit.hidden=!O.editor.getDesign().activity;
+}
+function lessonPages(O){
+  if(O.materialLoadError)throw Error('PPT 전체 자료를 읽지 못했어요. 내 자료에서 다시 열어주세요.');
+  return O.materialDeck?materialPages(O):currentSlides(O).map((page,index)=>({record:{...O.record,slides:currentSlides(O)},page,index}));
+}
+function selectActivityRecord(O,record,pageId){
+  const ready=migrateRecord(record);O.persistedRecord=structuredClone(ready);O.record={...ready};delete O.record.slides;
+  O.slides=ready.slides;O.at=Math.max(0,ready.slides.findIndex(p=>p.id===pageId));
+  clearTimeout(O.timer);clearTimeout(O.thumbTimer);O.dirty=false;O.saved=true;O.localOk=true;
+  O.nameInput.value=ready.name;setupApp(ready);markRatio(O,O.shapes);
+  O.editor.setUploads(libraryOf(ready.uploads,ready.slides));O.editor.setDesign(O.slides[O.at]);
+  upsert(ready);renderStrip(O);setStatus(O,'활동과 결과를 이 기기에 저장했어요');
+}
+async function commitActivityDocument(O,document,pageOrder,selectedPageId,expectedDocument){
+  if(O.recoveryRequired)throw Error('전체 자료에는 저장했어요. 발표를 끝내고 내 자료에서 다시 열어주세요.');
+  if(O.materialDeck){
+    if(!materialNavigation?.saveActivity)throw Error('이 자료의 활동 저장 기능을 연결하지 못했어요.');
+    const deck=await materialNavigation.saveActivity({designId:document.id,materialRef:O.materialDeck.materialRef,document,pageOrder,expectedDocument});
+    O.materialDeck={...deck,documents:deck.documents.map(migrateRecord)};
+    const ready=O.materialDeck.documents.find(row=>row.id===document.id);
+    selectActivityRecord(O,ready,selectedPageId);
+    if(deck.recoveryRequired){O.recoveryRequired=true;O.localOk=false;O.shell.inert=true;clearTimeout(O.timer);clearTimeout(O.thumbTimer);O.dirty=false;toast('전체 자료에는 저장했어요. 다른 창의 초안을 보존하기 위해 편집을 마쳐요. 내 자료에서 고정 저장본을 확인해주세요.',8000);}
+    for(const warning of deck.warnings||[])toast(warning,6500);
+  }else{
+    const ready=await replaceDesignIfUnchanged(document,expectedDocument);
+    selectActivityRecord(O,ready,selectedPageId);if(accountFor(ready))pusher.queue(ready);
+  }
+}
+async function configureActivity(O,editing=false){
+  if(editing&&O.editor.getDesign().activity?.kind==='gai-app')return configureGaiActivity(O,true);
+  if(O.closed||O.leaving||O.inlineImport||O.activityBusy||videoBusy(O))return;
+  if(O.materialLoadingPromise)await O.materialLoadingPromise;
+  if(O.closed||S.open!==O||O.recoveryRequired)return;
+  if(O.materialLoadError){toast('PPT 전체 자료를 읽지 못했어요. 내 자료에서 다시 열어주세요.');return;}
+  clearTimeout(O.thumbTimer);
+  O.activityConfig?.remove();
+  const selected=O.editor.getDesign(),activity=editing?selected.activity:undefined;
+  if(editing&&!activity)return;
+  const host=el('section',{class:'cv-activity-config','aria-label':'픽셀아트 활동 만들기'});
+  const cancel=()=>{host.remove();if(O.activityConfig===host)O.activityConfig=null;};
+  host.append(createPixelArtSetup({activity,onCancel:cancel,onApply:async value=>{
+    if(O.closed||O.activityBusy)throw Error('현재 작업을 마친 뒤 다시 시도해주세요.');
+    O.activityBusy=true;app.inert=true;
+    try{
+      await persistEditorAction(O);
+      const entries=lessonPages(O),at=entries.findIndex(v=>v.page.id===selected.id);
+      if(at<0)throw Error('선택한 쪽이 바뀌었어요. 다시 선택해주세요.');
+      let record={...O.record,slides:currentSlides(O)};
+      if(!editing){
+        // Keep each existing part bounded and reserve room for its first result.
+        const candidates=O.materialDeck?[record,...O.materialDeck.documents.filter(row=>row.id!==record.id)]:[record];
+        record=candidates.find(row=>row.slides.length<=MAX_SLIDES-2&&new TextEncoder().encode(JSON.stringify(row)).length<500000);
+        if(!record)throw Error('활동과 결과를 넣을 공간이 부족해요. 새 그림에 활동을 만들어주세요. 기존 자료는 그대로예요.');
+      }
+      const page={...pixelArtCover(value,aspectOf(record),pixelArtImage(value)),id:editing?selected.id:newId('p'),
+        source:editing?selected.source:{kind:'local'},origin:editing?selected.origin:{documentId:O.record.id,pageId:selected.id,revision:O.record.revision},activity:value};
+      const slides=[...record.slides],ids=entries.map(v=>v.page.id);
+      if(editing)slides[slides.findIndex(p=>p.id===selected.id)]=page;
+      else{const local=slides.findIndex(p=>p.id===selected.id);slides.splice(local<0?slides.length:local+1,0,page);ids.splice(at+1,0,page.id);}
+      await commitActivityDocument(O,{...record,slides},ids,page.id,record.id===O.record.id?O.persistedRecord:record);cancel();
+      if(O.recoveryRequired)await closeDesign(O);
+    }finally{O.activityBusy=false;app.inert=false;}
+  }}));
+  O.activityConfig=host;O.shell.querySelector('.cv-canvas').append(host);
+  host.querySelector('input')?.focus({preventScroll:true});
+}
+
+async function configureGaiActivity(O,editing=false){
+  if(!appMaker||O.closed||O.leaving||O.inlineImport||O.activityBusy||videoBusy(O))return;
+  if(O.materialLoadingPromise)await O.materialLoadingPromise;
+  if(O.closed||S.open!==O||O.recoveryRequired)return;
+  if(O.materialLoadError){toast('PPT 전체 자료를 읽지 못했어요. 내 자료에서 다시 열어주세요.');return;}
+  try{await persistEditorAction(O);}catch{toast('현재 그림을 저장하지 못했어요. 저장 상태를 확인한 뒤 앱을 만들어주세요.');return;}
+  if(O.closed||S.open!==O)return;
+  clearTimeout(O.thumbTimer);O.activityConfig?.remove();
+  const selected=O.editor.getDesign(),activity=editing?selected.activity:undefined;
+  if(editing&&activity?.kind!=='gai-app')return;
+  const host=el('section',{class:'cv-activity-config','aria-label':'가이X 앱 만들기'});
+  const cancel=()=>{host.remove();if(O.activityConfig===host)O.activityConfig=null;};
+  const maker=createGaiMaker({provider:appMaker,activity,
+    context:gaiLessonContext(lessonPages(O),selected.id,O.materialDeck?.title||O.record.name),
+    draftKey:JSON.stringify([storageName(),O.record.id,selected.id,O.record.revision,editing?'edit':'new']),onCancel:cancel,
+    onApply:async value=>{
+      if(O.closed||O.activityBusy||S.open!==O)throw Error('현재 작업을 마친 뒤 다시 시도해주세요.');
+      O.activityBusy=true;app.inert=true;
+      try{
+        await persistEditorAction(O);
+        const entries=lessonPages(O),at=entries.findIndex(v=>v.page.id===selected.id);
+        if(at<0)throw Error('선택한 쪽이 바뀌었어요. 다시 선택해주세요.');
+        let record={...O.record,slides:currentSlides(O)};
+        const id=editing?selected.id:newId('p');
+        const makePage=row=>({...gaiAppCover(value,aspectOf(row)),id,source:editing?selected.source:{kind:'local'},origin:editing?selected.origin:{documentId:O.record.id,pageId:selected.id,revision:O.record.revision},activity:value});
+        const updated=row=>{
+          const slides=[...row.slides],page=makePage(row),local=slides.findIndex(p=>p.id===selected.id);
+          if(editing){if(local<0)throw Error('수정할 앱을 다시 선택해주세요.');slides[local]=page;}
+          else slides.splice(local<0?slides.length:local+1,0,page);
+          return {...row,slides};
+        };
+        if(!editing){
+          const candidates=O.materialDeck?[record,...O.materialDeck.documents.filter(row=>row.id!==record.id)]:[record];
+          record=candidates.find(row=>row.slides.length<=MAX_SLIDES-2&&new TextEncoder().encode(JSON.stringify(updated(row))).length<460000);
+          if(!record)throw Error('이 자료에 앱과 결과를 넣을 공간이 부족해요. 대화는 남아 있어요. 가이X에게 더 작은 앱으로 줄여 달라고 요청해주세요.');
+        }
+        const document=updated(record);
+        if(new TextEncoder().encode(JSON.stringify(document)).length>500000)throw Error('앱이 너무 커서 저장하지 않았어요. 더 작은 앱으로 줄여 달라고 요청해주세요.');
+        const ids=entries.map(v=>v.page.id);if(!editing)ids.splice(at+1,0,id);
+        await commitActivityDocument(O,document,ids,id,record.id===O.record.id?O.persistedRecord:record);cancel();
+        if(O.recoveryRequired)await closeDesign(O);
+      }finally{O.activityBusy=false;app.inert=false;}
+    }});
+  host.append(maker);const remove=host.remove.bind(host);host.remove=()=>{maker.dispose();remove();};
+  O.activityConfig=host;O.shell.querySelector('.cv-canvas').append(host);
+}
+
 // ---------- 발표: 화면 가득 한 장씩 보여 준다 ----------
 // 움직임(src/motion.js): 다음 장으로 갈 때 그 장의 전환 효과로 넘어오고, 이어서 요소들이 나타난다.
 // "누를 때" 나오는 요소가 있으면, 넘기는 글쇠·누르기가 먼저 그것을 하나씩 나타나게 하고, 다 나온 뒤에 다음 장으로 간다.
 // 앞 장으로 돌아갈 때는 그 장의 다 나온 모습을 보여 준다. 움직임을 줄여 달라고 해 둔 기기에서는 움직이지 않고 바로 보인다.
 // 영상 장면이 있는 장은 그 장이 열리면 영상이 소리와 함께 저절로 틀어지고(쓰는 구간만), 끝나면 마지막 모습에서 멈춘다.
 // 아래 막대의 단추로 멈추거나 다시 틀 수 있다. 다른 장으로 넘어가면 멈춘다.
-function present(O) {
-  if (videoBusy(O)) return;
+async function present(O) {
+  if (videoBusy(O)||O.activityBusy||O.inlineImport) return;
+  try{await persistEditorAction(O);if(O.materialLoadingPromise)await O.materialLoadingPromise;if(O.materialLoadError)throw O.materialLoadError;}catch{toast('전체 자료를 준비하지 못했어요. 저장 상태를 확인하고 내 자료에서 다시 열어주세요.');return;}
   stopTour();
   O.editor.quiet();          // 꾸미기 판에서 틀어 보던 영상을 멈추고 카메라를 끈다(발표 화면 뒤에서 소리가 나지 않게)
   // 그리는 것과 움직임의 차례가 같은 요소를 가리키도록, 정리한 디자인 하나로 둘 다 한다(그릴 때와 같은 방법으로 정리한다).
-  const slides = currentSlides(O).map((d) => cleanDesign(d, { keepSpaces: true }));
-  const aspect = ratioOf(O.record.ratio).aspect;
-  let i = O.at;
+  let entries=lessonPages(O),slides=entries.map(v=>cleanDesign(v.page,{keepSpaces:true}));
+  const aspect = aspectOf(O.record),working=new Map(),savedResults=new Map();
+  let i=Math.max(0,entries.findIndex(v=>v.page.id===O.editor.getDesign().id)),savingActivity=false,closed=false;
+  let pixel=null;
   let parts = null;          // 지금 장의 요소 움직임(조종기)
   let turning = null;        // 틀고 있는 전환 효과
   let leaving = null;        // 나가는 중인 장(전환이 끝나면 뗀다)
@@ -837,12 +1138,39 @@ function present(O) {
     leaving = null;
   };
   const draw = (dir = 0) => {
+    pixel?.destroy();pixel=null;
     settle();
     const design = slides[i];
-    const view = slideView(design, aspect, 1920);
+    const ar=aspectOf(entries[i].record);
+    overlay.style.setProperty('--cv-show-ratio',String(ar));
+    const view = slideView(design, ar, 1920);
     view.style.setProperty('--fe-card-radius', '0');
     const old = stage.firstElementChild;
     count.textContent = `${i + 1} / ${slides.length}`;
+    if(design.activity){
+      for(const n of [...stage.children])drop(n);film?.pause();for(const p of tube)p.pause();film=null;tube=[];markFilm();parts=null;
+      const host=el('section',{class:'cv-show-activity',dataset:{pixelApp:''}});stage.append(host);
+      const gai=design.activity.kind==='gai-app',activity=gai?{...design.activity,state:working.get(design.id)||design.activity.state}:{...design.activity,cells:working.get(design.id)||design.activity.cells};
+      pixel=(gai?mountGaiApp:mountPixelArt)(host,{activity,onChange:value=>working.set(design.id,value),onSave:async cells=>{
+        if(savingActivity||closed)return;
+        savingActivity=true;
+        try{
+          const signature=JSON.stringify([design.id,cells]),prior=savedResults.get(signature);
+          if(prior&&slides.some(p=>p.id===prior)){i=slides.findIndex(p=>p.id===prior);draw(1);return;}
+          const source=entries.find(v=>v.page.id===design.id),record=source.record.id===O.record.id?{...O.record,slides:currentSlides(O)}:source.record;
+          if(record.slides.length>=MAX_SLIDES)throw Error('이 활동의 저장 공간이 가득 찼어요. 이전 결과 쪽을 정리한 뒤 다시 저장해주세요.');
+          const updated=gai?cleanGaiActivity({...design.activity,state:cells.state}):{...design.activity,cells:[...cells]},result=gai?gaiAppResult(updated,cells,aspectOf(record)):pixelArtResult(updated,cells,aspectOf(record),pixelArtImage(updated));
+          result.origin={documentId:record.id,pageId:design.id,revision:record.revision};
+          const next=record.slides.map(p=>p.id===design.id?{...p,activity:updated}:p),index=next.findIndex(p=>p.id===design.id);
+          next.splice(index+1,0,result);const ids=entries.map(v=>v.page.id);ids.splice(ids.indexOf(design.id)+1,0,result.id);
+          await commitActivityDocument(O,{...record,slides:next},ids,result.id,record.id===O.record.id?O.persistedRecord:record);
+          working.set(design.id,gai?cells.state:[...cells]);savedResults.set(signature,result.id);
+          if(gai&&cells.imageOmitted)toast('앱 화면 그림은 생략하고 답과 진행 상태를 저장했어요.');
+          entries=lessonPages(O);slides=entries.map(v=>cleanDesign(v.page,{keepSpaces:true}));i=slides.findIndex(p=>p.id===result.id);draw(1);
+        }finally{savingActivity=false;}
+      }});
+      ease(host,[{opacity:0,transform:'scale(.965)'},{opacity:1,transform:'scale(1)'}],260);return;
+    }
     if (!dir || !old) {
       for (const n of [...stage.children]) drop(n);
       stage.append(view);
@@ -865,6 +1193,7 @@ function present(O) {
     parts = playDesign(view, design, { delay: turn.ms, still: dir < 0 });
   };
   const go = (step) => {
+    if(savingActivity)return;
     if (step > 0) {
       // 움직이는 중에 넘기면 그 움직임은 바로 끝낸다. 누를 때 나오는 것이 남아 있으면 그것부터 하나 나타나게 한다.
       settle();
@@ -881,6 +1210,7 @@ function present(O) {
     draw(step);
   };
   const onKey = (e) => {
+    if(e.target?.closest?.('.cv-show-activity')&&e.key!=='Escape')return;
     // 아래 막대의 단추에 초점이 있을 때 스페이스 · 엔터는 그 단추를 누르는 글쇠다(다음 장으로 넘기지 않는다).
     if ((e.key === ' ' || e.key === 'Enter') && e.target?.closest?.('.cv-show-key')) { e.stopPropagation(); return; }
     // K: 영상 장면을 멈추거나 다시 튼다(글쇠의 자리로 견준다. 한글 입력 상태에서도 듣게).
@@ -895,6 +1225,8 @@ function present(O) {
   };
   const onFull = () => { if (!document.fullscreenElement && overlay.dataset.full === '1') close(); };
   function close() {
+    if(savingActivity)return;
+    closed=true;pixel?.destroy();pixel=null;
     settle();
     clearTimeout(filmTimer);
     clearTimeout(tubeTimer);
@@ -906,8 +1238,9 @@ function present(O) {
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     overlay.remove();
     document.body.classList.remove('modal-open');
+    if(O.recoveryRequired)closeDesign(O);
   }
-  const overlay = el('div', { class: 'cv-show', role: 'dialog', 'aria-label': '발표 화면', tabindex: '-1', onClick: () => go(1) },
+  const overlay = el('div', { class: `cv-show${slides.some(page=>page.activity)?' cv-show-lesson':''}`, role: 'dialog', 'aria-label': '발표 화면', tabindex: '-1', onClick: e => {if(!e.composedPath().some(n=>n.classList?.contains('cv-show-activity')))go(1);} },
     stage,
     el('div', { class: 'cv-show-bar' }, btn(ic('left'), '앞 장', () => go(-1)), count, btn(ic('right'), '다음 장', () => go(1)), filmBtn, btn([ic('close'), '끝내기'], '발표 끝내기 (Esc)', close)));
   overlay.style.setProperty('--cv-show-ratio', String(aspect));
@@ -924,11 +1257,23 @@ function present(O) {
 
 function markRatio(O, shapes) {
   // 그림 칸은 이 비율로 남은 자리에 꼭 맞게 커진다(app.css 의 .cv-canvas).
-  const aspect = ratioOf(O.record.ratio).aspect;
+  const aspect = aspectOf(O.record);
+  const ratio = canvasRatioOf(O.record);
+  if (O.ratioLabel) {
+    O.ratioLabel.hidden = O.record.source?.kind !== 'pptx' && ratio.preset !== null;
+    O.ratioLabel.textContent = ratio.label;
+    O.ratioLabel.dataset.ratio = ratio.id;
+    O.ratioLabel.classList.toggle('on', ratio.preset === null);
+    O.ratioLabel.setAttribute('aria-current', String(ratio.preset === null));
+    const source = O.record.originalSize;
+    O.ratioLabel.title = ratio.original && source?.unit === 'emu'
+      ? `원본 슬라이드 크기 ${Number((source.width / 360000).toFixed(3))} × ${Number((source.height / 360000).toFixed(3))}cm`
+      : '저장된 슬라이드 크기의 정확한 가로·세로 비율이에요.';
+  }
   O.shell?.style.setProperty('--cv-aspect', String(aspect));
   if (O.shell) O.shell.dataset.shape = aspect >= 1.3 ? 'wide' : aspect < 0.7 ? 'tall' : 'even';       // 옆 칸의 템플릿 줄 수를 정한다(app.css)
   for (const b of shapes.querySelectorAll('.cv-shape')) {
-    const on = b.dataset.ratio === O.record.ratio;
+    const on = ratio.preset === b.dataset.ratio;
     b.classList.toggle('on', on);
     b.setAttribute('aria-pressed', String(on));
   }
@@ -949,6 +1294,8 @@ function setRatio(O, id, shapes) {
     if (O.closed) return;
     const before = settings().aspect;
     O.record.ratio = r.id;
+    const [width, height] = r.id.split(':').map(Number);
+    O.record.size = { width, height, unit: 'px' };
     keepRatio(r.id);
     markRatio(O, shapes);
     const after = O.editor.setAspect(r.aspect, { fit });       // 지금 장. 요소가 있으면 onChange → touched 로 저장이 걸린다
@@ -1001,7 +1348,7 @@ function setStatus(O, text, cls = '') {
   else if (cls === 'ok') { O.alert.textContent = ''; O.alert.hidden = true; }
 }
 function touched(O) {
-  if (O.closed) return;
+  if (O.closed||O.recoveryRequired) return;
   clearTimeout(O.thumbTimer);
   O.thumbTimer = setTimeout(() => refreshThumb(O), 300);
   O.dirty = true;
@@ -1009,15 +1356,16 @@ function touched(O) {
   clearTimeout(O.timer);
   O.timer = setTimeout(() => save(O), SAVE_DELAY);
 }
-async function save(O) {
+async function save(O, { preserveBlank = false } = {}) {
   clearTimeout(O.timer);
   O.timer = 0;
+  if(O.recoveryRequired)return true; // The fixed receipt must never overwrite a conflicting draft.
   if (!O.dirty || O.closed) return true;       // 닫은 뒤에는 저장하지 않는다(치운 편집기는 빈 그림을 돌려준다)
   const slides = currentSlides(O);
   // 올린 파일 목록도 함께 적는다(편집기가 들고 있는 목록 + 다른 장에서 쓰는 사진).
-  const record = { ...O.record, slides, uploads: libraryOf(O.editor.getUploads().map((u) => u.url), slides), updatedAt: Date.now(), synced: false };
+  const record = { ...O.record, revision: ++O.record.revision, slides, uploads: libraryOf(O.editor.getUploads().map((u) => u.url), slides), updatedAt: Date.now(), synced: false };
   // 아직 아무것도 놓지 않은 새 그림은 저장하지 않는다(빈 그림이 목록에 쌓이지 않게).
-  if (!O.saved && isBlank(record)) { O.dirty = false; setStatus(O, '꾸미기 시작하면 저절로 저장돼요'); return true; }
+  if (!preserveBlank && !O.saved && isBlank(record)) { O.dirty = false; setStatus(O, '꾸미기 시작하면 저절로 저장돼요'); return true; }
   O.dirty = false;
   let ok = true;
   let kept = record;
@@ -1025,6 +1373,7 @@ async function save(O) {
   O.putting = put.catch(() => {});             // 나갈 때 이 저장이 끝났는지 기다릴 수 있게 둔다
   try {
     kept = await put;
+    O.persistedRecord=structuredClone(kept);
     O.saved = true;
   } catch (ex) {
     console.error(ex);
@@ -1033,8 +1382,8 @@ async function save(O) {
   O.localOk = ok;                              // 이 기기에 적혔는지(영상 파일을 정리해도 되는지 볼 때 쓴다)
   if (ok) {
     upsert(kept);
-    if (pusher) pusher.queue(kept);
-    if (!O.dirty) setStatus(O, pusher ? '이 기기에 저장했어요 · 계정에 올리는 중…' : '이 기기에 저장했어요', 'ok');
+    if (accountFor(kept)) pusher.queue(kept);
+    if (!O.dirty) setStatus(O, accountFor(kept) ? '이 기기에 저장했어요 · 계정에 올리는 중…' : '이 기기에 저장했어요', 'ok');
     return true;
   }
   O.dirty = true;
@@ -1056,7 +1405,10 @@ async function leaveEditor(O, { requireSaved = false, waitForSync = false } = {}
   // 그 그림은 지우려던 영상을 아직 쓰고 있을 수 있다.
   if (ok && !O.dirty && O.localOk !== false) await tidyVideos(O.record.id, currentSlides(O));
   O.closed = true;
-  if (pusher) {
+  O.activityConfig?.remove();O.activityConfig=null;
+  O.materialLoading?.dispose();
+  O.stripDrag?.destroy();
+  if (accountFor(O.record)) {
     const uploading = pusher.flush(O.record.id);
     if (waitForSync) await uploading;            // 바깥 화면으로 가면 이 앱이 닫히므로 올리기까지 기다린다
   }
@@ -1102,6 +1454,233 @@ async function closeToHost(O, btn) {
     app.inert = false;
   }
 }
+
+/** Import navigation is opt-in. Keep the existing editor intact until local and
+ * account persistence have both succeeded; never drop a new blank drawing. */
+async function persistEditorAction(O) {
+  if (O.putting) await O.putting;
+  if (O.closed || S.open !== O) throw new Error('EDITOR_BUSY');
+  if (!O.saved) O.dirty = true;
+  let ok = await save(O, {preserveBlank: true});
+  if (O.dirty) ok = await save(O, {preserveBlank: true});
+  if (!ok || O.dirty || O.localOk === false) throw new Error('EDITOR_SAVE_FAILED');
+  const saved = await getDesign(O.record.id);
+  if (!saved) throw new Error('DOCUMENT_NOT_FOUND');
+  if (accountFor(saved)) {
+    // Background flush absorbs errors; observe this exact saved revision's result.
+    await pusher.flush(saved.id);
+    O.accountOk = null; pusher.queue(saved); await pusher.flush(saved.id);
+    if (O.accountOk !== true) throw new Error('EDITOR_SYNC_FAILED');
+  }
+  if (O.closed || S.open !== O) throw new Error('EDITOR_BUSY');
+  return saved;
+}
+
+async function saveMaterialFromEditor(O) {
+  if (!materialAction || S.open !== O || O.closed || O.inlineImport || O.leaving || moving || app.inert || hostFlush || videoBusy(O)) return;
+  try { if (materialAction.accepts && !materialAction.accepts(O.record)) return; } catch { return; }
+  const focus = app.contains(document.activeElement) ? document.activeElement : null;
+  O.leaving = true; app.inert = true;
+  try {
+    await persistEditorAction(O);
+    await materialAction.open({designId: O.record.id, slideIndex: O.at});
+    // The host may have committed a new fixed revision. Refresh only the rail
+    // context so the next reorder uses that revision without clearing undo.
+    if(S.open===O&&!O.closed)await loadMaterialNavigation(O);
+  } catch (error) {
+    const note = error?.message === 'EDITOR_SYNC_FAILED'
+      ? '계정에 올리지 못했어요. 이 기기의 그림은 저장했고, 전체 자료 저장은 진행하지 않았어요.'
+      : '전체 자료에 저장하지 못했어요. 현재 그림은 그대로 있으니 저장 상태를 확인하고 다시 시도해주세요.';
+    if (S.open === O && !O.closed) setStatus(O, note, 'bad');
+    toast(note, 5000);
+  } finally {
+    O.leaving = false;
+    if (S.open === O && !O.closed) {
+      app.inert = false;
+      const target = focus?.isConnected ? focus : O.shell.querySelector('[data-material-action]');
+      if (target && document.activeElement === document.body && document.hasFocus()) {
+        try { target.focus({preventScroll: true}); } catch { /* Keep the save result. */ }
+      }
+    }
+  }
+}
+
+async function importFromEditor(O) {
+  if (!importAction?.editorLabel || S.open !== O || O.closed || O.inlineImport || O.leaving || moving || app.inert || hostFlush || videoBusy(O)) return;
+  const context = { from: 'editor', designId: O.record.id, slideIndex: O.at };
+  const previousFocus = app.contains(document.activeElement) ? document.activeElement : null;
+  let left = false, restored = false;
+  O.leaving = true; app.inert = true;
+  try {
+    const saved = await persistEditorAction(O);
+    if (importAction.editorMode === 'inline') {
+      await openInlineImport(O, context);
+      return;
+    }
+    if (!await leaveEditor(O, { requireSaved: true })) throw new Error('EDITOR_SAVE_FAILED');
+    left = true;
+    try { S.list = await listDesigns(); } catch { upsert(saved); }
+    S.phase = 'home'; render();
+    await importAction.open(context);
+  } catch (error) {
+    if (left && !S.open && !moving && S.phase === 'home') {
+      try { await openSavedDesign(context.designId, { slideIndex: context.slideIndex, tab: 'upload' }); restored = true; }
+      catch { /* The persisted drawing remains in the home library for recovery. */ }
+    }
+    const note = error?.message === 'EDITOR_SYNC_FAILED'
+      ? '계정에 올리지 못했어요. 이 기기의 그림은 저장했고, 편집 화면을 유지했어요. 다시 시도해주세요.'
+      : left ? restored ? '가져오기 화면을 열지 못했어요. 저장한 그림으로 돌아왔어요.' : '가져오기 화면을 열지 못했어요. 그림은 내 그림에 저장돼 있어요.'
+      : '지금 그림을 저장하지 못해 가져오기로 이동하지 않았어요. 다시 시도해주세요.';
+    if (S.open === O) setStatus(O, note, 'bad');
+    toast(note, 5000);
+  } finally {
+    O.leaving = false;
+    if (S.open === O && !O.closed) {
+      app.inert = false;
+      if (previousFocus?.isConnected && document.activeElement === document.body && document.hasFocus()) {
+        try { previousFocus.focus({ preventScroll: true }); } catch { /* Preserve the persistence result. */ }
+      }
+    }
+  }
+}
+
+/** The host owns conversion; the editor owns its shell and the saved drawing.
+ * No navigation/home render occurs while a host imports inside My materials. */
+async function openInlineImport(O, context) {
+  const work = O.shell.querySelector('.cv-work');
+  const protectedNodes = [O.shell.querySelector('.cv-bar'), O.shell.querySelector('.cv-side')];
+  const readonlyInputs = protectedNodes.flatMap(node => [...node.querySelectorAll('input:not([type=file]),textarea')].map(input => [input, input.readOnly]));
+  const previousChildren = [...work.children].map(node => [node, node.hidden]);
+  const previousFocus = document.activeElement;
+  const back = el('button', {class: 'btn btn-ghost', type: 'button', disabled: true, dataset: {inlineImportClose: ''}}, ...face('back', '편집으로 돌아가기'));
+  const outlet = el('div', {class: 'cv-inline-import-body'});
+  const header = el('header', {class: 'cv-inline-import-header'},
+    el('div', {}, el('small', {text: '내 자료 / PPT'}), el('h2', {text: '내 PPT 가져오기'})), back);
+  const region = el('section', {class: 'cv-inline-import', role: 'region', 'aria-label': '내 자료 · PPT 가져오기', dataset: {inlineImport: ''}}, header, outlet);
+  const session = {controller: null, disposed: false, closing: false, navigating: false};
+  O.inlineImport = session;
+  O.editor.quiet();
+  // Keep navigation available, but do not mutate the drawing before the provider
+  // has accepted the transition (saving/partial work can refuse or suspend it).
+  for (const [input] of readonlyInputs) input.readOnly = true;
+  for (const [node] of previousChildren) node.hidden = true;
+  O.shell.classList.add('inline-importing'); work.append(region); app.inert = false;
+  const controlFor = event => {
+    const target = event.target instanceof Element ? event.target.closest('button,a,input,select,textarea,summary') : null;
+    return target && protectedNodes.some(node => node.contains(target)) ? target : null;
+  };
+  const releaseControls = () => {
+    O.shell.removeEventListener('pointerdown', guardPointer, true);
+    O.shell.removeEventListener('click', guardClick, true);
+    O.shell.removeEventListener('focusin', guardFocus, true);
+    readonlyInputs.forEach(([input, readonly]) => { input.readOnly = readonly; });
+  };
+  const replayControl = target => {
+    if (target.matches('.fe-tab[data-tab]')) {
+      const tab = target.dataset.tab;
+      return () => O.editor.openTab(tab);
+    }
+    const base = protectedNodes.find(node => node.contains(target)), path = [];
+    let cursor = target;
+    while (cursor && cursor !== base) { path.unshift([...cursor.parentElement.children].indexOf(cursor)); cursor = cursor.parentElement; }
+    const signature = node => node && [node.tagName, node.getAttribute('type'), node.getAttribute('aria-label'), node.textContent].join('|');
+    const expected = signature(target);
+    return () => {
+      let current = base;
+      for (const index of path) current = current?.children[index];
+      // refresh() rebuilds sidebar controls. Replay only the identical control,
+      // never a neighbouring action at the same position after a host change.
+      if (!current?.isConnected || current.disabled || signature(current) !== expected) return;
+      if (current.matches('input:not([type=file]),textarea,select')) current.focus({preventScroll: true});
+      else current.click();
+    };
+  };
+  const request = async (details, replay) => {
+    if (session.closing || session.disposed || session.navigating || !session.controller) return;
+    session.navigating = true;
+    try {
+      const accepted = typeof session.controller.requestClose === 'function'
+        ? await session.controller.requestClose(details) : (await close(), true);
+      if (accepted !== false && O.inlineImport !== session && S.open === O && !O.closed) replay?.();
+    } catch { toast('작업 상태를 확인하지 못했어요. 잠시 뒤 다시 눌러주세요.'); }
+    finally { session.navigating = false; }
+  };
+  const guardPointer = event => { if (controlFor(event)) event.preventDefault(); };
+  const guardClick = event => {
+    const target = controlFor(event); if (!target) return;
+    event.preventDefault(); event.stopImmediatePropagation();
+    if (target.matches('[data-document-import]')) return;
+    const action = target.dataset.tab ? `tool:${target.dataset.tab}` : target.dataset.uploadTab ? `upload:${target.dataset.uploadTab}` : target.matches('.cv-back') ? 'home' : target.matches('[data-material-action]') ? 'material' : 'control';
+    void request({reason: 'navigate', action}, replayControl(target));
+  };
+  const guardFocus = event => {
+    const target = controlFor(event);
+    if (target?.matches('input:not([type=file]),textarea,select')) void request({reason: 'navigate', action: 'field'}, replayControl(target));
+  };
+  O.shell.addEventListener('pointerdown', guardPointer, true);
+  O.shell.addEventListener('click', guardClick, true);
+  O.shell.addEventListener('focusin', guardFocus, true);
+  const dispose = async () => {
+    if (session.disposed) return;
+    session.disposed = true;
+    await session.controller?.dispose?.();
+  };
+  const restore = () => {
+    region.remove();
+    previousChildren.forEach(([node, hidden]) => { node.hidden = hidden; });
+    releaseControls();
+    O.shell.classList.remove('inline-importing');
+    if (O.inlineImport === session) O.inlineImport = null;
+    if (S.open === O && !O.closed) {
+      setupApp(O.record); O.editor.refresh();
+      if (previousFocus?.isConnected && !previousFocus.disabled) previousFocus.focus({preventScroll: true});
+      else O.editor.panel.querySelector('[data-document-import]')?.focus({preventScroll: true});
+    }
+  };
+  const close = async () => {
+    if (session.closing || session.disposed) return;
+    session.closing = true; back.disabled = true;
+    try { await dispose(); } finally { restore(); }
+  };
+  const openImported = async (id, {slideIndex = 0, tab = 'upload'} = {}) => {
+    if (session.closing || session.disposed || S.open !== O) throw new Error('EDITOR_BUSY');
+    // Read and validate before replacing any active DOM. A failed host write
+    // leaves the previous editor and its undo stack available for cancellation.
+    const record = await getDesign(id);
+    if (!record) throw new Error('DOCUMENT_NOT_FOUND');
+    const ready = migrateRecord(record);
+    if (session.closing || session.disposed || S.open !== O) throw new Error('EDITOR_BUSY');
+    session.closing = true; back.disabled = true;
+    try {
+      if (!await leaveEditor(O, {requireSaved: true})) throw new Error('EDITOR_SAVE_FAILED');
+      S.phase = 'home'; // Internal readiness only: never render or emit the home view.
+      await dispose();
+      releaseControls();
+      upsert(ready); openDesign(ready, false);
+      if (Number.isSafeInteger(slideIndex) && slideIndex > 0 && slideIndex < S.open.slides.length) goSlide(S.open, slideIndex);
+      if (typeof tab === 'string') S.open.editor.openTab(tab);
+    } catch (error) {
+      session.closing = false;
+      if (!O.closed) back.disabled = false;
+      else if (!S.open) {
+        // Recovery stays in the editor even when a host disposer rejects.
+        await openSavedDesign(context.designId, {slideIndex: context.slideIndex, tab: 'upload'});
+      }
+      throw error;
+    }
+  };
+  back.addEventListener('click', async () => {
+    await request({reason: 'return'});
+  });
+  try {
+    const controller = await importAction.open({...context, inline: {root: outlet, close, openDesign: openImported}});
+    session.controller = controller || {};
+    if (session.disposed) await session.controller.dispose?.();
+    else { back.disabled = false; outlet.querySelector('button:not(:disabled),input:not(:disabled)')?.focus({preventScroll: true}); }
+  } catch (error) {
+    await dispose().catch(() => {}); restore(); throw error;
+  }
+}
 async function closeDesign(O, btn = null) {
   if (O.closed || moving || videoBusy(O)) return;
   // 저장하지 못했으면 바로 나가지 않는다(나가면 그림이 사라진다). 한 번 더 누르면 그래도 나간다.
@@ -1126,15 +1705,13 @@ async function closeDesign(O, btn = null) {
     app.querySelector(`.cv-item[data-id="${id}"] .cv-thumb .fe-card`)?.classList.add('cv-moving');
   }, 'close');
 }
-// ---------- 내려받기: 크기 · 파일 종류(그림 · 영상) · (여러 장이면) 이 장만 / 모든 장 · (영상이면) 머무는 시간 ----------
+// ---------- 내려받기: 파일 형식 → 범위 → 형식별 옵션 → 명시 실행 ----------
 function exportPref() {
   let p = {};
   try { p = JSON.parse(localStorage.getItem(EXPORT_KEY)) || {}; } catch { /* 기억해 둔 것이 없다 */ }
   return {
     size: EXPORT_SIZES.some((x) => x.id === p.size) ? p.size : DEFAULT_EXPORT, jpg: p.jpg === true, all: p.all === true,
     video: p.video === true, vsize: VIDEO_SIZES.some((x) => x.id === p.vsize) ? p.vsize : DEFAULT_VIDEO, stay: STAYS.includes(p.stay) ? p.stay : DEFAULT_STAY,
-    // 골라 본 적이 있는지(없으면 "추천", 있으면 "지난번"이라고 알려 준다)
-    pickedSize: EXPORT_SIZES.some((x) => x.id === p.size), pickedVideo: VIDEO_SIZES.some((x) => x.id === p.vsize),
   };
 }
 // 고른 것을 기억한다(그림과 영상의 것을 한곳에 두므로, 바뀐 것만 덮어쓴다).
@@ -1150,16 +1727,16 @@ const NO_VIDEO = '이 브라우저에서는 영상으로 만들 수 없어요. �
 function askDownload(O, btn) {
   if (videoBusy(O)) return;
   O.editor.quiet();          // 틀어 보던 영상을 멈춘다(창 뒤에서 소리가 나지 않게)
-  const aspect = ratioOf(O.record.ratio).aspect;
+  const aspect = aspectOf(O.record);
   const n = O.slides.length;
   const pref = exportPref();
   const can = canMakeVideo();
-  const pick = { kind: pref.video && can ? 'video' : pref.jpg ? 'jpg' : 'png', all: pref.all && n > 1, stay: pref.stay };
+  const pick = { kind: pref.video && can ? 'video' : pref.jpg ? 'jpg' : 'png', all: pref.all && n > 1, stay: pref.stay, pptxMode: 'editable', size: pref.size, vsize: pref.vsize };
   // 장마다 바탕에 깐 영상이 있는지: ''(없다) · 'yes'(있다) · 'gone'(있는데 그 파일이 이 기기에 없다. 조금 뒤에 알게 된다)
   const scenes = currentSlides(O).map((d) => (hasVideo(d) ? 'yes' : ''));
   currentSlides(O).forEach((d, i) => {
     const src = slideVideo(d).video?.src;
-    if (src) sceneUrl(src).then((url) => { if (!url) { scenes[i] = 'gone'; if (options.isConnected) draw(); } });
+    if (src) sceneUrl(src).then((url) => { if (!url) { scenes[i] = 'gone'; if (body.isConnected) draw(); } });
   });
   // 바탕에 깐 영상을 움직이는 채로 · 소리와 함께 담을 수 있는 브라우저인지(아니면 첫 모습의 멈춘 그림으로 담긴다).
   const live = canFilmScenes();
@@ -1180,73 +1757,129 @@ function askDownload(O, btn) {
     if (scenes[i] === 'gone') delete clean.video;
     return clean;
   }), { stay, scenes: live }).ms;
-  const lead = el('p', { class: 'muted' });
-  const sizes = el('div', { class: 'cv-sizes' });
-  const options = el('div', { class: 'cv-down-options' });
+  const lead = el('p', { class: 'muted', text: '파일 형식과 저장할 쪽을 고른 뒤 내려받으세요.' });
+  const body = el('div', { class: 'cv-down-body' });
+  const summaryTitle = el('b');
+  const summaryDetail = el('small');
+  const submit = el('button', { class: 'btn btn-primary cv-down-submit', type: 'button', 'data-download-save': '', onClick: () => {
+    // 옵션을 고를 때는 만들지 않는다. 마지막 단추에서만 현재 선택을 실행한다.
+    if (pick.kind === 'pptx') { makePptx(O, {all: pick.all, mode: pick.pptxMode}); return; }
+    if (pick.kind === 'html') { makeHtmlLesson(O); return; }
+    if (pick.kind === 'video' && (!can || filmMs(pick.stay) > MAX_FILM_SECONDS * 1000)) return;
+    closeModal();
+    if (pick.kind === 'video') {
+      rememberExport({video: true, vsize: pick.vsize, stay: pick.stay});
+      makeVideo(O, {vsize: pick.vsize, stay: pick.stay});
+    } else {
+      rememberExport({size: pick.size, jpg: pick.kind === 'jpg', all: pick.all, video: false});
+      download(O, btn, {size: pick.size, jpg: pick.kind === 'jpg', all: pick.all});
+    }
+  } });
+  const box = el('div', {class: 'cv-down-ask'},
+    el('div', {class: 'cv-down-head'}, el('h2', {id: 'cv-download-title', text: '내려받기'}), lead), body,
+    el('div', {class: 'cv-down-footer'},
+      el('div', {class: 'cv-down-summary', role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true'}, summaryTitle, summaryDetail),
+      el('div', {class: 'cv-down-actions'}, el('button', {class: 'btn btn-ghost cv-down-cancel', type: 'button', onClick: closeModal}, '취소'), submit)));
   const set = (changes) => {
-    // 다시 그려도 누르던 단추에 그대로 있게 한다(글쇠로 고르는 사람이 길을 잃지 않게).
-    const at = document.activeElement?.closest?.('.cv-down-options .chip')?.dataset;
     Object.assign(pick, changes);
     draw();
-    if (at) options.querySelector(Object.entries(at).map(([k, v]) => `.chip[data-${k}="${v}"]`).join(''))?.focus();
   };
   const chip = (label, on, onClick, data, more = {}) => el('button', { class: `btn chip${on ? ' on' : ''}`, type: 'button', 'aria-pressed': String(on), dataset: data, onClick, ...more }, label);
-  const row = (label, ...chips) => el('div', { class: 'cv-down-row' }, el('span', { class: 'cv-down-label', text: label }), el('div', { class: 'cv-down-chips' }, ...chips));
-  const sizeButton = ({ id, name, desc, width, height, last, note, onPick, off = false }) => el('button', { class: `cv-size${last ? ' last' : ''}`, type: 'button', dataset: { size: id }, onClick: onPick, ...(off ? { disabled: true } : {}) },
+  const section = (label, ...children) => el('fieldset', {class: 'cv-down-section'}, el('legend', {class: 'cv-down-heading', text: label}), ...children);
+  const choice = (className, name, desc, on, data, changes, more = {}) => el('button', {
+    class: className, type: 'button', 'aria-pressed': String(on), dataset: data, onClick: () => set(changes), ...more,
+  }, el('b', {text: name}), el('small', {text: desc}));
+  const sizeButton = ({ id, name, desc, width, height, last, note, onPick }) => el('button', { class: `cv-size${last ? ' last' : ''}`, type: 'button', 'aria-pressed': String(last), dataset: { size: id }, onClick: onPick },
     el('b', { text: name }), el('span', { class: 'cv-size-px', text: `${width} × ${height}` }), el('small', { text: desc }),
     note ? el('span', { class: 'cv-size-last', text: note }) : null);
   const imageSizes = () => EXPORT_SIZES.map((size) => sizeButton({
-    ...size, ...exportSize(size.id, aspect), last: size.id === pref.size, note: size.id !== pref.size ? '' : pref.pickedSize ? '지난번' : '추천',
-    onPick: () => {
-      closeModal();
-      rememberExport({ size: size.id, jpg: pick.kind === 'jpg', all: pick.all, video: false });
-      download(O, btn, { size: size.id, jpg: pick.kind === 'jpg', all: pick.all });
-    },
+    ...size, ...exportSize(size.id, aspect), last: size.id === pick.size, note: size.id === DEFAULT_EXPORT ? '추천' : '',
+    onPick: () => set({size: size.id}),
   }));
-  // 영상의 크기: 지난번에 고른 것에 테두리를 두르되, 추천하는 크기(글자가 또렷한 쪽)는 늘 알려 준다
-  // (지난번에 작은 것을 골랐더라도 더 좋은 쪽이 있다는 것이 보이게).
-  const videoSizes = (off) => VIDEO_SIZES.map((size) => sizeButton({
-    ...size, ...videoSize(aspect, size.short), last: size.id === pref.vsize, off,
-    note: pref.pickedVideo && size.id === pref.vsize ? '지난번' : size.id === DEFAULT_VIDEO ? '추천' : '',
-    onPick: () => {
-      closeModal();
-      rememberExport({ video: true, vsize: size.id, stay: pick.stay });
-      makeVideo(O, { vsize: size.id, stay: pick.stay });
-    },
+  const videoSizes = () => VIDEO_SIZES.map((size) => sizeButton({
+    ...size, ...videoSize(aspect, size.short), last: size.id === pick.vsize, note: size.id === DEFAULT_VIDEO ? '추천' : '',
+    onPick: () => set({vsize: size.id}),
   }));
   const draw = () => {
+    // 누른 단추와 스크롤 위치를 유지한다. 비동기 영상 확인도 선택을 방해하지 않는다.
+    const active = body.contains(document.activeElement) ? {...document.activeElement.dataset} : null;
+    const scrollTop = body.scrollTop;
     const video = pick.kind === 'video';
-    lead.textContent = !video ? '크기를 누르면 바로 내려받아요. 클수록 또렷하지만 파일이 커져요.'
-      : scenes.some(Boolean) && !live ? '크기를 누르면 영상을 만들기 시작해요. 글과 조각이 발표할 때처럼 움직여요.'
-        : '크기를 누르면 영상을 만들기 시작해요. 발표할 때처럼 움직이는 영상이 돼요.';
-    // 영상은 모든 장을 차례로 담는다. 너무 길면(한도를 넘으면) 만들지 않는다: 크기 단추를 잠그고 까닭을 알려 준다.
+    const pptx = pick.kind === 'pptx';
+    const html=pick.kind==='html';
+    const scopeN=(pptx||html)&&O.materialDeck?O.materialDeck.documents.reduce((total,row)=>total+(row.id===O.record.id?O.slides.length:row.slides.length),0):n;
+    const scopeAt=pptx&&O.materialDeck?materialPages(O).findIndex(value=>value.record.id===O.record.id&&value.index===O.at):O.at;
     const ms = video ? filmMs(pick.stay) : 0;
     const long = ms > MAX_FILM_SECONDS * 1000;
-    sizes.classList.toggle('two', video);
-    sizes.replaceChildren(...(video ? videoSizes(long) : imageSizes()));
-    const rows = [row('파일 종류',
-      chip('PNG · 또렷하게', pick.kind === 'png', () => set({ kind: 'png' }), { type: 'png' }),
-      chip('JPG · 용량 작게', pick.kind === 'jpg', () => set({ kind: 'jpg' }), { type: 'jpg' }),
-      chip('영상 · 움직임까지', video, () => set({ kind: 'video' }), { type: 'video' }, can ? {} : { disabled: true, title: NO_VIDEO }))];
+    const rows = [section('파일 형식', el('div', {class: 'cv-down-formats'},
+      choice('cv-down-format', 'PNG', '또렷한 그림', pick.kind === 'png', {type: 'png'}, {kind: 'png'}),
+      choice('cv-down-format', 'JPG', '용량이 작은 그림', pick.kind === 'jpg', {type: 'jpg'}, {kind: 'jpg'}),
+      choice('cv-down-format', 'PPTX', 'PowerPoint 파일', pptx, {type: 'pptx'}, {kind: 'pptx'}),
+      choice('cv-down-format', 'HTML 수업', '슬라이드와 활동을 함께 실행', html, {type: 'html'}, {kind: 'html'}),
+      choice('cv-down-format', '영상', '움직임까지 담기', video, {type: 'video'}, {kind: 'video'}, can ? {} : {disabled: true, title: NO_VIDEO})))];
+    rows.push(section('저장할 쪽', html?el('p',{class:'cv-down-note',text:`전체 ${scopeN}쪽과 픽셀아트 활동을 한 HTML 파일로 담아요.`}):video
+      ? el('p', {class: 'cv-down-note', text: `모든 장 (${n}장)을 순서대로 영상 하나에 담아요.`})
+      : scopeN > 1 ? el('div', {class: 'cv-down-chips'},
+        chip(`지금 장 (${scopeAt + 1}번째)`, !pick.all, () => set({all: false}), {scope: 'one'}),
+        chip(`모든 장 (${scopeN}장)`, pick.all, () => set({all: true}), {scope: 'all'}))
+        : el('p', {class: 'cv-down-note', text: '지금 장 (1장)'})));
+    if (pptx) rows.push(section('PPTX 방식', el('div', {class: 'cv-down-modes'},
+      choice('cv-down-mode', '편집형', '글·기본 도형·사진을 따로 수정해요.', pick.pptxMode === 'editable', {pptx: 'editable'}, {pptxMode: 'editable'}),
+      choice('cv-down-mode', '이미지형', '화면 모습을 한 장의 그림으로 담아요.', pick.pptxMode === 'image', {pptx: 'image'}, {pptxMode: 'image'})),
+      el('p', {class: 'cv-down-note', text: pick.pptxMode === 'editable'
+        ? '지원하지 않는 조각은 개별 이미지로 담아요. 글꼴 파일은 포함하지 않아 여는 기기에 해당 글꼴이 필요해요.'
+        : '글이나 요소를 따로 수정하기는 어려워요.'}),
+      el('p', {class: 'cv-down-note', text: '영상과 움직임은 정지한 모습으로 담아요.'})));
+    else if(html)rows.push(el('p',{class:'cv-down-note',text:'브라우저에서 같은 화면으로 슬라이드와 픽셀아트를 실행해요. 일반 슬라이드는 그림으로, 영상·움직임은 정지한 모습으로 담아요. 만든 결과를 포함해 HTML을 다시 내려받을 수 있어요.'}));
+    else rows.push(section(video ? '영상 화질' : '이미지 화질',
+      el('p', {class: 'cv-down-note', text: '클수록 또렷하지만 파일 용량이 커져요.'}),
+      el('div', {class: `cv-sizes${video ? ' two' : ''}`}, ...(video ? videoSizes() : imageSizes()))));
     if (video) {
       // 한 장이 얼마나 머무는지만 고른다(바탕에 영상을 깐 장은 그 영상이 끝날 때까지 이어진다).
-      rows.push(row('한 장에', ...STAYS.map((sec) => chip(`${sec}초`, pick.stay === sec, () => set({ stay: sec }), { stay: String(sec) }))));
-      rows.push(el('p', { class: 'cv-down-note', text: `${n > 1 ? `${n}장 모두 · ` : ''}영상 길이 약 ${secondsText(ms)}` }));
+      rows.push(section('장마다 머무는 시간', el('div', {class: 'cv-down-chips'}, ...STAYS.map((sec) => chip(`${sec}초`, pick.stay === sec, () => set({stay: sec}), {stay: String(sec)}))),
+        el('p', {class: 'cv-down-note', text: '바탕에 깐 영상이 있는 장은 그 영상이 끝날 때까지 이어져요.'})));
       if (long) rows.push(el('p', { class: 'cv-down-note warn', role: 'status', text: `영상은 ${MAX_FILM_SECONDS / 60}분까지 만들 수 있어요. 바탕에 깐 영상의 쓸 구간을 줄이거나, 장을 나눠 따로 만들어요.` }));
       // 바탕에 깐 영상이 어떻게 담기는지 미리 알려 준다(멈춘 그림으로 담기거나 빠지는 것이 있을 때는 눈에 띄게).
       const note = sceneNote(scenes, true);
       if (note) rows.push(el('p', { class: `cv-down-note${live && !scenes.includes('gone') ? '' : ' warn'}`, text: note }));
-    } else if (n > 1) {
-      rows.push(row('어느 장',
-        chip(`지금 장 (${O.at + 1}번째)`, !pick.all, () => set({ all: false }), { scope: 'one' }),
-        chip(`모든 장 (${n}장 · 압축 파일)`, pick.all, () => set({ all: true }), { scope: 'all' })));
     }
     if (!video && sceneNote(pick.all ? scenes : [scenes[O.at]], false)) rows.push(el('p', { class: 'cv-down-note', text: sceneNote(pick.all ? scenes : [scenes[O.at]], false) }));
     if (!can) rows.push(el('p', { class: 'cv-down-note', text: NO_VIDEO }));
-    options.replaceChildren(...rows);
+    body.replaceChildren(...rows);
+    body.scrollTop = scrollTop;
+    if (active && Object.keys(active).length) body.querySelector(Object.entries(active).map(([k, v]) => `button[data-${k}="${v}"]`).join(''))?.focus({preventScroll: true});
+    const range = video || html || pick.all ? `모든 장 ${scopeN}장` : `지금 장 (${scopeAt + 1}/${scopeN})`;
+    const label = video ? '영상' : pptx ? `PPTX ${pick.pptxMode === 'editable' ? '편집형' : '이미지형'}` : pick.kind.toUpperCase();
+    summaryTitle.textContent = `${label} · ${range}`;
+    const px = video ? videoSize(aspect, VIDEO_SIZES.find(size => size.id === pick.vsize).short) : exportSize(pick.size, aspect);
+    summaryDetail.textContent = html?'인터넷 연결 없이 실행하는 수업 파일 · 원본은 보존돼요.':pptx ? 'PPTX 한 파일 · 원본과 편집 자료는 그대로 보관돼요.' : video
+      ? `${px.width} × ${px.height}px · 약 ${secondsText(ms)} · 만든 뒤 미리보고 저장해요.`
+      : `${px.width} × ${px.height}px · ${pick.all && n > 1 ? `${label} ${n}장을 ZIP 한 파일로 저장해요.` : '그림 한 파일로 저장해요.'}`;
+    submit.disabled = video && long;
+    submit.toggleAttribute('data-pptx-save', pptx);
+    submit.replaceChildren(...face('download', video ? '영상 만들기' : `${pptx ? 'PPTX' : label} 내려받기`));
   };
   draw();
-  openModal(el('div', { class: 'cv-down-ask' }, el('h2', { text: '내려받기' }), lead, sizes, options));
+  const wasInert = app.inert;
+  openModal(box, {onClose: () => { app.inert = wasInert; if (btn.isConnected) btn.focus({preventScroll: true}); }});
+  const panel = box.closest('.modal-panel');
+  app.inert = true;
+  panel.classList.add('download-panel');
+  panel.parentElement.classList.add('download-backdrop');
+  panel.setAttribute('role', 'dialog');
+  panel.setAttribute('aria-modal', 'true');
+  panel.setAttribute('aria-labelledby', 'cv-download-title');
+  panel.addEventListener('keydown', e => {
+    e.stopPropagation(); // 뒤쪽 편집기의 단축키가 열려 있는 창에 반응하지 않게 한다.
+    if (e.key === 'Escape') { e.preventDefault(); closeModal(); }
+    if (e.key === 'Tab') {
+      const buttons = [...panel.querySelectorAll('button:not(:disabled)')];
+      const first = buttons[0], last = buttons.at(-1);
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  });
+  body.querySelector('[aria-pressed="true"]')?.focus({preventScroll: true});
 }
 const saveBlob = (blob, name) => {
   const url = URL.createObjectURL(blob);
@@ -1256,13 +1889,75 @@ const saveBlob = (blob, name) => {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 30000);
 };
+async function makeHtmlLesson(O){
+  const abort=new AbortController(),status=el('p',{role:'status',text:'수업 화면을 만들고 있어요…'});
+  const box=el('section',{},el('h2',{text:'HTML 수업 내려받기'}),status,el('button',{class:'btn',onClick:closeModal},'취소'));
+  openModal(box,{onClose:()=>abort.abort()});
+  try{
+    await persistEditorAction(O);if(O.materialLoadingPromise)await O.materialLoadingPromise;
+    const entries=lessonPages(O),pages=[];
+    for(const [index,value]of entries.entries()){
+      if(abort.signal.aborted)return;
+      status.textContent=`${index+1} / ${entries.length}쪽을 수업에 담고 있어요…`;
+      const aspect=aspectOf(value.record);setupApp(value.record);
+      const {width}=exportSize('medium',aspect);
+      const {blob}=await designToBlob(value.page,{width,aspect,type:'image/png'});
+      const image=await new Promise((yes,no)=>{const reader=new FileReader();reader.onload=()=>yes(reader.result);reader.onerror=no;reader.readAsDataURL(blob);});
+      pages.push({id:value.page.id,image,aspect,...(value.page.activity?{activity:value.page.activity}:{})});
+    }
+    if(abort.signal.aborted)return;
+    const html=createHtmlLesson({title:O.materialDeck?.title||O.record.name,pages});
+    saveBlob(html,`${fileName()}-lesson.html`);closeModal();toast('슬라이드와 활동을 함께 실행하는 HTML 수업을 내려받았어요.');
+  }catch(error){if(!abort.signal.aborted)status.textContent=`수업 파일을 만들지 못했어요. ${error.message||''} 원본과 편집 자료는 보관돼요.`;}
+  finally{setupApp(O.record);}
+}
+// PPTX는 편집 중인 장까지 저장한 뒤 한 파일로 만든다. 실패·취소 때 일부 파일을 내려받지 않는다.
+async function makePptx(O, {all, mode}) {
+  if (O.closed) return;
+  const controller = new AbortController();
+  const label = el('p', {role: 'status', 'aria-live': 'polite', text: '편집 내용을 저장하고 있어요…'});
+  const progress = el('progress', {max: all ? O.slides.length : 1, value: 0, 'aria-label': 'PPTX 만드는 중'});
+  const notes = el('ul');
+  const cancel = el('button', {class: 'btn', type: 'button', onClick: closeModal}, '만들기 취소');
+  const box = el('div', {class: 'cv-pptx-export'}, el('h2', {text: 'PPTX 내려받기'}), label, progress, notes, cancel);
+  openModal(box, {onClose: () => controller.abort()});
+  try {
+    await flushSavedDesign(O.record.id);
+    if (controller.signal.aborted || O.closed) return;
+    const slides = structuredClone(currentSlides(O));let selected=all?slides:[slides[O.at]];
+    if(all&&O.materialDeck){
+      selected=[];
+      for(const row of O.materialDeck.documents){
+        const draft=row.id===O.record.id?{...O.record,slides}:await getDesign(row.id);
+        if(!draft)throw Error('다른 쪽을 불러오지 못했어요. 전체 자료를 다시 열어주세요.');
+        if(Math.abs(aspectOf(draft)-aspectOf(O.record))>.001)throw Error('슬라이드 비율이 서로 달라요. 원본과 편집 자료는 보존돼요.');
+        selected.push(...structuredClone(draft.slides));
+      }
+      progress.max=selected.length;
+      selected=orderPages(selected,O.materialDeck.pageOrder);
+    }
+    const result = await createPptx({slides: selected, aspect: aspectOf(O.record), size: O.record.size,
+      title: O.record.name || '온바탕', mode, signal: controller.signal,
+      onProgress: ({completed, total}) => { progress.value = completed; label.textContent = `${completed} / ${total}장을 만들었어요…`; }});
+    if (controller.signal.aborted) return;
+    const name = (O.record.name || '온바탕').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').slice(0, 100);
+    saveBlob(result.blob, `${name}${all || slides.length === 1 ? '' : `-${O.at + 1}`}.pptx`);
+    label.textContent = `${result.slideCount}장을 PPTX로 내려받았어요. 파일을 열어 글꼴과 배치를 확인해주세요.`;
+    for (const text of new Set(result.warnings.map(note => `${note.pageNumber}장 · ${note.message}`))) notes.append(el('li', {text}));
+    cancel.textContent = '닫기'; progress.hidden = true;
+  } catch (error) {
+    if (controller.signal.aborted) return;
+    label.textContent = `PPTX를 만들지 못했어요. ${error.message || ''} 편집 내용은 그대로 보관돼요.`;
+    label.setAttribute('role', 'alert'); cancel.textContent = '닫기'; progress.hidden = true;
+  }
+}
 async function download(O, btn, { size, jpg, all }) {
   if (O.closed) return;
   const label = labelOf(btn);
   btn.disabled = true;
   relabel(btn, '그림으로 바꾸는 중…');
   try {
-    const aspect = ratioOf(O.record.ratio).aspect;
+    const aspect = aspectOf(O.record);
     const px = exportSize(size, aspect);
     const slides = currentSlides(O);
     const type = jpg ? 'image/jpeg' : 'image/png';
@@ -1301,7 +1996,7 @@ async function download(O, btn, { size, jpg, all }) {
 // 영상으로 만들기: 만드는 모습을 그대로 보여 주고(진행 막대 · 그만두기), 다 되면 틀어 보고 내려받게 한다.
 async function makeVideo(O, { vsize, stay }) {
   if (O.closed) return;
-  const size = videoSize(ratioOf(O.record.ratio).aspect, (VIDEO_SIZES.find((x) => x.id === vsize) || VIDEO_SIZES[0]).short);
+  const size = videoSize(aspectOf(O.record), (VIDEO_SIZES.find((x) => x.id === vsize) || VIDEO_SIZES[0]).short);
   const slides = currentSlides(O);
   const stop = new AbortController();
   let url = '';
@@ -1411,24 +2106,90 @@ function flush() {
  * - onView(view): 화면이 바뀔 때('home' · 'edit') 알려 준다(들여 쓰는 곳이 둘레를 맞출 때 쓴다)
  * - brand: 들여 쓰는 곳의 표시 { name, logo }. 꾸미는 화면 위 막대 맨 앞에 작게 보인다(없으면 표시하지 않는다)
  * - onBrandClick(): 표시를 누르면 기기 저장과 계정 올리기를 마친 뒤 부른다. 저장하지 못하면 이동하지 않는다
- * - sync: 계정 저장 { pull, push, drop }(sync.js). 주면 이 기기에 저장한 뒤 계정에도 올리고, 시작할 때 계정과 맞춘다
+ * - sync: 계정 저장 { pull, push, drop, accepts? }(sync.js). accepts(record)는 선택적인 기기 전용 자료 제외 정책이다.
+ * - importAction: 가져오기 연결 { label, open, editorLabel?, editorDescription?, editorMode?: 'inline', hideHome? }.
+ *   inline이면 내 자료 안의 root/close/openDesign을 제공한다. open은 {requestClose,dispose}를 반환할 수 있다.
+ * - materialAction: {label, accepts?(record), open({designId,slideIndex})} 현재 그림 저장 후 같은 편집기에서 전체 자료 작업을 여는 선택 연결.
+ *   기본 모드는 기존 호스트 이동 계약을 유지한다. 파일 해석과 저장은 호스트가 맡는다.
  */
-export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null } = {}) {
+export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null, materialAction: material = null, materialNavigation: navigation = null, appMaker: maker = null } = {}) {
   if (app) throw new Error('minican already started');
   if (!root) throw new Error('minican root');
   app = root;
+  app.classList.add('cv-app-root');
   if (typeof view === 'function') onView = view;
   brand = cleanBrand(mark);
   if (typeof hostHome === 'function') onBrandClick = hostHome;
+  if (importing && typeof importing.open === 'function' && typeof importing.label === 'string' && importing.label.trim()) importAction = importing;
+  if (material && typeof material.open === 'function' && typeof material.label === 'string' && material.label.trim() && (!material.accepts || typeof material.accepts === 'function')) materialAction = material;
+  if(navigation&&typeof navigation.load==='function')materialNavigation=navigation;
+  if(maker&&typeof maker.connect==='function'&&typeof maker.generate==='function')appMaker=maker;
   if (account && ['pull', 'push', 'drop'].every((k) => typeof account[k] === 'function')) {
     sync = account;
     pusher = createPusher(sync, { onDone: pushed });
   }
   setStorageName(storage);
+  colorPalettes=createLocalPalettes(storage);
   useFonts(fonts, titleFont);
   setupApp();
   window.addEventListener('pagehide', flush);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
   S.phase = 'boot';
   return refresh();
+}
+
+/** Check before a wrapper replaces DOM; this editor owns one app per window. */
+export function isMinicanStarted() { return app !== null; }
+
+/** Open an already persisted host import. Never replaces an active/unsaved editor. */
+export async function openSavedDesign(id, { slideIndex = 0, tab = null } = {}) {
+  if (!app || S.phase !== 'home' || S.open || moving) throw new Error('EDITOR_BUSY');
+  const record = await getDesign(id);
+  if (!record) throw new Error('DOCUMENT_NOT_FOUND');
+  if (S.open || moving) throw new Error('EDITOR_BUSY');
+  upsert(record);
+  openDesign(record, false);
+  if (Number.isSafeInteger(slideIndex) && slideIndex > 0 && slideIndex < S.open.slides.length) goSlide(S.open, slideIndex);
+  if (typeof tab === 'string') S.open.editor.openTab(tab);
+}
+
+let hostFlush = null;
+/** Persist the latest editor state before an explicit host save. Never closes or replaces it.
+ * Rejects on failed local persistence rather than returning an older saved record.
+ */
+export function flushSavedDesign(id) {
+  if (!app || moving) return Promise.reject(new Error('EDITOR_BUSY'));
+  if (S.open && S.open.record.id !== id) return Promise.reject(new Error('EDITOR_MISMATCH'));
+  if (hostFlush) return hostFlush.id === id ? hostFlush.job : Promise.reject(new Error('EDITOR_BUSY'));
+  const editor = S.open;
+  const job = (async () => {
+    const wasInert = app.inert;
+    const previousFocus = !wasInert && app.contains(document.activeElement) ? document.activeElement : null;
+    if (editor) app.inert = true;
+    try {
+      if (editor) {
+        if (editor.putting) await editor.putting;
+        if (editor.closed || S.open !== editor) throw new Error('EDITOR_BUSY');
+        let ok = await save(editor);
+        if (editor.dirty) ok = await save(editor);
+        if (!ok || editor.dirty || editor.localOk === false) throw new Error('EDITOR_SAVE_FAILED');
+      }
+      const record = await getDesign(id);
+      if (!record) throw new Error('DOCUMENT_NOT_FOUND');
+      return record;
+    } finally {
+      if (editor && S.open === editor) {
+        app.inert = wasInert;
+        // A rendered inert frame blurs the stage. Restore only that temporary
+        // loss, so the next shortcut works without stealing a host control's focus.
+        if (!wasInert && !editor.closed && previousFocus?.isConnected && app.contains(previousFocus)
+          && document.activeElement === document.body && document.hasFocus()) {
+          try { previousFocus.focus({ preventScroll: true }); } catch { /* Keep the save result if focus is no longer available. */ }
+        }
+      }
+    }
+  })();
+  hostFlush = {id, job};
+  job.finally(() => { if (hostFlush?.job === job) hostFlush = null; }).catch(() => {});
+  return job;
 }

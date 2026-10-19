@@ -1,0 +1,13 @@
+{
+  "hosting": {
+    "site": "onbatang",
+    "public": "work/firebase-public",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "headers": [
+      {"source": "**/*.html", "headers": [{"key": "Cache-Control", "value": "no-cache"}]},
+      {"source": "**/*.js", "headers": [{"key": "Cache-Control", "value": "no-cache"}]},
+      {"source": "**/*.css", "headers": [{"key": "Cache-Control", "value": "no-cache"}]},
+      {"source": "/version.json", "headers": [{"key": "Cache-Control", "value": "no-store"}]}
+    ]
+  }
+}

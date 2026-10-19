@@ -1,0 +1,125 @@
+// Shared, storage-independent document contract. No network or host account concepts.
+export const SCHEMA_VERSION = 1;
+export const DOCUMENT_LIMITS = Object.freeze({ pages: 20, items: 40, photos: 10, text: 120, assets: 256 });
+// Imported slides keep authored text boxes and pictures as individual elements.
+// The public marker also works after a guest projection removes provenance.
+export const SLIDE_LIMITS = Object.freeze({ items: 40, photos: 40, text: 4096 });
+export const isSlideItem = item => item?.layout === 'slide' || item?.source?.kind === 'pptx';
+export const itemTextLimit = (item, ordinary = DOCUMENT_LIMITS.text) => isSlideItem(item) ? Math.max(ordinary, SLIDE_LIMITS.text) : ordinary;
+export function pageLimits(page, ordinary = DOCUMENT_LIMITS) {
+  return Array.isArray(page?.items) && page.items.some(isSlideItem)
+    ? { ...ordinary, items: Math.max(ordinary.items, SLIDE_LIMITS.items), photos: Math.max(ordinary.photos, SLIDE_LIMITS.photos) }
+    : ordinary;
+}
+export class DocumentError extends Error {
+  constructor(code, path, original, details = {}) {
+    super(`${code}: ${path}`);
+    this.name = 'DocumentError'; this.code = code; this.path = path;
+    // The caller can export/retry the untouched input; never mistake a partial result for success.
+    this.original = original; this.details = details;
+  }
+}
+export const fail = (code, path, original, details) => { throw new DocumentError(code, path, original, details); };
+export const isObject = v => !!v && typeof v === 'object' && !Array.isArray(v);
+export const isId = v => typeof v === 'string' && /^[a-z][a-z0-9]{5,31}$/.test(v);
+export function newId(prefix = 'e') {
+  return prefix + (globalThis.crypto?.randomUUID?.().replaceAll('-', '').slice(0, 24)
+    || Date.now().toString(36) + Math.random().toString(36).slice(2, 14));
+}
+// Stable migration IDs: no randomness or clock, including repeated reads of the same legacy row.
+export function legacyId(prefix, seed) {
+  let a = 2166136261, b = 5381;
+  for (const c of String(seed)) { a = Math.imul(a ^ c.charCodeAt(0), 16777619); b = Math.imul(b, 33) ^ c.charCodeAt(0); }
+  return prefix + (a >>> 0).toString(16).padStart(8, '0') + (b >>> 0).toString(16).padStart(8, '0');
+}
+const field = (v, key, test, out, path) => {
+  if (v[key] !== undefined) {
+    if (!test(v[key])) fail('INVALID_FIELD', `${path}.${key}`, v);
+    out[key] = v[key];
+  }
+};
+const short = n => v => typeof v === 'string' && v.length > 0 && v.length <= n && !/[\u0000-\u001f]/.test(v);
+const natural = v => Number.isSafeInteger(v) && v >= 0;
+export function cleanSize(v, path = 'size') {
+  if (!isObject(v) || !Number.isFinite(v.width) || !Number.isFinite(v.height) || v.width <= 0 || v.height <= 0
+    || v.width > 1e9 || v.height > 1e9 || !['px', 'pt', 'emu'].includes(v.unit)) fail('INVALID_SIZE', path, v);
+  const aspect = v.width / v.height;
+  if (aspect < 0.25 || aspect > 4) fail('UNSUPPORTED_ASPECT', path, v, { min: 0.25, max: 4 });
+  return { width: v.width, height: v.height, unit: v.unit };
+}
+export function cleanSource(v) {
+  if (!isObject(v) || !['local', 'pptx', 'pdf', 'image', 'result'].includes(v.kind)) fail('INVALID_SOURCE', 'source', v);
+  const out = { kind: v.kind };
+  for (const k of ['sourceDocumentId', 'assetId']) field(v, k, isId, out, 'source');
+  for (const k of ['filename', 'objectId']) field(v, k, short(240), out, 'source');
+  field(v, 'sha256', x => typeof x === 'string' && /^[a-f0-9]{64}$/.test(x), out, 'source');
+  field(v, 'pageNumber', x => natural(x) && x > 0, out, 'source');
+  return out;
+}
+export function cleanOrigin(v) {
+  if (!isObject(v)) fail('INVALID_ORIGIN', 'origin', v);
+  const out = {};
+  for (const k of ['documentId', 'pageId', 'elementId']) field(v, k, isId, out, 'origin');
+  field(v, 'revision', natural, out, 'origin');
+  if (!Object.keys(out).length) fail('INVALID_ORIGIN', 'origin', v);
+  return out;
+}
+export function metadata(v, { identity = false } = {}) {
+  const out = {};
+  if (identity && v?.id !== undefined) {
+    if (!isId(v.id)) fail('INVALID_ID', 'id', v);
+    out.id = v.id;
+  }
+  if (v?.source !== undefined) out.source = cleanSource(v.source);
+  if (v?.origin !== undefined) out.origin = cleanOrigin(v.origin);
+  if (v?.assetRefs !== undefined) {
+    if (!Array.isArray(v.assetRefs) || v.assetRefs.length > DOCUMENT_LIMITS.assets || v.assetRefs.some(x => !isId(x))) fail('INVALID_ASSET_REFS', 'assetRefs', v);
+    if (new Set(v.assetRefs).size !== v.assetRefs.length) fail('DUPLICATE_ID', 'assetRefs', v);
+    out.assetRefs = [...v.assetRefs];
+  }
+  return out;
+}
+export function cleanAssets(list = []) {
+  if (!Array.isArray(list) || list.length > DOCUMENT_LIMITS.assets) fail('ASSET_LIMIT', 'assets', list);
+  const seen = new Set();
+  return list.map(v => {
+    if (!isObject(v) || !isId(v.id) || seen.has(v.id)) fail('INVALID_ASSET', 'assets.id', v);
+    seen.add(v.id);
+    if (!['source', 'render', 'image', 'structure', 'snapshot'].includes(v.kind) || !short(100)(v.mimeType)) fail('INVALID_ASSET', 'assets', v);
+    const out = { id: v.id, kind: v.kind, mimeType: v.mimeType };
+    field(v, 'sha256', x => typeof x === 'string' && /^[a-f0-9]{64}$/.test(x), out, 'asset');
+    field(v, 'byteLength', natural, out, 'asset');
+    // A logical reference, never fetched by the editor. Hosts resolve it after authorization.
+    field(v, 'storageKey', x => short(500)(x) && !x.includes('..') && !/[:\\]/.test(x) && !x.startsWith('/'), out, 'asset');
+    return out;
+  });
+}
+export function validatePageInput(page, limits = DOCUMENT_LIMITS) {
+  const items = page?.items;
+  if (!Array.isArray(items)) fail('INVALID_ITEMS', 'items', page);
+  limits = pageLimits(page, limits);
+  if (items.length > limits.items) fail('ITEM_LIMIT', 'items', page, { limit: limits.items, actual: items.length });
+  if (items.filter(x => x?.t === 'image').length > limits.photos) fail('PHOTO_LIMIT', 'items', page, { limit: limits.photos });
+  const seen = new Set();
+  for (const [i, item] of items.entries()) {
+    if (!isObject(item) || !['text', 'emoji', 'shape', 'art', 'yt', 'image'].includes(item.t)) fail('UNSUPPORTED_ELEMENT', `items.${i}`, page);
+    if (item.id !== undefined) {
+      if (!isId(item.id)) fail('INVALID_ID', `items.${i}.id`, page);
+      if (seen.has(item.id)) fail('DUPLICATE_ID', `items.${i}.id`, page);
+      seen.add(item.id);
+    }
+    const textLimit = itemTextLimit(item, limits.text);
+    if (item.t === 'text' && (typeof item.text !== 'string' || item.text.length > textLimit)) fail('TEXT_LIMIT', `items.${i}.text`, page, { limit: textLimit, actual: item.text?.length });
+  }
+}
+export function validateReferences(record) {
+  const assets = new Set(record.assets.map(a => a.id)), seen = new Set([record.id]);
+  const check = (v, path) => {
+    if (v !== record) { if (seen.has(v.id)) fail('DUPLICATE_ID', `${path}.id`, record); seen.add(v.id); }
+    for (const id of [...(v.assetRefs || []), ...(v.source?.assetId ? [v.source.assetId] : [])]) {
+      if (!assets.has(id)) fail('MISSING_ASSET', `${path}.assetRefs`, record, { assetId: id });
+    }
+  };
+  check(record, 'document');
+  record.slides.forEach((p, i) => { check(p, `slides.${i}`); p.items.forEach((e, j) => check(e, `slides.${i}.items.${j}`)); });
+}

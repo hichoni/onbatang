@@ -1,0 +1,19 @@
+{
+  "id": "dstudio20261017", "schemaVersion": 1, "revision": 0,
+  "name": "검증용 4:3 수업", "ratio": "4:3", "updatedAt": 1792191600000,
+  "size": {"width": 960, "height": 720, "unit": "px"},
+  "originalSize": {"width": 9144000, "height": 6858000, "unit": "emu"},
+  "source": {"kind": "pptx", "sourceDocumentId": "ssample20261017", "assetId": "asource20261017", "filename": "직접만든표본.pptx"},
+  "assetRefs": ["asource20261017"],
+  "assets": [{"id": "asource20261017", "kind": "source", "mimeType": "application/vnd.openxmlformats-officedocument.presentationml.presentation", "storageKey": "samples/self-authored.pptx"}],
+  "uploads": [],
+  "slides": [
+    {"id": "pintro20261017", "bg": "paper", "source": {"kind": "pptx", "sourceDocumentId": "ssample20261017", "pageNumber": 1}, "items": [
+      {"id": "etitle20261017", "t": "text", "text": "절차대로 선물 포장하기", "x": 50, "y": 25, "w": 85, "size": 8, "source": {"kind": "pptx", "pageNumber": 1, "objectId": "2"}, "assetRefs": ["asource20261017"]},
+      {"id": "eshape20261017", "t": "shape", "shape": "rect", "x": 50, "y": 60, "w": 40, "h": 30, "color": "#1c7ed6"}
+    ]},
+    {"id": "pquestion20261017", "bg": "mint", "items": [
+      {"id": "equestion20261017", "t": "text", "text": "가장 먼저 해야 할 일은 무엇일까요?", "x": 50, "y": 40, "w": 80, "size": 7}
+    ]}
+  ]
+}

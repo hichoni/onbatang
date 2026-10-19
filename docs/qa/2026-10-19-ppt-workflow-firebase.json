@@ -1,0 +1,197 @@
+{
+  "scope": "actual-public-Firebase-synthetic-local-operations-only",
+  "hostingVersion": "9df2c10592f44e3a",
+  "sourceCommit": "348d817aa81e8737cc0fb79170dee30df624cc70",
+  "version": "0.24.0",
+  "local": {
+    "unit": {
+      "passed": 179,
+      "failed": 0
+    },
+    "edge": {
+      "passed": 24,
+      "failed": 0
+    },
+    "archiveRehearsal": {
+      "passed": 16,
+      "failed": 0
+    }
+  },
+  "public": {
+    "checkedAt": "2026-10-19T09:30:46.304Z",
+    "scope": "public-fresh-device-self-authored-only",
+    "sourceSnapshot": "COMMITTED",
+    "expectedRelease": {
+      "product": "onbatang",
+      "version": "0.24.0",
+      "sourceCommit": "348d817aa81e8737cc0fb79170dee30df624cc70",
+      "sourceFiles": 144
+    },
+    "checks": [
+      {
+        "name": "exact-version-source-commit-and-file-count-before-browser",
+        "passed": true
+      },
+      {
+        "name": "all-public-source-entry-html-and-metadata-bytes-match-committed-release",
+        "passed": true,
+        "sourceFiles": 144,
+        "entryHtmlFiles": 2,
+        "metadataFiles": 1,
+        "publicFiles": 147
+      },
+      {
+        "name": "public-css-revalidation-prevents-hour-old-styles",
+        "passed": true
+      },
+      {
+        "name": "home-has-no-import-and-my-materials-keeps-editor-shell-and-url",
+        "passed": true
+      },
+      {
+        "name": "file-step-tool-switch-closes-safely-and-resumes-the-same-workspace",
+        "passed": true
+      },
+      {
+        "name": "both-original-previews-and-complete-import-auto-open-without-navigation",
+        "passed": true
+      },
+      {
+        "name": "desktop-and-390px-step-labels-and-footer-buttons-visible",
+        "passed": true,
+        "visualIssues": 0
+      },
+      {
+        "name": "mobile-tool-switch-restores-identical-editor-page-and-undo",
+        "passed": true
+      },
+      {
+        "name": "resumed-preview-font-plan-and-image-mode-use-the-same-DOM",
+        "passed": true
+      },
+      {
+        "name": "applied-fonts-and-image-page-import-auto-opens-new-drawing-preserving-old",
+        "passed": true
+      },
+      {
+        "name": "my-drawings-goes-to-real-home-without-an-external-ppt-layer",
+        "passed": true
+      },
+      {
+        "name": "my-materials-library-fixed-save-keeps-both-revision-zero-and-source-bytes",
+        "passed": true
+      },
+      {
+        "name": "reload-reopens-exact-two-materials-with-library-inside-my-materials",
+        "passed": true
+      },
+      {
+        "name": "original-pptx-download-is-byte-identical",
+        "passed": true
+      },
+      {
+        "name": "two-page-editable-pptx-download-preserves-original-four-to-three",
+        "passed": true
+      },
+      {
+        "name": "two-page-image-pptx-download-preserves-original-four-to-three",
+        "passed": true
+      },
+      {
+        "name": "zero-external-requests-writes-websockets-serviceworkers-and-page-errors",
+        "passed": true
+      }
+    ],
+    "source": {
+      "bytes": 11185,
+      "sha256": "739854765f14c5e3ca852399b1d6bc80879ce520d94eb7670f483667bf04254f"
+    },
+    "pageErrors": 0,
+    "externalRequestsBlocked": 0,
+    "writeRequestsBlocked": 0,
+    "webSocketsBlocked": 0,
+    "serviceWorkers": 0,
+    "accountVerification": "NOT_RUN",
+    "teacherInputUsed": false,
+    "existingBrowserProfileUsed": false,
+    "nativePowerPointRendering": "NOT_RUN",
+    "downloads": [
+      {
+        "mode": "editable",
+        "bytes": 70493,
+        "sha256": "3b9e3e94e12d626452eda61a6605578a89e2b7a1887a34abde3ec2f7817af0f8",
+        "slides": 2,
+        "originalSizePreserved": true
+      },
+      {
+        "mode": "image",
+        "bytes": 96287,
+        "sha256": "943176f62d89c58fe62611005349c7ad1ed906abc673b31dc1a98959ba85430c",
+        "slides": 2,
+        "originalSizePreserved": true
+      }
+    ],
+    "screenshots": [
+      {
+        "file": "desktop.png",
+        "width": 1440,
+        "height": 1000,
+        "footerInViewport": true,
+        "footerBottom": 1000,
+        "actionButtonsInViewport": true,
+        "stepsFit": true,
+        "horizontalOverflow": false
+      },
+      {
+        "file": "narrow.png",
+        "width": 390,
+        "height": 844,
+        "footerInViewport": true,
+        "footerBottom": 804,
+        "actionButtonsInViewport": true,
+        "stepsFit": true,
+        "horizontalOverflow": false
+      }
+    ],
+    "visualIssues": [],
+    "checkedOrigin": "https://onbatang.web.app",
+    "httpFileMap": {
+      "files": 147,
+      "sha256": "0753c103bd1baeb0e23d89902f8b010367df5f3d1237e9d440b1633a64e1a32e",
+      "allBytesMatch": true
+    },
+    "cssCachePolicies": [
+      {
+        "path": "/app/app.css",
+        "cacheControl": "no-cache"
+      },
+      {
+        "path": "/app/pptx-import/style.css",
+        "cacheControl": "no-cache"
+      },
+      {
+        "path": "/src/editor.css",
+        "cacheControl": "no-cache"
+      }
+    ],
+    "editorRatio": {
+      "aspect": 1.3333333333333333,
+      "caption": "원본 비율 · 4:3"
+    },
+    "functionalPassed": true,
+    "passed": true
+  },
+  "rawReportSha256": "fbdb6b92fca1d271f15081d9460d165fee33a9c81eab7334569a97569a4c3be8",
+  "fileMapCanonicalSha256": "0753c103bd1baeb0e23d89902f8b010367df5f3d1237e9d440b1633a64e1a32e",
+  "productionDatabaseChanged": false,
+  "accountQa": "NOT_RUN_THIS_VERSION",
+  "nativePowerPoint": "NOT_RUN_THIS_VERSION",
+  "physicalDevices35Students": "NOT_RUN",
+  "mail": "NOT_RUN_USER_DECLINED",
+  "firstRunNotes": [
+    "Restricted Edge launch denied by Windows AppContainer; rerun with approved isolated browser execution.",
+    "Old tests selected hidden compatibility input or pre-transition editor; scoped to native workspace and awaited completed transition.",
+    "Old visible home import/aspect test expectations migrated to My materials while preserving payload assertions.",
+    "After package version change, vendor BUILD metadata was regenerated; exact reproducibility then passed."
+  ]
+}

@@ -1,0 +1,1439 @@
+{
+  "checkedAt": "2026-10-19T14:09:35.594Z",
+  "status": "PASS_WITH_EXPLICIT_UNRUN_SCOPES",
+  "task": "mobile-tablet-PPT-import-navigation-reorder-palettes-download",
+  "releases": {
+    "common": {
+      "version": "0.26.5",
+      "commit": "2cc7e764ec5c7818ae603ecd70c19bf9d2ea41cf",
+      "url": "https://onbatang.web.app/app/",
+      "sourceFiles": 149,
+      "hostingFiles": 152
+    },
+    "gai": {
+      "version": "0.71.3",
+      "commit": "21dedd73f2704885d08b94c93be66a486c08c8e8",
+      "pullRequest": "https://github.com/hichoni/g-ai-lab/pull/86",
+      "url": "https://gai-lab.netlify.app/#/onbatang"
+    }
+  },
+  "local": {
+    "commonUnit": {
+      "passed": 182,
+      "failed": 0,
+      "source": "local-test-log"
+    },
+    "commonBrowser": {
+      "passed": 26,
+      "failed": 0,
+      "source": "local-test-log"
+    },
+    "gaiUnit": {
+      "passed": 49,
+      "failed": 0,
+      "source": "local-test-log"
+    },
+    "gaiBrowser": {
+      "passed": 19,
+      "failed": 0,
+      "source": "local-test-log"
+    },
+    "commonBuild": "PASS",
+    "gaiBuild": "PASS",
+    "officialVendorSync": "PASS_149_EXACT_GIT_BLOBS",
+    "browser": "Windows Edge/Chromium headless with isMobile+hasTouch; CDP native touch dispatch",
+    "screens": [
+      [
+        320,
+        568
+      ],
+      [
+        390,
+        844
+      ],
+      [
+        844,
+        390
+      ],
+      [
+        768,
+        1024
+      ],
+      [
+        1024,
+        768
+      ],
+      [
+        880,
+        640
+      ]
+    ],
+    "syntheticSource": {
+      "pages": 21
+    },
+    "actualTeacherPpt": {
+      "pages": 19,
+      "parts": 11,
+      "sourceSha256": "c165d32bda450cec385e5bc916351c75d72b6acc69abdea5931d2d473f10d12d",
+      "sourceFileChanged": false,
+      "immutableOriginalRevisionChanged": false
+    }
+  },
+  "public": {
+    "common": {
+      "checkedAt": "2026-10-19T14:01:00.437Z",
+      "scope": "public-fresh-device-self-authored-only",
+      "sourceSnapshot": "COMMITTED",
+      "expectedRelease": {
+        "product": "onbatang",
+        "version": "0.26.5",
+        "sourceCommit": "2cc7e764ec5c7818ae603ecd70c19bf9d2ea41cf",
+        "sourceFiles": 149
+      },
+      "checks": [
+        {
+          "name": "exact-version-source-commit-and-file-count-before-browser",
+          "passed": true
+        },
+        {
+          "name": "all-public-source-entry-html-and-metadata-bytes-match-committed-release",
+          "passed": true,
+          "sourceFiles": 149,
+          "entryHtmlFiles": 2,
+          "metadataFiles": 1,
+          "publicFiles": 152
+        },
+        {
+          "name": "public-css-revalidation-prevents-hour-old-styles",
+          "passed": true
+        },
+        {
+          "name": "home-has-no-import-and-my-materials-keeps-editor-shell-and-url",
+          "passed": true
+        },
+        {
+          "name": "file-step-tool-switch-closes-safely-and-resumes-the-same-workspace",
+          "passed": true
+        },
+        {
+          "name": "both-original-previews-and-complete-import-auto-open-without-navigation",
+          "passed": true
+        },
+        {
+          "name": "desktop-and-390px-step-labels-and-footer-buttons-visible",
+          "passed": true,
+          "visualIssues": 0
+        },
+        {
+          "name": "mobile-tool-switch-restores-identical-editor-page-and-undo",
+          "passed": true
+        },
+        {
+          "name": "resumed-preview-font-plan-and-image-mode-use-the-same-DOM",
+          "passed": true
+        },
+        {
+          "name": "applied-fonts-and-image-page-import-auto-opens-new-drawing-preserving-old",
+          "passed": true
+        },
+        {
+          "name": "my-drawings-goes-to-real-home-without-an-external-ppt-layer",
+          "passed": true
+        },
+        {
+          "name": "my-materials-library-fixed-save-keeps-both-revision-zero-and-source-bytes",
+          "passed": true
+        },
+        {
+          "name": "reload-reopens-exact-two-materials-with-library-inside-my-materials",
+          "passed": true
+        },
+        {
+          "name": "original-pptx-download-is-byte-identical",
+          "passed": true
+        },
+        {
+          "name": "two-page-editable-pptx-download-preserves-original-four-to-three",
+          "passed": true
+        },
+        {
+          "name": "two-page-image-pptx-download-preserves-original-four-to-three",
+          "passed": true
+        },
+        {
+          "name": "zero-external-requests-writes-websockets-serviceworkers-and-page-errors",
+          "passed": true
+        },
+        {
+          "name": "public-filmstrip-order-palette-persistence-and-mobile",
+          "passed": true
+        },
+        {
+          "name": "public-slide-selection-retains-dom-geometry-and-scroll-without-loading-flash",
+          "passed": true
+        }
+      ],
+      "source": {
+        "bytes": 11185,
+        "sha256": "739854765f14c5e3ca852399b1d6bc80879ce520d94eb7670f483667bf04254f"
+      },
+      "pageErrors": 0,
+      "externalRequestsBlocked": 0,
+      "writeRequestsBlocked": 0,
+      "webSocketsBlocked": 0,
+      "serviceWorkers": 0,
+      "accountVerification": "NOT_RUN",
+      "teacherInputUsed": false,
+      "existingBrowserProfileUsed": false,
+      "nativePowerPointRendering": "NOT_RUN",
+      "downloads": [
+        {
+          "mode": "editable",
+          "bytes": 70493,
+          "sha256": "154e184d7000a9eb67fb316e914bdf5b780e4d613762910522ab3ff674708d64",
+          "slides": 2,
+          "originalSizePreserved": true
+        },
+        {
+          "mode": "image",
+          "bytes": 96287,
+          "sha256": "4deb9bcf7a62236a600c2772d87dc79569bcc131137f801be872d8075ed97728",
+          "slides": 2,
+          "originalSizePreserved": true
+        }
+      ],
+      "visualIssues": [],
+      "checkedOrigin": "https://onbatang.web.app",
+      "httpFileMap": {
+        "files": 152,
+        "sha256": "1bf45ec485156c8d932715f3571217773e77b2fd4d9f2fae7d99ba990f3edeac",
+        "allBytesMatch": true
+      },
+      "cssCachePolicies": [
+        {
+          "path": "/app/app.css",
+          "cacheControl": "no-cache"
+        },
+        {
+          "path": "/app/pptx-import/style.css",
+          "cacheControl": "no-cache"
+        },
+        {
+          "path": "/src/editor.css",
+          "cacheControl": "no-cache"
+        }
+      ],
+      "editorRatio": {
+        "aspect": 1.3333333333333333,
+        "caption": "원본 비율 · 4:3"
+      },
+      "nativeScreenEyedropper": "NOT_RUN_API_MOCK_ONLY",
+      "functionalPassed": true,
+      "passed": true
+    },
+    "gai": {
+      "checkedAt": "2026-10-19T14:04:34.301Z",
+      "target": "https://gai-lab.netlify.app",
+      "expectedCommit": "21dedd73f2704885d08b94c93be66a486c08c8e8",
+      "expectedVersion": "0.71.3",
+      "status": "PASS",
+      "accountUsed": false,
+      "userProfileUsed": false,
+      "teacherDataUsed": false,
+      "remoteWrites": 0,
+      "checks": {
+        "badge": {
+          "displayedVersion": "0.71.3",
+          "displayedContext": "운영",
+          "displayedCommitShort": "21dedd73",
+          "metadataCommitFull": "21dedd73f2704885d08b94c93be66a486c08c8e8"
+        },
+        "cancel": {
+          "sameEditorDom": true,
+          "sameUrl": true,
+          "undoPreserved": true,
+          "originalDrawingSavedLocally": true
+        },
+        "materialSave": {
+          "sameEditorDom": true,
+          "bothPagesEdited": true,
+          "selectedDraftsPinnedExactly": true,
+          "oldMaterialRevision": 1,
+          "newMaterialRevision": 3,
+          "originalRevisionZeroPreserved": true,
+          "originalMaterialGraphPreserved": true,
+          "peerDraftsPreserved": true,
+          "undoRedoPreserved": true
+        },
+        "pptx": {
+          "actualWorkerImport": true,
+          "selfAuthoredOnly": true,
+          "pages": 2,
+          "sourceSha256": "739854765f14c5e3ca852399b1d6bc80879ce520d94eb7670f483667bf04254f",
+          "sourceBytes": 11185,
+          "originalRatio": "4:3",
+          "inlineFrameAndUrlPreserved": true,
+          "originalEditorUndoPreserved": true,
+          "independentPptScreenPreview": true,
+          "allSlidesFontReplacementPersisted": true,
+          "completeSaveOpensEditorDirectly": true,
+          "homeFlashes": 0,
+          "namespace": "gailab-minican",
+          "immutableOriginalRevision": 0,
+          "canonicalSourcePreserved": true,
+          "exports": [
+            {
+              "mode": "editable",
+              "bytes": 13975,
+              "sha256": "55e21a8fd0449fca5968f9a31335ebd2700a3e1aea0e9f8e4f3563b9707b8616",
+              "slides": 2,
+              "widthEmu": 9144000,
+              "heightEmu": 6858000,
+              "modeStructureVerified": true
+            },
+            {
+              "mode": "image",
+              "bytes": 101439,
+              "sha256": "95dfa740fcab134cd7db3130a1e40f0821d7e729843d2be67938b191e3f8b266",
+              "slides": 2,
+              "widthEmu": 9144000,
+              "heightEmu": 6858000,
+              "modeStructureVerified": true
+            }
+          ],
+          "reloadAndUiReopen": true,
+          "remoteUpload": false
+        },
+        "filmstripPalettes": {
+          "savedOrder": [
+            2,
+            1
+          ],
+          "originalsPreserved": true,
+          "paletteNamedAndReloaded": true,
+          "mobileFits": true,
+          "nativeScreenEyedropper": "NOT_RUN_API_MOCK_ONLY"
+        },
+        "steadySelection": {
+          "sameShell": true,
+          "sameRail": true,
+          "heightUnchanged": true,
+          "topUnchanged": true,
+          "scrollUnchanged": true
+        },
+        "quietNavigation": {
+          "noNoticeAfterFastSelection": true
+        }
+      },
+      "loadedVersion": "0.71.3",
+      "loadedCommit": "21dedd73f2704885d08b94c93be66a486c08c8e8",
+      "context": "production",
+      "configuration": {
+        "provider": "supabase",
+        "supabaseProjectMatchesExistingProduction": true,
+        "googleEnabled": true,
+        "keyValueRecorded": false,
+        "securityQaExposed": false
+      },
+      "verifiedCommonFiles": [
+        {
+          "file": "NOTICE",
+          "sha256": "691ad6c6e08c49c4c4077654e44aacee9a7e0a65c2f62b5c63bf4ee5fcf45dcc"
+        },
+        {
+          "file": "LICENSE",
+          "sha256": "91a99d65040e8600831016b39ebc4272a6fbe277457d00649cc1e899de300099"
+        },
+        {
+          "file": "app/brand.css",
+          "sha256": "11214c444af995b2fb7249748f629c76a323eca9dd4f8b3256a5767cc98e4b7e"
+        },
+        {
+          "file": "app/brand.js",
+          "sha256": "bcfc008ef71bce2870e7ba714a1dae26dd35082dc302f5e38e789da350bcc0f6"
+        },
+        {
+          "file": "app/app.js",
+          "sha256": "69af229b630a10cc0031276140f15682cb73668b1753ade7561693123101e690"
+        },
+        {
+          "file": "app/app.css",
+          "sha256": "d475ce546e0f83601c170eaa8fdd9d55d1e8e4812983c4f811b2a37a50f52bb8"
+        },
+        {
+          "file": "app/brand/app-icon.svg",
+          "sha256": "20491cae8ccbd8ba7cb361a25d12c33823837647dcab47f8a2ad4a12d42e44b7"
+        },
+        {
+          "file": "app/brand/app-icon-dark.svg",
+          "sha256": "0d31cf8172526bdea1f2c24f0530c75279acf3cbf8ae6f3d40fba66c3d3f31d8"
+        },
+        {
+          "file": "app/brand/app-icon-192.png",
+          "sha256": "a716a1bc307eb600c7c90ac26c5c8a4032768f40aa9bdc9ef385c40f7891b25f"
+        },
+        {
+          "file": "app/brand/OFL.txt",
+          "sha256": "1c05c68c34f9708415aada51f17e1b0092d2cea709bf4a94cd38114f9e73d7d9"
+        },
+        {
+          "file": "app/brand/logo-inverse.svg",
+          "sha256": "568b723f05f3fa65efc34a31e26464637bee25dc8170579e9bde49674a5ecbfa"
+        },
+        {
+          "file": "app/brand/app-icon-512.png",
+          "sha256": "ce633d212bf1765838e31f5c577463abd8c74a790409c99835406cc95c3ddf2a"
+        },
+        {
+          "file": "app/brand/symbol-mono.svg",
+          "sha256": "71a01edb20b23ef1ed4a613eade6041e5c904b566b7bde842027825a4ad338a3"
+        },
+        {
+          "file": "app/brand/symbol-inverse.svg",
+          "sha256": "c975141fb115b6f0dd49c335aed5935834744e5063d5adb8e707fe05d0e5e24a"
+        },
+        {
+          "file": "app/brand/logo-primary.svg",
+          "sha256": "0e85f27bbfd213cabd92a59a1791ce0cf0dd7895bc9aeb4b45611ec10c4ba411"
+        },
+        {
+          "file": "app/brand/logo-mono.svg",
+          "sha256": "5139a860699e548f4352e58b385b0c9084d0f25bcf2d186717ffb3851841b687"
+        },
+        {
+          "file": "app/brand/symbol-primary.svg",
+          "sha256": "dd9566ec3b56816d6f3d9f3f12869073a9496737feb388658557937d120e2345"
+        },
+        {
+          "file": "app/brand/noto-sans-kr.woff2",
+          "sha256": "4c78b30b59e6167c1819d43b64eb4a72f92aca41357cb4f3bcc5da7db8d74abe"
+        },
+        {
+          "file": "app/camera.js",
+          "sha256": "3092aaef29b32017ad4318cac39b949115bb5b4ae7ee7427f022e1f3341b9152"
+        },
+        {
+          "file": "app/brand/symbol.svg",
+          "sha256": "dd9566ec3b56816d6f3d9f3f12869073a9496737feb388658557937d120e2345"
+        },
+        {
+          "file": "app/brand/wordmark-primary.svg",
+          "sha256": "c4a9d30054a9d15d48a65566ef38b3b2c8a106af82130058c9baf2110f6fe43a"
+        },
+        {
+          "file": "app/designs.js",
+          "sha256": "42b32edcfa47c1425c47d2370cee8a2c6c962a37fa63dd778f4fea438217bb55"
+        },
+        {
+          "file": "app/brand/wordmark-mono.svg",
+          "sha256": "c4a9d30054a9d15d48a65566ef38b3b2c8a106af82130058c9baf2110f6fe43a"
+        },
+        {
+          "file": "app/brand/wordmark-inverse.svg",
+          "sha256": "28d1eb296dab3023cde4555d553314a84b8f9c16012de10dfe5d851f07dcf41c"
+        },
+        {
+          "file": "app/filmstrip.js",
+          "sha256": "54068a1527eeb1a6f8ea17b1967b50a61d25e382c376d6f1e761a3fdb005b876"
+        },
+        {
+          "file": "app/fonts.js",
+          "sha256": "d71c76e7643165e8a4a829d74807c3a7d5dc4e758c70e096ae8f949c713292e2"
+        },
+        {
+          "file": "app/fonts/bagel-fat-one-OFL.txt",
+          "sha256": "4f40ab196ccf674056fed8b0e6d4f918eea183a149be8a67bff1239413ebada9"
+        },
+        {
+          "file": "app/fonts/do-hyeon-OFL.txt",
+          "sha256": "de5ff32211a4340b01477af39ee339d639438955e409f79b666d4b9207f3c92c"
+        },
+        {
+          "file": "app/fonts/bagel-fat-one.woff2",
+          "sha256": "b933451675795d61f235697b9ac6cb8b890b325b6c6d62998a366239674cc8a3"
+        },
+        {
+          "file": "app/fonts/do-hyeon.woff2",
+          "sha256": "a1538a15639831cb82a3b9a40ec4e4e72ffa88e28e4e35ce518dd2ff4eaefdbf"
+        },
+        {
+          "file": "app/fonts/gamja-flower-OFL.txt",
+          "sha256": "39de3de5f1873f89bca4af37823ab22e28e88d0d8f7fe2f07e82e9e6e9bf7b70"
+        },
+        {
+          "file": "app/fonts/dongle-OFL.txt",
+          "sha256": "f9e59049e824264bffd626d0901cfcaac9d5ba756988b904d3e3e0e233493607"
+        },
+        {
+          "file": "app/fonts/east-sea-dokdo-OFL.txt",
+          "sha256": "39de3de5f1873f89bca4af37823ab22e28e88d0d8f7fe2f07e82e9e6e9bf7b70"
+        },
+        {
+          "file": "app/fonts/east-sea-dokdo.woff2",
+          "sha256": "21b17d498dccb6b9c455e6fd982fb7b1c08765be8652815ed23b32ddd81ce2be"
+        },
+        {
+          "file": "app/fonts/dongle.woff2",
+          "sha256": "7b07ecc2c1769a379e08584a2fb9e052f4964e82dde9afc4e28994dfba2a44eb"
+        },
+        {
+          "file": "app/fonts/gamja-flower.woff2",
+          "sha256": "ffe4f48f9b71101e1ea8be158fdaad8dfa87ac67da9b641989c3689cb814bf0f"
+        },
+        {
+          "file": "app/fonts/gugi-OFL.txt",
+          "sha256": "391ac3126dacc95b92a8f3408467879edb3245344bc411530a30d5aada52df92"
+        },
+        {
+          "file": "app/fonts/gowun-batang-OFL.txt",
+          "sha256": "49a57cc769fa9affd6eefb9070a61e3d3f6b757c97cafb15848bc6d1c81acc78"
+        },
+        {
+          "file": "app/fonts/gowun-dodum-OFL.txt",
+          "sha256": "a7c73f9521cd646bbdfb6684c99a62311bbd7bce11898dc11ef0b3c69eda1aca"
+        },
+        {
+          "file": "app/fonts/gugi.woff2",
+          "sha256": "397562bf8fd650f1b8a647d856ff8454afce958f0935bb5684406cc387bafcd7"
+        },
+        {
+          "file": "app/fonts/gowun-dodum.woff2",
+          "sha256": "2f89872949c94f92fd9c560ce30c8977cb314346d222995d892802c1c9be47fc"
+        },
+        {
+          "file": "app/fonts/gowun-batang.woff2",
+          "sha256": "945c8f84848718d5439c3ef1c6a094d0bc7d71de62bd239d0899a297dfbbdc5b"
+        },
+        {
+          "file": "app/fonts/jua-OFL.txt",
+          "sha256": "44a7c6e4c5572392ae122d3b1d8c6ba6fd640a7797e675384585d947f2773e3c"
+        },
+        {
+          "file": "app/fonts/hi-melody-OFL.txt",
+          "sha256": "39de3de5f1873f89bca4af37823ab22e28e88d0d8f7fe2f07e82e9e6e9bf7b70"
+        },
+        {
+          "file": "app/fonts/nanum-brush-OFL.txt",
+          "sha256": "eeacf16032901d0ed0456876ec77b8f0fda6b3fecec7d972f8543eb602e6c30f"
+        },
+        {
+          "file": "app/fonts/jua.woff2",
+          "sha256": "0aa84c3896ca4de915e25c92063ffe834e705aad5bf9bc1e56e377c1d8ab5fd3"
+        },
+        {
+          "file": "app/fonts/hi-melody.woff2",
+          "sha256": "b35aa243f5da996fe84e70010af466aa7b7d3804f1a7df35aebf1ed98d45f4ac"
+        },
+        {
+          "file": "app/fonts/nanum-brush.woff",
+          "sha256": "47a2814f1d206db6eb6eca0a89fafed00b8f736c58d081ad887633975af061cf"
+        },
+        {
+          "file": "app/fonts/poor-story-OFL.txt",
+          "sha256": "39de3de5f1873f89bca4af37823ab22e28e88d0d8f7fe2f07e82e9e6e9bf7b70"
+        },
+        {
+          "file": "app/fonts/single-day-OFL.txt",
+          "sha256": "397e83b05703a4240be51e2c3a2be1d0d7693d7a2d8b1ff367c26a2b9afc013e"
+        },
+        {
+          "file": "app/fonts/nanum-pen-OFL.txt",
+          "sha256": "eeacf16032901d0ed0456876ec77b8f0fda6b3fecec7d972f8543eb602e6c30f"
+        },
+        {
+          "file": "app/fonts/single-day.woff2",
+          "sha256": "ab07d03a3aa2a2140c075290549a0dee25d4634974ed118c5864eec26c137cf4"
+        },
+        {
+          "file": "app/fonts/poor-story.woff2",
+          "sha256": "d2ad7c145dbaa83352430718b6f1c6bfceb86aff8a798a56988f8e42500aa9fd"
+        },
+        {
+          "file": "app/fonts/nanum-pen.woff",
+          "sha256": "2da43ee5948f50403a99a5ad793ecba65bbc6c1f5cd683314a1f4cad335defde"
+        },
+        {
+          "file": "app/loading.js",
+          "sha256": "4a915c3f80e321a8233d4969828e12fe337c0840830db9183291d16006465f46"
+        },
+        {
+          "file": "app/import-document.js",
+          "sha256": "c44c87c8bc22e18725e705a8887c79c14bd14bada41084ce33e71d6badd128e6"
+        },
+        {
+          "file": "app/hero-art.js",
+          "sha256": "8368ba56905608effcb2e24d0d720d44aab543f458a1eb3e7ad7a03ff3a1c6e5"
+        },
+        {
+          "file": "app/layouts.js",
+          "sha256": "158835af849572d14a84286157f920b125899359553593f9676b3e21a2e08aa5"
+        },
+        {
+          "file": "app/fonts/yeon-sung-OFL.txt",
+          "sha256": "d7d8074c2dd46804990c184e25849947ab76c5ac7607fbf3966543455769bb73"
+        },
+        {
+          "file": "app/fonts/yeon-sung.woff2",
+          "sha256": "cefa31a3ba546f64748cb226f213e3f4d13805f40995b356bfaabe887e0aec8e"
+        },
+        {
+          "file": "app/pptx-import/client.js",
+          "sha256": "3d342adc8eb739698ae19402e481b0a7fc8519a2cb66eda5f0b5833cc7fc7fc7"
+        },
+        {
+          "file": "app/page-order.js",
+          "sha256": "52651ec866733ccea4aeb221e5526e3479d89135bdc4241c842801da6d412fc6"
+        },
+        {
+          "file": "app/palettes.js",
+          "sha256": "dabe6ad5a11afb2c95afa47b64ec10174f3891eb28659da060865aa21183c3af"
+        },
+        {
+          "file": "app/pptx-import/app.js",
+          "sha256": "0ccb4ef4e9d6428122bd1e2aa787739d1948e94c06cd23a9407b8515ea3d73b9"
+        },
+        {
+          "file": "app/pptx-import/bullets.js",
+          "sha256": "7f19b7f374bf31645195ad97c24569e1840c6517af46cd8782d245f70a32634b"
+        },
+        {
+          "file": "app/pptx-import/converter.js",
+          "sha256": "b2444a3d1b11f218445b1a44aaef57e39120870d967788de866d152ff21bfaea"
+        },
+        {
+          "file": "app/pptx-import/preview-punctuation.js",
+          "sha256": "8ff4f855942dde60b6302e775e5a06b58b411e34b015c129088157533934c90e"
+        },
+        {
+          "file": "app/pptx-import/fonts.js",
+          "sha256": "fbcee3c4e9f5dee585b586ce0c77aba8ed69ec4eb61271ab1913e0a728007e38"
+        },
+        {
+          "file": "app/pptx-import/import-storage.js",
+          "sha256": "06ac8e837000ccfbaf2a642a5668b0b381e8b4c7e8ac3ab87dcbfa5e76f2ac71"
+        },
+        {
+          "file": "app/pptx-import/library.js",
+          "sha256": "fc6bbb083ebf68d74ea54d4cb2887e42d9e30b68fc84250f726385b65a7a0ef6"
+        },
+        {
+          "file": "app/pptx-import/preview-frame.js",
+          "sha256": "70b93c775814114a118d05442d7cf15e4bf472bb30267f938a0981e46fc7a8b6"
+        },
+        {
+          "file": "app/pptx-import/preview-frame.html",
+          "sha256": "3794dd7c33957ef86d232f80560ea428eff72128f59b994eb245451d1c17e127"
+        },
+        {
+          "file": "app/pptx-import/ui-services.js",
+          "sha256": "038a6c2e20b87423537b2fa4ac2f9514657d95b4b8659032b4961055f02e045e"
+        },
+        {
+          "file": "app/pptx-import/vendor/licenses/THIRD_PARTY_NOTICES.md",
+          "sha256": "4e49f2e111bff02e594594abbca7924076649d9cc8826d80e42fd7ed2f4fa11c"
+        },
+        {
+          "file": "app/pptx-import/preview.js",
+          "sha256": "21c615bbda597168304a0b43f274190c5a92d392b712e277f6c7792271304dd4"
+        },
+        {
+          "file": "app/pptx-import/style.css",
+          "sha256": "a6582089d2419d9c9d94d68fccde5edcaf432bf3e05a6a813e36dfd2294b472c"
+        },
+        {
+          "file": "app/pptx-import/samples/self-authored-4x3.pptx",
+          "sha256": "739854765f14c5e3ca852399b1d6bc80879ce520d94eb7670f483667bf04254f"
+        },
+        {
+          "file": "app/pptx-import/vendor/BUILD.json",
+          "sha256": "e694c6fc6f5b335acce6ba152ce18ef1c9889f64b1179114b9fd1dbd1de3f0f4"
+        },
+        {
+          "file": "app/pptx-import/vendor/licenses/licenses/LICENSE-d3",
+          "sha256": "e1211892da0b0e0585b7aebe8f98c1274fba15bafe47fa1f4ee8a7a502c06304"
+        },
+        {
+          "file": "app/pptx-import/vendor/licenses/jszip-LICENSE.md",
+          "sha256": "566c953c6090b1218ca6217dd7359d45dde46581968586dc607d59a78af6a9c4"
+        },
+        {
+          "file": "app/pptx-import/vendor/licenses/echarts-NOTICE.txt",
+          "sha256": "d491d358344f842685c1b1585970999db65fe30ecf7ef3867af8814f4016c016"
+        },
+        {
+          "file": "app/pptx-import/vendor/licenses/fflate-MIT.txt",
+          "sha256": "0a1df3a083d0c010560aa342e87959c8c1070e6fd54545741f083f22d0c8b551"
+        },
+        {
+          "file": "app/pptx-import/vendor/licenses/licenses/ECMA-text-copyright-notice.txt",
+          "sha256": "9a08c202df693f91f1f3b1674a64f5989d6269d5d89f710bc65e0fb2757d8f1f"
+        },
+        {
+          "file": "app/pptx-import/vendor/licenses/echarts-LICENSE.txt",
+          "sha256": "634293835b43a6dd2094fa39182a3d9a6b9ca43b7fdb9ac354e8037af2a3093a"
+        },
+        {
+          "file": "app/pptx-import/vendor/licenses/tslib-LICENSE.txt",
+          "sha256": "210b19e543130388c68654b7497e967119ce17145f66ab7d85688fbd70f08751"
+        },
+        {
+          "file": "app/pptx-import/vendor/licenses/zrender-LICENSE.txt",
+          "sha256": "a681e9d183c72b4af4856935893805eb48c08f0f5a3f260203db7444c20fb98a"
+        },
+        {
+          "file": "app/pptx-import/vendor/licenses/licenses/mtx-decompressor-MPL-2.0.txt",
+          "sha256": "1f256ecad192880510e84ad60474eab7589218784b9a50bc7ceee34c2b91f1d5"
+        },
+        {
+          "file": "app/pptx-import/vendor/licenses/xmldom-MIT.txt",
+          "sha256": "4da724fc305d81606b245b324d4d2586916b9d248b23d82183df753ace0fdf71"
+        },
+        {
+          "file": "app/pptx-import/vendor/licenses/pptx-renderer-Apache-2.0.txt",
+          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+        },
+        {
+          "file": "app/pptx-import/vendor/licenses/tslib-CopyrightNotice.txt",
+          "sha256": "dd835e67a9a297da32f9467d7677a5d02c8e50e10f15da43b810147c79c04b9b"
+        },
+        {
+          "file": "app/pptx-import/vendor/renderer-version.js",
+          "sha256": "5dc84c446174e25e61fc952807e520a7a3d5681f0f7a375677c9f442bb347ea9"
+        },
+        {
+          "file": "app/pptx-import/workflow.js",
+          "sha256": "e73c18988b7730d3aef09f5f577b2111f0139f8af08827b71f9ddb5aab7c4d70"
+        },
+        {
+          "file": "app/pptx-import/worker.js",
+          "sha256": "d4e9ac47e75357e6fdcf5d38d703c337651c2c3720fde01f3bbfa071ad1823c0"
+        },
+        {
+          "file": "app/pptx-import/vendor/pptx-worker.js",
+          "sha256": "94feae5cc5d5b6ccaa130d1b9b9f9322f0fea0357ff7d04b9c0ff68560a6cf24"
+        },
+        {
+          "file": "app/pptx-import/workspace.js",
+          "sha256": "0b7d40573c1ac7092a682bfbacb5d12b149160ae1afb2f2175c6e741f3c68a3e"
+        },
+        {
+          "file": "app/pptx-import/vendor/preview-frame.html",
+          "sha256": "5155c1095db55072de991f4ef655260e3181a5592d18b58043e2234fc8fc05c4"
+        },
+        {
+          "file": "app/setup.js",
+          "sha256": "df6cfcc00a961dfda95b7bb204263afb3ff40a43a484a53cf3b2eaa7b12e38c3"
+        },
+        {
+          "file": "app/pptx.js",
+          "sha256": "ea30feaf05fad7f6b1b0d91968a271b8c644066d29cff18e2214cb1df0807af5"
+        },
+        {
+          "file": "app/samples/studio-links.json",
+          "sha256": "fac5fe252c324dbceea298e1277306b90390bc9c03c6be7c6048e7d1c2401919"
+        },
+        {
+          "file": "app/samples/studio-import.json",
+          "sha256": "4932032d9ad52e2c31cda6a8b8ec227612eac13c511a3c3e6ce0f1440a85aa37"
+        },
+        {
+          "file": "app/standalone.js",
+          "sha256": "9b7d8ecde2be7afd90cce66d6424ab9681b8604f8e6a2dbaedbd9b85c2a12bf5"
+        },
+        {
+          "file": "app/samples/studio-document.json",
+          "sha256": "8e542c3f4bf30319919da918265a6fca4fcd00e3dd5ef45f3759933a63909e04"
+        },
+        {
+          "file": "app/ui.js",
+          "sha256": "bcb8c05434244221c85ae55f4a542e802947d7615a23e59bbd6c8f9efe885c5b"
+        },
+        {
+          "file": "app/templates.js",
+          "sha256": "193ae8a12c4a5b8158b6be8c8fde2437fa5c88c22055d8c881eb2bbb11d2a0eb"
+        },
+        {
+          "file": "app/sync.js",
+          "sha256": "b8627eaa950d949b4bed50760e41622e15f484a7fa4cf40429b5deeccdb8f632"
+        },
+        {
+          "file": "app/themes.js",
+          "sha256": "f32cb75093bc9d10038eccf458db44ad9fafaa84b56c56a809d54a6409ff5916"
+        },
+        {
+          "file": "app/store.js",
+          "sha256": "8bb16e8efce4365a13e4ed8fde3ecccacc45bcdc80bf7e3bc55cdf3aff1647d6"
+        },
+        {
+          "file": "app/tour.js",
+          "sha256": "5d247557b762e0ecc89ee1cfc48aba4672e4a01f5e901124e4f431736370de9f"
+        },
+        {
+          "file": "src/art.js",
+          "sha256": "3ecd394c8753006c57ea59241b6917bbfbd0b095fd134cac2ed49e8d95649ef8"
+        },
+        {
+          "file": "app/videos.js",
+          "sha256": "573ec6c24fbb92121612ecd68e2e1bc3e2d3f70e07c2ac664d4503a862ed2142"
+        },
+        {
+          "file": "app/zip.js",
+          "sha256": "345e936f955665a859d7fa86d9c1b9f4846d75a944c1df0f3d0c7d477152c026"
+        },
+        {
+          "file": "app/webm.js",
+          "sha256": "ea139802050bd040ba37d55389fc931933df561423274af5bc13ffe6b20bf4e2"
+        },
+        {
+          "file": "src/art/LICENSE-fluent-emoji.txt",
+          "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383"
+        },
+        {
+          "file": "src/art/LICENSE-open-peeps.txt",
+          "sha256": "bfd35c083d50a1578084fb1e4d462aed9c46bb165cb00cf62b178fb61d163ce4"
+        },
+        {
+          "file": "src/art/LICENSE-tabler-icons.txt",
+          "sha256": "b740a1d46122672da62833e97f7e7c8a13fa85cbc7445b584b297cc00dde93db"
+        },
+        {
+          "file": "src/art/LICENSE-pixelarticons.txt",
+          "sha256": "eb113ac5006542496193a0641f8e90dcaf392e5025540ba45c2ee042af3ae51d"
+        },
+        {
+          "file": "src/art/tabler.js",
+          "sha256": "d6b007cc9d0fcc730d5795eae18d996a389f6c745eeaaf58ee9b1fdc705c5d28"
+        },
+        {
+          "file": "src/art/pixel.js",
+          "sha256": "ec6303c97feefd0afa66513a68441fcd63aaaaa849bdc6fb65cbc5e0a0801823"
+        },
+        {
+          "file": "src/art/peeps.js",
+          "sha256": "17ae798cba57ef0074dae4ce1e477bc5d7e07ece31b76fdcdb92cdea522460fb"
+        },
+        {
+          "file": "src/art/fluent.js",
+          "sha256": "ac8e6f93081a0616b2a719956cae7eccd67d8ffb9c08ecd409ed7dc29a71a4e9"
+        },
+        {
+          "file": "src/demux.js",
+          "sha256": "c705c29f62e3469ca50c5c5702590cea87400ac9f31417bedade4697afa59f74"
+        },
+        {
+          "file": "src/dom.js",
+          "sha256": "381c1e39c6b79f846820e6dd8a9e214e0afda803c65fbb6c5272cd36326ac5b6"
+        },
+        {
+          "file": "src/cutout.js",
+          "sha256": "8d8bca67af165f3a5a58dba68ad6cbf9d5e696f6b5a445c1de628f9c3f351a42"
+        },
+        {
+          "file": "src/document.js",
+          "sha256": "1fc088084c243346de8c1606171d19fa27419e0ee95d26ec4137f2707aa8e22f"
+        },
+        {
+          "file": "src/editor.css",
+          "sha256": "cc2f2b2e61d9f7a592626e523cee79d9e9eb6a40e1260514de0063f6868e434f"
+        },
+        {
+          "file": "src/editor.js",
+          "sha256": "4b99ad0e8282b4681f64cfd899d7a9dcdf1cbae37ac588d3525fa41849dbd62d"
+        },
+        {
+          "file": "src/export.js",
+          "sha256": "c6cc224044c6527c66f0c5cf0152d9615c0d47a4dc836970ab42af3c3d881125"
+        },
+        {
+          "file": "src/fonts.js",
+          "sha256": "04cda589c1487f216d31a8c73ac3bb7cf9ffb0123a2b1615f0e4e82b6a3a828a"
+        },
+        {
+          "file": "src/index.js",
+          "sha256": "ea7b70ef2aa2ed32738400be29e1c7ede8ad4c42e5f37c9342fb24765f020028"
+        },
+        {
+          "file": "src/icons.js",
+          "sha256": "ded934e9c06512e14185c34cc1f30d252267571043856ccb15771d616aa9394d"
+        },
+        {
+          "file": "src/film.js",
+          "sha256": "0c181245899a298acf36056624603f6a0e6ffa71f35219dee6e0e4fd6fcc917a"
+        },
+        {
+          "file": "src/images.js",
+          "sha256": "d76575b10e5b487478e295b67bf9c64b3f7894758205d73bd836cbc368386b6d"
+        },
+        {
+          "file": "src/mux.js",
+          "sha256": "e7bf3e851e3e737641e34e0b27aac872d9af0d84e569d0653e05cfaffd9ecb38"
+        },
+        {
+          "file": "src/models/LICENSE-U2Net.txt",
+          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+        },
+        {
+          "file": "src/model.js",
+          "sha256": "44c0192941618c8d2e58d007b07c0931b8fc249707dc42a6f29c8965ee6a4021"
+        },
+        {
+          "file": "src/models/README.md",
+          "sha256": "30be57605f20c6184506f6d674a70038dc94139266944f33c2d4a8017965628e"
+        },
+        {
+          "file": "src/motion.js",
+          "sha256": "5889de7821e1829a65edba36c2c4e0c4a2b7c81b60a5c061514d8921be979012"
+        },
+        {
+          "file": "src/models/u2netp.onnx",
+          "sha256": "309c8469258dda742793dce0ebea8e6dd393174f89934733ecc8b14c76f4ddd8"
+        },
+        {
+          "file": "src/palettes.js",
+          "sha256": "eb1e0298a7c8fc0f98e86d3374e407444a9b3486246f127574703fc121ab88de"
+        },
+        {
+          "file": "src/scene.js",
+          "sha256": "e028fd397daec6a0b85e9df7e1789db49ec0bd0a2946e8be29ad89045763305c"
+        },
+        {
+          "file": "src/render.js",
+          "sha256": "8a9cc2c7148108a1a255bd33a37f82389d8485b618f398212e5e3d7a9f7249a8"
+        },
+        {
+          "file": "src/resize.js",
+          "sha256": "36be8fc210b9e43010c767c2aea19cd1d317677a11c2a7b6cc060a1ba0e75621"
+        },
+        {
+          "file": "src/reel.js",
+          "sha256": "12e11ce51ce346357d1b1c341f1e822296fe11d7ab7c3552706452fa554b16bd"
+        },
+        {
+          "file": "src/segment.js",
+          "sha256": "e1b673d67cbcec66dda0663506b39f4d769d5d7df7299173b7efe719aaddc492"
+        },
+        {
+          "file": "src/shapes.js",
+          "sha256": "af0f5802d74b15d902fb7cceb5d43775f455ce0648e46992e88aabd969a0c990"
+        },
+        {
+          "file": "src/sound.js",
+          "sha256": "99d9ed616236456378ee26e59dfc6d0b584f26bbc68f89c01e0b79f57183f4b2"
+        },
+        {
+          "file": "src/stickers.js",
+          "sha256": "268530e5c764d1cbafcc70f9a4f29f7033475afe92edca2aa5c2e7d4c14ad821"
+        },
+        {
+          "file": "src/video.js",
+          "sha256": "668e8e13f1ee80055f73b0230cb3508f7ef8671b0ad663e0652dfaa3843bf999"
+        },
+        {
+          "file": "src/youtube.js",
+          "sha256": "b41fa81ce70ca8c1f7cb4912b6d30a32228032e14a373bc2b1356b6d8d6e06ee"
+        }
+      ],
+      "htmlNormalization": {
+        "knownNetlifyToolbar": 0,
+        "knownNetlifyHostingComment": 1,
+        "removedHostingCommentCharacters": 326,
+        "originalCharactersDeleted": 0,
+        "rawSha256": "39ac5d597af08cb451155e5d1e0075a0571265c9c250c469b0db18f1010317cb",
+        "normalizedSha256": "5155c1095db55072de991f4ef655260e3181a5592d18b58043e2234fc8fc05c4",
+        "inlineScriptCspHashMatches": true
+      },
+      "common": {
+        "version": "0.26.5",
+        "commit": "2cc7e764ec5c7818ae603ecd70c19bf9d2ea41cf",
+        "manifestFiles": 149,
+        "localHashesVerified": 149,
+        "remoteRuntimeHashesVerified": 149
+      },
+      "verifiedHostFiles": [
+        {
+          "file": "onbatang-material-navigation.js",
+          "sha256": "d2350d03770ac9f99ac3ec3beac7420b2b80abd2d907ee54eac8f4b83ca7ef96"
+        },
+        {
+          "file": "minican-app.js",
+          "sha256": "a8a17972bfb95720342327e074743bebddf60cf2e217dc5c9738ebe49962cb78"
+        },
+        {
+          "file": "onbatang-inline-import.js",
+          "sha256": "fedc235ff9e12f52fe14d9456658af1dafa0431fd316277ec617ac58f869a56b"
+        },
+        {
+          "file": "onbatang-import-app.js",
+          "sha256": "0cbb28d84f3be78c766d4489cf07cccc95fb7fd8a73c9c00393e12053c09bca2"
+        },
+        {
+          "file": "onbatang-import-workspace.js",
+          "sha256": "33cd9885653962cb1015d8c47bfa05a43788d02d8445644b95ad76f84858a2bd"
+        },
+        {
+          "file": "onbatang-import.css",
+          "sha256": "a249171d9dfff6c18b4f35ffc392b9402fb01e06d92affaecc6ec3bffc34b81a"
+        },
+        {
+          "file": "minican-cloud.js",
+          "sha256": "45188b94fde406a6326343116dfa1eb629951b1a96033402f4c90cd455e9369e"
+        },
+        {
+          "file": "onbatang-material-editor.js",
+          "sha256": "65b8cf2615ffd6622da133077ccfc33df7bd23f30baa1e7878871f17173e0ba6"
+        },
+        {
+          "file": "onbatang-material-drafts.js",
+          "sha256": "a0834a8474c4a83fd83ef6de69e8b62d231ed411363dec2658b51c1124f6264a"
+        },
+        {
+          "file": "onbatang-material-edits.js",
+          "sha256": "2de3c49e34e8f9544ffac90bcf611abdd0b5e11ef17bc9e20b4d78eae6fb69a6"
+        },
+        {
+          "file": "onbatang-local-repository.js",
+          "sha256": "92c53d102ded8ab6e8eabba1385222aa0ea0773e996106e0a5d9ad576a243cd4"
+        }
+      ],
+      "isolation": {
+        "freshNonPersistentContext": true,
+        "existingProfileUsed": false,
+        "accountUsed": false,
+        "loginAttempted": false,
+        "mailSent": false,
+        "externalOriginsAllowed": 0,
+        "bootstrapOutsideGetsBlocked": 25,
+        "bootstrapSdkGetsBlocked": 25,
+        "bootstrapAccountReadsBlocked": 25,
+        "pptAccountRequests": 0,
+        "pptOutsideGets": 0,
+        "nonGetAttemptsBlocked": 0,
+        "webSocketAttemptsBlocked": 0,
+        "serviceWorkers": 0,
+        "serviceWorkerRegistrationsBlocked": 0,
+        "rawPageErrors": 0
+      }
+    },
+    "commonActualTeacher": {
+      "checkedAt": "2026-10-19T14:06:05.517Z",
+      "scope": "public-runtime-private-teacher-PPT-browser-touch-emulation",
+      "physicalDevice": "NOT_RUN",
+      "paidQaUsed": false,
+      "origin": "https://onbatang.web.app",
+      "app": "standalone",
+      "checks": [
+        {
+          "name": "original-hash-before",
+          "pass": true
+        },
+        {
+          "name": "exact-current-public-release-and-critical-runtime-bytes",
+          "pass": true
+        },
+        {
+          "name": "all-original-pages-selected",
+          "pass": true
+        },
+        {
+          "name": "actual-PPT-screen-preview-loaded",
+          "pass": true
+        },
+        {
+          "name": "touch-font-dialog-readable-and-actions-visible",
+          "pass": true
+        },
+        {
+          "name": "all-parts-visible-in-editor",
+          "pass": true,
+          "pages": 19,
+          "parts": 11
+        },
+        {
+          "name": "fast-slide-navigation-never-flashes-notices",
+          "pass": true,
+          "fastSlides": 19
+        },
+        {
+          "name": "all-nineteen-pages-open-in-editor",
+          "pass": true
+        },
+        {
+          "name": "all-nineteen-pages-keep-editor-rail-and-frame-layout",
+          "pass": true,
+          "sameNodes": true,
+          "topDelta": 0,
+          "heightDelta": 0
+        },
+        {
+          "name": "first-and-last-part-drafts-saved",
+          "pass": true
+        },
+        {
+          "name": "touch-drag-order-and-button-restore",
+          "pass": true
+        },
+        {
+          "name": "four-named-palettes-saved-with-distinct-colors",
+          "pass": true
+        },
+        {
+          "name": "order-saved-across-parts-original-revision-unchanged",
+          "pass": true
+        },
+        {
+          "name": "reload-keeps-all-pages-and-part-edits",
+          "pass": true
+        },
+        {
+          "name": "four-palettes-and-colors-survive-reload",
+          "pass": true
+        },
+        {
+          "name": "whole-editor-export-editable",
+          "pass": true,
+          "slides": 19,
+          "bytes": 4283807,
+          "sha256": "193b18bb619f5ed35ce87b15c2902501b1bdb9c8171b0547996f311b3e03a565"
+        },
+        {
+          "name": "whole-editor-export-image",
+          "pass": true,
+          "slides": 19,
+          "bytes": 4358067,
+          "sha256": "0fa3f730ccdbc24e3eb312883952a95f3f2b39afebcbc13e34319b83f75d7f83"
+        },
+        {
+          "name": "original-fixed-graph-and-private-source-unchanged",
+          "pass": true
+        }
+      ],
+      "remoteRequests": 0,
+      "pageErrors": [],
+      "accountQa": "NOT_RUN",
+      "nativePowerPoint": "NOT_RUN_THIS_SESSION",
+      "productionDatabaseChanged": false,
+      "emulatedScreen": {
+        "width": 390,
+        "height": 844,
+        "touch": true
+      },
+      "release": {
+        "version": "0.26.5",
+        "commit": "2cc7e764ec5c7818ae603ecd70c19bf9d2ea41cf",
+        "commonVersion": "0.26.5",
+        "commonCommit": "2cc7e764ec5c7818ae603ecd70c19bf9d2ea41cf"
+      },
+      "runtimeHashes": [
+        {
+          "file": "app/app.js",
+          "sha256": "69af229b630a10cc0031276140f15682cb73668b1753ade7561693123101e690"
+        },
+        {
+          "file": "app/loading.js",
+          "sha256": "4a915c3f80e321a8233d4969828e12fe337c0840830db9183291d16006465f46"
+        },
+        {
+          "file": "app/filmstrip.js",
+          "sha256": "54068a1527eeb1a6f8ea17b1967b50a61d25e382c376d6f1e761a3fdb005b876"
+        },
+        {
+          "file": "src/editor.js",
+          "sha256": "4b99ad0e8282b4681f64cfd899d7a9dcdf1cbae37ac588d3525fa41849dbd62d"
+        },
+        {
+          "file": "src/editor.css",
+          "sha256": "cc2f2b2e61d9f7a592626e523cee79d9e9eb6a40e1260514de0063f6868e434f"
+        },
+        {
+          "file": "app/app.css",
+          "sha256": "d475ce546e0f83601c170eaa8fdd9d55d1e8e4812983c4f811b2a37a50f52bb8"
+        }
+      ],
+      "palettes": {
+        "slots": 4,
+        "namesAndColorsReopened": true,
+        "nativeEyedropper": "NOT_RUN"
+      },
+      "downloads": [
+        {
+          "mode": "editable",
+          "filename": "common-editable-v0265.pptx",
+          "slides": 19,
+          "bytes": 4283807,
+          "sha256": "193b18bb619f5ed35ce87b15c2902501b1bdb9c8171b0547996f311b3e03a565"
+        },
+        {
+          "mode": "image",
+          "filename": "common-image-v0265.pptx",
+          "slides": 19,
+          "bytes": 4358067,
+          "sha256": "0fa3f730ccdbc24e3eb312883952a95f3f2b39afebcbc13e34319b83f75d7f83"
+        }
+      ],
+      "pass": true
+    },
+    "gaiActualTeacher": {
+      "checkedAt": "2026-10-19T14:04:34.235Z",
+      "scope": "public-runtime-private-teacher-PPT-browser-touch-emulation",
+      "physicalDevice": "NOT_RUN",
+      "paidQaUsed": false,
+      "origin": "https://gai-lab.netlify.app",
+      "app": "gai",
+      "checks": [
+        {
+          "name": "original-hash-before",
+          "pass": true
+        },
+        {
+          "name": "exact-current-public-release-and-critical-runtime-bytes",
+          "pass": true
+        },
+        {
+          "name": "all-original-pages-selected",
+          "pass": true
+        },
+        {
+          "name": "actual-PPT-screen-preview-loaded",
+          "pass": true
+        },
+        {
+          "name": "touch-font-dialog-readable-and-actions-visible",
+          "pass": true
+        },
+        {
+          "name": "all-parts-visible-in-editor",
+          "pass": true,
+          "pages": 19,
+          "parts": 11
+        },
+        {
+          "name": "fast-slide-navigation-never-flashes-notices",
+          "pass": true,
+          "fastSlides": 19
+        },
+        {
+          "name": "all-nineteen-pages-open-in-editor",
+          "pass": true
+        },
+        {
+          "name": "all-nineteen-pages-keep-editor-rail-and-frame-layout",
+          "pass": true,
+          "sameNodes": true,
+          "topDelta": 0,
+          "heightDelta": 0
+        },
+        {
+          "name": "first-and-last-part-drafts-saved",
+          "pass": true
+        },
+        {
+          "name": "touch-drag-order-and-button-restore",
+          "pass": true
+        },
+        {
+          "name": "four-named-palettes-saved-with-distinct-colors",
+          "pass": true
+        },
+        {
+          "name": "order-saved-across-parts-original-revision-unchanged",
+          "pass": true
+        },
+        {
+          "name": "reload-keeps-all-pages-and-part-edits",
+          "pass": true
+        },
+        {
+          "name": "four-palettes-and-colors-survive-reload",
+          "pass": true
+        },
+        {
+          "name": "whole-editor-export-editable",
+          "pass": true,
+          "slides": 19,
+          "bytes": 4283807,
+          "sha256": "ac89bb758d41bbddf89f07e85d06f2bd882e89f5c87ee36a3b12216a2bdb002e"
+        },
+        {
+          "name": "whole-editor-export-image",
+          "pass": true,
+          "slides": 19,
+          "bytes": 4358067,
+          "sha256": "2ed848a5d9cffeff2026a7b7c2ef74150359c4790e3aa5a53767f0cdca94ce95"
+        },
+        {
+          "name": "original-fixed-graph-and-private-source-unchanged",
+          "pass": true
+        }
+      ],
+      "remoteRequests": 0,
+      "pageErrors": [],
+      "accountQa": "NOT_RUN",
+      "nativePowerPoint": "NOT_RUN_THIS_SESSION",
+      "productionDatabaseChanged": false,
+      "emulatedScreen": {
+        "width": 1024,
+        "height": 768,
+        "touch": true
+      },
+      "release": {
+        "version": "0.71.3",
+        "commit": "21dedd73f2704885d08b94c93be66a486c08c8e8",
+        "commonVersion": "0.26.5",
+        "commonCommit": "2cc7e764ec5c7818ae603ecd70c19bf9d2ea41cf"
+      },
+      "runtimeHashes": [
+        {
+          "file": "app/app.js",
+          "sha256": "69af229b630a10cc0031276140f15682cb73668b1753ade7561693123101e690"
+        },
+        {
+          "file": "app/loading.js",
+          "sha256": "4a915c3f80e321a8233d4969828e12fe337c0840830db9183291d16006465f46"
+        },
+        {
+          "file": "app/filmstrip.js",
+          "sha256": "54068a1527eeb1a6f8ea17b1967b50a61d25e382c376d6f1e761a3fdb005b876"
+        },
+        {
+          "file": "src/editor.js",
+          "sha256": "4b99ad0e8282b4681f64cfd899d7a9dcdf1cbae37ac588d3525fa41849dbd62d"
+        },
+        {
+          "file": "src/editor.css",
+          "sha256": "cc2f2b2e61d9f7a592626e523cee79d9e9eb6a40e1260514de0063f6868e434f"
+        },
+        {
+          "file": "app/app.css",
+          "sha256": "d475ce546e0f83601c170eaa8fdd9d55d1e8e4812983c4f811b2a37a50f52bb8"
+        }
+      ],
+      "palettes": {
+        "slots": 4,
+        "namesAndColorsReopened": true,
+        "nativeEyedropper": "NOT_RUN"
+      },
+      "downloads": [
+        {
+          "mode": "editable",
+          "filename": "gai-editable-v0265.pptx",
+          "slides": 19,
+          "bytes": 4283807,
+          "sha256": "ac89bb758d41bbddf89f07e85d06f2bd882e89f5c87ee36a3b12216a2bdb002e"
+        },
+        {
+          "mode": "image",
+          "filename": "gai-image-v0265.pptx",
+          "slides": 19,
+          "bytes": 4358067,
+          "sha256": "2ed848a5d9cffeff2026a7b7c2ef74150359c4790e3aa5a53767f0cdca94ce95"
+        }
+      ],
+      "pass": true
+    },
+    "previewHost": {
+      "origin": "https://deploy-preview-86--gai-lab.netlify.app",
+      "commit": "c874e28e91384430691814ade78f640a5c6fe0cc",
+      "version": "0.71.3",
+      "context": "deploy-preview",
+      "commonCommit": "2cc7e764ec5c7818ae603ecd70c19bf9d2ea41cf",
+      "status": "PASS",
+      "previewToolbarBlocked": true,
+      "physicalDevice": "NOT_RUN",
+      "paidQaUsed": false,
+      "accountUsed": false,
+      "remoteWrites": 0,
+      "screens": [
+        {
+          "width": 390,
+          "height": 844,
+          "passed": true,
+          "fullScreenIframe": true,
+          "fontsReadable": true,
+          "downloadVisible": true
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "passed": true,
+          "fullScreenIframe": true,
+          "fontsReadable": true,
+          "downloadVisible": true
+        }
+      ]
+    },
+    "productionHost": {
+      "origin": "https://gai-lab.netlify.app",
+      "commit": "21dedd73f2704885d08b94c93be66a486c08c8e8",
+      "version": "0.71.3",
+      "context": "production",
+      "commonCommit": "2cc7e764ec5c7818ae603ecd70c19bf9d2ea41cf",
+      "status": "PASS",
+      "previewToolbarBlocked": false,
+      "physicalDevice": "NOT_RUN",
+      "paidQaUsed": false,
+      "accountUsed": false,
+      "remoteWrites": 0,
+      "screens": [
+        {
+          "width": 390,
+          "height": 844,
+          "passed": true,
+          "fullScreenIframe": false,
+          "loginGatePreserved": true,
+          "directRuntime": true,
+          "fontsReadable": true,
+          "downloadVisible": true
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "passed": true,
+          "fullScreenIframe": false,
+          "loginGatePreserved": true,
+          "directRuntime": true,
+          "fontsReadable": true,
+          "downloadVisible": true
+        }
+      ],
+      "authenticatedProductionHost": "NOT_RUN_ACCOUNT_NOT_USED"
+    }
+  },
+  "preservation": {
+    "originalTeacherPpt": "UNCHANGED_SHA256",
+    "originalFixedRevisions": "UNCHANGED",
+    "existingPr76": {
+      "state": "OPEN",
+      "draft": true,
+      "head": "41a610388d6e8566af70f9676b64c9894e33ab1f"
+    },
+    "preexistingDirtyFiles": [
+      "dist/community-config.js",
+      "release-times.json"
+    ],
+    "preexistingDirtyFilesChangedByTask": false,
+    "sqlSchemaChanged": false,
+    "productionDbChanged": false,
+    "paidQaUsed": false,
+    "realAccountUsed": false
+  },
+  "unresolved": {
+    "physicalAndroidIphoneIpad": "NOT_RUN",
+    "safari": "NOT_RUN",
+    "osEyedropperAndFileApp": "NOT_RUN",
+    "virtualKeyboardAndRealDeviceRotation": "NOT_RUN",
+    "nativePowerPoint": "NOT_RUN_THIS_MOBILE_UI_SESSION",
+    "authenticatedGaiProductionIframe": "NOT_RUN_ACCOUNT_NOT_USED; preview iframe and deployed direct runtime verified separately",
+    "actualAccountMailStudentAnd35Users": "NOT_RUN_NO_PAID_QA",
+    "githubActions": "NOT_STARTED_ACCOUNT_PAYMENTS_OR_SPENDING_LIMIT; LOCAL_TESTS_AND_NETLIFY_BUILD_PASS"
+  },
+  "reconciledValidationFindings": [
+    {
+      "finding": "A first production parent-frame check timed out waiting for an iframe",
+      "resolution": "Existing authenticated-teacher gate intentionally has no iframe for guests. Gate preservation and deployed direct editor were checked; authenticated flow remains NOT_RUN."
+    },
+    {
+      "finding": "Netlify preview toolbar intercepted touch input",
+      "resolution": "Only the preview-specific /.netlify/scripts/cdp was blocked in fresh test contexts; recorded in previewHost. No production or product source was altered."
+    }
+  ]
+}

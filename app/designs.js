@@ -9,6 +9,10 @@
 // 그림은 이 기기(브라우저의 IndexedDB, store.js)에만 저장된다. 서버로는 아무것도 보내지 않는다.
 
 /** 고를 수 있는 화면 비율(aspect 는 가로 ÷ 세로). */
+import { SCHEMA_VERSION, DOCUMENT_LIMITS, DocumentError, fail, isId, newId, legacyId, cleanSize, metadata, cleanAssets, validatePageInput, validateReferences } from '../src/document.js';
+import { cleanActivity } from '../src/activity.js';
+export { SCHEMA_VERSION, DocumentError };
+
 export const RATIOS = [
   { id: '1:1', name: '정사각형', desc: '카드 한 장', aspect: 1 },
   { id: '4:5', name: '세로', desc: '포스터처럼', aspect: 4 / 5 },
@@ -46,7 +50,32 @@ export function exportSize(sizeId, aspect) {
   return { id: size.id, width, height };
 }
 
-export const ratioOf = (id) => RATIOS.find((r) => r.id === id) || RATIOS[0];
+export const ratioOf = (id) => {
+  const preset = RATIOS.find((r) => r.id === id);
+  if (preset) return preset;
+  const m = typeof id === 'string' && /^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/.exec(id);
+  const aspect = m && Number(m[1]) / Number(m[2]);
+  return aspect >= 0.25 && aspect <= 4 ? { id, name: '원본 비율', desc: id, aspect } : RATIOS[0];
+};
+export const aspectOf = record => record?.size ? cleanSize(record.size).width / record.size.height : ratioOf(record?.ratio).aspect;
+/** Describe the stored canvas without rounding it to an editor preset or resizing it. */
+export function canvasRatioOf(record) {
+  // Allow only floating-point representation noise, not a nearby custom ratio.
+  const sameAspect = (a, b) => Math.abs(a - b) <= Number.EPSILON * Math.max(1, Math.abs(a), Math.abs(b)) * 4;
+  const aspect = aspectOf(record), preset = RATIOS.find(value => sameAspect(value.aspect, aspect));
+  const originalSize = record?.originalSize ? cleanSize(record.originalSize, 'originalSize') : null;
+  const original = record?.source?.kind === 'pptx' && originalSize !== null
+    && sameAspect(originalSize.width / originalSize.height, aspect);
+  const size = original ? originalSize : record?.size ? cleanSize(record.size) : null;
+  let id = preset?.id || ratioOf(record?.ratio).id;
+  if (!preset && size) {
+    const gcd = (a, b) => b ? gcd(b, a % b) : a;
+    const divisor = Number.isSafeInteger(size.width) && Number.isSafeInteger(size.height) ? gcd(size.width, size.height) : 1;
+    id = `${size.width / divisor}:${size.height / divisor}`;
+  }
+  return { id, aspect, preset: preset?.id || null, original,
+    label: `${original ? '원본 비율' : '현재 비율'} · ${id}` };
+}
 /** 새 그림의 모양으로 쓸, 지난번에 고른 모양을 기억해 두는 자리(localStorage). */
 export const RATIO_KEY = 'minican.ratio';
 
@@ -79,7 +108,11 @@ export function slideVideo(slide) {
   return { video };
 }
 /** 장에 딸린 것 모두(움직임 · 영상 장면). 슬라이드를 새로 짜 맞추는 곳({ bg, items } 를 만드는 곳)마다 함께 펼쳐 넣는다(빠뜨리면 저장하면서 사라진다). */
-export const slideExtra = (slide) => ({ ...slideMotion(slide), ...slideVideo(slide) });
+export const slideExtra = (slide) => ({ ...metadata(slide, { identity: true }), ...slideMotion(slide), ...slideVideo(slide), ...(slide?.activity === undefined ? {} : {activity:cleanActivity(slide.activity)}) });
+export function withSlideMotion(slide, motion) {
+  const { pa, tr, ...extra } = slideExtra(slide);
+  return { bg: slide.bg, items: slide.items, ...extra, ...slideMotion(motion) };
+}
 /** 영상 장면이 있는 장인지. */
 export const hasVideo = (slide) => !!slideVideo(slide).video;
 /** 슬라이드들이 쓰는 영상 파일의 열쇠들(같은 파일은 한 번만). */
@@ -98,9 +131,19 @@ export function unusedVideos(files, designId, used, more = []) {
   return [...new Set([...mine, ...more])].filter((key) => typeof key === 'string' && key && !busy.has(key));
 }
 
-const cleanSlide = (raw) => {
-  const d = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
-  return { bg: d.bg, items: Array.isArray(d.items) ? d.items.slice(0, 60) : [], ...slideExtra(d) };
+// Visual fields remain compatible with model.js; nested extension data is explicitly validated.
+const ITEM_FIELDS = ['t', 'x', 'y', 'w', 'h', 'rot', 'op', 'lock', 'g', 'an', 'aw', 'fx', 'fy', 'text', 'size', 'color', 'font', 'bold', 'italic', 'under', 'align', 'valign', 'lh', 'nowrap', 'hangingPunct', 'typeface', 'bgc', 'ch', 'shape', 'r', 'line', 'lc', 'hollow', 'art', 'yt', 'start', 'auto', 'url', 'path', 'mask'];
+const cleanSlide = (d, index, documentId) => {
+  if (!d || typeof d !== 'object' || Array.isArray(d)) fail('INVALID_PAGE', `slides.${index}`, d);
+  const pageId = d.id ?? legacyId('p', `${documentId}:page:${index}`);
+  if (d.items !== undefined && !Array.isArray(d.items)) fail('INVALID_ITEMS', `slides.${index}.items`, d);
+  const items = Array.isArray(d.items) ? d.items : [];
+  validatePageInput({ ...d, items });
+  return { bg: d.bg, ...slideExtra({ ...d, id: pageId }), items: items.map((item, i) => {
+    const out = {};
+    for (const k of ITEM_FIELDS) if (['string', 'number', 'boolean'].includes(typeof item[k])) out[k] = item[k];
+    return { ...out, ...(item.layout==='slide'?{layout:'slide'}:{}), ...metadata({ ...item, id: item.id ?? legacyId('e', `${documentId}:${pageId}:${i}`) }, { identity: true }) };
+  }) };
 };
 /**
  * 저장해 둔 기록 하나를 정리한다. { id, name, ratio, slides, updatedAt, … } 모양이 아니면 null.
@@ -109,19 +152,50 @@ const cleanSlide = (raw) => {
  */
 export function cleanRecord(raw) {
   const r = raw && typeof raw === 'object' ? raw : {};
-  if (!isDesignId(r.id)) return null;
+  if (r.id !== undefined && !isDesignId(r.id)) return null;
+  if (r.schemaVersion !== undefined && r.schemaVersion !== SCHEMA_VERSION) fail('UNSUPPORTED_SCHEMA', 'schemaVersion', raw, { supported: SCHEMA_VERSION });
   const one = r.design && typeof r.design === 'object' && !Array.isArray(r.design) ? [r.design] : null;
   const many = Array.isArray(r.slides) && r.slides.length ? r.slides : one;
   if (!many) return null;
-  const slides = many.slice(0, MAX_SLIDES).map(cleanSlide);
-  return {
-    id: r.id,
+  if (many.length > MAX_SLIDES) fail('PAGE_LIMIT', 'slides', raw, { limit: MAX_SLIDES, actual: many.length });
+  const id = r.id ?? legacyId('d', JSON.stringify(raw));
+  const slides = many.map((d, i) => cleanSlide(d, i, id));
+  const preset = ratioOf(r.ratio);
+  const pair = preset.id.split(':').map(Number);
+  const size = cleanSize(r.size ?? r.originalSize ?? { width: pair[0], height: pair[1], unit: 'px' });
+  const revision = r.revision ?? 0;
+  if (!Number.isSafeInteger(revision) || revision < 0) fail('INVALID_REVISION', 'revision', raw);
+  const out = {
+    id, schemaVersion: SCHEMA_VERSION, revision,
+    size, originalSize: cleanSize(r.originalSize ?? size, 'originalSize'),
+    source: { kind: 'local' }, ...metadata(r), assets: cleanAssets(r.assets),
     name: cleanName(r.name) || '이름 없는 그림',
-    ratio: ratioOf(r.ratio).id,
+    ratio: `${size.width}:${size.height}`,
     slides,
     uploads: libraryOf(r.uploads, slides),
     updatedAt: Number.isFinite(r.updatedAt) && r.updatedAt > 0 ? r.updatedAt : 0,
   };
+  validateReferences(out);
+  return out;
+}
+
+/** Import/migration boundary. Rejection retains the exact input, with a machine-readable reason. */
+export function migrateRecord(raw) {
+  try {
+    const record = cleanRecord(raw);
+    if (!record) fail('INVALID_RECORD', 'document', raw);
+    return record;
+  } catch (error) {
+    if (error instanceof DocumentError) error.original = raw;
+    throw error;
+  }
+}
+/** A copy has fresh identities; origin references describe where its content came from. */
+export function copyRecord(raw) {
+  const r = migrateRecord(raw), id = newDesignId();
+  return migrateRecord({ ...r, id, revision: 0, name: `${r.name} 복사`, origin: { documentId: r.id, revision: r.revision },
+    slides: r.slides.map(p => ({ ...p, id: newId('p'), ...(p.activity?{activity:{...p.activity,id:newId('a')}}:{}), origin: { documentId: r.id, pageId: p.id, revision: r.revision },
+      items: p.items.map(e => ({ ...e, id: newId(), origin: { documentId: r.id, pageId: p.id, elementId: e.id, revision: r.revision } })) })) });
 }
 
 // ---------- 올린 파일 목록 ----------
@@ -145,7 +219,8 @@ export function libraryOf(uploads, slides) {
   for (const u of [...(Array.isArray(uploads) ? uploads : []), ...deckPhotos(slides)]) {
     if (isPhotoData(u) && !out.includes(u)) out.push(u);
   }
-  return out.slice(0, MAX_LIBRARY);
+  if (out.length > MAX_LIBRARY) fail('UPLOAD_LIMIT', 'uploads', uploads, { limit: MAX_LIBRARY });
+  return out;
 }
 /** 그 사진을 뺀 슬라이드들(올린 파일을 지울 때 쓴 곳에서도 지운다). 바뀐 것이 없으면 받은 목록을 그대로 돌려준다. */
 export function dropPhoto(slides, url) {
@@ -161,7 +236,7 @@ export function dropPhoto(slides, url) {
 
 /** 새 기록(빈 슬라이드 한 장). n 은 "그림 n" 이름에 쓸 번호. */
 export function newRecord(ratio, n = 1, now = Date.now()) {
-  return { id: newDesignId(now), name: `그림 ${n}`, ratio: ratioOf(ratio).id, slides: [{ items: [] }], updatedAt: now };
+  return migrateRecord({ id: newDesignId(now), name: `그림 ${n}`, ratio: ratioOf(ratio).id, slides: [{ items: [] }], updatedAt: now });
 }
 /** 최근에 고친 것부터. */
 export function sortRecords(list) {
@@ -187,7 +262,7 @@ export function fileName(now = new Date(), page = 0) {
 
 // ---------- 슬라이드 다루기(모두 새 목록을 돌려준다) ----------
 
-const emptySlide = () => ({ items: [] });
+const emptySlide = () => ({ id: newId('p'), items: [] });
 /**
  * at 번째 슬라이드 뒤에 빈 슬라이드를 넣는다. [새 목록, 새 슬라이드의 번호]. 꽉 찼으면 [그대로, -1]. bg 를 주면 그 배경으로.
  * like 를 주면 그 슬라이드의 움직임(조합 효과 · 전환 효과)을 이어받는다(앞 장과 같은 모양으로 넘어가고 나오게).
@@ -196,14 +271,19 @@ export function addSlide(slides, at, bg, like = null) {
   if (slides.length >= MAX_SLIDES) return [slides, -1];
   const i = Math.min(slides.length, Math.max(0, at + 1));
   const next = slides.slice();
-  next.splice(i, 0, { ...(bg === undefined ? emptySlide() : { bg, items: [] }), ...slideMotion(like) });
+  next.splice(i, 0, { ...emptySlide(), ...(bg === undefined ? {} : { bg }), ...slideMotion(like) });
   return [next, i];
 }
 /** at 번째 슬라이드를 복제해 바로 뒤에 넣는다. [새 목록, 복제된 것의 번호]. 꽉 찼으면 [그대로, -1]. */
 export function copySlide(slides, at) {
   if (slides.length >= MAX_SLIDES || !slides[at]) return [slides, -1];
   const next = slides.slice();
-  next.splice(at + 1, 0, JSON.parse(JSON.stringify(slides[at])));
+  const original = slides[at], page = JSON.parse(JSON.stringify(original));
+  page.id = newId('p');
+  if(page.activity)page.activity.id=newId('a');
+  if (original.id) page.origin = { pageId: original.id };
+  page.items = page.items.map(e => ({ ...e, id: newId(), ...(e.id ? { origin: { elementId: e.id, ...(original.id ? { pageId: original.id } : {}) } } : {}) }));
+  next.splice(at + 1, 0, page);
   return [next, at + 1];
 }
 /** at 번째 슬라이드를 지운다. 마지막 한 장은 지우지 않고 비운다. [새 목록, 이어서 보여 줄 번호] */

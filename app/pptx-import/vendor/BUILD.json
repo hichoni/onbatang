@@ -1,0 +1,101 @@
+{
+  "format": 1,
+  "renderer": {
+    "id": "aiden0z-pptx-renderer",
+    "version": "1.3.0"
+  },
+  "packages": {
+    "@aiden0z/pptx-renderer": "1.3.0",
+    "@xmldom/xmldom": "0.8.15",
+    "echarts": "6.1.0",
+    "esbuild": "0.28.2",
+    "fflate": "0.8.3",
+    "jszip": "3.10.2",
+    "tslib": "2.3.0",
+    "zrender": "6.1.0"
+  },
+  "previewScriptSha256": "CxniqZwjYsO/QbCuMDojvI1zrz++0iuiCbcDE2aeeqY=",
+  "sources": {
+    "app/designs.js": "28b8bebd1f7917d631bed3e24f1d9a8ea05b1c56036033fd1c67fd498978fbc2",
+    "app/import-document.js": "c44c87c8bc22e18725e705a8887c79c14bd14bada41084ce33e71d6badd128e6",
+    "app/pptx-import/bullets.js": "7f19b7f374bf31645195ad97c24569e1840c6517af46cd8782d245f70a32634b",
+    "app/pptx-import/converter.js": "b2444a3d1b11f218445b1a44aaef57e39120870d967788de866d152ff21bfaea",
+    "app/pptx-import/preview-frame.html": "3794dd7c33957ef86d232f80560ea428eff72128f59b994eb245451d1c17e127",
+    "app/pptx-import/preview-frame.js": "70b93c775814114a118d05442d7cf15e4bf472bb30267f938a0981e46fc7a8b6",
+    "app/pptx-import/preview-punctuation.js": "8ff4f855942dde60b6302e775e5a06b58b411e34b015c129088157533934c90e",
+    "app/pptx-import/worker.js": "d4e9ac47e75357e6fdcf5d38d703c337651c2c3720fde01f3bbfa071ad1823c0",
+    "app/zip.js": "345e936f955665a859d7fa86d9c1b9f4846d75a944c1df0f3d0c7d477152c026",
+    "package-lock.json": "29719c6e0115212e645e88a6d60744af3faea28ebcb0ae2759725ff8128bf97e",
+    "src/activity.js": "776e63454bf361306c78c91d39ccd11a1aece40f63d99e64b3756cfd2ee39a8e",
+    "src/document.js": "1fc088084c243346de8c1606171d19fa27419e0ee95d26ec4137f2707aa8e22f",
+    "src/gai-app.js": "b475f79811d851731cc5b65ab312b0b4b64274e7661b6a5b79e71b6e5d072073",
+    "src/pixel-art.js": "533a61b81f49c6bbf8e33b65681d5db76853a2a37c7d9d089f6c00c0c0ec0089",
+    "tools/build-pptx-import.mjs": "54e7e3e87ecf933018338d5d77ecb8eec7318ce8fd95ff1c0c3096ecadcb0b5b"
+  },
+  "files": {
+    "licenses/echarts-LICENSE.txt": {
+      "bytes": 11990,
+      "sha256": "634293835b43a6dd2094fa39182a3d9a6b9ca43b7fdb9ac354e8037af2a3093a"
+    },
+    "licenses/echarts-NOTICE.txt": {
+      "bytes": 168,
+      "sha256": "d491d358344f842685c1b1585970999db65fe30ecf7ef3867af8814f4016c016"
+    },
+    "licenses/fflate-MIT.txt": {
+      "bytes": 1069,
+      "sha256": "0a1df3a083d0c010560aa342e87959c8c1070e6fd54545741f083f22d0c8b551"
+    },
+    "licenses/jszip-LICENSE.md": {
+      "bytes": 33753,
+      "sha256": "566c953c6090b1218ca6217dd7359d45dde46581968586dc607d59a78af6a9c4"
+    },
+    "licenses/licenses/ECMA-text-copyright-notice.txt": {
+      "bytes": 2254,
+      "sha256": "9a08c202df693f91f1f3b1674a64f5989d6269d5d89f710bc65e0fb2757d8f1f"
+    },
+    "licenses/licenses/LICENSE-d3": {
+      "bytes": 1475,
+      "sha256": "e1211892da0b0e0585b7aebe8f98c1274fba15bafe47fa1f4ee8a7a502c06304"
+    },
+    "licenses/licenses/mtx-decompressor-MPL-2.0.txt": {
+      "bytes": 16725,
+      "sha256": "1f256ecad192880510e84ad60474eab7589218784b9a50bc7ceee34c2b91f1d5"
+    },
+    "licenses/pptx-renderer-Apache-2.0.txt": {
+      "bytes": 11357,
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+    },
+    "licenses/THIRD_PARTY_NOTICES.md": {
+      "bytes": 2144,
+      "sha256": "4e49f2e111bff02e594594abbca7924076649d9cc8826d80e42fd7ed2f4fa11c"
+    },
+    "licenses/tslib-CopyrightNotice.txt": {
+      "bytes": 824,
+      "sha256": "dd835e67a9a297da32f9467d7677a5d02c8e50e10f15da43b810147c79c04b9b"
+    },
+    "licenses/tslib-LICENSE.txt": {
+      "bytes": 655,
+      "sha256": "210b19e543130388c68654b7497e967119ce17145f66ab7d85688fbd70f08751"
+    },
+    "licenses/xmldom-MIT.txt": {
+      "bytes": 1298,
+      "sha256": "4da724fc305d81606b245b324d4d2586916b9d248b23d82183df753ace0fdf71"
+    },
+    "licenses/zrender-LICENSE.txt": {
+      "bytes": 1509,
+      "sha256": "a681e9d183c72b4af4856935893805eb48c08f0f5a3f260203db7444c20fb98a"
+    },
+    "pptx-worker.js": {
+      "bytes": 148948,
+      "sha256": "22257ba3d1b4e60b851fbd039a7fb5906ac95590584cab4390f537a2e8caa68f"
+    },
+    "preview-frame.html": {
+      "bytes": 1243897,
+      "sha256": "5155c1095db55072de991f4ef655260e3181a5592d18b58043e2234fc8fc05c4"
+    },
+    "renderer-version.js": {
+      "bytes": 80,
+      "sha256": "5dc84c446174e25e61fc952807e520a7a3d5681f0f7a375677c9f442bb347ea9"
+    }
+  }
+}

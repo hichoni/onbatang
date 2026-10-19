@@ -1,0 +1,17 @@
+.gai-maker{color:#203e37;background:#fffdf8;max-width:1440px;min-height:100%;margin:auto;border-radius:20px;padding:20px;box-sizing:border-box}
+.gai-maker header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px}.gai-maker h2{font-size:23px;margin:0 0 5px}.gai-maker p{margin:8px 0;line-height:1.6}
+.gai-maker-body{display:grid;grid-template-columns:minmax(260px,.8fr) minmax(0,1.2fr);gap:20px}.gai-maker-chat,.gai-maker-stage{min-width:0}.gai-maker-stage{display:flex;flex-direction:column;gap:12px}
+.gai-maker-share{display:flex;align-items:center;gap:8px;margin:14px 0 4px;font-weight:700}.gai-maker-share input{width:20px;height:20px;accent-color:#286f62}.gai-maker-note{font-size:13px;color:#536b66}
+.gai-maker details{font-size:13px}.gai-maker pre{white-space:pre-wrap;max-height:180px;overflow:auto;font:12px/1.5 system-ui;background:#eff5f1;padding:10px;border-radius:10px}
+.gai-maker-log{max-height:260px;overflow:auto;margin:14px 0}.gai-maker-teacher,.gai-maker-answer{padding:12px;border-radius:12px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:15px}.gai-maker-teacher{background:#e8f1ed;margin-left:24px!important}.gai-maker-answer{background:#f3f0fa;margin-right:24px!important}
+.gai-maker-compose textarea{box-sizing:border-box;width:100%;resize:vertical;min-height:100px;max-height:250px;padding:12px;border:1px solid #aabfb7;border-radius:12px;font:16px/1.6 inherit;color:inherit}.gai-maker-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}.gai-maker-status{font-size:14px;min-height:24px}
+.gai-maker-preview{min-height:400px;height:min(56vh,650px);background:#f2f6f3;border:1px solid #cfddd5;border-radius:14px;overflow:hidden;display:flex;flex-direction:column}.gai-maker-placeholder{padding:40px;text-align:center;color:#5d716a;margin:auto!important}.gai-maker-preview>.gai-app-runtime{flex:1;min-height:0;overflow:auto;padding:12px}.gai-maker-preview .gai-app-frame{height:340px;min-height:260px}
+.gai-maker button{min-height:44px}.gai-maker button:focus-visible,.gai-maker textarea:focus-visible{outline:3px solid #acb3fc;outline-offset:3px}
+@media(max-width:850px){.gai-maker{padding:12px}.gai-maker-body{grid-template-columns:1fr}.gai-maker header{align-items:start;flex-wrap:wrap}.gai-maker-preview{height:460px;min-height:320px}.gai-maker-log{max-height:180px}.gai-maker h2{font-size:20px}}
+@media(max-width:850px){
+ .cv-activity-config:has(>.gai-maker){position:fixed;inset:0;z-index:35;padding:0;max-height:100dvh;background:#fffdf8}
+ .gai-maker{border-radius:0;padding-top:0;min-height:100dvh}
+ .gai-maker>header{position:sticky;top:0;z-index:2;background:#fffdf8;padding:12px 0;margin:0 0 12px;border-bottom:1px solid #d5e2da}
+ .gai-maker>header>div{flex:1 1 160px}.gai-maker>header>button{font-size:13px;padding:8px 10px;white-space:nowrap}
+ .gai-maker>header p{font-size:13px;margin:0}.gai-maker h2{font-size:18px}
+}

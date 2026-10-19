@@ -1,0 +1,195 @@
+{
+  "checkedAt": "2026-10-18T16:03:47.603Z",
+  "status": "PASS",
+  "scope": "public-hosting-device-storage-editor-ppt-import",
+  "release": {
+    "product": "onbatang",
+    "version": "0.21.1",
+    "sourceCommit": "cf951d671ff7f407b4a2246e6577269d58b63b7f",
+    "sourceFiles": 143,
+    "url": "https://onbatang.web.app/",
+    "project": "onbatang",
+    "site": "onbatang",
+    "hostingVersion": "064cc70ce71b85ec"
+  },
+  "environment": {
+    "browser": "isolated headless Microsoft Edge",
+    "storage": "new persistent profile retained across deployments",
+    "fixture": "tools/fixtures/pptx/self-authored-4x3.pptx",
+    "sourcePages": 2,
+    "teacherMaterialUsed": false,
+    "existingUserProfileUsed": false,
+    "allowedHttpMethods": [
+      "GET",
+      "HEAD"
+    ],
+    "allowedOrigin": "https://onbatang.web.app"
+  },
+  "publicFiles": {
+    "status": "PASS",
+    "checkedAt": "2026-10-18T16:00:16.645Z",
+    "count": 146,
+    "totalBytes": 18651660,
+    "fileMapSha256": "bd2fe64eb87b18432786a78ae5f97421b2de876438e534a6961978a76e95e774",
+    "sourceCommit": "cf951d671ff7f407b4a2246e6577269d58b63b7f"
+  },
+  "preDeploymentSeed": {
+    "version": "0.20.0",
+    "sourceCommit": "41776457364ad2a955ab67e057f84c64ce78bd15",
+    "passedChecks": 5,
+    "savedRevision": 1,
+    "browserClosedBeforeUpgrade": true
+  },
+  "earlierProductFailure": {
+    "version": "0.21.0",
+    "passedChecks": 6,
+    "status": "FAIL",
+    "reason": "After cancelling editor import and returning to the editor, closing it left the original material hidden behind the new-file screen.",
+    "storedMaterialAndSourcePreserved": true,
+    "fixedIn": "0.21.1",
+    "localRegression": "Failed on the hidden save-button assertion before the fix; all four standalone browser tests passed after the fix."
+  },
+  "finalPublicUi": {
+    "status": "PASS",
+    "uniquePassedChecks": 16,
+    "checks": [
+      {
+        "name": "exact-release-before-device-actions",
+        "status": "PASS"
+      },
+      {
+        "name": "new-release-preserves-existing-id-head-revision-zero-and-source-hash",
+        "status": "PASS"
+      },
+      {
+        "name": "previously-saved-page-opens-after-deployment",
+        "status": "PASS"
+      },
+      {
+        "name": "eleven-public-files-match-final-commit",
+        "status": "PASS"
+      },
+      {
+        "name": "my-materials-entry-saves-and-opens-fresh-file-step",
+        "status": "PASS"
+      },
+      {
+        "name": "cancel-restores-previous-document-page-text-and-my-materials-tab",
+        "status": "PASS"
+      },
+      {
+        "name": "cancel-restores-original-material-context-for-pinned-save",
+        "status": "PASS"
+      },
+      {
+        "name": "new-two-page-import-through-my-materials-preserves-old-material",
+        "status": "PASS"
+      },
+      {
+        "name": "same-profile-keeps-upgraded-material-and-new-import-after-harness-interruption",
+        "status": "PASS"
+      },
+      {
+        "name": "new-import-ui-edit-pins-after-browser-reopen-with-source-intact",
+        "status": "PASS"
+      },
+      {
+        "name": "reload-reopens-new-and-predeployment-materials-exactly",
+        "status": "PASS"
+      },
+      {
+        "name": "original-pptx-download-remains-byte-identical",
+        "status": "PASS"
+      },
+      {
+        "name": "new-flow-two-page-editable-download",
+        "status": "PASS"
+      },
+      {
+        "name": "new-flow-two-page-image-download",
+        "status": "PASS"
+      },
+      {
+        "name": "exports-keep-all-saved-revisions-unchanged",
+        "status": "PASS"
+      },
+      {
+        "name": "zero-page-errors-external-requests-remote-writes-and-service-workers",
+        "status": "PASS"
+      }
+    ],
+    "execution": "The same profile was continued after two harness timing assertions. The first final-version run verified eight checks through the new import. The continuation verified nine checks, with release metadata checked again. This is 16 distinct checks across continued sessions, not a single uninterrupted run.",
+    "harnessCorrections": [
+      "Wait for aria-current to reflect the selected slide before reading it.",
+      "Wait for asynchronous editor close to show the material before clicking its save button."
+    ],
+    "productChangesForHarnessCorrections": false
+  },
+  "preservation": {
+    "samePreDeploymentMaterialId": true,
+    "samePreDeploymentDocumentIds": true,
+    "exactPreDeploymentHeadVerifiedBeforeNewEdits": true,
+    "originalMaterialRevisionZeroUnchanged": true,
+    "sourceBlobSha256Unchanged": true,
+    "preDeploymentMaterialPinnedRevisionAfterNewEdit": 2,
+    "newMaterialPinnedRevisionAfterUiEdit": 1,
+    "bothMaterialsReopenedAfterBrowserReload": true
+  },
+  "isolation": {
+    "pageErrors": 0,
+    "externalRequests": 0,
+    "remoteWrites": 0,
+    "serviceWorkers": 0
+  },
+  "downloads": [
+    {
+      "mode": "editable",
+      "pages": 2,
+      "bytes": 13908,
+      "sha256": "00bdcab3d18e5f5d566df628787c403f462364365574fd170b3af42db0423179"
+    },
+    {
+      "mode": "image",
+      "pages": 2,
+      "bytes": 94846,
+      "sha256": "df2ac61c0f5d3eeedec2055ced6b9cd14fb55907143251bf1836fc54ded9a7d2"
+    }
+  ],
+  "localRegression": {
+    "command": "node --test tests/browser/standalone-pptx.test.mjs",
+    "passed": 4,
+    "failed": 0,
+    "durationMs": 20345.1691,
+    "scope": "After the 0.21.1 hidden-material fix; the previous wider 16-case run is a separate result."
+  },
+  "accountVerification": {
+    "status": "NOT_RUN",
+    "reason": "The standalone Hosting flow stores in the isolated browser. No account, authentication, email, database writes, or account storage were used."
+  },
+  "nativePowerPointRendering": {
+    "status": "NOT_RUN",
+    "reason": "Exported ZIP slide count, native editable text, image slides and preserved source bytes were checked. PowerPoint desktop rendering was not executed."
+  },
+  "evidence": [
+    {
+      "file": "work/firebase-upgrade-Do9YH1/seed-report.json",
+      "sha256": "f42f5911b8b4effb719d6cb19b1eca28e4a28f4c90f08b1f454eb5e716f83bbd"
+    },
+    {
+      "file": "work/firebase-upgrade-Do9YH1/v0210-initial-report.json",
+      "sha256": "77fa23446f1948a4dfd989d6a0dee1d74acb639b8bec4d157331e88184ce837a"
+    },
+    {
+      "file": "work/firebase-upgrade-Do9YH1/v0211-harness-wait-report.json",
+      "sha256": "7b5da66550478ce116d04c66b35d27ca8d3f282005e97b5f823c93bd1a533a74"
+    },
+    {
+      "file": "work/firebase-upgrade-Do9YH1/v0211-harness-close-wait-report.json",
+      "sha256": "caf58b1a106766a277fbfed7f998df7f431faee072af0c5b9862ab8b9e9d951f"
+    },
+    {
+      "file": "work/firebase-upgrade-Do9YH1/finish-report.json",
+      "sha256": "cbfc9f3f5ea8ca553e594f57e01d4f69c2e344650ce1fa3a99e1d94ff1db7d72"
+    }
+  ]
+}

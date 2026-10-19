@@ -1,0 +1,301 @@
+// Editable PresentationML export. Stored designs and source files are never changed.
+// Package parts follow ISO/IEC 29500 PresentationML; ZIP creation stays dependency-free.
+import {zipStore} from './zip.js';
+import {cleanDesign, settings, fontList, backgroundOf, hangsPunctuation} from '../src/model.js';
+import {designToBlob, designSheet} from '../src/export.js';
+import {itemView, paintCard} from '../src/render.js';
+import {sceneFrame} from '../src/scene.js';
+
+export const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+export const PPTX_MAX_SLIDES = 200;
+export const PPTX_MAX_BYTES = 128 * 1024 * 1024;
+const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+const P = 'http://schemas.openxmlformats.org/presentationml/2006/main';
+const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+const XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+const encoder = new TextEncoder();
+const nativeShapes = new Set(['rect', 'round', 'circle', 'pill', 'line']);
+const object = value => value && typeof value === 'object' && !Array.isArray(value);
+export class PptxExportError extends Error {
+  constructor(code, message, details = {}) { super(message); this.name = 'PptxExportError'; this.code = code; this.details = details; }
+}
+const fail = (code, message, details) => { throw new PptxExportError(code, message, details); };
+const abort = signal => { if (signal?.aborted) throw new DOMException('내보내기를 취소했어요.', 'AbortError'); };
+async function cancellable(job, signal) {
+  if (signal?.aborted) { Promise.resolve(job).catch(() => {}); abort(signal); }
+  if (!signal) return job;
+  let stop;
+  try { return await Promise.race([job, new Promise((_, reject) => { stop = () => reject(new DOMException('내보내기를 취소했어요.', 'AbortError')); signal.addEventListener('abort', stop, {once: true}); })]); }
+  finally { signal.removeEventListener('abort', stop); }
+}
+function xml(value) {
+  const text = String(value);
+  if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffe\uffff]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(text)) fail('INVALID_XML_TEXT', '저장할 수 없는 문자가 있어요. 글을 확인해 주세요.');
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+}
+const color = value => /^#[a-f0-9]{6}$/i.test(value || '') ? value.slice(1).toUpperCase() : '1D2433';
+const solid = (value, opacity = 100) => `<a:solidFill><a:srgbClr val="${color(value)}">${opacity < 100 ? `<a:alpha val="${Math.round(opacity * 1000)}"/>` : ''}</a:srgbClr></a:solidFill>`;
+const rels = entries => XML + `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${entries.map(([id, type, target]) => `<Relationship Id="${xml(id)}" Type="${R}/${type}" Target="${xml(target)}"/>`).join('')}</Relationships>`;
+const group = '<p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>';
+const namespaces = `xmlns:a="${A}" xmlns:r="${R}" xmlns:p="${P}"`;
+
+function dimensions(size, aspect) {
+  let ratio = Number.isFinite(aspect) && aspect >= .25 && aspect <= 4 ? aspect : 16 / 9;
+  if (size !== undefined) {
+    if (!object(size) || !['px', 'pt', 'emu'].includes(size.unit) || !Number.isFinite(size.width) || !Number.isFinite(size.height) || size.width <= 0 || size.height <= 0) fail('INVALID_SLIDE_SIZE', '슬라이드 크기를 확인해 주세요.');
+    ratio = size.width / size.height;
+    if (ratio < .25 || ratio > 4) fail('INVALID_SLIDE_SIZE', '지원하는 슬라이드 비율은 1:4부터 4:1까지예요.');
+    const scale = {px: 9525, pt: 12700, emu: 1}[size.unit];
+    if (size.unit !== 'px' || (size.width >= 128 && size.height >= 128)) {
+      const width = Math.round(size.width * scale), height = Math.round(size.height * scale);
+      if (width < 914400 || height < 914400 || width > 51206400 || height > 51206400) fail('INVALID_SLIDE_SIZE', 'PowerPoint 슬라이드의 가로와 세로는 각각 1~56인치여야 해요.');
+      return {width, height, aspect: ratio};
+    }
+  }
+  return {width: 9144000, height: Math.round(9144000 / ratio), aspect: ratio};
+}
+function transform(box, item = {}) {
+  const rot = Math.round((item.rot || 0) * 60000);
+  return `<a:xfrm${rot ? ` rot="${rot}"` : ''}${item.fx ? ' flipH="1"' : ''}${item.fy ? ' flipV="1"' : ''}><a:off x="${Math.round(box.x)}" y="${Math.round(box.y)}"/><a:ext cx="${Math.max(1, Math.round(box.w))}" cy="${Math.max(1, Math.round(box.h))}"/></a:xfrm>`;
+}
+function itemBox(item, size, textHeight) {
+  const w = item.w * size.width / 100;
+  const h = item.t === 'text' ? (item.h ? item.h * size.height / 100 : textHeight) : item.h * size.height / 100;
+  return {x: item.x * size.width / 100 - w / 2, y: item.y * size.height / 100 - h / 2, w, h};
+}
+function nativeShape(item, box, id, size) {
+  const rounded = ['round', 'pill', 'line'].includes(item.shape) || item.r > 0;
+  const preset = item.shape === 'circle' ? 'ellipse' : rounded ? 'roundRect' : 'rect';
+  // Legacy round rectangles use 4cqw in editor.css (lines use 1cqw), capped
+  // at half the short side. Resolve against this export's aspect, not global config.
+  const radius = item.shape === 'pill' ? 100 : item.r ?? (item.shape === 'round' || item.shape === 'line'
+    ? Math.min(100, (item.shape === 'round' ? 8 : 2) * size.width / Math.min(box.w, box.h)) : 0);
+  const edge = Math.min((item.line || 0) * size.width / 100, Math.min(box.w, box.h) / 2);
+  return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${xml(item.id || `도형 ${id}`)}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>${transform(box, item)}<a:prstGeom prst="${preset}"><a:avLst>${preset === 'roundRect' ? `<a:gd name="adj" fmla="val ${Math.round(radius * 500)}"/>` : ''}</a:avLst></a:prstGeom>${item.hollow ? '<a:noFill/>' : solid(item.color, item.op)}<a:ln w="${Math.round(edge)}">${edge ? solid(item.lc || item.color, item.op) : '<a:noFill/>'}</a:ln></p:spPr></p:sp>`;
+}
+function typeface(item, warn) {
+  if (item.typeface) return item.typeface;
+  const font = fontList().find(candidate => candidate.id === item.font);
+  const family = font?.exportFamily || (font?.family && !/^mc-|^gai-/.test(font.family) ? font.family : font?.name && font.id !== 'gothic' ? font.name : '맑은 고딕');
+  if (font?.id !== 'gothic' && !font?.exportFamily && (!font?.family || /^mc-|^gai-/.test(font.family))) warn('FONT_NAME_INFERRED', '글꼴의 표시 이름을 사용했어요. PowerPoint에서 글꼴 이름을 확인해 주세요.', {font: family});
+  return family;
+}
+function nativeText(item, box, id, size, warn) {
+  const requestedSize = item.size * size.width / 12700;
+  if (!Number.isFinite(requestedSize) || requestedSize < 100 || requestedSize > 400000) fail('UNSUPPORTED_FONT_SIZE', 'PowerPoint에서 편집할 글자 크기는 1~4000pt여야 해요. 글자 크기를 바꾸거나 그림 PPTX로 내보내 주세요.', {elementId: item.id, pointSize: requestedSize / 100});
+  const family = typeface(item, warn), fontSize = Math.round(requestedSize);
+  warn('FONT_NOT_EMBEDDED', '글자는 편집할 수 있으며, 받는 기기에 글꼴이 없으면 다른 글꼴로 보일 수 있어요.', {font: family});
+  const style = `lang="ko-KR" sz="${fontSize}" b="${item.bold ? 1 : 0}" i="${item.italic ? 1 : 0}"${item.under ? ' u="sng"' : ''}`;
+  const properties = `<a:rPr ${style}>${solid(item.color, item.op)}<a:latin typeface="${xml(family)}"/><a:ea typeface="${xml(family)}"/><a:cs typeface="${xml(family)}"/></a:rPr>`;
+  const inset = item.bgc ? Math.round(item.size * size.width / 100 * .5) : 0;
+  // CSS line-height multiplies the font size. DrawingML percentages multiply
+  // the font's normal line metrics instead, making otherwise identical text taller.
+  // Exact points preserve the authored baseline distance without shrinking text
+  // to an explicit frame whose visible overflow may be intentional in the editor.
+  const lineSpacing = Math.round(requestedSize * (item.lh || 1.25));
+  const paragraphs = item.text.split('\n').map(line => `<a:p><a:pPr algn="${{l: 'l', c: 'ctr', r: 'r'}[item.align] || 'ctr'}" hangingPunct="${hangsPunctuation(item) ? 1 : 0}"><a:lnSpc><a:spcPts val="${lineSpacing}"/></a:lnSpc><a:spcBef><a:spcPts val="0"/></a:spcBef><a:spcAft><a:spcPts val="0"/></a:spcAft></a:pPr><a:r>${properties}<a:t xml:space="preserve">${xml(line)}</a:t></a:r><a:endParaRPr ${style}/></a:p>`).join('');
+  return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${xml(item.id || `글상자 ${id}`)}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr>${transform(box, item)}<a:prstGeom prst="${item.bgc ? 'roundRect' : 'rect'}"><a:avLst/></a:prstGeom>${item.bgc ? solid(item.bgc, item.op) : '<a:noFill/>'}<a:ln><a:noFill/></a:ln></p:spPr><p:txBody><a:bodyPr wrap="${item.nowrap ? 'none' : 'square'}" lIns="${inset}" rIns="${inset}" tIns="${Math.round(inset * .44)}" bIns="${Math.round(inset * .44)}" anchor="${{top: 't', middle: 'ctr', bottom: 'b'}[item.valign] || 't'}"><a:noAutofit/></a:bodyPr><a:lstStyle/>${paragraphs}</p:txBody></p:sp>`;
+}
+function picture(box, id, relation, name, item = {}, crop = '') {
+  return `<p:pic><p:nvPicPr><p:cNvPr id="${id}" name="${xml(name)}"/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="${relation}">${item.op < 100 ? `<a:alphaModFix amt="${Math.round(item.op * 1000)}"/>` : ''}</a:blip>${crop}<a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr>${transform(box, item)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:ln><a:noFill/></a:ln></p:spPr></p:pic>`;
+}
+function canvasBlob(canvas) {
+  return new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new PptxExportError('RASTER_FAILED', '그림을 파일로 만들지 못했어요.')), 'image/png'));
+}
+async function imageElement(url, signal) {
+  abort(signal);
+  if (typeof Image === 'undefined') fail('BROWSER_REQUIRED', '사진을 내보내려면 브라우저가 필요해요.');
+  const image = new Image(); image.decoding = 'sync';
+  let timer, onAbort;
+  try {
+    await new Promise((resolve, reject) => {
+      image.onload = resolve; image.onerror = () => reject(new PptxExportError('IMAGE_UNAVAILABLE', '사진을 읽지 못했어요. 빠진 그림 없이 저장하려면 다시 확인해 주세요.'));
+      onAbort = () => reject(new DOMException('내보내기를 취소했어요.', 'AbortError'));
+      signal?.addEventListener('abort', onAbort, {once: true});
+      timer = setTimeout(() => reject(new PptxExportError('IMAGE_TIMEOUT', '사진을 읽는 시간이 길어 내보내기를 멈췄어요.')), 45000);
+      image.src = url;
+    });
+  } finally { clearTimeout(timer); signal?.removeEventListener('abort', onAbort); }
+  abort(signal);
+  if (!image.naturalWidth || !image.naturalHeight) fail('IMAGE_UNAVAILABLE', '사진 크기를 읽지 못했어요.');
+  return image;
+}
+async function photo(item, signal) {
+  const response = await fetch(item.url, {signal, method: 'GET', credentials: 'omit', referrerPolicy: 'no-referrer'});
+  if (!response.ok) fail('IMAGE_UNAVAILABLE', '사진 파일을 읽지 못했어요.');
+  const blob = await response.blob(); abort(signal);
+  if (blob.size > PPTX_MAX_BYTES) fail('PPTX_SIZE_LIMIT', '사진 파일이 너무 커요.');
+  const url = URL.createObjectURL(blob);
+  try {
+    const image = await imageElement(url, signal);
+    if (['image/png', 'image/jpeg'].includes(blob.type)) return {blob, width: image.naturalWidth, height: image.naturalHeight};
+    const canvas = document.createElement('canvas'); canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
+    if (canvas.width * canvas.height > 16777216) fail('IMAGE_SIZE_LIMIT', '사진 해상도가 너무 커요.');
+    canvas.getContext('2d').drawImage(image, 0, 0);
+    return {blob: await canvasBlob(canvas), width: canvas.width, height: canvas.height};
+  } finally { URL.revokeObjectURL(url); }
+}
+async function prepareRaster(design, signal, aspect) {
+  const prepared = structuredClone(design);
+  for (const item of prepared.items) {
+    if (item.t === 'yt') fail('UNSUPPORTED_VIDEO', '연결한 동영상은 PPTX로 내보낼 수 없어요. 그림으로 바꾼 뒤 다시 저장해 주세요.');
+    if (item.t !== 'image') continue;
+    const {blob} = await photo(item, signal);
+    item.url = await new Promise((resolve, reject) => {
+      const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(reader.error); reader.readAsDataURL(blob);
+    });
+  }
+  if (prepared.video) {
+    const blob = await settings().loadVideo?.(prepared.video.src);
+    if (!(blob instanceof Blob) || !blob.size) fail('VIDEO_UNAVAILABLE', '영상 파일이 없어서 첫 장면을 만들 수 없어요.');
+    const frame = await sceneFrame(prepared.video, {edge: Math.min(1920, Math.max(1280, Math.round(1280 / aspect)))});
+    if (!frame?.url) fail('VIDEO_UNAVAILABLE', '영상의 첫 장면을 읽지 못했어요. 빠진 그림 없이 저장하려면 영상을 확인해 주세요.');
+    await imageElement(frame.url, signal);
+  }
+  abort(signal); return prepared;
+}
+async function renderWhole(design, options) {
+  const prepared = await prepareRaster(design, options.signal, options.aspect);
+  return designToBlob(prepared, {width: 1280, aspect: options.aspect});
+}
+async function renderElement(design, index, options) {
+  const prepared = await prepareRaster({...design, items: [design.items[index]], video: undefined}, options.signal, options.aspect);
+  const width = 1280, height = Math.round(width / options.aspect);
+  const rendered = await designSheet(prepared, [{items: [0], bg: false, box: {x: 0, y: 0, w: width, h: height}, at: {x: 0, y: 0}}], {width, height, sheetWidth: width, sheetHeight: height});
+  abort(options.signal);
+  // PowerPoint selects a picture's rectangular frame, including transparent
+  // pixels. A full-slide frame would cover unrelated editable objects below it.
+  // Crop the already painted result so rotation, masks, flips and antialiasing
+  // stay exact, and keep only the part visible inside the slide.
+  const rgba = rendered.canvas.getContext('2d').getImageData(0, 0, width, height).data;
+  let left = width, top = height, right = -1, bottom = -1;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (!rgba[(y * width + x) * 4 + 3]) continue;
+      left = Math.min(left, x); top = Math.min(top, y);
+      right = Math.max(right, x); bottom = Math.max(bottom, y);
+    }
+  }
+  // Retain an entirely transparent/off-slide element as a 1px transparent
+  // picture instead of dropping its identity or leaving a slide-sized hitbox.
+  if (right < left) { left = 0; top = 0; right = 0; bottom = 0; }
+  const canvas = document.createElement('canvas');
+  canvas.width = right - left + 1; canvas.height = bottom - top + 1;
+  canvas.getContext('2d').drawImage(rendered.canvas, left, top, canvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
+  return {blob: await canvasBlob(canvas), missingFonts: rendered.missingFonts,
+    bounds: {x: left / width, y: top / height, w: canvas.width / width, h: canvas.height / height}};
+}
+
+function rasterBox(rendered, size) {
+  if (!rendered?.bounds) return {x: 0, y: 0, w: size.width, h: size.height};
+  const box = rendered.bounds;
+  if (!object(box) || !['x', 'y', 'w', 'h'].every(key => Number.isFinite(box[key])) || box.x < 0 || box.y < 0 || box.w <= 0 || box.h <= 0 || box.x + box.w > 1 + Number.EPSILON || box.y + box.h > 1 + Number.EPSILON) fail('INVALID_RASTER', '그림의 위치를 확인하지 못해서 PPTX를 저장하지 않았어요.');
+  return {x: box.x * size.width, y: box.y * size.height, w: box.w * size.width, h: box.h * size.height};
+}
+async function textHeight(item, size, warn) {
+  if (item.h) return item.h * size.height / 100;
+  if (typeof document !== 'undefined' && document.body) {
+    await document.fonts?.ready;
+    const card = paintCard(document.createElement('div'), 'paper'); card.className = 'fe-card';
+    card.style.cssText = `position:fixed;left:-20000px;top:0;width:960px;height:${960 / size.aspect}px;visibility:hidden;pointer-events:none;`;
+    card.style.setProperty('--fe-ratio', String(size.aspect));
+    const node = itemView({...item, rot: 0, fx: false, fy: false}); card.append(node); document.body.append(card);
+    try { const height = node.getBoundingClientRect().height; if (height > 0) return height / 960 * size.width; } finally { card.remove(); }
+  }
+  warn('TEXT_HEIGHT_APPROXIMATE', '글상자 높이를 줄 수로 계산했어요. PowerPoint에서 줄 바꿈을 확인해 주세요.');
+  return Math.max(1, item.text.split('\n').length) * item.size * size.width / 100 * (item.lh || 1.25) + (item.bgc ? item.size * size.width / 100 * .44 : 0);
+}
+
+/** Every slide is exported, or the operation rejects without a partial download.
+ * renderSlide(design,{aspect,signal,pageNumber}) / renderItem(design,index,options)
+ * can be injected; each must return Blob or {blob,missingFonts?} with a PNG/JPEG image.
+ * renderItem may include bounds:{x,y,w,h} in 0..1 slide coordinates for a cropped image.
+ */
+export async function createPptx({slides, aspect = 16 / 9, size, title = '온바탕', mode = 'editable', signal, onProgress, renderSlide = renderWhole, renderItem = renderElement} = {}) {
+  abort(signal);
+  if (!Array.isArray(slides) || !slides.length || slides.length > PPTX_MAX_SLIDES) fail('SLIDE_LIMIT', '슬라이드를 1~200쪽 선택해 주세요.');
+  if (!['editable', 'image'].includes(mode)) fail('INVALID_MODE', '편집 가능한 PPTX 또는 그림 PPTX를 선택해 주세요.');
+  if (typeof title !== 'string' || title.length > 1000) fail('INVALID_TITLE', '파일 제목을 확인해 주세요.');
+  xml(title);
+  const slideSize = dimensions(size, aspect), input = structuredClone(slides), warnings = [], files = [], media = [], content = [], slideIds = [];
+  let byteCount = 0;
+  const add = (name, value) => { const bytes = typeof value === 'string' ? encoder.encode(value) : value; byteCount += bytes.length + name.length * 2 + 100; if (byteCount > PPTX_MAX_BYTES) fail('PPTX_SIZE_LIMIT', 'PPTX 파일이 128MB를 넘어요. 자료를 나누어 내보내 주세요.'); files.push({name, bytes}); };
+  const warn = (pageNumber, elementId) => (code, message, extra = {}) => warnings.push({code, pageNumber, ...(elementId ? {elementId} : {}), message, ...extra});
+  async function addImage(rendered, warning) {
+    abort(signal); const blob = rendered instanceof Blob ? rendered : rendered?.blob;
+    if (!(blob instanceof Blob) || !blob.size || !['image/png', 'image/jpeg'].includes(blob.type)) fail('INVALID_RASTER', '그림을 완성하지 못해서 PPTX를 저장하지 않았어요.');
+    if (blob.size + byteCount > PPTX_MAX_BYTES) fail('PPTX_SIZE_LIMIT', 'PPTX 파일이 128MB를 넘어요.');
+    const ext = blob.type === 'image/jpeg' ? 'jpeg' : 'png', name = `image${media.length + 1}.${ext}`;
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    if (ext === 'png' ? bytes.length < 24 || ![137,80,78,71,13,10,26,10].every((value, index) => bytes[index] === value) : bytes.length < 4 || bytes[0] !== 255 || bytes[1] !== 216) fail('INVALID_RASTER', '그림 파일 형식이 잘못되어 PPTX를 저장하지 않았어요.');
+    add(`ppt/media/${name}`, bytes); media.push(name);
+    for (const font of rendered?.missingFonts || []) warning('FONT_UNAVAILABLE', '그림을 만들 때 글꼴을 불러오지 못했어요.', {font});
+    return name;
+  }
+  for (let index = 0; index < input.length; index += 1) {
+    abort(signal); const raw = input[index], pageNumber = index + 1;
+    if (!object(raw) || !Array.isArray(raw.items)) fail('INVALID_SLIDE', '슬라이드 내용을 확인해 주세요.', {pageNumber});
+    const design = cleanDesign(raw, {keepSpaces: true});
+    if (design.items.length !== raw.items.length || design.items.some((item, n) => item.t !== raw.items[n].t || (item.t === 'text' && item.text !== raw.items[n].text))) fail('UNSUPPORTED_CONTENT', '정리 과정에서 달라지는 요소가 있어요. 원본을 보존하기 위해 내보내기를 멈췄어요.', {pageNumber});
+    const pageWarn = warn(pageNumber), relations = [['rId1', 'slideLayout', '../slideLayouts/slideLayout1.xml']], shapes = [];
+    const full = {x: 0, y: 0, w: slideSize.width, h: slideSize.height};
+    async function raster(result, name, item = {}, box = full, crop = '') {
+      const mediaName = await addImage(result, warn(pageNumber, item.id));
+      const relation = `rId${relations.length + 1}`; relations.push([relation, 'image', `../media/${mediaName}`]);
+      shapes.push(picture(box, shapes.length + 2, relation, name, item, crop));
+    }
+    const options = {aspect: slideSize.aspect, signal, pageNumber};
+    if (design.video || design.pa || design.tr || design.items.some(item => item.an && item.an !== 'none')) pageWarn('STATIC_EXPORT', '움직임과 소리는 포함하지 않고 현재 그림을 저장해요.');
+    if (mode === 'image') await raster(await cancellable(renderSlide(design, options), signal), `슬라이드 ${pageNumber}`);
+    else {
+      if (design.video || !/^#[a-f0-9]{6}$/i.test(backgroundOf(design.bg).bg)) {
+        if (!design.video) pageWarn('BACKGROUND_RASTERIZED', '꾸민 바탕은 모양을 보존한 그림으로 저장해요.');
+        await raster(await cancellable(renderSlide({...design, items: []}, options), signal), design.video ? '영상 첫 장면' : '슬라이드 바탕');
+      }
+      for (let itemIndex = 0; itemIndex < design.items.length; itemIndex += 1) {
+        abort(signal); const item = design.items[itemIndex], itemWarn = warn(pageNumber, item.id), id = shapes.length + 2;
+        if (item.t === 'text') shapes.push(nativeText(item, itemBox(item, slideSize, await cancellable(textHeight(item, slideSize, itemWarn), signal)), id, slideSize, itemWarn));
+        else if (item.t === 'shape' && nativeShapes.has(item.shape)) shapes.push(nativeShape(item, itemBox(item, slideSize), id, slideSize));
+        else if (item.t === 'image' && item.mask === 'none') {
+          const loaded = await photo(item, signal), box = itemBox(item, slideSize), sourceAspect = loaded.width / loaded.height, targetAspect = box.w / box.h;
+          const horizontal = sourceAspect > targetAspect, crop = Math.max(0, Math.round((1 - (horizontal ? targetAspect / sourceAspect : sourceAspect / targetAspect)) * 50000));
+          await raster(loaded, item.id || `사진 ${id}`, item, box, crop ? `<a:srcRect ${horizontal ? `l="${crop}" r="${crop}"` : `t="${crop}" b="${crop}"`}/>` : '');
+        } else {
+          itemWarn('ELEMENT_RASTERIZED', '이 요소는 모양을 보존한 그림으로 저장해요.', {type: item.t, ...(item.shape ? {shape: item.shape} : {})});
+          const rendered = await cancellable(renderItem(design, itemIndex, options), signal);
+          await raster(rendered, item.id || `그림 ${id}`, {}, rasterBox(rendered, slideSize));
+        }
+      }
+    }
+    abort(signal);
+    add(`ppt/slides/slide${pageNumber}.xml`, XML + `<p:sld ${namespaces}><p:cSld><p:bg><p:bgPr>${solid(backgroundOf(design.bg).bg)}<a:effectLst/></p:bgPr></p:bg><p:spTree>${group}${shapes.join('')}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>`);
+    add(`ppt/slides/_rels/slide${pageNumber}.xml.rels`, rels(relations));
+    slideIds.push(`<p:sldId id="${256 + index}" r:id="rId${index + 2}"/>`);
+    content.push([`/ppt/slides/slide${pageNumber}.xml`, 'application/vnd.openxmlformats-officedocument.presentationml.slide+xml']);
+    onProgress?.({completed: pageNumber, total: input.length, pageNumber});
+  }
+  const parts = [
+    ['/ppt/presentation.xml', 'application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml'],
+    ['/ppt/slideMasters/slideMaster1.xml', 'application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml'],
+    ['/ppt/slideLayouts/slideLayout1.xml', 'application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml'],
+    ['/ppt/theme/theme1.xml', 'application/vnd.openxmlformats-officedocument.theme+xml'],
+    ['/docProps/core.xml', 'application/vnd.openxmlformats-package.core-properties+xml'],
+    ['/docProps/app.xml', 'application/vnd.openxmlformats-officedocument.extended-properties+xml'], ...content];
+  add('[Content_Types].xml', XML + `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Default Extension="jpeg" ContentType="image/jpeg"/>${parts.map(([name, type]) => `<Override PartName="${name}" ContentType="${type}"/>`).join('')}</Types>`);
+  add('_rels/.rels', XML + `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${R}/officeDocument" Target="ppt/presentation.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="${R}/extended-properties" Target="docProps/app.xml"/></Relationships>`);
+  add('docProps/core.xml', XML + `<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>${xml(title)}</dc:title><dc:creator>온바탕</dc:creator></cp:coreProperties>`);
+  add('docProps/app.xml', XML + `<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>온바탕</Application><Slides>${input.length}</Slides></Properties>`);
+  add('ppt/presentation.xml', XML + `<p:presentation ${namespaces}><p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId1"/></p:sldMasterIdLst><p:sldIdLst>${slideIds.join('')}</p:sldIdLst><p:sldSz cx="${slideSize.width}" cy="${slideSize.height}"/><p:notesSz cx="6858000" cy="9144000"/><p:defaultTextStyle/></p:presentation>`);
+  add('ppt/_rels/presentation.xml.rels', rels([['rId1', 'slideMaster', 'slideMasters/slideMaster1.xml'], ...input.map((_, i) => [`rId${i + 2}`, 'slide', `slides/slide${i + 1}.xml`])]));
+  const colorMap = '<p:clrMap accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" bg1="lt1" bg2="lt2" folHlink="folHlink" hlink="hlink" tx1="dk1" tx2="dk2"/>';
+  add('ppt/slideMasters/slideMaster1.xml', XML + `<p:sldMaster ${namespaces}><p:cSld><p:spTree>${group}</p:spTree></p:cSld>${colorMap}<p:sldLayoutIdLst><p:sldLayoutId id="2147483649" r:id="rId1"/></p:sldLayoutIdLst><p:txStyles><p:titleStyle/><p:bodyStyle/><p:otherStyle/></p:txStyles></p:sldMaster>`);
+  add('ppt/slideMasters/_rels/slideMaster1.xml.rels', rels([['rId1', 'slideLayout', '../slideLayouts/slideLayout1.xml'], ['rId2', 'theme', '../theme/theme1.xml']]));
+  add('ppt/slideLayouts/slideLayout1.xml', XML + `<p:sldLayout ${namespaces} type="blank" preserve="1"><p:cSld name="빈 슬라이드"><p:spTree>${group}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sldLayout>`);
+  add('ppt/slideLayouts/_rels/slideLayout1.xml.rels', rels([['rId1', 'slideMaster', '../slideMasters/slideMaster1.xml']]));
+  const colors = {dk1:'000000',lt1:'FFFFFF',dk2:'1D2433',lt2:'FFFDF5',accent1:'1C7ED6',accent2:'2F9E44',accent3:'FFD43B',accent4:'E03131',accent5:'7048E8',accent6:'F76707',hlink:'0563C1',folHlink:'954F72'};
+  const fill = '<a:solidFill><a:schemeClr val="phClr"/></a:solidFill>';
+  add('ppt/theme/theme1.xml', XML + `<a:theme xmlns:a="${A}" name="온바탕"><a:themeElements><a:clrScheme name="온바탕">${Object.entries(colors).map(([key, value]) => `<a:${key}><a:srgbClr val="${value}"/></a:${key}>`).join('')}</a:clrScheme><a:fontScheme name="온바탕"><a:majorFont><a:latin typeface="Arial"/><a:ea typeface="맑은 고딕"/><a:cs typeface="Arial"/></a:majorFont><a:minorFont><a:latin typeface="Arial"/><a:ea typeface="맑은 고딕"/><a:cs typeface="Arial"/></a:minorFont></a:fontScheme><a:fmtScheme name="온바탕"><a:fillStyleLst>${fill.repeat(3)}</a:fillStyleLst><a:lnStyleLst>${[6350,12700,19050].map(width => `<a:ln w="${width}" cap="flat" cmpd="sng" algn="ctr">${fill}<a:prstDash val="solid"/><a:miter lim="800000"/></a:ln>`).join('')}</a:lnStyleLst><a:effectStyleLst>${'<a:effectStyle><a:effectLst/></a:effectStyle>'.repeat(3)}</a:effectStyleLst><a:bgFillStyleLst>${fill.repeat(3)}</a:bgFillStyleLst></a:fmtScheme></a:themeElements></a:theme>`);
+  abort(signal); const bytes = zipStore(files); abort(signal);
+  if (bytes.length > PPTX_MAX_BYTES) fail('PPTX_SIZE_LIMIT', 'PPTX 파일이 128MB를 넘어요.');
+  return {blob: new Blob([bytes], {type: PPTX_MIME}), bytes, mimeType: PPTX_MIME, ext: 'pptx', slideCount: input.length, warnings, size: {width: slideSize.width, height: slideSize.height, unit: 'emu'}};
+}
