@@ -46,3 +46,13 @@ test('bounded lesson references retain the selected late slide and remain valid 
  assert.equal(value.omittedSlides+value.slides.length,500);
  assert.ok(value.slides.every((p,i)=>i===0||value.slides[i-1].position<p.position));
 });
+
+test('explicit references exclude unchecked pages and preserve a separate insertion anchor in whole-deck order',()=>{
+ const entries=Array.from({length:200},(_,i)=>({page:{id:`p${i}`,source:{pageNumber:i+1},items:[{t:'text',text:`참고 ${i} `+'가'.repeat(4000)}]}}));
+ const options={referenceIds:['p198','p1','p199']},value=JSON.parse(gaiLessonContext(entries,'p150','선택한 수업',options));
+ assert.deepEqual(value.slides.map(v=>v.position),[2,199,200]);assert.equal(value.insertAfter,151);assert.equal(value.placement.pageId,'p150');assert.equal(value.placement.mode,'after');
+ assert.equal(value.omittedSlides,197);assert.ok(JSON.stringify(value).length<14000);assert.ok(value.slides.every(v=>v.text.length===3000));assert.doesNotMatch(JSON.stringify(value.slides),/참고 150/);
+ assert.throws(()=>gaiLessonContext(entries,'p150','',{referenceIds:['p1','p2','p3','p4']}),/최대 3쪽/);
+ assert.throws(()=>gaiLessonContext(entries,'p150','',{referenceIds:['missing']}));
+ assert.equal(JSON.parse(gaiLessonContext(entries,'p150','',{referenceIds:[],editing:true})).placement.mode,'replace');
+});
