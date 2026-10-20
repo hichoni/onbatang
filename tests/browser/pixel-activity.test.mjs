@@ -23,6 +23,7 @@ async function setup(t,{viewport={width:1440,height:1000},touch=false}={}){
  const errors=[],external=[],workers=[],requests=[];
  const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript','.css':'text/css','.json':'application/json','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png','.jpg':'image/jpeg'};
  const server=createServer(async(req,res)=>{try{
+  if(new URL(req.url,'http://localhost').pathname==='/authoring-test.html'){res.setHeader('Content-Type',mime['.html']);return res.end('<!doctype html><html lang="ko"><meta name="viewport" content="width=device-width,initial-scale=1"><body class="mc-app"><main id="app"></main><script type="module">import {startOnbatang} from "/app/standalone.js";await startOnbatang({activityAuthoring:true});</script></body></html>');}
   const pathname=new URL(req.url,'http://localhost').pathname,file=resolve(root,'.'+decodeURIComponent(pathname));
   if(!file.startsWith(root+sep)){res.writeHead(403);return res.end();}
   res.setHeader('Content-Type',mime[extname(file)]||'application/octet-stream');res.end(await readFile(file));
@@ -37,7 +38,7 @@ async function setup(t,{viewport={width:1440,height:1000},touch=false}={}){
  await context.route('**/*',route=>{const url=new URL(route.request().url());if(['data:','blob:','about:'].includes(url.protocol))return route.continue();if(url.origin!==origin){external.push(url.origin);return route.abort('blockedbyclient');}requests.push(url.pathname);return route.continue();});
  const page=await context.newPage();page.setDefaultTimeout(45000);
  page.on('pageerror',error=>errors.push(error.message));page.on('worker',worker=>workers.push(worker.url()));
- return {page,entry:origin+'/app/index.html',async verifyIsolation(){
+ return {page,entry:origin+'/authoring-test.html',async verifyIsolation(){
   assert.deepEqual(errors,[],'no uncaught editor, activity or sandbox-preview errors');
   assert.deepEqual(external,[],'pixel activities and local exports make no off-origin requests');
   assert.ok(workers.some(url=>url.endsWith('/app/pptx-import/vendor/pptx-worker.js')),'the real conversion worker ran');
@@ -138,6 +139,12 @@ test('PPT activity runs in the full material, saves a result immediately after i
  await page.locator(`[data-material-page="${activityIndex}"][aria-pressed=true]`).waitFor();
  const activityPageId=await page.locator(`[data-material-page="${activityIndex}"]`).getAttribute('data-page-id');
  const name=await page.locator('.cv-name').inputValue();
+
+ // Seed an existing activity through an explicit authoring host, then use the
+ // real public entry for all participation, result saving and reopening.
+ await page.goto(new URL('/app/index.html',entry).href);await page.getByRole('button',{name:name+' 열기',exact:true}).click();await waitPages(page,pageCount+1);
+ assert.equal(await page.locator('[data-add-activity]').count(),0);assert.equal(await page.locator('[data-add-gai-app]').count(),0);
+ await page.locator(`[data-material-page="${activityIndex}"]`).click();assert.equal(await page.locator('[data-edit-activity]').isVisible(),false);
 
  await page.locator('.cv-show-btn').click();await page.locator('.cv-show .pixel-app').waitFor();
  const show=page.locator('.cv-show'),runtime=show.locator('.pixel-app');
