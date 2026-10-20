@@ -20,9 +20,15 @@ addEventListener('message',event=>{const d=event.data;if(event.source!==parent||
 document.getElementById('step').onclick=()=>{count++;draw();report(capture());};document.addEventListener('change',()=>report(capture()));draw();report(capture());
 </script>`;
 const make=()=>newGaiActivity({title:'실행 앱',instructions:'단계를 실행하고 저장해요.',document:source,project:{template:'freeform',title:'실행 앱'},state:{count:2}});
+// Older generated pixel apps paint buttons rather than a canvas. Both their
+// actual colors and their independently reported answer must survive capture.
+const gridSource=source.replace('<canvas width="64" height="64"></canvas>','<div id="pixel-grid" role="grid" style="display:grid;grid-template-columns:repeat(8,24px);gap:3px;width:max-content"></div>')
+ .replace("const c=document.querySelector('canvas').getContext('2d');c.fillStyle='#ef6461';c.fillRect(0,0,64,64);",`const grid=document.getElementById('pixel-grid');grid.replaceChildren();for(let i=0;i<64;i++){const cell=document.createElement('button'),filled=[0,1,9,18].slice(0,count).includes(i);cell.style.cssText='width:24px;height:24px;border:1px solid #999;background:'+(filled?'#111827':'#fff');cell.setAttribute('aria-pressed',String(filled));grid.append(cell);}`)
+ .replace("answer:count+'단계 완료'","answer:'작품: 네 칸의 데이터 · 검정 픽셀 '+count+'개 · 흰색은 0, 검정은 1'");
+const makeGrid=()=>({...make(),document:gridSource,state:{count:3}});
 const frame=page=>page.frameLocator('.gai-app-frame').frameLocator('[data-gai-app-content]');
 
-async function setup(t,{noReady=false}={}){
+async function setup(t,{noReady=false,activity=make()}={}){
  const server=createServer(async(req,res)=>{try{const pathname=new URL(req.url,'http://localhost').pathname;if(pathname==='/test.html'){res.setHeader('Content-Type','text/html');return res.end('<!doctype html><html><meta charset="utf-8"><div id="root"></div><script type="module">import {mountGaiApp} from "/app/gai-app.js";window.mountGaiApp=mountGaiApp;</script></html>');}const file=resolve(root,'.'+pathname);if(!file.startsWith(root+sep))throw Error('path');res.setHeader('Content-Type',({'.js':'text/javascript','.css':'text/css'})[extname(file)]||'text/html');res.end(await readFile(file));}catch{res.writeHead(404);res.end();}});
  await new Promise(yes=>server.listen(0,'127.0.0.1',yes));t.after(()=>new Promise(yes=>server.close(yes)));
  const origin=`http://127.0.0.1:${server.address().port}`,{chromium}=await import(pathToFileURL(process.env.MINICAN_PLAYWRIGHT_PATH).href);
@@ -33,7 +39,7 @@ async function setup(t,{noReady=false}={}){
  const context=await browser.newContext({acceptDownloads:true,viewport:{width:1024,height:768}}),external=[];
  await context.route('**/*',route=>{const url=route.request().url();if(/^https?:/.test(url)&&!url.startsWith(origin+'/')){external.push(url);return route.abort();}return route.continue();});
  const page=await context.newPage();page.setDefaultTimeout(10000);if(process.env.MINICAN_GAI_DEBUG){page.on('console',m=>console.log('browser',m.type(),m.text()));page.on('pageerror',e=>console.log('pageerror',e.message));for(const event of ['frameattached','framenavigated','framedetached'])page.on(event,f=>console.log(event,f.url()));}await page.goto(origin+'/test.html');await page.waitForFunction(()=>typeof window.mountGaiApp==='function');
- const activity=make();if(noReady)activity.document=activity.document.replace('draw();report(capture());\n</script>','draw();\n</script>');
+ if(noReady)activity.document=activity.document.replace('draw();report(capture());\n</script>','draw();\n</script>');
  await page.evaluate(activity=>{localStorage.setItem('private-host-token','secret');window.changes=[];window.saved=[];window.failSave=false;window.runtime=window.mountGaiApp(document.getElementById('root'),{activity,onChange:state=>changes.push(state),onSave:result=>{if(window.failSave)throw Error('disk full');saved.push(result);}});},activity);
  await frame(page).locator('#count').waitFor();if(!noReady)await page.waitForFunction(()=>window.changes.length===1);
  return {page,context,browser,external};
@@ -72,12 +78,26 @@ test('saving waits for a complete initial capture and propagates adapter flush f
  await app.locator('body').evaluate(()=>window.GAIClassroom.flush=async()=>{document.getElementById('step').click();});await save.click();await page.waitForFunction(()=>saved.length===1);assert.equal(await page.evaluate(()=>saved[0].state.count),4,'flush publishes the last state before result creation');
 });
 
-test('offline HTML restores generated app checkpoint and includes app and result in a reopened download',options,async t=>{
+test('button pixel artwork captures real colors with the latest answer, never an unrelated grid',options,async t=>{
+ const {page,external}=await setup(t,{activity:makeGrid()}),app=frame(page),save=page.getByRole('button',{name:'결과를 다음 슬라이드에 저장'});
+ await app.locator('#step').click();await page.waitForFunction(()=>runtime.getState().count===4);await save.click();await page.waitForFunction(()=>saved.length===1);
+ const result=await page.evaluate(()=>saved[0]);assert.equal(result.state.count,4);assert.match(result.answer,/검정 픽셀 4개/);assert.ok(result.image.length<=40000);assert.equal(result.imageOmitted,undefined);
+ const pixels=await page.evaluate(async image=>{const img=new Image();img.src=image;await img.decode();const c=document.createElement('canvas');c.width=img.width;c.height=img.height;const ctx=c.getContext('2d');ctx.drawImage(img,0,0);return {width:c.width,height:c.height,colors:Array.from({length:64},(_,i)=>[...ctx.getImageData((i%8+.5)*32,(Math.floor(i/8)+.5)*32,1,1).data])};},result.image);
+ assert.equal(pixels.width,256);assert.equal(pixels.height,256);assert.deepEqual(pixels.colors,Array.from({length:64},(_,i)=>[0,1,9,18].includes(i)?[17,24,39,255]:[255,255,255,255]));
+ await app.locator('#pixel-grid').evaluate(grid=>{grid.id='';grid.setAttribute('data-onbatang-pixel-grid','');grid.firstElementChild.style.background='#ec4899';});
+ await save.click();await page.waitForFunction(()=>saved.length===2);assert.notEqual(await page.evaluate(()=>saved[1].image),result.image,'the explicit surface captures colored pixels too');
+ await app.locator('[data-onbatang-pixel-grid]').evaluate(grid=>grid.firstElementChild.remove());await save.click();await page.waitForFunction(()=>saved.length===3);
+ assert.equal(await page.evaluate(()=>saved[2].image),undefined);assert.equal(await page.evaluate(()=>saved[2].imageOmitted),true,'a missing grid cell cannot silently produce wrong artwork');assert.match(await page.evaluate(()=>saved[2].answer),/검정 픽셀 4개/);
+ await app.locator('[data-onbatang-pixel-grid]').evaluate(grid=>{grid.removeAttribute('data-onbatang-pixel-grid');});await save.click();await page.waitForFunction(()=>saved.length===4);assert.equal(await page.evaluate(()=>saved[3].image),undefined,'a generic grid is not assumed to be pixel art');assert.deepEqual(external,[]);
+});
+
+for(const kind of ['canvas','buttons'])test(`offline HTML restores ${kind} artwork and answer in a reopened download`,options,async t=>{
  const {page,context,browser,external}=await setup(t),workRoot=join(root,'work');await mkdir(workRoot,{recursive:true});const work=await mkdtemp(join(workRoot,'gai-html-test-')),path=join(work,'lesson.html');
- const activity=make();await writeFile(path,Buffer.from(await createHtmlLesson({title:'앱 수업',pages:[{id:'pfirst123',image,aspect:16/9},{id:'pactivity123',image,aspect:16/9,activity},{id:'plast123',image,aspect:16/9}]}).arrayBuffer()));
+ const activity=kind==='buttons'?makeGrid():make(),count=activity.state.count+1;await writeFile(path,Buffer.from(await createHtmlLesson({title:'앱 수업',pages:[{id:'pfirst123',image,aspect:16/9},{id:'pactivity123',image,aspect:16/9,activity},{id:'plast123',image,aspect:16/9}]}).arrayBuffer()));
  await context.setOffline(true);await page.goto(pathToFileURL(path).href);await page.getByRole('button',{name:'다음',exact:true}).click();await page.getByRole('button',{name:'활동 시작'}).click();await frame(page).locator('#step').click();await frame(page).locator('#ack').filter({hasText:'saved'}).waitFor();
  await page.getByRole('button',{name:'결과를 다음 슬라이드에 저장'}).click();await page.locator('.lesson-count').filter({hasText:'3 / 4쪽 · 결과'}).waitFor();assert.ok(await page.locator('.lesson-slide').evaluate(img=>img.complete&&img.naturalWidth===1280));
- await page.reload();assert.equal(await page.locator('.lesson-count').innerText(),'3 / 4쪽 · 결과');await page.getByRole('button',{name:'이전',exact:true}).click();await page.getByRole('button',{name:'활동 시작'}).click();assert.equal(await frame(page).locator('#count').innerText(),'3');
+ await page.reload();assert.equal(await page.locator('.lesson-count').innerText(),'3 / 4쪽 · 결과');await page.getByRole('button',{name:'이전',exact:true}).click();await page.getByRole('button',{name:'활동 시작'}).click();assert.equal(await frame(page).locator('#count').innerText(),String(count));
  const pending=page.waitForEvent('download');await page.getByRole('button',{name:'현재 수업 내려받기'}).click();const copy=join(work,'with-result.html');await(await pending).saveAs(copy);
- const fresh=await browser.newContext({offline:true});t.after(()=>fresh.close());const again=await fresh.newPage();await again.goto(pathToFileURL(copy).href);assert.equal(await again.locator('.lesson-count').innerText(),'1 / 4쪽');await again.getByRole('button',{name:'다음',exact:true}).click();await again.getByRole('button',{name:'활동 시작'}).click();assert.equal(await frame(again).locator('#count').innerText(),'3');assert.deepEqual(external,[]);
+ const seed=JSON.parse((await readFile(copy,'utf8')).match(/id="onbatang-lesson-data">([\s\S]*?)<\/script>/)[1]);assert.match(seed.pages[2].resultData.image,/^data:image\/png;base64,/);assert.match(seed.pages[2].resultData.answer,kind==='buttons'?/검정 픽셀 4개/:/3단계 완료/);
+ const fresh=await browser.newContext({offline:true});t.after(()=>fresh.close());const again=await fresh.newPage();await again.goto(pathToFileURL(copy).href);assert.equal(await again.locator('.lesson-count').innerText(),'1 / 4쪽');await again.getByRole('button',{name:'다음',exact:true}).click();await again.getByRole('button',{name:'활동 시작'}).click();assert.equal(await frame(again).locator('#count').innerText(),String(count));assert.deepEqual(external,[]);
 });
