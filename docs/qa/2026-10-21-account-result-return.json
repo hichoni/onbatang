@@ -1,0 +1,119 @@
+{
+  "date": "2026-10-21",
+  "feature": "account-library-and-return-student-results-to-original-material",
+  "environment": "existing-production-account-and-device-local-original-material",
+  "paidQaUsed": false,
+  "additionalAiRequests": 0,
+  "release": {
+    "gai": "0.77.0",
+    "gaiProductCommit": "e4d8741bfd1848c2a8527c3f8e1bd2524b339494",
+    "gaiPr": 102,
+    "previewCommit": "96c400a0fa105f8456c68d7de90b5d7b816c05c0",
+    "common": "0.32.0",
+    "commonProductCommit": "45d418fff377ba71d86ff5afdb2d35ec00e6ec3f",
+    "commonPr": 10,
+    "commonFilesVerified": 167,
+    "firebaseFilesDeployed": 170,
+    "httpCoreSharedFiles": 4,
+    "httpHostFiles": 26
+  },
+  "boundaries": {
+    "additionalSqlOrDatabaseSchemaChanges": false,
+    "authRlsBucketWorkflowChanges": false,
+    "serverResultOverwritten": false,
+    "resultDestination": "device-local-IndexedDB-fixed-material-revision",
+    "privateAssetsCommitted": false
+  },
+  "local": {
+    "commonUnit": {
+      "passed": 203,
+      "failed": 0
+    },
+    "commonHostBrowser": {
+      "passed": 2,
+      "failed": 0
+    },
+    "gaiFullUnit": {
+      "passed": 618,
+      "failed": 0,
+      "concurrency": 4
+    },
+    "laterWorkspaceUnit": {
+      "passed": 2,
+      "failed": 0
+    },
+    "finalRelatedTests": {
+      "passed": 15,
+      "failed": 0
+    },
+    "realIndexedDbBrowser": {
+      "passed": 6,
+      "failed": 0
+    },
+    "overlappingCountsMustNotBeSummed": true,
+    "build": "PASS",
+    "initialDefaultConcurrency": "One existing worker timeout; full rerun at concurrency 4 passed."
+  },
+  "actualAccount": {
+    "existingSignedInTeacher": true,
+    "newAccountsCreated": 0,
+    "newRoomsCreated": 0,
+    "endedRoomListed": true,
+    "roomRecoveryAndEditorReturn": true,
+    "savedResultRead": true,
+    "studentPngCount": 2,
+    "sourcePptPages": 19,
+    "originalMaterialPagesBefore": 25,
+    "originalMaterialPagesAfter": 26,
+    "partsBefore": 11,
+    "partsAfter": 11,
+    "insertionAfterCurrentPage": 19,
+    "resultCurrentPage": 20,
+    "answerIndependentlyEdited": true,
+    "imageIndependentlyResized": true,
+    "firstImageWidthPercentBefore": 19.125,
+    "firstImageWidthPercentAfter": 18.1,
+    "bothPngBytesPreserved": true,
+    "fixedAnchorRevisionBefore": 17,
+    "fixedAnchorRevisionAfter": 19,
+    "fullPageReloadReopen": true,
+    "fixedSnapshotComparedToDraft": true,
+    "duplicateResultBlocked": true,
+    "serverPinnedResultUnchanged": true,
+    "serverOriginalComparedByReadingUi": true
+  },
+  "public": {
+    "deployed": true,
+    "accountButtons": 0,
+    "appCreationButtons": 0,
+    "existingExecutionContractPreserved": true,
+    "existingPrivateActivityManuallyReplayedThisSession": false
+  },
+  "ci": {
+    "githubVerify": "NOT_STARTED_BILLING_LIMIT",
+    "mainCheckRun": 118936546054,
+    "previewCheckRun": 118935993843,
+    "netlifyPreview": "SUCCESS",
+    "productionUiAndHttp": "PASS",
+    "firebase": "SUCCESS",
+    "billingSettingsChanged": false
+  },
+  "preservation": {
+    "originalPptSha256": "c165d32bda450cec385e5bc916351c75d72b6acc69abdea5931d2d473f10d12d",
+    "existingGaiDraftPr": 76,
+    "existingGaiDraftHead": "41a610388d6e8566af70f9676b64c9894e33ab1f",
+    "existingCommonDraftPr": 1,
+    "existingCommonDraftHead": "61bd156d239733be013cd5e695e75623e760b00d",
+    "communityConfigSha256": "fd6cb8f7ed1543197ed259d6c03ea0c338c06c7bf25df08e50639c57722e1a83",
+    "releaseTimesSha256": "44d8598a92748630d057a1ed91c1b31e3ae8d6dc2041c9827fc26ded875ddcef"
+  },
+  "notVerified": [
+    "physical-mobile-or-tablet",
+    "new-physical-device",
+    "35-student-class",
+    "PowerPoint-export-edit-save-reopen-in-this-session"
+  ],
+  "limitation": "Returning results requires the original complete material on this device; account room recovery is not automatic backup/recovery of the whole original PPT.",
+  "privateEvidenceDirectory": "work/account-return-live-1021/",
+  "finalScreenshot": "result-reopened-final.png"
+}
