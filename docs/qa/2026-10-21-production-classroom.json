@@ -1,0 +1,155 @@
+{
+  "date": "2026-10-21",
+  "release": "0.76.5",
+  "environment": "existing-production",
+  "paidQaUsed": false,
+  "additionalAiRequests": 0,
+  "installation": {
+    "publicTables": 10,
+    "allRls": true,
+    "privateTables": 1,
+    "privateBucket": true,
+    "baselineFiles": 27,
+    "baselineObjectsVerified": 221,
+    "missingBaselineObjects": 0,
+    "newMigrations": 9,
+    "history": 36,
+    "existingAccounts": 9,
+    "existingDrawings": 6,
+    "existingAccountDrawingFunctionPolicyFingerprintsUnchangedAfterInstall": true,
+    "files": [
+      {
+        "file": "202610170001_onbatang_revisions.sql",
+        "sha256": "988b6926ee9e26bdaed3d922e9917acd5c672398ee5046db06b1738b4f2064b3"
+      },
+      {
+        "file": "202610170002_onbatang_rooms.sql",
+        "sha256": "c5210ddaa4515bfba875892f224fc7b8b52d853874b8b2470077eb68174ac7ab"
+      },
+      {
+        "file": "202610180001_onbatang_account_library.sql",
+        "sha256": "23d33b4245fb8af26fdbbc7ea41bd4ea31ed4bfd94d64694d135e35354df429c"
+      },
+      {
+        "file": "202610180002_onbatang_sequence_grading.sql",
+        "sha256": "922989d171d179a3b2e0d6f84fc327effc417ad643cb385ee4781af64fba2d1f"
+      },
+      {
+        "file": "202610180003_onbatang_slide_projection.sql",
+        "sha256": "834c031a5d0b7d04f4fb69630a7a7fc518fcd39824f145877dd46f55c2ba1dd5"
+      },
+      {
+        "file": "202610180004_onbatang_material_bundles.sql",
+        "sha256": "d7cdb0cc7c5fa2b47c80602451e5532788187e88ed87779b33d0544176d97b63"
+      },
+      {
+        "file": "202610180005_onbatang_flexible_lesson_time.sql",
+        "sha256": "85cc9f5a546cf2fef792b9c93881a1780b59256ede393c4f53d737d1be8ddf90"
+      },
+      {
+        "file": "202610210001_onbatang_slide_apps.sql",
+        "sha256": "271bb37d244d72a006430da9688e26f3f2497d29d93e3ed796fbed4343bf74fe"
+      },
+      {
+        "file": "202610210002_onbatang_result_layout.sql",
+        "sha256": "5d977d5f021e6e233b20e5864b8a72413c77748f4c9f95d83548f485045781db"
+      }
+    ],
+    "existingAccountDrawingFunctionPolicyFingerprintsUnchangedAfterLiveTest": true,
+    "resultAndSubmissionFingerprintsUnchangedByLayoutMigration": true
+  },
+  "live": {
+    "teacher": "existing signed-in account",
+    "studentSessions": 2,
+    "physicalStudents": 0,
+    "sameCode": true,
+    "teacherPracticeNotInherited": true,
+    "mouseAndKeyboardInput": true,
+    "pauseResume": true,
+    "pngSubmissions": [
+      {
+        "hasPng": true,
+        "imageMd5": "3f7d1991d293530be6035b7ed2f27c90",
+        "template": "slide-app",
+        "answerLength": 215
+      },
+      {
+        "hasPng": true,
+        "imageMd5": "1fc77c0f570ec0e13fec6c81703844a0",
+        "template": "slide-app",
+        "answerLength": 227
+      }
+    ],
+    "result": [
+      {
+        "slides": 7,
+        "revision": 0,
+        "lastPageImages": 0,
+        "lastPageAnswers": 2,
+        "selectedEntries": null
+      },
+      {
+        "slides": 8,
+        "revision": 1,
+        "lastPageImages": 2,
+        "lastPageAnswers": 3,
+        "selectedEntries": 2
+      }
+    ],
+    "originalPptSha256": "c165d32bda450cec385e5bc916351c75d72b6acc69abdea5931d2d473f10d12d",
+    "privateSourceAsset": {
+      "bytes": 19627567,
+      "ready": 1,
+      "total": 1,
+      "originalPptPresent": true,
+      "matchesStoredObjects": true
+    },
+    "newWindowResultReopen": true,
+    "reloadedResultPngByteEquality": [
+      true,
+      true
+    ],
+    "teacherRoomRecovery": true,
+    "studentRejoinReceipt": true,
+    "nextAppFollowsSameCode": true,
+    "roomEnded": true
+  },
+  "local": {
+    "testsPassed": 605,
+    "build": true,
+    "vendorFiles": 167,
+    "vendorCommit": "c54b630f814907ce1d9a97b6886fbc4bd092caf9"
+  },
+  "notVerified": [
+    "35 concurrent actual students",
+    "physical mobile/tablet",
+    "physical new device",
+    "second app additional submission",
+    "this server result PPTX native PowerPoint reopen"
+  ],
+  "layout": {
+    "newResultsHeadingClearsPng": true,
+    "legacyPreviewDoesNotRewriteSavedRevision": true,
+    "actualProductionReopenedPngUnchanged": [
+      true,
+      true
+    ],
+    "actualProductionTitleClearsImages": true
+  },
+  "deployed": {
+    "version": "0.76.5",
+    "productCommit": "25bf9b7ace79b389e17519c91825e0a1f80a1fa9",
+    "pullRequests": [
+      100,
+      101
+    ],
+    "previewHead": "3af1dcd13863bb60466722e464fa29f8d6e6ac8a",
+    "previewNetlifySuccess": true,
+    "previewAndProductionVisibleVersion": true,
+    "commonHttpHashes": 4,
+    "hostHttpHashes": 23,
+    "canonicalVersionsEqualProduction": true,
+    "automaticGithubChecks": "blocked before execution by account billing/spending limit",
+    "productionDatabaseAppliedAndVerified": true
+  }
+}
