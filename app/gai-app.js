@@ -8,13 +8,35 @@ const clone=value=>JSON.parse(JSON.stringify(value));
 // This helper is injected before the generated source. It only accepts an
 // explicit parent capture request; it never asks the host to create a result.
 function canvasHelper(bridge){
+ // Explicit pixel surfaces only: do not mistake palettes, number tables or
+ // arbitrary app buttons for a drawing. #pixel-grid supports saved older apps.
+ function pixelCanvas(grid){
+  const cells=[...grid.children];if(cells.length<4||cells.length>1024)throw Error('pixel cells');
+  const pixels=cells.map(cell=>{
+   const rect=cell.getBoundingClientRect(),style=getComputedStyle(cell),color=style.backgroundColor;
+   if(rect.width<=0||rect.height<=0||style.visibility!=='visible'||style.display==='none'||Number(style.opacity)!==1||style.backgroundImage!=='none'||!/^rgb\(/.test(color)&&!/^rgba\([^,]+,[^,]+,[^,]+,\s*1\)$/.test(color))throw Error('pixel fill');
+   return {x:rect.x+rect.width/2,y:rect.y+rect.height/2,w:rect.width,h:rect.height,color};
+  });
+  const axis=key=>{const out=[];for(const p of [...pixels].sort((a,b)=>a[key]-b[key]))if(!out.length||Math.abs(p[key]-out.at(-1))>1)out.push(p[key]);return out;};
+  const xs=axis('x'),ys=axis('y');if(xs.length<2||ys.length<2||xs.length>32||ys.length>32||xs.length*ys.length!==pixels.length)throw Error('pixel shape');
+  for(const positions of [xs,ys])for(let i=2;i<positions.length;i++)if(Math.abs(positions[i]-positions[i-1]-(positions[1]-positions[0]))>1)throw Error('pixel spacing');
+  const used=new Set(),size=Math.max(xs.length,ys.length),scale=Math.max(1,Math.floor(256/size)),canvas=document.createElement('canvas');
+  canvas.width=xs.length*scale;canvas.height=ys.length*scale;const ctx=canvas.getContext('2d');if(!ctx)throw Error('pixel context');
+  for(const p of pixels){
+   if(Math.abs(p.w-pixels[0].w)>1||Math.abs(p.h-pixels[0].h)>1)throw Error('pixel size');
+   const x=xs.findIndex(v=>Math.abs(v-p.x)<=1),y=ys.findIndex(v=>Math.abs(v-p.y)<=1),key=y*xs.length+x;
+   if(x<0||y<0||used.has(key))throw Error('pixel position');used.add(key);ctx.fillStyle=p.color;ctx.fillRect(x*scale,y*scale,scale,scale);
+  }
+  return canvas;
+ }
  window.addEventListener('message',async event=>{
   const d=event.data;if(event.source!==parent||d?.bridge!==bridge||d.type!=='onbatang-app-capture'||typeof d.request!=='string')return;
   // The Gai SDK observes change events and publishes before the capture task.
   try{if(typeof window.GAIClassroom?.flush==='function')await window.GAIClassroom.flush();else document.dispatchEvent(new Event('change',{bubbles:true}));}
   catch{parent.postMessage({type:'onbatang-app-captured',bridge,request:d.request,error:'APP_CAPTURE_FAILED'},'*');return;}
   setTimeout(()=>{
-   let image,imageOmitted=false;const source=document.querySelector('canvas');
+   let image,imageOmitted=false,source;const grid=document.querySelector('[data-onbatang-pixel-grid],#pixel-grid');
+   try{source=grid?pixelCanvas(grid):document.querySelector('canvas');}catch{imageOmitted=true;}
    if(source?.width&&source?.height)try{
     for(const edge of [256,128,64]){
      const canvas=document.createElement('canvas'),scale=Math.min(1,edge/Math.max(source.width,source.height));
@@ -53,7 +75,7 @@ export function mountGaiApp(root,{activity:raw,onChange,onSave}={}){
  const status=el('p',{class:'gai-app-status',role:'status','aria-live':'polite',text:'앱의 진행 기록을 연결하고 있어요. 연결되면 결과를 저장할 수 있어요.'});
  const save=el('button',{type:'button',class:'gai-app-save',text:'결과를 다음 슬라이드에 저장',disabled:true});
  const body=el('section',{class:'gai-app-runtime','aria-label':activity.title},el('header',{},el('span',{class:'gai-app-kicker',text:'내가 만든 수업 앱'}),el('h2',{text:activity.title}),el('p',{class:'gai-app-instructions',text:activity.instructions})),frame,
-  el('footer',{},el('p',{class:'gai-app-hint',text:'그림판 앱은 그림과 함께, 그 외 앱은 답과 진행 상태를 저장해요.'}),save,status));
+  el('footer',{},el('p',{class:'gai-app-hint',text:'픽셀아트·그림판은 PNG 그림과 답을 함께 다음 슬라이드에 저장해요.'}),save,status));
  const send=message=>{if(!destroyed)frame.contentWindow?.postMessage({...message,bridge},'*');};
  const snapshot=()=>({connected:false,room:{phase:'running',round:1,message:'온바탕에서 연습하고 있어요.',ranking:false},me:{id:'practice',nickname:'연습',checkpoint:clone(checkpoint),...clone(reported)},participants:[]});
  const handler=event=>{

@@ -29,6 +29,8 @@ const initial={connected:true,room:{phase:'running',round:1,message:''},me:{id:'
 const counterHtml='<main><h1>수업 절차 연습</h1><p>버튼을 눌러 활동 단계를 진행해요.</p><button id="step">다음 단계 실행</button><output id="count" aria-live="polite">0</output><p id="version"></p></main>';
 const counterCss='*{box-sizing:border-box}body{margin:0;padding:24px;background:#f1f7f3;color:#273f3a;font:18px/1.6 system-ui}main{max-width:640px;margin:auto}button{min-height:48px;padding:12px 18px;background:#287467;color:white;border:0;border-radius:12px;font:inherit}output{display:block;font-size:3rem;margin:16px 0}';
 const counterJs=`let count=0;const out=document.getElementById('count');function draw(){out.textContent=String(count);}function capture(){return {progress:Math.min(100,count*10),score:count,completed:false,answer:count+'단계 완료',checkpoint:{count},state:{count}};}document.getElementById('step').onclick=async()=>{count++;draw();await GAIClassroom.publish(capture());};GAIClassroom.connect({capture,restore(saved){count=Number.isInteger(saved.count)?saved.count:0;draw();},onRoom(){}});draw();`;
+const pixelHtml=counterHtml+'<div id="pixel-grid" role="grid" style="display:grid;grid-template-columns:repeat(8,24px);gap:2px;width:max-content"></div>';
+const pixelJs=counterJs.replace('out.textContent=String(count);',`out.textContent=String(count);const grid=document.getElementById('pixel-grid');grid.replaceChildren();for(let i=0;i<64;i++){const cell=document.createElement('button');cell.style.cssText='padding:0;min-height:0;width:24px;height:24px;border:0;background:'+([0,1,9,18].slice(0,count).includes(i)?'#111827':'#fff');grid.append(cell);}`).replace("count+'단계 완료'","count+'개 검정 픽셀 · 흰색은 0, 검정은 1'");
 const documentHead=`<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; img-src data:; object-src 'none'; frame-src 'none'; form-action 'none'">`;
 const safe=value=>JSON.stringify(value).replace(/</g,'\\u003c');
 const providerModule=`
@@ -45,13 +47,13 @@ export function createFixtureProvider(){
  }};
 }`;
 
-async function setup(t,{width,height}){
+async function setup(t,{width,height,pixel=false}){
  const errors=[],external=[],requests=[];
  const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript','.css':'text/css','.json':'application/json','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png','.jpg':'image/jpeg'};
  const server=createServer(async(req,res)=>{try{
   const path=new URL(req.url,'http://localhost').pathname;
   if(path==='/gai-test.html'){res.setHeader('Content-Type',mime['.html']);return res.end('<!doctype html><html lang="ko"><meta name="viewport" content="width=device-width,initial-scale=1"><body class="mc-app"><main id="app"></main><script type="module">import {startOnbatang} from "/app/standalone.js";import {createFixtureProvider} from "/gai-test-provider.js";await startOnbatang({activityAuthoring:true,appMaker:createFixtureProvider()});</script></body></html>');}
-  if(path==='/gai-test-provider.js'){res.setHeader('Content-Type',mime['.js']);return res.end(providerModule);}
+  if(path==='/gai-test-provider.js'){res.setHeader('Content-Type',mime['.js']);return res.end(pixel?providerModule.replace(safe(counterHtml),safe(pixelHtml)).replace(safe(counterJs),safe(pixelJs)):providerModule);}
   const file=resolve(root,'.'+decodeURIComponent(path));if(!file.startsWith(root+sep)){res.writeHead(403);return res.end();}
   res.setHeader('Content-Type',mime[extname(file)]||'application/octet-stream');res.end(await readFile(file));
  }catch{res.writeHead(404);res.end();}});
@@ -80,6 +82,25 @@ async function readLibrary(page){return page.evaluate(async()=>{
 });}
 async function reopen(page,name,count){await page.locator('.cv-back').click();await page.locator('.cv-home-title').waitFor();await page.reload();await page.getByRole('button',{name:name+' 열기',exact:true}).click();await waitPages(page,count);}
 const appFrame=scope=>scope.frameLocator('.gai-app-frame').frameLocator('[data-gai-app-content]');
+
+test('a button pixel app saves PNG plus answer into the next PPT page and reopens in the public editor',options,async t=>{
+ const {page,entry,errors,external}=await setup(t,{width:1440,height:1000,pixel:true});await importDeck(page,entry);
+ const original=await readLibrary(page),before=original.graphs[0],after=9;await page.locator(`[data-material-page="${after}"]`).click();
+ await page.locator('[data-add-gai-app]').click();const maker=page.locator('.gai-maker');await maker.getByRole('button',{name:'가이X 연결',exact:true}).click();await maker.getByRole('button',{name:'가이X 연결됨',exact:true}).waitFor();
+ await maker.getByRole('textbox',{name:'가이X에게 요청',exact:true}).fill('직접 만든 픽셀 그림 검증');await maker.getByRole('button',{name:'보내기',exact:true}).click();await appFrame(maker).locator('#pixel-grid button').first().waitFor();
+ await maker.getByRole('button',{name:'이 앱을 슬라이드에 넣기',exact:true}).click();await maker.waitFor({state:'detached'});await waitPages(page,sourcePages+1);
+ await page.locator('.cv-show-btn').click();const show=page.locator('.cv-show'),runtime=appFrame(show);await runtime.locator('#step').waitFor();for(let i=0;i<4;i++)await runtime.locator('#step').click();
+ await show.getByRole('button',{name:'결과를 다음 슬라이드에 저장',exact:true}).click();await page.waitForFunction(n=>document.querySelector('.cv-show-count')?.textContent===`12 / ${n}`,sourcePages+2);
+ await show.getByRole('button',{name:'발표 끝내기 (Esc)',exact:true}).click();await waitPages(page,sourcePages+2);
+ const saved=await readLibrary(page),graph=saved.graphs[0],result=graph.pages[11].page,picture=result.items.find(v=>v.t==='image'),answer=result.items.find(v=>v.text?.includes('4개 검정 픽셀'));
+ assert.ok(picture&&answer,'PNG and editable answer share the result slide');assert.match(picture.url,/^data:image\/png;base64,/);assert.ok(picture.url.length<=40000);assert.equal(graph.pages[10].page.activity.state.count,4);
+ assert.deepEqual(graph.pages.filter(v=>v.page.source?.kind==='pptx').map(v=>v.page.id),before.pages.map(v=>v.page.id));assert.deepEqual(saved.originals,original.originals);assert.deepEqual(saved.sources,original.sources);
+ const name=await page.locator('.cv-name').inputValue();await reopen(page,name,sourcePages+2);assert.deepEqual(await readLibrary(page),saved);
+ await page.goto(new URL('/app/index.html',entry).href);await page.getByRole('button',{name:name+' 열기',exact:true}).click();await waitPages(page,sourcePages+2);
+ assert.equal(await page.locator('[data-add-gai-app]').count(),0);assert.equal(await page.locator('[data-add-activity]').count(),0);await page.locator('[data-material-page="10"]').click();assert.equal(await page.locator('[data-edit-activity]').isVisible(),false);
+ await page.locator('.cv-show-btn').click();await runtime.locator('#step').waitFor();assert.equal(await runtime.locator('#count').innerText(),'4');await show.getByRole('button',{name:'다음 장',exact:true}).click();assert.match(await show.locator('.cv-show-stage').innerText(),/4개 검정 픽셀/);await show.getByRole('button',{name:'발표 끝내기 (Esc)',exact:true}).click();
+ assert.deepEqual(await readLibrary(page),saved);assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
+});
 
 test('a visited part keeps its persisted draft basis when another full part sends an app there', {...options,skip:options.skip||sourcePages!==21},async t=>{
  const {page,entry}=await setup(t,{width:1440,height:1000});await importDeck(page,entry);
