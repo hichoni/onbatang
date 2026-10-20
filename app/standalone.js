@@ -13,7 +13,7 @@ export async function startOnbatang({root=document.getElementById('app'),fonts=O
  if(isMinicanStarted())throw Error('minican already started');
  // Existing visitors may still have the previous CSS cached for an hour.
  // A release key fetches the matching editor layout without reloading a drawing.
- if(styles)for(const href of [new URL('../src/editor.css?v=0.28.2',import.meta.url).href,new URL('./app.css?v=0.28.2',import.meta.url).href,new URL('./brand.css?v=0.28.2',import.meta.url).href,new URL('./pptx-import/style.css?v=0.28.2',import.meta.url).href]){
+ if(styles)for(const href of [new URL('../src/editor.css?v=0.29.0',import.meta.url).href,new URL('./app.css?v=0.29.0',import.meta.url).href,new URL('./brand.css?v=0.29.0',import.meta.url).href,new URL('./pptx-import/style.css?v=0.29.0',import.meta.url).href]){
   if(![...document.querySelectorAll('link[rel=stylesheet]')].some(link=>link.href===href)){const link=document.createElement('link');link.rel='stylesheet';link.href=href;document.head.append(link);}
  }
  const editor=document.createElement('div'),workspace=document.createElement('section');workspace.className='op-root';workspace.hidden=true;root.classList.add('cv-standalone-shell');root.replaceChildren(editor,workspace);
@@ -85,6 +85,15 @@ export async function startOnbatang({root=document.getElementById('app'),fonts=O
   for(const row of graph.documents){try{documents.push(row.id===designId?saved:(await getDesign(row.id)||row.payload));}catch{documents.push(row.payload);recoveryRequired=true;}}
   try{await controller.restoreEditorContext(graph);}catch{recoveryRequired=true;warnings.push('전체 자료에는 저장했어요. 내 자료에서 다시 열어주세요.');}
   return {title:graph.manifest.title,documents,materialRef:graph.materialRef,pageOrder:graph.pages.map(value=>value.page.id),warnings,recoveryRequired};
+ },async saveResults({designId,materialRef,documents,pageOrder,expectedDocuments}){
+  const canonical=value=>JSON.stringify(value,(_,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.fromEntries(Object.keys(x).sort().map(k=>[k,x[k]])):x);
+  const before=new Map();
+  for(const expected of expectedDocuments){const current=await getDesign(expected.id);if(canonical(current)!==canonical(expected))throw Error('다른 창에서 자료를 편집했어요. 결과를 다시 확인해주세요.');before.set(expected.id,current);}
+  const graph=await controller.library.pinEdits({materialRef,drafts:documents,pageOrder}),warnings=[];let recoveryRequired=false;
+  for(const document of documents){const fixed=graph.documents.find(d=>d.id===document.id).payload;try{await replaceDesignIfUnchanged(fixed,before.get(document.id));}catch{recoveryRequired=true;warnings.push('전체 자료에는 결과를 저장했어요. 다른 창의 초안을 보존했으니 내 자료에서 다시 열어주세요.');}}
+  const rows=[];for(const row of graph.documents){try{rows.push(await getDesign(row.id)||row.payload);}catch{rows.push(row.payload);recoveryRequired=true;}}
+  try{await controller.restoreEditorContext(graph);}catch{recoveryRequired=true;}
+  return {title:graph.manifest.title,documents:rows,materialRef:graph.materialRef,pageOrder:graph.pages.map(v=>v.page.id),warnings,recoveryRequired};
  }};
  await startMinican({appMaker:createGaiPopupProvider(),...options,root:editor,fonts,titleFont,storage,materialNavigation,importAction:{label:'PPTX 가져오기',hideHome:true,editorLabel:'내 PPT 올리기',editorMode:'inline',open:openPptx},onView:next=>{
   view=next;onView?.(next);

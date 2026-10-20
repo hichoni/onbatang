@@ -5,6 +5,7 @@ import { isId, newId } from '../src/document.js';
 import { mountPixelArt } from './pixel-art.js';
 import { mountGaiApp } from './gai-app.js';
 import { el } from '../src/dom.js';
+import {cleanLessonTarget,cleanLessonBinding,returnedResultsFromLesson} from './lesson-results.js';
 
 const png = value => typeof value === 'string' && /^data:image\/png;base64,[A-Za-z\d+/=]+$/.test(value) && value.length <= 4_000_000;
 export const safeLessonJson = value => JSON.stringify(value).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
@@ -17,6 +18,7 @@ export function cleanHtmlLesson(raw) {
     if (bytes > 200_000_000) throw new Error('수업 파일이 너무 커요. 그림 크기를 줄여 다시 내려받아 주세요.');
     const out = { id: page.id, image: page.image, aspect: page.aspect };
     if (page.activity !== undefined) { out.activity = cleanActivity(page.activity); bytes += new TextEncoder().encode(JSON.stringify(out.activity)).length; }
+    if(page.binding!==undefined){out.binding=cleanLessonBinding(page.binding);if(out.activity&&(out.binding.pageId!==out.id||out.binding.activityId!==out.activity.id||out.binding.kind!==out.activity.kind))throw Error('활동의 원본 연결 정보가 달라요.');}
     if (bytes > 200_000_000) throw new Error('수업 파일이 너무 커요. 그림 크기를 줄여 다시 내려받아 주세요.');
     if (page.result === true) {
       out.result = true;
@@ -25,7 +27,7 @@ export function cleanHtmlLesson(raw) {
     if(bytes>200_000_000)throw new Error('수업 파일이 너무 커요. 그림 크기를 줄여 다시 내려받아 주세요.');
     return out;
   });
-  return { version: 1, id: raw.id, title: raw.title, updatedAt: Number.isSafeInteger(raw.updatedAt) && raw.updatedAt >= 0 ? raw.updatedAt : 0, pages };
+  return { version: 1, id: raw.id, title: raw.title, updatedAt: Number.isSafeInteger(raw.updatedAt) && raw.updatedAt >= 0 ? raw.updatedAt : 0, pages,...(raw.target===undefined?{}:{target:cleanLessonTarget(raw.target)}) };
 }
 
 export function mountHtmlLesson(raw, host = document.getElementById('onbatang-lesson')) {
@@ -67,7 +69,14 @@ export function mountHtmlLesson(raw, host = document.getElementById('onbatang-le
       status.textContent = '활동과 결과가 담긴 새 수업 파일을 내려받았어요. 처음 연 파일은 그대로예요.';
     } catch { status.textContent = '수업 파일을 만들지 못했어요. 작업은 이 화면에 남아 있어요. 다시 시도해 주세요.'; }
   } });
-  host.replaceChildren(el('header', { class: 'lesson-header' }, el('div', {}, el('span', { class: 'lesson-brand', text: '온바탕 수업' }), title), download),
+  const returnResults=el('button',{type:'button',text:'온바탕용 결과 내려받기',class:'lesson-download',onclick:()=>{
+    try{
+      const packet=returnedResultsFromLesson({...seed,pages});if(!packet.results.length){status.textContent='활동을 하고 결과를 다음 슬라이드에 저장한 뒤 내려받아주세요.';return;}
+      const url=URL.createObjectURL(new Blob([JSON.stringify(packet)],{type:'application/json'})),anchor=el('a',{href:url,download:'onbatang-results.json'});anchor.click();setTimeout(()=>URL.revokeObjectURL(url),60000);
+      status.textContent='원래 온바탕 자료에서 「HTML 수업 결과 가져오기」를 누르고 이 JSON 파일을 선택해주세요.';
+    }catch(error){status.textContent=error.message;}
+  }});
+  host.replaceChildren(el('header', { class: 'lesson-header' }, el('div', {}, el('span', { class: 'lesson-brand', text: '온바탕 수업' }), title),el('div',{class:'lesson-downloads'},download,returnResults)),
     el('nav', { class: 'lesson-navigation', 'aria-label': '슬라이드 이동' }, previous, count, next, returnToCover), stage, status,
     el('footer', { class: 'lesson-footer', text: '활동과 결과는 이 브라우저에 저장돼요. 다른 기기에서는 현재 수업을 내려받아 여세요.' }));
   function persist() {
@@ -101,7 +110,7 @@ export function mountHtmlLesson(raw, host = document.getElementById('onbatang-le
           const signature=JSON.stringify([page.id,value]),existing=pages.findIndex(p=>p.id===savedResults.get(signature));
           if(existing>=0){app?.destroy();app=null;executing=false;current=existing;persist();render();return;}
           if(pages.length>=500)throw new Error('이 수업은 최대 500쪽까지 저장할 수 있어요. 앱의 진행 기록은 그대로 있어요.');
-          const owner=app,result={id:newId('p'),result:true,image:await gaiResultImage(page.activity,value,page.aspect),aspect:page.aspect,resultData:value};
+          const owner=app,result={id:newId('p'),result:true,image:await gaiResultImage(page.activity,value,page.aspect),aspect:page.aspect,resultData:value,...(page.binding?{binding:page.binding}:{})};
           if(app!==owner||pages[current]?.id!==page.id)throw new Error('활동 화면이 바뀌었어요. 앱을 다시 열어 결과 저장을 눌러주세요.');
           savedResults.set(signature,result.id);pages.splice(current+1,0,result);app?.destroy();app=null;executing=false;current++;persist();render();
           if(persistent)status.textContent=value.imageOmitted?'앱 화면 그림은 생략하고 답과 진행 상태를 다음 슬라이드에 저장했어요.':'앱 결과를 다음 슬라이드에 저장했어요.';
@@ -118,7 +127,7 @@ export function mountHtmlLesson(raw, host = document.getElementById('onbatang-le
           return;
         }
         if (pages.length >= 500) throw new Error('이 수업은 최대 500쪽까지 저장할 수 있어요. 지금 그림은 그대로 있어요.');
-        const result = { id: newId('p'), result: true, image: resultImage(page.activity, page.aspect), aspect: page.aspect };
+        const result = { id: newId('p'), result: true, image: resultImage(page.activity, page.aspect), aspect: page.aspect,...(page.binding?{binding:page.binding}:{}) };
         savedResults.set(signature, result.id);
         pages.splice(current + 1, 0, result); app?.destroy(); app = null; executing = false; current++; persist(); render();
         if (persistent) status.textContent = '결과를 다음 슬라이드에 저장했어요. 현재 수업 내려받기로 다른 기기에 옮길 수 있어요.';
