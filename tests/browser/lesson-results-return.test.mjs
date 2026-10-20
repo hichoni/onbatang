@@ -28,7 +28,7 @@ for(const width of [1440,390])test(`${gai?'Gai':'common'} HTML result return pre
  await context.route('**/*',route=>{if(route.request().url().startsWith(origin+'/')||/^(data|blob):/.test(route.request().url()))return route.continue();external.push(route.request().url());return route.abort();});
  await context.routeWebSocket('**/*',s=>s.close());await context.addInitScript(()=>{try{localStorage.setItem('onbatang-tour-seen-v1:editor','1');}catch{}});
  const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));await page.goto(origin+(gai?'/minican-app.html':'/app/'));
- await page.locator('.cv-hero .cv-new-btn').click();await page.getByRole('tab',{name:'내 자료',exact:true}).click();await page.getByRole('tab',{name:'PPT',exact:true}).click();await page.getByRole('button',{name:'내 PPT 올리기',exact:true}).click();
+ await page.locator('.cv-hero .cv-new-btn').click();assert.equal(await page.locator('[data-add-gai-app]').count(),gai?1:0);await page.getByRole('tab',{name:'내 자료',exact:true}).click();await page.getByRole('tab',{name:'PPT',exact:true}).click();await page.getByRole('button',{name:'내 PPT 올리기',exact:true}).click();
  await page.locator('[data-inline-import]').getByLabel('PPTX 파일 선택',{exact:true}).setInputFiles(resolve(commonRoot,'tools/fixtures/pptx/self-authored-4x3.pptx'));
  await page.waitForFunction(()=>document.querySelector('[data-inline-import] [data-import-save]')?.disabled===false);await page.locator('[data-inline-import] [data-import-save]').click();await page.locator('[data-inline-import]').waitFor({state:'detached'});
  await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===2);const original=await graph(page);

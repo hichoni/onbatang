@@ -940,7 +940,7 @@ function applyMotionAll(O, motion) {
 // Activities are local, typed page data. Both hosts use the same runtime and
 // pin a new material revision before acknowledging a result. No app URL opens.
 function updateActivityTools(O){
-  const edit=O.strip.querySelector('[data-edit-activity]');if(edit)edit.hidden=!O.editor.getDesign().activity;
+  const edit=O.strip.querySelector('[data-edit-activity]'),activity=O.editor.getDesign().activity;if(edit)edit.hidden=!activity||activity.kind==='gai-app'&&!appMaker;
 }
 function lessonPages(O){
   if(O.materialLoadError)throw Error('PPT 전체 자료를 읽지 못했어요. 내 자료에서 다시 열어주세요.');
