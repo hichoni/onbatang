@@ -4,7 +4,7 @@
 // 화면의 짜임: 첫 화면(소개·새로 만들기 + 템플릿 + 내 그림)과 꾸미는 화면(위 막대 · 왼쪽 도구 줄과 옆 칸 · 가운데 그림 · 아래 슬라이드 띠).
 //             꾸미는 화면은 넓은 화면에서 창을 꽉 채우고(스크롤 없음), 좁은 화면에서는 위에서 아래로 쌓인다(app.css).
 import { el, toast, openModal, closeModal } from './ui.js';
-import { onbatangLogo } from './brand.js';
+import { onbatangLogo,gaiOwl } from './brand.js';
 import { onbatangLoading,deferredOnbatangLoading } from './loading.js';
 import {bindFilmstrip} from './filmstrip.js';
 import {orderPages,movePage} from './page-order.js';
@@ -755,8 +755,8 @@ function renderStrip(O) {
       tool('right', '뒤로', '이 장을 뒤로 옮기기', () => moveStripSelection(O,1), O.materialDeck?materialPages(O).findIndex(v=>v.record.id===O.record.id&&v.index===O.at)===materialPages(O).length-1:O.at===n-1),
       tool('copy', '복제', '이 장을 복제하기', () => changeSlides(O, copySlide), full),
       del,
-      el('button',{class:'btn cv-activity-add',type:'button',dataset:{addActivity:''},onClick:()=>configureActivity(O)},'+ 활동 추가'),
-      appMaker&&el('button',{class:'btn cv-activity-add',type:'button',dataset:{addGaiApp:''},onClick:()=>configureGaiActivity(O)},'가이X로 앱 만들기'),
+      el('button',{class:'btn cv-activity-add',type:'button',dataset:{addActivity:''},title:'미리 준비된 픽셀아트 활동을 새 슬라이드로 넣어요',onClick:()=>configureActivity(O)},'픽셀아트 활동 넣기'),
+      appMaker&&el('button',{class:'btn cv-activity-add',type:'button',dataset:{addGaiApp:''},onClick:()=>configureGaiActivity(O)},gaiOwl(),'가이X로 앱 만들기'),
       el('button',{class:'btn cv-activity-add',type:'button',dataset:{importLessonResults:''},onClick:()=>importLessonResults(O)},'HTML 수업 결과 가져오기'),
       el('button',{class:'btn cv-activity-edit',type:'button',dataset:{editActivity:''},onClick:()=>configureActivity(O,true)},'활동 설정')));
   updateActivityTools(O);
@@ -1046,25 +1046,34 @@ async function configureGaiActivity(O,editing=false){
   const cancel=()=>{host.remove();if(O.activityConfig===host)O.activityConfig=null;};
   const maker=createGaiMaker({provider:appMaker,activity,
     context:gaiLessonContext(lessonPages(O),selected.id,O.materialDeck?.title||O.record.name),
+    entries:lessonPages(O),selectedId:selected.id,title:O.materialDeck?.title||O.record.name,
+    previewSlide:(row,width)=>slideView(row.page,aspectOf(row.record),width),
+    referenceImage:async(row,position)=>{
+      for(const width of [800,560,360]){
+        const {blob}=await designToBlob(row.page,{width,aspect:aspectOf(row.record),type:'image/jpeg',quality:.8});
+        if(blob.size<=300*1024){const data=await new Promise((yes,no)=>{const reader=new FileReader();reader.onload=()=>yes(reader.result.split(',')[1]);reader.onerror=no;reader.readAsDataURL(blob);});return {name:`온바탕 ${position}쪽.jpg`,mimeType:'image/jpeg',data};}
+      }
+      throw Error('참고 화면이 너무 커요. 화면 전달을 끄고 글로 요청해주세요.');
+    },
     draftKey:JSON.stringify([storageName(),O.record.id,selected.id,O.record.revision,editing?'edit':'new']),onCancel:cancel,
-    onApply:async value=>{
+    onApply:async(value,{afterPageId=selected.id}={})=>{
       if(O.closed||O.activityBusy||S.open!==O)throw Error('현재 작업을 마친 뒤 다시 시도해주세요.');
       O.activityBusy=true;app.inert=true;
       try{
         await persistEditorAction(O);
-        const entries=lessonPages(O),at=entries.findIndex(v=>v.page.id===selected.id);
+        const entries=lessonPages(O),anchor=editing?selected.id:afterPageId,at=entries.findIndex(v=>v.page.id===anchor);
         if(at<0)throw Error('선택한 쪽이 바뀌었어요. 다시 선택해주세요.');
-        let record={...O.record,slides:currentSlides(O)};
+        const origin=entries[at];let record=origin.record.id===O.record.id?{...O.record,slides:currentSlides(O)}:origin.record;
         const id=editing?selected.id:newId('p');
-        const makePage=row=>({...gaiAppCover(value,aspectOf(row)),id,source:editing?selected.source:{kind:'local'},origin:editing?selected.origin:{documentId:O.record.id,pageId:selected.id,revision:O.record.revision},activity:value});
+        const makePage=row=>({...gaiAppCover(value,aspectOf(row)),id,source:editing?selected.source:{kind:'local'},origin:editing?selected.origin:{documentId:origin.record.id,pageId:anchor,revision:origin.record.revision},activity:value});
         const updated=row=>{
-          const slides=[...row.slides],page=makePage(row),local=slides.findIndex(p=>p.id===selected.id);
+          const slides=[...row.slides],page=makePage(row),local=slides.findIndex(p=>p.id===anchor);
           if(editing){if(local<0)throw Error('수정할 앱을 다시 선택해주세요.');slides[local]=page;}
           else slides.splice(local<0?slides.length:local+1,0,page);
           return {...row,slides};
         };
         if(!editing){
-          const candidates=O.materialDeck?[record,...O.materialDeck.documents.filter(row=>row.id!==record.id)]:[record];
+          const candidates=O.materialDeck?[record,...O.materialDeck.documents.filter(row=>row.id!==record.id).map(row=>row.id===O.record.id?{...O.record,slides:currentSlides(O)}:row)]:[record];
           record=candidates.find(row=>row.slides.length<=MAX_SLIDES-2&&new TextEncoder().encode(JSON.stringify(updated(row))).length<460000);
           if(!record)throw Error('이 자료에 앱과 결과를 넣을 공간이 부족해요. 대화는 남아 있어요. 가이X에게 더 작은 앱으로 줄여 달라고 요청해주세요.');
         }
