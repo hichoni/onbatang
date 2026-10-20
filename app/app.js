@@ -47,6 +47,7 @@ let onView = () => {};
 let onBrandClick = null;
 let importAction = null;
 let materialAction = null;
+let lessonAction = null;
 let materialNavigation = null;
 let appMaker = null;
 let activityAuthoring = false; // Host opt-in; playback/result saving never depends on this.
@@ -585,6 +586,8 @@ function openDesign(record, isNew) {
   let acceptsMaterial = false;
   try { acceptsMaterial = !!materialAction && (!materialAction.accepts || materialAction.accepts(record)); } catch { /* An optional host action must fail closed. */ }
   const material = acceptsMaterial ? el('button', {class: 'btn cv-material-btn', type: 'button', dataset: {materialAction: ''}, onClick: () => saveMaterialFromEditor(O)}, materialAction.label) : null;
+  let acceptsLesson=false;try{acceptsLesson=!!lessonAction&&(!lessonAction.accepts||lessonAction.accepts(record));}catch{}
+  const lesson=acceptsLesson?el('button',{class:'btn cv-lesson-btn',type:'button',dataset:{lessonAction:''},onClick:()=>openLessonFromEditor(O)},lessonAction.label):null;
   const show = el('button', { class: 'btn cv-show-btn', type: 'button', title: '화면 가득 보여 줘요', onClick: () => present(O) }, ...face('play', '발표'));
   // 그림의 모양: 꾸미는 화면 안에서 바로 바꾼다. 놓아 둔 도형과 사진은 찌그러지지 않게 편집기가 맞춰 준다.
   const shapes = el('div', { class: 'cv-shapes', role: 'group', 'aria-label': '그림의 모양' }, ...RATIOS.map((r) => {
@@ -608,7 +611,7 @@ function openDesign(record, isNew) {
     ...(mark ? [mark, el('span', { class: 'cv-bar-sep cv-brand-sep', 'aria-hidden': 'true' })] : []),
     el('button', { class: 'btn btn-ghost cv-back', type: 'button', title: '저장하고 내 그림으로 돌아가요', onClick: (e) => closeDesign(O, e.currentTarget) }, ...face('back', '내 그림')),
     el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' }),
-    name, O.status, ...(material ? [material] : []), el('span', { class: 'cv-bar-gap' }), shapes, el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' }), tourButton('editor', O), show, down);
+    name, O.status, ...(material ? [material] : []), ...(lesson?[lesson]:[]), el('span', { class: 'cv-bar-gap' }), shapes, el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' }), tourButton('editor', O), show, down);
   const shell = editorShell(O, bar);
   markRatio(O, shapes);
   setView('edit');
@@ -1584,7 +1587,14 @@ async function importFromEditor(O) {
 
 /** The host owns conversion; the editor owns its shell and the saved drawing.
  * No navigation/home render occurs while a host imports inside My materials. */
-async function openInlineImport(O, context) {
+async function openLessonFromEditor(O){
+ if(!lessonAction||S.open!==O||O.closed||O.inlineImport||O.leaving||moving||app.inert||hostFlush||videoBusy(O))return;
+ O.leaving=true;app.inert=true;
+ try{await persistEditorAction(O);await openInlineImport(O,{from:'editor',designId:O.record.id,slideIndex:O.at},lessonAction);}
+ catch(error){setStatus(O,error?.message||'수업 화면을 열지 못했어요. 그림은 그대로예요.','bad');}
+ finally{O.leaving=false;if(S.open===O&&!O.closed)app.inert=false;}
+}
+async function openInlineImport(O, context, action=importAction) {
   const work = O.shell.querySelector('.cv-work');
   const protectedNodes = [O.shell.querySelector('.cv-bar'), O.shell.querySelector('.cv-side')];
   const readonlyInputs = protectedNodes.flatMap(node => [...node.querySelectorAll('input:not([type=file]),textarea')].map(input => [input, input.readOnly]));
@@ -1593,8 +1603,8 @@ async function openInlineImport(O, context) {
   const back = el('button', {class: 'btn btn-ghost', type: 'button', disabled: true, dataset: {inlineImportClose: ''}}, ...face('back', '편집으로 돌아가기'));
   const outlet = el('div', {class: 'cv-inline-import-body'});
   const header = el('header', {class: 'cv-inline-import-header'},
-    el('div', {}, el('small', {text: '내 자료 / PPT'}), el('h2', {text: '내 PPT 가져오기'})), back);
-  const region = el('section', {class: 'cv-inline-import', role: 'region', 'aria-label': '내 자료 · PPT 가져오기', dataset: {inlineImport: ''}}, header, outlet);
+    el('div', {}, el('small', {text: action===lessonAction?'수업':'내 자료 / PPT'}), el('h2', {text: action.editorTitle||'내 PPT 가져오기'})), back);
+  const region = el('section', {class: 'cv-inline-import', role: 'region', 'aria-label': action===lessonAction?'이 자료로 수업 만들기':'내 자료 · PPT 가져오기', dataset: {inlineImport: ''}}, header, outlet);
   const session = {controller: null, disposed: false, closing: false, navigating: false};
   O.inlineImport = session;
   O.editor.quiet();
@@ -1711,7 +1721,7 @@ async function openInlineImport(O, context) {
     await request({reason: 'return'});
   });
   try {
-    const controller = await importAction.open({...context, inline: {root: outlet, close, openDesign: openImported}});
+    const controller = await action.open({...context, inline: {root: outlet, close, openDesign: openImported}});
     session.controller = controller || {};
     if (session.disposed) await session.controller.dispose?.();
     else { back.disabled = false; outlet.querySelector('button:not(:disabled),input:not(:disabled)')?.focus({preventScroll: true}); }
@@ -2151,8 +2161,9 @@ function flush() {
  * - materialAction: {label, accepts?(record), open({designId,slideIndex})} 현재 그림 저장 후 같은 편집기에서 전체 자료 작업을 여는 선택 연결.
  *   기본 모드는 기존 호스트 이동 계약을 유지한다. 파일 해석과 저장은 호스트가 맡는다.
  * - activityAuthoring: 명시적으로 true인 호스트만 활동/앱 제작·설정을 제공한다. 기존 활동 실행·결과 저장은 항상 유지한다.
+ * - lessonAction: {label, editorTitle?, accepts?(record), open({designId,slideIndex,inline})}; 저장 후 같은 편집 영역에서 호스트의 수업 구성/진행을 연다. 공용 기본값은 숨김.
  */
-export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null, materialAction: material = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false } = {}) {
+export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false } = {}) {
   if (app) throw new Error('minican already started');
   if (!root) throw new Error('minican root');
   app = root;
@@ -2162,6 +2173,7 @@ export function startMinican({ root = document.getElementById('app'), fonts = []
   if (typeof hostHome === 'function') onBrandClick = hostHome;
   if (importing && typeof importing.open === 'function' && typeof importing.label === 'string' && importing.label.trim()) importAction = importing;
   if (material && typeof material.open === 'function' && typeof material.label === 'string' && material.label.trim() && (!material.accepts || typeof material.accepts === 'function')) materialAction = material;
+  if(lesson&&typeof lesson.open==='function'&&typeof lesson.label==='string'&&lesson.label.trim()&&(!lesson.accepts||typeof lesson.accepts==='function'))lessonAction=lesson;
   if(navigation&&typeof navigation.load==='function')materialNavigation=navigation;
   activityAuthoring=authoring===true;
   if(maker&&typeof maker.connect==='function'&&typeof maker.generate==='function')appMaker=maker;
