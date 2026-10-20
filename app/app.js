@@ -49,6 +49,7 @@ let importAction = null;
 let materialAction = null;
 let materialNavigation = null;
 let appMaker = null;
+let activityAuthoring = false; // Host opt-in; playback/result saving never depends on this.
 let colorPalettes=null;
 let brand = null;                // 들여 쓰는 곳의 표시 { name, logo } (없으면 표시하지 않는다)
 let sync = null;                 // 들여 쓰는 곳의 계정 저장(sync.js). 없으면 이 기기에만 저장한다
@@ -755,8 +756,8 @@ function renderStrip(O) {
       tool('right', '뒤로', '이 장을 뒤로 옮기기', () => moveStripSelection(O,1), O.materialDeck?materialPages(O).findIndex(v=>v.record.id===O.record.id&&v.index===O.at)===materialPages(O).length-1:O.at===n-1),
       tool('copy', '복제', '이 장을 복제하기', () => changeSlides(O, copySlide), full),
       del,
-      el('button',{class:'btn cv-activity-add',type:'button',dataset:{addActivity:''},title:'미리 준비된 픽셀아트 활동을 새 슬라이드로 넣어요',onClick:()=>configureActivity(O)},'픽셀아트 활동 넣기'),
-      appMaker&&el('button',{class:'btn cv-activity-add',type:'button',dataset:{addGaiApp:''},onClick:()=>configureGaiActivity(O)},gaiOwl(),'가이X로 앱 만들기'),
+      activityAuthoring&&el('button',{class:'btn cv-activity-add',type:'button',dataset:{addActivity:''},title:'미리 준비된 픽셀아트 활동을 새 슬라이드로 넣어요',onClick:()=>configureActivity(O)},'픽셀아트 활동 넣기'),
+      activityAuthoring&&appMaker&&el('button',{class:'btn cv-activity-add',type:'button',dataset:{addGaiApp:''},onClick:()=>configureGaiActivity(O)},gaiOwl(),'가이X로 앱 만들기'),
       el('button',{class:'btn cv-activity-add',type:'button',dataset:{importLessonResults:''},onClick:()=>importLessonResults(O)},'HTML 수업 결과 가져오기'),
       el('button',{class:'btn cv-activity-edit',type:'button',dataset:{editActivity:''},onClick:()=>configureActivity(O,true)},'활동 설정')));
   updateActivityTools(O);
@@ -940,7 +941,7 @@ function applyMotionAll(O, motion) {
 // Activities are local, typed page data. Both hosts use the same runtime and
 // pin a new material revision before acknowledging a result. No app URL opens.
 function updateActivityTools(O){
-  const edit=O.strip.querySelector('[data-edit-activity]'),activity=O.editor.getDesign().activity;if(edit)edit.hidden=!activity||activity.kind==='gai-app'&&!appMaker;
+  const edit=O.strip.querySelector('[data-edit-activity]'),activity=O.editor.getDesign().activity;if(edit)edit.hidden=!activityAuthoring||!activity||activity.kind==='gai-app'&&!appMaker;
 }
 function lessonPages(O){
   if(O.materialLoadError)throw Error('PPT 전체 자료를 읽지 못했어요. 내 자료에서 다시 열어주세요.');
@@ -994,6 +995,7 @@ async function commitActivityDocument(O,document,pageOrder,selectedPageId,expect
   }
 }
 async function configureActivity(O,editing=false){
+  if(!activityAuthoring)return;
   if(editing&&O.editor.getDesign().activity?.kind==='gai-app')return configureGaiActivity(O,true);
   if(O.closed||O.leaving||O.inlineImport||O.activityBusy||videoBusy(O))return;
   if(O.materialLoadingPromise)await O.materialLoadingPromise;
@@ -1033,7 +1035,7 @@ async function configureActivity(O,editing=false){
 }
 
 async function configureGaiActivity(O,editing=false){
-  if(!appMaker||O.closed||O.leaving||O.inlineImport||O.activityBusy||videoBusy(O))return;
+  if(!activityAuthoring||!appMaker||O.closed||O.leaving||O.inlineImport||O.activityBusy||videoBusy(O))return;
   if(O.materialLoadingPromise)await O.materialLoadingPromise;
   if(O.closed||S.open!==O||O.recoveryRequired)return;
   if(O.materialLoadError){toast('PPT 전체 자료를 읽지 못했어요. 내 자료에서 다시 열어주세요.');return;}
@@ -2148,8 +2150,9 @@ function flush() {
  *   inline이면 내 자료 안의 root/close/openDesign을 제공한다. open은 {requestClose,dispose}를 반환할 수 있다.
  * - materialAction: {label, accepts?(record), open({designId,slideIndex})} 현재 그림 저장 후 같은 편집기에서 전체 자료 작업을 여는 선택 연결.
  *   기본 모드는 기존 호스트 이동 계약을 유지한다. 파일 해석과 저장은 호스트가 맡는다.
+ * - activityAuthoring: 명시적으로 true인 호스트만 활동/앱 제작·설정을 제공한다. 기존 활동 실행·결과 저장은 항상 유지한다.
  */
-export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null, materialAction: material = null, materialNavigation: navigation = null, appMaker: maker = null } = {}) {
+export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null, materialAction: material = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false } = {}) {
   if (app) throw new Error('minican already started');
   if (!root) throw new Error('minican root');
   app = root;
@@ -2160,6 +2163,7 @@ export function startMinican({ root = document.getElementById('app'), fonts = []
   if (importing && typeof importing.open === 'function' && typeof importing.label === 'string' && importing.label.trim()) importAction = importing;
   if (material && typeof material.open === 'function' && typeof material.label === 'string' && material.label.trim() && (!material.accepts || typeof material.accepts === 'function')) materialAction = material;
   if(navigation&&typeof navigation.load==='function')materialNavigation=navigation;
+  activityAuthoring=authoring===true;
   if(maker&&typeof maker.connect==='function'&&typeof maker.generate==='function')appMaker=maker;
   if (account && ['pull', 'push', 'drop'].every((k) => typeof account[k] === 'function')) {
     sync = account;
