@@ -48,6 +48,8 @@ let onBrandClick = null;
 let importAction = null;
 let materialAction = null;
 let lessonAction = null;
+let accountAction = null;
+let accountHome = null;
 let materialNavigation = null;
 let appMaker = null;
 let activityAuthoring = false; // Host opt-in; playback/result saving never depends on this.
@@ -349,7 +351,7 @@ function heroShowcase() {
 // 처음 불러온 그림들은 살짝 떠오르며 나타난다(그 뒤에 다시 그릴 때는 움직이지 않는다).
 let wasLoading = true;
 function render() {
-  if (S.open) return;
+  if (S.open || accountHome) return;
   const oldRail = app.querySelector('.cv-start-list');
   if (oldRail?.dataset.starts === startTab) startScroll = oldRail.scrollLeft;
   const focused = document.activeElement?.closest('.cv-start');
@@ -387,6 +389,7 @@ function render() {
           try { await importAction.open(); } catch (error) { console.warn(error); toast('가져오기 화면을 열지 못했어요. 다시 시도해주세요.'); }
           finally { button.disabled = false; }
         } }, importAction.label) : null,
+        accountAction ? el('button',{class:'btn cv-account-btn',type:'button',disabled:loading,dataset:{accountAction:''},onClick:()=>openAccountFromHome()},accountAction.label) : null,
         full ? el('p', { class: 'cv-hero-full', text: `그림은 ${MAX_DESIGNS}장까지 저장돼요. 안 쓰는 그림을 지워 주세요.` }) : null),
       el('p', { class: 'cv-hero-tag', text: `작은 생각도 멋진 작품이 되도록 · ${sync ? '내 계정에 자동 저장' : '이 기기에 자동 저장'}` })),
     heroShowcase()));
@@ -588,6 +591,7 @@ function openDesign(record, isNew) {
   const material = acceptsMaterial ? el('button', {class: 'btn cv-material-btn', type: 'button', dataset: {materialAction: ''}, onClick: () => saveMaterialFromEditor(O)}, materialAction.label) : null;
   let acceptsLesson=false;try{acceptsLesson=!!lessonAction&&(!lessonAction.accepts||lessonAction.accepts(record));}catch{}
   const lesson=acceptsLesson?el('button',{class:'btn cv-lesson-btn',type:'button',dataset:{lessonAction:''},onClick:()=>openLessonFromEditor(O)},lessonAction.label):null;
+  const accountLibrary=accountAction?el('button',{class:'btn cv-account-btn',type:'button',dataset:{accountAction:''},onClick:()=>openLessonFromEditor(O,accountAction)},accountAction.label):null;
   const show = el('button', { class: 'btn cv-show-btn', type: 'button', title: '화면 가득 보여 줘요', onClick: () => present(O) }, ...face('play', '발표'));
   // 그림의 모양: 꾸미는 화면 안에서 바로 바꾼다. 놓아 둔 도형과 사진은 찌그러지지 않게 편집기가 맞춰 준다.
   const shapes = el('div', { class: 'cv-shapes', role: 'group', 'aria-label': '그림의 모양' }, ...RATIOS.map((r) => {
@@ -611,7 +615,7 @@ function openDesign(record, isNew) {
     ...(mark ? [mark, el('span', { class: 'cv-bar-sep cv-brand-sep', 'aria-hidden': 'true' })] : []),
     el('button', { class: 'btn btn-ghost cv-back', type: 'button', title: '저장하고 내 그림으로 돌아가요', onClick: (e) => closeDesign(O, e.currentTarget) }, ...face('back', '내 그림')),
     el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' }),
-    name, O.status, ...(material ? [material] : []), ...(lesson?[lesson]:[]), el('span', { class: 'cv-bar-gap' }), shapes, el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' }), tourButton('editor', O), show, down);
+    name, O.status, ...(material ? [material] : []), ...(lesson?[lesson]:[]), ...(accountLibrary?[accountLibrary]:[]), el('span', { class: 'cv-bar-gap' }), shapes, el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' }), tourButton('editor', O), show, down);
   const shell = editorShell(O, bar);
   markRatio(O, shapes);
   setView('edit');
@@ -1587,12 +1591,28 @@ async function importFromEditor(O) {
 
 /** The host owns conversion; the editor owns its shell and the saved drawing.
  * No navigation/home render occurs while a host imports inside My materials. */
-async function openLessonFromEditor(O){
- if(!lessonAction||S.open!==O||O.closed||O.inlineImport||O.leaving||moving||app.inert||hostFlush||videoBusy(O))return;
+async function openLessonFromEditor(O,action=lessonAction){
+ if(!action||S.open!==O||O.closed||O.inlineImport||O.leaving||moving||app.inert||hostFlush||videoBusy(O))return;
  O.leaving=true;app.inert=true;
- try{await persistEditorAction(O);await openInlineImport(O,{from:'editor',designId:O.record.id,slideIndex:O.at},lessonAction);}
+ try{await persistEditorAction(O);await openInlineImport(O,{from:'editor',designId:O.record.id,slideIndex:O.at},action);}
  catch(error){setStatus(O,error?.message||'수업 화면을 열지 못했어요. 그림은 그대로예요.','bad');}
  finally{O.leaving=false;if(S.open===O&&!O.closed)app.inert=false;}
+}
+/** Account lists do not require creating an empty drawing on a new device. */
+async function openAccountFromHome(){
+ if(!accountAction||accountHome||S.open||moving||S.phase!=='home')return;
+ const session={controller:null,disposed:false,closing:false};accountHome=session;
+ const outlet=el('div',{class:'cv-account-home-body'}),back=el('button',{class:'btn',type:'button',disabled:true},'내 그림으로 돌아가기');
+ const shell=el('section',{class:'cv-account-home',role:'region','aria-label':accountAction.editorTitle||accountAction.label},
+  el('style',{},'.cv-account-home{height:100dvh;display:flex;flex-direction:column;background:#fbfdfb;color:#233f36}.cv-account-home>header{padding:16px 24px;display:flex;gap:16px;align-items:center;justify-content:space-between;border-bottom:1px solid #d8e6df}.cv-account-home h2{margin:0}.cv-account-home-body{flex:1;min-height:0;overflow:auto}'),
+  el('header',{},el('h2',{},accountAction.editorTitle||accountAction.label),back),outlet);
+ const dispose=async()=>{if(session.disposed)return;session.disposed=true;await session.controller?.dispose?.();if(accountHome===session)accountHome=null;};
+ const close=async()=>{if(session.closing||session.disposed)return;session.closing=true;await dispose();await refresh();};
+ const open=async(id,options={})=>{const record=await getDesign(id);if(!record||session.disposed)throw Error('DOCUMENT_NOT_FOUND');await dispose();await openSavedDesign(id,options);};
+ back.onclick=async()=>{if(session.controller?.requestClose)await session.controller.requestClose({reason:'return'});else await close();};
+ setView('edit');app.replaceChildren(shell);
+ try{session.controller=await accountAction.open({from:'home',inline:{root:outlet,close,openDesign:open}})||{};if(session.disposed)await session.controller.dispose?.();else back.disabled=false;}
+ catch(error){await dispose();await refresh();toast(error.message||'내 수업을 열지 못했어요.');}
 }
 async function openInlineImport(O, context, action=importAction) {
   const work = O.shell.querySelector('.cv-work');
@@ -1603,8 +1623,8 @@ async function openInlineImport(O, context, action=importAction) {
   const back = el('button', {class: 'btn btn-ghost', type: 'button', disabled: true, dataset: {inlineImportClose: ''}}, ...face('back', '편집으로 돌아가기'));
   const outlet = el('div', {class: 'cv-inline-import-body'});
   const header = el('header', {class: 'cv-inline-import-header'},
-    el('div', {}, el('small', {text: action===lessonAction?'수업':'내 자료 / PPT'}), el('h2', {text: action.editorTitle||'내 PPT 가져오기'})), back);
-  const region = el('section', {class: 'cv-inline-import', role: 'region', 'aria-label': action===lessonAction?'이 자료로 수업 만들기':'내 자료 · PPT 가져오기', dataset: {inlineImport: ''}}, header, outlet);
+    el('div', {}, el('small', {text: action===accountAction?'내 수업':action===lessonAction?'수업':'내 자료 / PPT'}), el('h2', {text: action.editorTitle||'내 PPT 가져오기'})), back);
+  const region = el('section', {class: 'cv-inline-import', role: 'region', 'aria-label': action===accountAction?'내 계정 수업':action===lessonAction?'이 자료로 수업 만들기':'내 자료 · PPT 가져오기', dataset: {inlineImport: ''}}, header, outlet);
   const session = {controller: null, disposed: false, closing: false, navigating: false};
   O.inlineImport = session;
   O.editor.quiet();
@@ -2162,8 +2182,9 @@ function flush() {
  *   기본 모드는 기존 호스트 이동 계약을 유지한다. 파일 해석과 저장은 호스트가 맡는다.
  * - activityAuthoring: 명시적으로 true인 호스트만 활동/앱 제작·설정을 제공한다. 기존 활동 실행·결과 저장은 항상 유지한다.
  * - lessonAction: {label, editorTitle?, accepts?(record), open({designId,slideIndex,inline})}; 저장 후 같은 편집 영역에서 호스트의 수업 구성/진행을 연다. 공용 기본값은 숨김.
+ * - accountAction: {label,editorTitle?,open({from,designId?,inline})}; 첫 화면과 편집기 안의 계정 수업 목록. 기본값은 숨김이며 서버/로그인은 호스트가 담당한다.
  */
-export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false } = {}) {
+export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, accountAction: accountLibrary = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false } = {}) {
   if (app) throw new Error('minican already started');
   if (!root) throw new Error('minican root');
   app = root;
@@ -2174,6 +2195,7 @@ export function startMinican({ root = document.getElementById('app'), fonts = []
   if (importing && typeof importing.open === 'function' && typeof importing.label === 'string' && importing.label.trim()) importAction = importing;
   if (material && typeof material.open === 'function' && typeof material.label === 'string' && material.label.trim() && (!material.accepts || typeof material.accepts === 'function')) materialAction = material;
   if(lesson&&typeof lesson.open==='function'&&typeof lesson.label==='string'&&lesson.label.trim()&&(!lesson.accepts||typeof lesson.accepts==='function'))lessonAction=lesson;
+  if(accountLibrary&&typeof accountLibrary.open==='function'&&typeof accountLibrary.label==='string'&&accountLibrary.label.trim())accountAction=accountLibrary;
   if(navigation&&typeof navigation.load==='function')materialNavigation=navigation;
   activityAuthoring=authoring===true;
   if(maker&&typeof maker.connect==='function'&&typeof maker.generate==='function')appMaker=maker;
