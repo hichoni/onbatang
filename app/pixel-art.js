@@ -16,7 +16,7 @@ export function pixelArtImage(raw, cells = raw.cells) {
   return canvas.toDataURL('image/png');
 }
 
-export function mountPixelArt(root, { activity: raw, onSave, onChange } = {}) {
+export function mountPixelArt(root, { activity: raw, onSave, onChange, saveLabel = '결과를 다음 슬라이드에 저장', saveMessage = '결과를 다음 슬라이드에 저장했어요.' } = {}) {
   const activity = cleanPixelActivity(raw);
   let cells = [...activity.cells], color = 0, undo = [], stroke = null, pointer = null, focus = 0, busy = false, destroyed = false;
   const abort = new AbortController(), signal = abort.signal;
@@ -36,7 +36,7 @@ export function mountPixelArt(root, { activity: raw, onSave, onChange } = {}) {
   const clearButton = el('button', { type: 'button', text: '모두 지우기' });
   const clearConfirm = el('div', { class: 'pixel-confirm', hidden: true }, el('span', { text: '그림을 모두 지울까요? 되돌리기로 복구할 수 있어요.' }));
   clearConfirm.append(el('button', { type: 'button', text: '지우기', onclick: () => { snapshot(); cells.fill(-1); clearConfirm.hidden = true; changed(); } }), el('button', { type: 'button', text: '취소', onclick: () => { clearConfirm.hidden = true; clearButton.focus(); } }));
-  const save = el('button', { type: 'button', class: 'pixel-primary', text: '결과를 다음 슬라이드에 저장', disabled: typeof onSave !== 'function' });
+  const save = el('button', { type: 'button', class: 'pixel-primary', text: saveLabel, disabled: typeof onSave !== 'function' });
   const body = el('section', { class: 'pixel-app', 'aria-label': activity.title },
     el('header', {}, el('span', { class: 'pixel-kicker', text: '픽셀아트 활동' }), el('h2', { text: activity.title }), el('p', { class: 'pixel-instructions', text: activity.instructions })),
     el('div', { class: 'pixel-workspace' }, board, el('aside', { class: 'pixel-tools' }, el('h3', { text: '색을 고르고 그려요' }), palette,
@@ -97,7 +97,7 @@ export function mountPixelArt(root, { activity: raw, onSave, onChange } = {}) {
     if (busy || destroyed) return;
     end(); busy = true; status.textContent = '결과를 저장하고 있어요.';
     body.querySelectorAll('button').forEach(b => { b.disabled = true; });
-    try { await onSave([...cells]); if (!destroyed) status.textContent = '결과를 다음 슬라이드에 저장했어요.'; }
+    try { await onSave([...cells]); if (!destroyed) status.textContent = saveMessage; }
     catch (error) { if (!destroyed) status.textContent = `저장하지 못했어요. 그림은 그대로 있어요. ${error?.message || '다시 시도해 주세요.'}`; }
     finally { busy = false; if (!destroyed) { body.querySelectorAll('button').forEach(b => { b.disabled = false; }); draw(); } }
   });

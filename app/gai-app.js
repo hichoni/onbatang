@@ -69,15 +69,16 @@ function sandboxSource(activity,bridge){
  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${policy}"><style>html,body{height:100%;margin:0;overflow:hidden}</style></head><body><script>(${wrapper.toString()})(${json(bridge)},${json(inner)});<\/script></body></html>`;
 }
 
-export function mountGaiApp(root,{activity:raw,onChange,onSave}={}){
+export function mountGaiApp(root,{activity:raw,onChange,onSave,saveLabel='결과를 다음 슬라이드에 저장',saveMessage='결과를 다음 슬라이드에 저장했어요.',hint='픽셀아트·그림판은 PNG 그림과 답을 함께 다음 슬라이드에 저장해요.',roomState}={}){
  const activity=cleanGaiActivity(raw),bridge=crypto.randomUUID();let checkpoint=clone(activity.state),reported={state:{},answer:'',score:null,completed:false,progress:0},destroyed=false,busy=false,ready=false,reportError=false,inFlight=0,serial=Promise.resolve(),capture=null;
  const frame=el('iframe',{class:'gai-app-frame',title:activity.title,sandbox:'allow-scripts',referrerpolicy:'no-referrer',allow:"camera 'none'; microphone 'none'; geolocation 'none'; clipboard-read 'none'; clipboard-write 'none'"});
  const status=el('p',{class:'gai-app-status',role:'status','aria-live':'polite',text:'앱의 진행 기록을 연결하고 있어요. 연결되면 결과를 저장할 수 있어요.'});
- const save=el('button',{type:'button',class:'gai-app-save',text:'결과를 다음 슬라이드에 저장',disabled:true});
+ const save=el('button',{type:'button',class:'gai-app-save',text:saveLabel,disabled:true});
  const body=el('section',{class:'gai-app-runtime','aria-label':activity.title},el('header',{},el('span',{class:'gai-app-kicker',text:'내가 만든 수업 앱'}),el('h2',{text:activity.title}),el('p',{class:'gai-app-instructions',text:activity.instructions})),frame,
-  el('footer',{},el('p',{class:'gai-app-hint',text:'픽셀아트·그림판은 PNG 그림과 답을 함께 다음 슬라이드에 저장해요.'}),save,status));
+  el('footer',{},el('p',{class:'gai-app-hint',text:hint}),save,status));
  const send=message=>{if(!destroyed)frame.contentWindow?.postMessage({...message,bridge},'*');};
- const snapshot=()=>({connected:false,room:{phase:'running',round:1,message:'온바탕에서 연습하고 있어요.',ranking:false},me:{id:'practice',nickname:'연습',checkpoint:clone(checkpoint),...clone(reported)},participants:[]});
+ let currentRoom=roomState;
+ const snapshot=()=>({connected:!!currentRoom,room:{phase:'running',round:1,message:'온바탕에서 연습하고 있어요.',ranking:false,...currentRoom},me:{id:'practice',nickname:'연습',checkpoint:clone(checkpoint),...clone(reported)},participants:[]});
  const handler=event=>{
   const d=event.data;if(destroyed||event.source!==frame.contentWindow||d?.bridge!==bridge)return;
   if(d.type==='onbatang-app-captured'){
@@ -113,10 +114,10 @@ export function mountGaiApp(root,{activity:raw,onChange,onSave}={}){
    });
    await serial;if(destroyed)return;if(reportError)throw new Error('앱의 진행 기록을 저장하지 못했어요. 다시 시도해주세요.');
    const result=cleanGaiResult({state:checkpoint,answer:reported.answer,score:reported.score,completed:reported.completed,progress:reported.progress,...picture});
-   await onSave(result);if(!destroyed)status.textContent=result.imageOmitted?'앱 화면 그림은 생략하고 답과 진행 상태를 저장했어요.':'결과를 다음 슬라이드에 저장했어요.';
+   await onSave(result);if(!destroyed)status.textContent=result.imageOmitted?'앱 화면 그림은 생략하고 답과 진행 상태를 저장했어요.':saveMessage;
   }catch(error){if(!destroyed)status.textContent=`저장하지 못했어요. 앱과 진행 기록은 그대로예요. ${String(error?.message||'다시 시도해주세요.').slice(0,200)}`;}
   finally{busy=false;if(!destroyed){save.disabled=!ready;frame.style.pointerEvents='';}}
  });
  frame.srcdoc=sandboxSource(activity,bridge);root.replaceChildren(body);
- return {getState:()=>clone(checkpoint),destroy(){if(destroyed)return;destroyed=true;window.removeEventListener('message',handler);if(capture){clearTimeout(capture.timer);capture.resolve({});capture=null;}body.remove();}};
+ return {getState:()=>clone(checkpoint),setRoomState(value){currentRoom=value;send({type:'gai-classroom-state',snapshot:snapshot()});},destroy(){if(destroyed)return;destroyed=true;window.removeEventListener('message',handler);if(capture){clearTimeout(capture.timer);capture.resolve({});capture=null;}body.remove();}};
 }
