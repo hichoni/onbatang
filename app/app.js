@@ -13,6 +13,8 @@ import {newId} from '../src/document.js';
 import {newPixelActivity,pixelArtCover,pixelArtResult} from '../src/pixel-art.js';
 import {mountPixelArt,createPixelArtSetup,pixelArtImage} from './pixel-art.js';
 import {createHtmlLesson} from './html-lesson.js';
+import {activityDefinitionHash} from './lesson-results.js';
+import {openLessonResults} from './lesson-results-ui.js';
 import {cleanGaiActivity,gaiAppCover,gaiAppResult} from '../src/gai-app.js';
 import {mountGaiApp} from './gai-app.js';
 import {createGaiMaker,gaiLessonContext} from './gai-maker.js';
@@ -755,6 +757,7 @@ function renderStrip(O) {
       del,
       el('button',{class:'btn cv-activity-add',type:'button',dataset:{addActivity:''},onClick:()=>configureActivity(O)},'+ 활동 추가'),
       appMaker&&el('button',{class:'btn cv-activity-add',type:'button',dataset:{addGaiApp:''},onClick:()=>configureGaiActivity(O)},'가이X로 앱 만들기'),
+      el('button',{class:'btn cv-activity-add',type:'button',dataset:{importLessonResults:''},onClick:()=>importLessonResults(O)},'HTML 수업 결과 가져오기'),
       el('button',{class:'btn cv-activity-edit',type:'button',dataset:{editActivity:''},onClick:()=>configureActivity(O,true)},'활동 설정')));
   updateActivityTools(O);
   // 띠를 다시 그려도 옆으로 넘겨 둔 자리는 그대로 두고, 고른 장이 안 보일 때에만 그쪽으로 (부드럽게) 넘긴다.
@@ -942,6 +945,30 @@ function updateActivityTools(O){
 function lessonPages(O){
   if(O.materialLoadError)throw Error('PPT 전체 자료를 읽지 못했어요. 내 자료에서 다시 열어주세요.');
   return O.materialDeck?materialPages(O):currentSlides(O).map((page,index)=>({record:{...O.record,slides:currentSlides(O)},page,index}));
+}
+const lessonTarget=O=>({kind:O.materialDeck?'material':'document',id:O.materialDeck?.materialRef.id||O.record.id});
+async function importLessonResults(O){
+ if(O.closed||O.inlineImport||O.activityBusy||videoBusy(O))return;
+ try{
+  if(O.materialLoadingPromise)await O.materialLoadingPromise;await persistEditorAction(O);
+  const snapshot=()=>({target:lessonTarget(O),records:O.materialDeck?O.materialDeck.documents.map(row=>row.id===O.record.id?structuredClone(O.persistedRecord):structuredClone(row)):[structuredClone(O.persistedRecord)],pageOrder:lessonPages(O).map(v=>v.page.id)});
+  openLessonResults({snapshot,onSave:async plan=>{
+   if(O.closed||O.activityBusy)throw Error('현재 작업을 마친 뒤 다시 시도해주세요.');
+   O.activityBusy=true;app.inert=true;
+   try{
+    if(!plan.added.length)return;
+    const first=plan.added[0];
+    if(O.materialDeck){
+     if(!materialNavigation.saveResults)throw Error('결과 저장 연결을 확인해주세요.');
+     const deck=await materialNavigation.saveResults({designId:O.record.id,materialRef:O.materialDeck.materialRef,documents:plan.documents,pageOrder:plan.pageOrder,expectedDocuments:plan.expectedDocuments});
+     O.materialDeck={...deck,documents:deck.documents.map(migrateRecord)};selectActivityRecord(O,O.materialDeck.documents.find(d=>d.id===first.documentId),first.pageId);
+     if(deck.recoveryRequired){O.recoveryRequired=true;O.localOk=false;O.dirty=false;clearTimeout(O.timer);O.shell.inert=true;}
+     for(const warning of deck.warnings||[])toast(warning,6500);
+    }else await commitActivityDocument(O,plan.documents[0],plan.pageOrder,first.pageId,plan.expectedDocuments[0]);
+    if(O.recoveryRequired)await closeDesign(O);else setStatus(O,'HTML 결과를 새 저장본에 저장했어요');
+   }finally{O.activityBusy=false;app.inert=false;}
+  }});
+ }catch(error){toast(error.message||'자료를 저장한 뒤 다시 시도해주세요.');}
 }
 function selectActivityRecord(O,record,pageId){
   const ready=migrateRecord(record);O.persistedRecord=structuredClone(ready);O.record={...ready};delete O.record.slides;
@@ -1903,10 +1930,11 @@ async function makeHtmlLesson(O){
       const {width}=exportSize('medium',aspect);
       const {blob}=await designToBlob(value.page,{width,aspect,type:'image/png'});
       const image=await new Promise((yes,no)=>{const reader=new FileReader();reader.onload=()=>yes(reader.result);reader.onerror=no;reader.readAsDataURL(blob);});
-      pages.push({id:value.page.id,image,aspect,...(value.page.activity?{activity:value.page.activity}:{})});
+      const activity=value.page.activity;
+      pages.push({id:value.page.id,image,aspect,...(value.page.source?.kind==='result'?{result:true}:{}),...(activity?{activity,binding:{documentId:value.record.id,pageId:value.page.id,activityId:activity.id,kind:activity.kind,definitionHash:await activityDefinitionHash(activity)}}:{})});
     }
     if(abort.signal.aborted)return;
-    const html=createHtmlLesson({title:O.materialDeck?.title||O.record.name,pages});
+    const html=createHtmlLesson({title:O.materialDeck?.title||O.record.name,pages,target:lessonTarget(O)});
     saveBlob(html,`${fileName()}-lesson.html`);closeModal();toast('슬라이드와 활동을 함께 실행하는 HTML 수업을 내려받았어요.');
   }catch(error){if(!abort.signal.aborted)status.textContent=`수업 파일을 만들지 못했어요. ${error.message||''} 원본과 편집 자료는 보관돼요.`;}
   finally{setupApp(O.record);}
