@@ -37,9 +37,10 @@ test('이어 움직이기 is a stored transition that crossfades where only one 
   assert.equal(morphs('move'), true);
   assert.equal(morphs('fade'), false);
   assert.equal(cleanDesign({id: 'ppage00001', bg: '#fff', tr: 'move', items: []}).tr, 'move');
-  const half = transitionPose('move', 1, 450);
+  const half = transitionPose('move', 1, 500);
   assert.ok(half.next.o > 0 && half.next.o < 1 && half.old.o > 0 && half.old.o < 1);
-  assert.equal(transitionPose('move', 1, 900).done, true);
+  assert.equal(transitionPose('move', 1, 1000).done, true);
+  assert.equal(transitionPose('move', 1, 900).done, false);
   // Element entrances still plan normally; the player skips the ones it moved.
   assert.equal(planMotion({tr: 'move', pa: 'fade', items: [text('etext00001', 'a')]}).auto.length, 1);
 });
@@ -98,4 +99,25 @@ test('HTML lessons keep page topics; C toggles the presenter camera bubble', () 
   assert.deepEqual(showAction({key: 'ㅊ', code: 'KeyC'}), {type: 'camera'});
   assert.equal(showAction({key: 'c', code: 'KeyC', ctrlKey: true}), null);
   assert.ok(SHOW_KEYS.some(([k, v]) => k === 'C' && /카메라/.test(v)));
+});
+
+test('video plan: 이어 움직이기 pairs get their own cells on both slides and do not enter again', async () => {
+  const {filmPlan, filmCells, morphPairs} = await import('../src/film.js');
+  const a = cleanDesign({id: 'ppage00001', bg: '#fff', pa: 'pop', items: [shape('ecircle001'), text('etitle0001', '제목')]});
+  const b = cleanDesign({id: 'ppage00002', bg: '#fff', pa: 'pop', tr: 'move', items: [shape('ecircle001', {x: 80}), text('eother0001', '새 글'), text('eclick0001', '제목', {aw: true})]});
+  assert.deepEqual(morphPairs(a, b), [[0, 0]]);
+  const plan = filmPlan([a, b], {stay: 3});
+  const [, second] = plan.slides;
+  assert.deepEqual(second.turn.pairs, [[0, 0]]);
+  assert.deepEqual(second.split, [0]);
+  assert.deepEqual(plan.slides[0].split, [0]);
+  assert.ok(!second.moves.some(m => m.i === 0 && !m.click), 'the moved circle does not pop in again');
+  assert.ok(second.moves.some(m => m.i === 1), 'the new text still enters');
+  const boxes = b.items.map(() => ({x: 10, y: 10, w: 50, h: 50, bw: 50, bh: 50}));
+  assert.ok(filmCells(b, second, boxes, 640, 360).some(c => c.i === 0));
+  assert.equal(second.turn.changed, undefined, 'the circle only moved');
+  const c = cleanDesign({...b, items: [shape('ecircle001', {x: 80, color: '#ffc93c'})]});
+  assert.deepEqual(filmPlan([a, c]).slides[1].turn.changed, [0], 'a new colour cross-dissolves');
+  // Without the transition there are no pairs.
+  assert.equal(filmPlan([a, {...b, tr: 'fade'}]).slides[1].turn.pairs, undefined);
 });

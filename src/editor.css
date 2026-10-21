@@ -45,6 +45,11 @@
 /* ---- 카드(디자인 한 장). 놓인 칸의 너비를 따라 커지고 작아진다. 글자 크기는 카드 너비를 따라간다(cqw) ---- */
 /* 넘치는 것은 자르기만 한다(clip): hidden 이면 카드 밖으로 나간 요소 때문에 카드 안쪽이 "넘길 수 있는 칸"이 되어,
    글을 고칠 때 브라우저가 글자 자리를 보이게 하려고 카드 속을 밀어 버릴 수 있다(요소가 통째로 어긋나 보인다). */
+/* 연결선(links.js): 네모는 누르기를 받지 않고, 선 둘레의 넓은 투명 선만 받는다. 고르면 선이 빛난다. */
+.fi.fi-link { pointer-events: none; }
+.fi-link svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.fi-link .fi-link-hit { stroke: transparent; fill: none; pointer-events: stroke; cursor: pointer; }
+.fi-link.sel .fi-link-line, .fi-link.sel .fi-link-head { filter: drop-shadow(0 0 .35cqw rgba(61, 75, 192, .95)); }
 /* 이어 움직이기(motion.js 의 playMorph): 도는 동안 카드는 비쳐 보이고, 이 장의 바탕은 따로 깐 판으로 서서히 나타난다. */
 .fe-card.fe-morphing { background: transparent; }
 .fe-morph-back { position: absolute; inset: 0; background: var(--fe-bg, #fffdf5); pointer-events: none; }

@@ -5,6 +5,7 @@ import {cleanDesign, settings, fontList, backgroundOf, hangsPunctuation} from '.
 import {designToBlob, designSheet} from '../src/export.js';
 import {itemView, paintCard} from '../src/render.js';
 import {sceneFrame} from '../src/scene.js';
+import {linkEnds} from '../src/links.js';
 
 export const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 export const PPTX_MAX_SLIDES = 200;
@@ -65,6 +66,14 @@ function itemBox(item, size, textHeight) {
   const w = item.w * size.width / 100;
   const h = item.t === 'text' ? (item.h ? item.h * size.height / 100 : textHeight) : item.h * size.height / 100;
   return {x: item.x * size.width / 100 - w / 2, y: item.y * size.height / 100 - h / 2, w, h};
+}
+// 연결선 → PowerPoint 의 직선 연결선(straightConnector1). 굵기 · 색 · 점선 · 화살표 머리가 그대로 고칠 수 있게 들어간다.
+// (두 도형에 "붙는" 연결은 하지 않는다: PowerPoint 에서 도형을 옮기면 선은 제자리에 남는다.)
+function nativeLink(item, id, size) {
+  const [[x1, y1], [x2, y2]] = linkEnds(item, settings().aspect).map(([x, y]) => [x * size.width / 100, y * size.height / 100]);
+  const flip = `${x2 < x1 ? ' flipH="1"' : ''}${y2 < y1 ? ' flipV="1"' : ''}`;
+  const head = item.head === 'both' ? '<a:headEnd type="triangle"/>' : '', tail = item.head !== 'none' ? '<a:tailEnd type="triangle"/>' : '';
+  return `<p:cxnSp><p:nvCxnSpPr><p:cNvPr id="${id}" name="${xml(item.id || `연결선 ${id}`)}"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr><p:spPr><a:xfrm${flip}><a:off x="${Math.round(Math.min(x1, x2))}" y="${Math.round(Math.min(y1, y2))}"/><a:ext cx="${Math.max(1, Math.round(Math.abs(x2 - x1)))}" cy="${Math.max(1, Math.round(Math.abs(y2 - y1)))}"/></a:xfrm><a:prstGeom prst="straightConnector1"><a:avLst/></a:prstGeom><a:ln w="${Math.max(1, Math.round(item.line / 100 * size.width))}" cap="${item.dash ? 'flat' : 'rnd'}">${solid(item.color, item.op)}${item.dash ? '<a:prstDash val="dash"/>' : ''}${head}${tail}</a:ln></p:spPr></p:cxnSp>`;
 }
 function nativeShape(item, box, id, size) {
   const rounded = ['round', 'pill', 'line'].includes(item.shape) || item.r > 0;
@@ -274,6 +283,7 @@ export async function createPptx({slides, aspect = 16 / 9, size, title = '온바
         abort(signal); const item = design.items[itemIndex], itemWarn = warn(pageNumber, item.id), id = shapes.length + 2;
         if (item.t === 'text') shapes.push(nativeText(item, itemBox(item, slideSize, await cancellable(textHeight(item, slideSize, itemWarn), signal)), id, slideSize, itemWarn));
         else if (item.t === 'shape' && nativeShapes.has(item.shape)) shapes.push(nativeShape(item, itemBox(item, slideSize), id, slideSize));
+        else if (item.t === 'link') shapes.push(nativeLink(item, id, slideSize));
         else if (item.t === 'image' && item.mask === 'none') {
           const loaded = await photo(item, signal), box = itemBox(item, slideSize), sourceAspect = loaded.width / loaded.height, targetAspect = box.w / box.h;
           const horizontal = sourceAspect > targetAspect, crop = Math.max(0, Math.round((1 - (horizontal ? targetAspect / sourceAspect : sourceAspect / targetAspect)) * 50000));

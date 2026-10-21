@@ -85,6 +85,10 @@ test('이어 움직이기 moves the duplicated element from its old place to its
   assert.equal(mid.moved, '1');
   assert.ok(mid.x > .25 && mid.x < .75, `mid ${mid.x}`);
   assert.ok(mid.w > .1 && mid.w < .2, `mid width ${mid.w}`);
+  // Smooth: the moving element animates only transform/opacity (no layout properties), on a promoted layer.
+  const props = await page.evaluate(() => { const n = [...document.querySelectorAll('.cv-show-stage > .fe-card')].at(-1).querySelector('.fi-shape'); return {keys: [...new Set(n.getAnimations().flatMap(a => a.effect.getKeyframes().flatMap(Object.keys)))].sort(), will: n.style.willChange}; });
+  assert.deepEqual(props.keys.filter(k => !['offset', 'easing', 'composite', 'computedOffset'].includes(k)), ['opacity', 'transform']);
+  assert.equal(props.will, 'transform, opacity');
   await page.waitForFunction(() => document.querySelectorAll('.cv-show-stage > .fe-card').length === 1);
   const end = await where();
   assert.equal(end.morphing, false);
@@ -195,5 +199,35 @@ test('a downloaded HTML lesson groups its overview by topic and offers the camer
   await page.keyboard.press('?');
   assert.match(await page.locator('.ost-help-list').textContent(), /카메라/);
   assert.equal(await page.locator('.lesson-show-key', {hasText: '카메라'}).count(), 1);
+  assert.deepEqual(external, []);
+});
+
+test('exported video: 이어 움직이기 glides the duplicated element across the transition frames', options, async t => {
+  const {page, external} = await setup(t, {motion: 'reduce'});
+  const spots = await page.evaluate(async () => {
+    const {createFilm} = await import('/src/video.js');
+    const {cleanDesign, configure} = await import('/src/model.js');
+    configure({aspect: 16 / 9});
+    const saved = await window.readSaved();
+    const film = createFilm(saved.slides.slice(0, 2), {width: 640, height: 360});
+    await film.ready(0); await film.ready(1);
+    const ms = film.plan.slides[1].turn.ms, ctx = film.canvas.getContext('2d');
+    // Blue circle: slide 1 at (20%, 30%) size 10%, slide 2 at (80%, 70%) size 20%. Find the blue pixels' centre.
+    const blue = () => {
+      const {data} = ctx.getImageData(0, 0, 640, 360); let sx = 0, sy = 0, n = 0;
+      for (let y = 0; y < 360; y += 2) for (let x = 0; x < 640; x += 2) { const q = (y * 640 + x) * 4; if (data[q + 2] > 150 && data[q] < 110 && data[q + 1] < 120) { sx += x; sy += y; n++; } }
+      return n ? [Math.round(sx / n), Math.round(sy / n), n] : null;
+    };
+    const at = local => { film.draw(1, local); return blue(); };
+    const out = {pairs: film.plan.slides[1].turn.pairs, start: at(0), mid: at(ms / 2), end: at(ms - 1), after: at(ms + 50)};
+    film.close();
+    return out;
+  });
+  assert.deepEqual(spots.pairs, [[0, 0], [1, 1]]);
+  assert.ok(Math.abs(spots.start[0] - 128) < 8 && Math.abs(spots.start[1] - 108) < 8, `start ${spots.start}`);
+  assert.ok(spots.mid[0] > 250 && spots.mid[0] < 390 && spots.mid[1] > 150 && spots.mid[1] < 230, `mid ${spots.mid}`);
+  assert.ok(spots.mid[2] > spots.start[2] * 1.5 && spots.mid[2] < spots.end[2], `grows ${spots.start[2]} ${spots.mid[2]} ${spots.end[2]}`);
+  assert.ok(Math.abs(spots.end[0] - 512) < 10 && Math.abs(spots.end[1] - 252) < 10, `end ${spots.end}`);
+  assert.ok(Math.abs(spots.after[0] - 512) < 6 && Math.abs(spots.after[1] - 252) < 6, `after ${spots.after}`);
   assert.deepEqual(external, []);
 });

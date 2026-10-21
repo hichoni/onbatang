@@ -1,0 +1,155 @@
+// Local-only browser contract for connector lines (연결선): join two selected pieces, follow them, style, delete, duplicate, export.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createServer} from 'node:http';
+import {readFile} from 'node:fs/promises';
+import {fileURLToPath, pathToFileURL} from 'node:url';
+import {resolve, extname, sep} from 'node:path';
+
+const root = resolve(fileURLToPath(new URL('../../', import.meta.url)));
+const options = {skip: !process.env.MINICAN_PLAYWRIGHT_PATH, timeout: 120000};
+const html = `<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/src/editor.css"><link rel="stylesheet" href="/app/app.css"><body class="mc-app"><main id="app"></main><script type="module">
+import {startMinican} from '/app/app.js';import {newRecord} from '/app/designs.js';import {putDesign,getDesign,setStorageName} from '/app/store.js';
+setStorageName('links-fixture');try{localStorage.setItem('onbatang-tour-seen-v1:editor','1');}catch{}
+const seed=newRecord('16:9');seed.name='연결선 검수';
+seed.slides=[{id:'plink00001',bg:'#ffffff',items:[
+ {id:'ebox000001',t:'shape',shape:'round',x:25,y:40,w:18,h:22,color:'#3d4bc0'},
+ {id:'ebox000002',t:'shape',shape:'circle',x:72,y:62,w:14,h:24,color:'#ffc93c'},
+ {id:'etext00001',t:'text',text:'설명',x:50,y:12,w:30,size:4}]}];
+await putDesign(seed);window.readSaved=()=>getDesign(seed.id);
+await startMinican({storage:'links-fixture'});window.ready=true;
+</script>`;
+
+async function setup(t) {
+  const server = createServer(async (req, res) => {
+    try {
+      const path = new URL(req.url, 'http://localhost').pathname;
+      if (path === '/fixture.html') { res.setHeader('Content-Type', 'text/html'); return res.end(html); }
+      const f = resolve(root, '.' + decodeURIComponent(path));
+      if (!f.startsWith(root + sep)) throw Error('path');
+      res.setHeader('Content-Type', ({'.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.woff': 'font/woff', '.png': 'image/png'})[extname(f)] || 'application/octet-stream');
+      res.end(await readFile(f));
+    } catch { res.writeHead(404); res.end(); }
+  });
+  await new Promise(done => server.listen(0, '127.0.0.1', done));
+  t.after(() => new Promise(done => server.close(done)));
+  const {chromium} = await import(pathToFileURL(process.env.MINICAN_PLAYWRIGHT_PATH).href);
+  const browser = await chromium.launch({channel: process.env.MINICAN_BROWSER || 'msedge', headless: true});
+  t.after(() => browser.close());
+  const origin = `http://127.0.0.1:${server.address().port}`, external = [];
+  const context = await browser.newContext({reducedMotion: 'reduce', viewport: {width: 1280, height: 800}});
+  await context.route('**/*', route => /^https?:/.test(route.request().url()) && !route.request().url().startsWith(origin + '/') ? (external.push(route.request().url()), route.abort()) : route.continue());
+  const page = await context.newPage();
+  await page.goto(origin + '/fixture.html');
+  await page.waitForFunction(() => window.ready);
+  await page.locator('.cv-item .cv-thumb').first().click();
+  await page.locator('.cv-canvas .fe-stage').waitFor();
+  return {page, external};
+}
+async function saved(page, check) {
+  for (let end = Date.now() + 15000; Date.now() < end; await new Promise(r => setTimeout(r, 200))) if (check(await page.evaluate(() => window.readSaved()))) return;
+  assert.fail('saved record never matched');
+}
+const center = async locator => { const b = await locator.boundingBox(); return [b.x + b.width / 2, b.y + b.height / 2]; };
+// The drawn line's two ends on screen (px).
+const ends = page => page.evaluate(() => {
+  const line = document.querySelector('.cv-canvas .fe-card .fi-link .fi-link-line');
+  if (!line) return null;
+  const m = line.getScreenCTM(), p = (x, y) => { const q = new DOMPoint(x, y).matrixTransform(m); return [q.x, q.y]; };
+  return [p(+line.getAttribute('x1'), +line.getAttribute('y1')), p(+line.getAttribute('x2'), +line.getAttribute('y2'))];
+});
+const rectOf = (page, n) => page.locator('.cv-canvas .fe-card .fi-shape').nth(n).boundingBox();
+
+test('two selected pieces join with a connector that follows them, takes styles, and goes away with them', options, async t => {
+  const {page, external} = await setup(t);
+  const shapes = page.locator('.cv-canvas .fe-card .fi-shape');
+  await shapes.nth(0).click();
+  await shapes.nth(1).click({modifiers: ['Shift']});
+  await page.locator('.fe-bar button').filter({hasText: '연결선'}).click();
+  await page.locator('.cv-canvas .fe-card .fi-link').waitFor();
+  await saved(page, r => r.slides[0].items.some(it => it.t === 'link' && it.from === 'ebox000001' && it.to === 'ebox000002' && it.head === 'end'));
+  // The line runs from the edge of the first box to the edge of the second (not into them).
+  const [a, b] = [await rectOf(page, 0), await rectOf(page, 1)];
+  let [p1, p2] = await ends(page);
+  assert.ok(p1[0] > a.x + a.width - 2 && p1[0] < a.x + a.width + 25, `start ${p1} box ${JSON.stringify(a)}`);
+  assert.ok(p2[0] < b.x + 2 && p2[0] > b.x - 30, `end ${p2} box ${JSON.stringify(b)}`);
+  // The link sits under both pieces and has no resize handles; clicking the line selects it.
+  assert.deepEqual(await page.evaluate(() => [...document.querySelector('.cv-canvas .fe-card').querySelectorAll('.fi')].map(n => n.classList.contains('fi-link') ? 'link' : n.classList.contains('fi-shape') ? 'shape' : 'text')), ['link', 'shape', 'shape', 'text']);
+  await page.mouse.click((p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2);
+  await page.waitForFunction(() => document.querySelector('.cv-canvas .fe-card .fi-link.sel'));
+  assert.equal(await page.locator('.fe-sel').isHidden(), true);
+  // Style: thicker, dashed, both heads, reversed.
+  await page.locator('.fe-bar button').filter({hasText: '화살표'}).click();
+  await page.locator('[data-head="both"]').click();
+  await page.locator('[data-dash="on"]').click();
+  await page.locator('[data-flip-link="1"]').click();
+  await saved(page, r => { const l = r.slides[0].items.find(it => it.t === 'link'); return l.head === 'both' && l.dash === true && l.from === 'ebox000002' && l.to === 'ebox000001'; });
+  assert.equal(await page.locator('.cv-canvas .fe-card .fi-link .fi-link-head').count(), 2);
+  assert.ok(await page.locator('.cv-canvas .fe-card .fi-link .fi-link-line').getAttribute('stroke-dasharray'));
+  // Dragging a piece moves the line with it, live.
+  await page.keyboard.press('Escape');
+  const before = await ends(page);
+  const [cx, cy] = await center(shapes.nth(1));
+  await page.mouse.move(cx, cy);
+  await page.mouse.down();
+  await page.mouse.move(cx - 60, cy - 120, {steps: 6});
+  const during = await ends(page);
+  await page.mouse.up();
+  assert.ok(Math.abs(during[0][1] - before[0][1]) > 60, `line follows while dragging ${JSON.stringify([before, during])}`);
+  await saved(page, r => { const box = r.slides[0].items.find(it => it.id === 'ebox000002'), l = r.slides[0].items.find(it => it.t === 'link'); return box.y < 55 && Math.abs(l.y - (box.y + 40) / 2) < 15; });
+  // Deleting a piece removes its lines; undo brings both back.
+  const list = () => page.evaluate(async () => (await window.readSaved()).slides[0].items.map(it => [it.t, it.id, it.from || '', it.to || '']));
+  await page.mouse.click(...await center(shapes.nth(1)));
+  await page.keyboard.press('Delete');
+  await saved(page, r => !r.slides[0].items.some(it => it.t === 'link') && r.slides[0].items.length === 2);
+  await page.keyboard.press('Control+z');
+  await saved(page, r => r.slides[0].items.some(it => it.t === 'link') && r.slides[0].items.length === 4);
+  assert.equal((await list()).filter(([t]) => t === 'link').length, 1);
+  assert.deepEqual(external, []);
+});
+
+test('duplicating the slide and the joined pieces keeps the copies joined; PNG and PPTX carry the line', options, async t => {
+  const {page, external} = await setup(t);
+  const shapes = page.locator('.cv-canvas .fe-card .fi-shape');
+  await shapes.nth(0).click();
+  await shapes.nth(1).click({modifiers: ['Shift']});
+  await page.locator('.fe-bar button').filter({hasText: '연결선'}).click();
+  await page.locator('.cv-canvas .fe-card .fi-link').waitFor();
+  // Ctrl+A then Ctrl+D duplicates everything; the duplicated link joins the duplicated boxes.
+  await page.mouse.click(5, 5);
+  await page.locator('.cv-canvas .fe-stage').focus();
+  await page.keyboard.press('Control+a');
+  await page.keyboard.press('Control+d');
+  await saved(page, r => r.slides[0].items.filter(it => it.t === 'link').length === 2);
+  const items = (await page.evaluate(() => window.readSaved())).slides[0].items;
+  const [one, two] = items.filter(it => it.t === 'link');
+  assert.notDeepEqual([one.from, one.to], [two.from, two.to]);
+  const ids = new Set(items.map(it => it.id));
+  assert.ok([two.from, two.to].every(id => ids.has(id) && !['ebox000001', 'ebox000002'].includes(id)));
+  // Duplicate the slide: its line joins the copied slide's own pieces.
+  await page.locator('.cv-slide-list .cv-slide:not(.add)').first().click({button: 'right'});
+  await page.locator('.fe-menu .fe-mi').filter({hasText: '이 장 복제'}).click();
+  await saved(page, r => r.slides.length === 2);
+  const copy = (await page.evaluate(() => window.readSaved())).slides[1];
+  const copyIds = new Set(copy.items.map(it => it.id));
+  assert.ok(copy.items.filter(it => it.t === 'link').every(l => copyIds.has(l.from) && copyIds.has(l.to)));
+  // PNG of the slide shows the dark line between the boxes; editable PPTX has a native connector with an arrow.
+  const out = await page.evaluate(async () => {
+    const {designToCanvas, cleanDesign} = await import('/src/index.js');
+    const {createPptx} = await import('/app/pptx.js');
+    const slide = cleanDesign((await window.readSaved()).slides[0], {keepSpaces: true});
+    const made = await designToCanvas(slide, {width: 800, aspect: 16 / 9});
+    const link = slide.items.find(it => it.t === 'link');
+    const {linkEnds} = await import('/src/links.js');
+    const [[x1, y1], [x2, y2]] = linkEnds(link, 16 / 9);
+    const mx = (x1 + x2) / 2 * 8, my = (y1 + y2) / 2 * 450 / 100;
+    const px = [...made.canvas.getContext('2d').getImageData(Math.round(mx), Math.round(my), 1, 1).data].slice(0, 3);
+    const {bytes} = await createPptx({slides: [slide], aspect: 16 / 9});
+    const text = new TextDecoder().decode(bytes);
+    return {px, connectors: (text.match(/<p:cxnSp>/g) || []).length, arrow: /straightConnector1.*?<a:tailEnd type="triangle"\/>/.test(text)};
+  });
+  assert.ok(out.px.every(v => v < 90), `line pixel ${out.px}`);
+  assert.equal(out.connectors, 2);
+  assert.equal(out.arrow, true);
+  assert.deepEqual(external, []);
+});

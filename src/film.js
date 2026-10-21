@@ -8,7 +8,7 @@
 //   - 요소가 다 나온 뒤에도 읽을 틈(TAIL)은 남긴다. 그래서 요소가 많은 장은 머무는 시간보다 조금 길어진다.
 //   - 영상 장면(그 장의 바탕에 깐 영상)은 발표할 때처럼 그 장이 열리면(전환 효과가 끝나면) 틀기 시작해서, 쓰는 구간이 끝날 때까지 튼다.
 //     그래서 영상 장면이 있는 장은 적어도 그 영상의 길이만큼 이어진다. 끝난 뒤에는 마지막 모습에 잠깐 머문다.
-import { planMotion, enterPose, enterTime, emphasisPose, emphasisTime, transitionPose } from './motion.js';
+import { planMotion, enterPose, enterTime, emphasisPose, emphasisTime, transitionPose, matchItems, morphs, looksChanged } from './motion.js';
 
 /** 고를 수 있는 머무는 시간(초)과 기본값. */
 export const STAYS = [3, 5, 8];
@@ -37,6 +37,9 @@ const staySeconds = (stay) => (Number.isFinite(stay) ? Math.min(30, Math.max(1, 
  *     settle: 모든 요소가 다 나온 때
  *     ms:     이 장의 길이(다음 장이 시작되는 때)
  *     scene:  (영상 장면이 있는 장만) 바탕 영상을 트는 때 { start(트기 시작하는 때), ms(쓰는 구간의 길이) }
+ *     split:  (이어 움직이기가 있을 때만) 따로 칸을 나눠 그려 둘 요소 번호들(옮겨 가는 요소)
+ *     turn.pairs: 이어 움직이기로 앞 장에서 옮겨 오는 요소의 짝 [[앞 장 번호, 이 장 번호]]
+ *     turn.changed: 그 가운데 내용·꾸밈이 달라진 것(이 장 번호). 옮기며 앞 것이 사라지고 새것이 나타난다
  *   }],
  *   ms: 영상 전체의 길이
  * }
@@ -50,9 +53,14 @@ export function filmPlan(designs, { stay = DEFAULT_STAY, scenes = true } = {}) {
     // 리허설로 잰 시간이 있는 장은 그 시간만큼 머문다(고른 머무는 시간 대신).
     const stayMs = Number.isInteger(design?.dur) && design.dur >= 1 ? Math.min(design.dur, 600) * 1000 : stayAll;
     const pose = n > 0 ? transitionPose(design?.tr) : null;
-    const turn = pose ? { id: design.tr, ms: pose.ms } : null;
+    // 이어 움직이기: 앞 장과 짝이 된 요소는 전환 동안 옮겨 가고, 장이 열린 뒤에 다시 나타나지 않는다(발표 화면과 같다).
+    // 누를 때 나타나는 요소는 짝짓지 않는다(그 차례에 나타난다).
+    const pairs = pose && morphs(design.tr) ? morphPairs(designs[n - 1], design) : null;
+    const changed = (pairs || []).filter(([i, j]) => looksChanged(designs[n - 1].items[i], design.items[j])).map(([, j]) => j);
+    const turn = pose ? { id: design.tr, ms: pose.ms, ...(pairs?.length ? { pairs } : {}), ...(changed.length ? { changed } : {}) } : null;
     const lead = turn ? turn.ms : n === 0 && plan.auto.length + plan.clicks.length ? FIRST_LEAD : 0;
-    const moves = plan.auto.map((a) => ({ i: a.i, enter: a.enter, mirror: a.mirror, start: lead + a.delay, ms: enterTime(a.enter), click: false }));
+    const arrived = new Set((pairs || []).map(([, j]) => j));
+    const moves = plan.auto.filter((a) => !arrived.has(a.i)).map((a) => ({ i: a.i, enter: a.enter, mirror: a.mirror, start: lead + a.delay, ms: enterTime(a.enter), click: false }));
     const count = plan.clicks.length;
     if (count) {
       const least = Math.max(STEP_LEAST, Math.min(STEP_MIN, CLICKS_MAX / count));
@@ -67,7 +75,18 @@ export function filmPlan(designs, { stay = DEFAULT_STAY, scenes = true } = {}) {
     const ms = Math.round(Math.max(lead + Math.max(stayMs, settle - lead + (moves.length ? TAIL : 0)), scene ? scene.start + scene.ms + SCENE_TAIL : 0));
     return { turn, lead, moves, settle, ms, ...(scene ? { scene } : {}) };
   });
+  // 짝이 된 요소는 두 장 모두에서 제 칸(따로 그린 그림)이 있어야 옮겨 그릴 수 있다: split 에 적는다.
+  slides.forEach((s, n) => {
+    for (const [i, j] of s.turn?.pairs || []) {
+      (s.split ||= []).push(j);
+      (slides[n - 1].split ||= []).push(i);
+    }
+  });
   return { slides, ms: slides.reduce((sum, s) => sum + s.ms, 0) };
+}
+/** 이어 움직이기의 짝 [[앞 장 번호, 이 장 번호]] (누를 때 나타나는 요소는 빼고). */
+export function morphPairs(before, after) {
+  return matchItems(before?.items, after?.items).filter(([, j]) => after.items[j]?.aw !== true);
 }
 
 /**
@@ -105,7 +124,7 @@ const HALF = SHEET_MAX / 2 - 8;  // 움직이는 요소의 칸은 그 요소의 
  */
 export function filmCells(design, slide, boxes, W, H) {
   const items = Array.isArray(design?.items) ? design.items : [];
-  const moving = new Set((slide?.moves || []).map((m) => m.i));
+  const moving = new Set([...(slide?.moves || []).map((m) => m.i), ...(slide?.split || [])]);
   const card = { x: 0, y: 0, w: W, h: H };
   const split = !!design?.video;
   if (!moving.size && !split) return [{ items: items.map((_, i) => i), bg: true, i: -1, box: card }];

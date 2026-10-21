@@ -18,6 +18,7 @@ import { metadata, newId, fail, validatePageInput, isSlideItem, itemTextLimit, p
 export { cleanAlt, ALT_LIMIT };
 import { cleanActivity } from './activity.js';
 import { cleanCrop } from './crop.js';
+import { LINK_HEADS, LINK_LINE, layoutLinks } from './links.js';
 
 export { SHAPE_GROUPS };
 
@@ -326,6 +327,22 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
     if (it.auto === true) out.auto = true;          // 발표할 때 장이 열리면 바로 튼다(아니면 스페이스 바를 누를 때)
     return out;
   }
+  if (it.t === 'link') {
+    // 연결선(links.js): 잇는 두 조각의 이름표와 꾸밈만 저장한다. 자리(x·y·w·h·pts·vh)는 cleanItems 가 두 조각에서 다시 계산한다.
+    const isRef = (v) => typeof v === 'string' && /^[a-z][a-z0-9]{5,31}$/.test(v);
+    if (!isRef(it.from) || !isRef(it.to) || it.from === it.to) return null;
+    const out = {
+      t: 'link', ...base, rot: 0, from: it.from, to: it.to,
+      head: LINK_HEADS.includes(it.head) ? it.head : 'end',
+      color: cleanColor(it.color, '#1d2433'),
+      line: Math.round(num(it.line, LINK_LINE.min, LINK_LINE.max, LINK_LINE.base) * 100) / 100,
+      ...(it.dash === true ? { dash: true } : {}),
+    };
+    // 계산해 둔 자리는 그대로 받아 두었다가(그릴 때 바로 쓰게) cleanItems 에서 새로 맞춘다.
+    if (Array.isArray(it.pts) && it.pts.length === 4 && it.pts.every(Number.isFinite) && [it.w, it.h, it.vh].every((v) => Number.isFinite(v) && v > 0)) Object.assign(out, { w: it.w, h: it.h, vh: it.vh, pts: [...it.pts] });
+    else Object.assign(out, { w: 1, h: 1, vh: 1, pts: [0, 0, 0, 0] });
+    return out;
+  }
   if (it.t === 'image') {
     const img = cleanImg(it);
     if (!img) return null;
@@ -356,7 +373,8 @@ export function cleanItems(items, opts) {
     out.push(it);
     if (out.length >= limits.items) break;
   }
-  return out;
+  // 연결선은 잇는 두 조각에서 자리를 다시 계산한다(조각이 없어진 선은 빠진다).
+  return layoutLinks(out, config.aspect);
 }
 
 /**
@@ -663,6 +681,7 @@ export function itemLabel(it) {
   if (it.t === 'shape') return `도형: ${SHAPES.find((s) => s.id === it.shape)?.name || '네모'}`;
   if (it.t === 'art') return `그림: ${artName(it.art) || it.art.slice(3)}`;
   if (it.t === 'yt') return `유튜브 영상${it.start ? ` (${ytTime(it.start)}부터)` : ''}`;
+  if (it.t === 'link') return `연결선${it.head === 'none' ? '' : ' (화살표)'}`;
   return '사진';
 }
 
@@ -796,6 +815,7 @@ const STYLE_KEYS = {
   emoji: ['op'],
   image: ['mask', 'op'],
   yt: ['op'],
+  link: ['color', 'line', 'head', 'dash', 'op'],
 };
 /** 요소의 꾸밈 값 { t, values } (스타일을 옮길 수 없는 것이면 null). */
 export function styleOf(item) {
