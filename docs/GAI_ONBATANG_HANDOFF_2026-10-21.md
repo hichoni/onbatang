@@ -11,6 +11,10 @@
 - 파일당 50MB/전체 백업 1회 256MB, 연결 고정 버전 10,000개 한도. **별도 영상 장면·임시/외부 이미지 주소가 있는 자료는 첫 원격 쓰기 전에 안내하고 중단한다.** 원본 PPT bytes 자체는 보존한다. 영상 계정 백업·사진 교체 시 위치/크기 유지·전체 슬라이드 글 찾기/바꾸기·백업 관리 UI는 [누락 점검](https://github.com/hichoni/g-ai-lab/blob/codex/ppt-backup-image-crop/docs/onbatang-feature-audit-2026-10-21.md)에 후속으로 명시했다.
 - 남은 검수: 이번 기능의 실제 운영 계정 백업 생성, 물리 새 기기/모바일/태블릿, 35명, 이번 자르기 출력의 PowerPoint 데스크톱 재열기. 배포 성공은 PR의 정확한 HEAD/Netlify 상태/실제 화면 버전을 확인한 뒤 보고한다. 운영 main 병합과 공용 Firebase 배포는 이번 PR 준비와 구분한다.
 
+
+- **미리보기 검수 완료:** 가이랩 PR #103의 검증 HEAD `0c6c549c563ef2dd7fbac76c408518a4a0d8bae4`에서 Netlify SUCCESS, 실제 화면 **테스트 v0.78.0 / 0c6c549c**, 공통 manifest v0.33.0/b5c0e0f/168파일을 확인했다. 공통 핵심 15·호스트 핵심 8파일의 HTTP SHA256이 Git blob과 같다. 이후 문서 전용 commit은 이 제품 코드를 바꾸지 않는다. [미리보기](https://deploy-preview-103--gai-lab.netlify.app/#/onbatang).
+- GitHub verify job **118985925883**는 결제 실패/지출 한도로 **시작 전 차단**됐고 실행 단계는 0개였다. 정확한 check annotation으로 확인했으며 로컬 검사·Netlify 성공과 구분한다. 결제/한도 설정은 변경하지 않았다.
+
 ### 이전 운영 완료 기록
 
 
