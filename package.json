@@ -1,6 +1,6 @@
 {
   "name": "onbatang",
-  "version": "0.32.0",
+  "version": "0.33.0",
   "description": "브라우저에서 쓰는 디자인 편집기와 독립 PPTX 가져오기·편집·내려받기",
   "license": "MIT",
   "type": "module",

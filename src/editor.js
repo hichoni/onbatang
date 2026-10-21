@@ -22,6 +22,7 @@ import { fontReady } from './fonts.js';
 import { TOLERANCE, colorAlpha, prepareAlpha, finishCutout, resizeMask, plainBorder } from './cutout.js';
 import { anchorResizedItem, resizeItemFromHandle } from './resize.js';
 import {cleanPalettes,updatePalettes} from './palettes.js';
+import {FULL_CROP, cleanCrop, coverCrop, cropImage} from './crop.js';
 
 const HISTORY = 40;
 // 옆 메뉴의 칸: [이름, 아이콘(icons.js), 보이는 이름, 한 줄 설명]
@@ -148,6 +149,7 @@ export function createEditor({
   let tab = 'layout';         // 옆 메뉴에서 열려 있는 칸
   let pop = null;             // 도구 막대 아래에 펼쳐진 칸: 'color' · 'bgc' · 'edge' · 'corner' · 'thick' · 'size' · 'op' · 'flip' · 'pos' · 'swap' · 'mask' · 'cut' · null
   let busy = false;           // 사진 올리는 중
+  let cropJob = null;         // Preview only; Apply creates a single undo step.
   let importingDocument = false;
   let uploadTab = 'photo';     // 내 자료의 종류는 같은 편집기를 다시 그려도 유지한다.
   let youtubeInput = null;
@@ -1890,7 +1892,8 @@ export function createEditor({
     class: `fe-tb${on ? ' on' : ''}${cls ? ` ${cls}` : ''}`, type: 'button', title: title || name || null, 'aria-label': name || null, disabled,
     'aria-pressed': on == null ? null : String(!!on), onClick,
   }, label, /\bhas-pop\b/.test(cls) && !/\bicon\b/.test(cls) ? icon('chev', 'fe-chev') : null);
-  const toggle = (name) => { pop = pop === name ? null : name; if (pop !== 'cut') cut = null; renderBar(); keepKeys(); };
+  const toggle = (name) => { pop = pop === name ? null : name; if (pop !== 'cut') cut = null; if(pop!=='crop')cropJob=null; renderBar(); keepKeys(); };
+  popBox.addEventListener('keydown',e=>{if(pop==='crop'&&e.key==='Escape'){e.preventDefault();e.stopPropagation();toggle('crop');focusStage();}});
   const popBtn = (label, name, opts = {}) => tb(label, () => toggle(name), { ...opts, on: pop === name, cls: 'has-pop' });
   // 아이콘 + 이름 단추의 속. 이름(.fe-lbl)은 좁은 도구 막대에서 감춰지므로, 단추에는 늘 name(aria-label)을 함께 준다.
   const lab = (pic, text) => [icon(pic), el('span', { class: 'fe-lbl', text })];
@@ -2175,6 +2178,7 @@ export function createEditor({
         tb(lab('screen', '유튜브에서 보기'), () => window.open(ytWatch(it.yt, it.start || 0), '_blank', 'noopener'), { title: '새 탭에서 이 영상을 열어요', name: '유튜브에서 보기', cls: 'yt-open' }));
     } else {
       own.push(
+        tb(lab('crop', '자르기'), openCrop, {on:pop==='crop',title:'사진에서 쓸 부분을 골라요',name:'이미지 자르기',cls:'has-pop crop'}),
         tb(lab('eraser', '배경 제거'), () => (pop === 'cut' ? toggle('cut') : openCut()), { on: pop === 'cut', title: '사진의 배경을 투명하게 지워요', name: '배경 제거', cls: 'has-pop cut' }),
         pick('mask', '모양', 'mask', { title: '사진의 테두리 모양(동그라미 · 둥근 네모 …)' }),
         tb(lab('cover', '배경으로'), toBackground, { title: '카드에 꽉 차게 키워 맨 뒤에 깔아요', name: '배경으로 깔기', cls: 'cover' }));
@@ -2286,11 +2290,81 @@ export function createEditor({
       body = [el('div', { class: 'fe-row' }, ...MASKS.map((m) => el('button', {
         class: `fe-chip${it.mask === m.id ? ' on' : ''}`, type: 'button', 'aria-pressed': String(it.mask === m.id), onClick: () => change({ mask: m.id }),
       }, m.name)))];
-    } else if (pop === 'cut' && it.t === 'image' && cut) body = cutBody();
+    } else if (pop === 'crop' && it.t === 'image') body = cropBody();
+    else if (pop === 'cut' && it.t === 'image' && cut) body = cutBody();
     popBox.hidden = !body;
     popBox.replaceChildren(...(body ? [
       el('button', { class: 'fe-pop-close', type: 'button', 'aria-label': '닫기', title: '닫기 (Esc)', onClick: () => toggle(pop) }, icon('close')),
       ...body.filter(Boolean)] : []));
+  }
+
+  async function openCrop() {
+    if(pop==='crop'){toggle('crop');return;}
+    const it=cur();if(it?.t!=='image'||it.lock)return;
+    endEdit();stopDrag();cut=null;
+    const job=cropJob={item:structuredClone(it),state:'loading'};pop='crop';renderBar();
+    try {
+      const image=new Image();image.src=it.url;await image.decode();
+      if(cropJob!==job||pop!=='crop'||cur()?.url!==it.url||cur()?.id!==it.id)return;
+      job.aspect=image.naturalWidth/image.naturalHeight;
+      job.base=it.crop||coverCrop(job.aspect,it.w/(it.h/settings().aspect));
+      job.rect={...job.base};job.state='ready';renderBar();
+    } catch {if(cropJob===job){job.state='error';renderBar();}}
+  }
+  function cropBody() {
+    const job=cropJob;
+    if(!job||job.state==='loading')return [el('p',{class:'fe-note',text:'사진을 여는 중이에요…'})];
+    if(job.state==='error')return [el('p',{class:'fe-note',text:'사진을 읽지 못했어요. 사진을 다시 확인해주세요.'})];
+    const view=el('div',{class:'fe-crop-view','data-image-crop':''});view.style.setProperty('--fe-crop-ratio',String(job.aspect));
+    const image=el('img',{src:job.item.url,alt:'자르기 전 원본 사진',draggable:'false'});
+    const rect=el('div',{class:'fe-crop-rect',tabindex:'0','aria-label':'자를 영역 이동 · 방향키로 이동'});
+    const fields=el('div',{class:'fe-crop-fields'}),inputs={};
+    const note=el('p',{class:'fe-note',role:'status'});
+    const draw=()=>{
+      const c=job.rect;Object.assign(rect.style,{left:`${c.x*100}%`,top:`${c.y*100}%`,width:`${c.w*100}%`,height:`${c.h*100}%`});
+      for(const [k,input]of Object.entries(inputs))if(document.activeElement!==input)input.value=String(Math.round(c[k]*1000)/10);
+      note.textContent=`원본의 가로 ${Math.round(c.w*100)}% · 세로 ${Math.round(c.h*100)}%를 사용해요.`;
+    };
+    for(const [k,label]of [['x','왼쪽'],['y','위쪽'],['w','가로'],['h','세로']]){
+      const input=inputs[k]=el('input',{type:'number',min:'0',max:'100',step:'0.1','aria-label':`자르기 ${label} (%)`});
+      input.onchange=()=>{const c={...job.rect,[k]:Number(input.value)/100};try{cleanCrop(c);job.rect=c;draw();}catch{input.value=String(Math.round(job.rect[k]*1000)/10);note.textContent='영역이 사진 안에 있도록 1% 이상으로 정해주세요.';}};
+      fields.append(el('label',{},`${label} (%)`,input));
+    }
+    for(const corner of ['nw','ne','sw','se'])rect.append(el('button',{type:'button',class:'fe-crop-handle',dataset:{corner},'aria-label':({nw:'왼쪽 위',ne:'오른쪽 위',sw:'왼쪽 아래',se:'오른쪽 아래'})[corner]+' 자르기 손잡이'}));
+    rect.onpointerdown=e=>{
+      e.preventDefault();const corner=e.target.closest('[data-corner]')?.dataset.corner,start={...job.rect},bounds=view.getBoundingClientRect(),x=e.clientX,y=e.clientY;
+      rect.setPointerCapture(e.pointerId);rect.focus({preventScroll:true});
+      rect.onpointermove=ev=>{
+        const dx=(ev.clientX-x)/bounds.width,dy=(ev.clientY-y)/bounds.height;
+        if(!corner)job.rect={...start,x:Math.max(0,Math.min(1-start.w,start.x+dx)),y:Math.max(0,Math.min(1-start.h,start.y+dy))};
+        else {
+          let l=start.x,t=start.y,r=l+start.w,b=t+start.h;
+          if(corner.includes('w'))l=Math.max(0,Math.min(r-.01,l+dx));else r=Math.min(1,Math.max(l+.01,r+dx));
+          if(corner.includes('n'))t=Math.max(0,Math.min(b-.01,t+dy));else b=Math.min(1,Math.max(t+.01,b+dy));
+          job.rect={x:l,y:t,w:r-l,h:b-t};
+        }draw();
+      };
+      const end=()=>{rect.onpointermove=null;rect.onpointerup=null;rect.onpointercancel=null;};rect.onpointerup=end;rect.onpointercancel=end;
+    };
+    rect.onkeydown=e=>{
+      if(e.key==='Escape'){e.preventDefault();toggle('crop');focusStage();return;}
+      if(e.key==='Enter'){e.preventDefault();apply();return;}
+      const directions={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]},d=directions[e.key];if(!d)return;
+      e.preventDefault();const c=job.rect,step=e.shiftKey?.05:.005;
+      job.rect={...c,x:Math.max(0,Math.min(1-c.w,c.x+d[0]*step)),y:Math.max(0,Math.min(1-c.h,c.y+d[1]*step))};draw();
+    };
+    function apply(){
+      if(cur()?.url!==job.item.url||cur()?.id!==job.item.id||JSON.stringify(cur())!==JSON.stringify(job.item)){notify('사진이 바뀌었어요. 다시 자르기를 열어주세요.');return;}
+      const next=cropImage(job.item,job.rect,{base:job.base,aspect:settings().aspect}),clean=cleanItem(next,{keepSpaces:true});
+      if(Math.abs(clean.w-next.w)>.11||Math.abs(clean.h-next.h)>.11){note.textContent='자를 영역이 너무 작거나 커요. 손잡이로 영역을 조절해주세요.';return;}
+      if(JSON.stringify(job.rect)!==JSON.stringify(job.base))change(next,{keepPop:false});else toggle('crop');
+      cropJob=null;focusStage();
+    }
+    view.append(image,rect);draw();
+    const choose=(label,value)=>pbtn(label,()=>{job.rect=value();draw();});
+    return [el('b',{text:'이미지 자르기'}),el('p',{class:'fe-note',text:'모서리를 끌어 쓸 부분을 고르세요. 안쪽을 끌면 영역이 움직여요. 원본 사진은 남아 있어요.'}),
+      el('div',{class:'fe-crop-layout'},view,el('div',{},fields,note,el('div',{class:'fe-row'},choose('원본 전체',()=>({...FULL_CROP})),...[[1,'정사각형'],[4/3,'4:3'],[16/9,'16:9']].map(([ratio,label])=>choose(label,()=>coverCrop(job.aspect,ratio)))),
+        el('div',{class:'fe-row'},pbtn('취소',()=>toggle('crop')),el('button',{class:'fe-btn primary',type:'button',onClick:apply,'data-crop-apply':''},'자르기 적용'))))];
   }
 
   function cutBody() {
