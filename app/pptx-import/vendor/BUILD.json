@@ -25,9 +25,9 @@
     "app/pptx-import/preview-punctuation.js": "8ff4f855942dde60b6302e775e5a06b58b411e34b015c129088157533934c90e",
     "app/pptx-import/worker.js": "d4e9ac47e75357e6fdcf5d38d703c337651c2c3720fde01f3bbfa071ad1823c0",
     "app/zip.js": "345e936f955665a859d7fa86d9c1b9f4846d75a944c1df0f3d0c7d477152c026",
-    "package-lock.json": "ee36510c267b4127e4565bbfda591c3a4c7ad61cf02b7b9e0fa55da94a860077",
+    "package-lock.json": "89260623fb6f73e23a775b02617784d36d1dfd346818ccdb5db167a59d1e0e84",
     "src/activity.js": "776e63454bf361306c78c91d39ccd11a1aece40f63d99e64b3756cfd2ee39a8e",
-    "src/crop.js": "7891b0315ccb320aa936cd40db2e14a9b868251c1685a96926c86f45f7fbaee4",
+    "src/crop.js": "ec9159574565f560476ede8f5292609ab74eae42d130fe0bf59a1ad8844ac1fb",
     "src/document.js": "1fc088084c243346de8c1606171d19fa27419e0ee95d26ec4137f2707aa8e22f",
     "src/gai-app.js": "b475f79811d851731cc5b65ab312b0b4b64274e7661b6a5b79e71b6e5d072073",
     "src/pixel-art.js": "533a61b81f49c6bbf8e33b65681d5db76853a2a37c7d9d089f6c00c0c0ec0089",
@@ -88,7 +88,7 @@
     },
     "pptx-worker.js": {
       "bytes": 149558,
-      "sha256": "a809f5ca7e4f31e855541276702dbdce6b47facb2128a03f4c251d9ebb836bf6"
+      "sha256": "eabb649a6ade9122047b196ff02c4abe311779829562f354e4c7c6413f12e8ca"
     },
     "preview-frame.html": {
       "bytes": 1243897,

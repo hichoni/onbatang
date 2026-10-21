@@ -28,3 +28,10 @@ export function cropImage(item, rectangle, {base=item.crop||FULL_CROP,aspect=1}=
   return {...item,x:item.x+dx*Math.cos(angle)-dy*Math.sin(angle),y:item.y+(dx*Math.sin(angle)+dy*Math.cos(angle))*aspect,
     w:round(item.w*next.w/old.w),h:round(item.h*next.h/old.h),crop:cleanCrop(next)||undefined};
 }
+// Drag the source inside a fixed crop frame. Clamp to source pixels (no empty
+// edges) and compensate in slide coordinates, including rotation and flips.
+export function panCrop(full, rectangle, dx, dy, {aspect=1}={}) {
+  const rect={...rectangle,x:Math.max(0,Math.min(1-rectangle.w,rectangle.x-dx)),y:Math.max(0,Math.min(1-rectangle.h,rectangle.y-dy))};
+  const before=cropImage(full,rectangle,{base:FULL_CROP,aspect}),after=cropImage(full,rect,{base:FULL_CROP,aspect});
+  return {rect,full:{...full,x:full.x+before.x-after.x,y:full.y+before.y-after.y}};
+}

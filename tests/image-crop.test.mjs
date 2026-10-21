@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {cleanCrop,coverCrop,cropImage,FULL_CROP} from '../src/crop.js';
+import {cleanCrop,coverCrop,cropImage,panCrop,FULL_CROP} from '../src/crop.js';
 import {cleanItem} from '../src/model.js';
 import {newRecord,migrateRecord,copyRecord} from '../app/designs.js';
 const item={t:'image',url:'data:image/png;base64,AAAA',x:50,y:50,w:40,h:40,rot:0,mask:'none',id:'ecropfixture001',assetRefs:['acropfixture001']};
@@ -23,6 +23,20 @@ test('cropping keeps source bytes, IDs, asset links and the selected pixel posit
 test('initial crop matches the old centered cover for a mismatched image/frame aspect',()=>{
   assert.deepEqual(coverCrop(2,1),{x:.25,y:0,w:.5,h:1});
   assert.deepEqual(coverCrop(1,2),{x:0,y:.25,w:1,h:.5});
+});
+
+test('panning the source leaves the crop frame fixed through rotation/flips and stops at source edges',()=>{
+ for(const rot of [0,30,90,-80])for(const fx of [false,true])for(const fy of [false,true]){
+  const full={...item,rot,fx,fy},rect={x:.2,y:.25,w:.5,h:.5},aspect=16/9;
+  const before=cropImage(full,rect,{aspect}),original=structuredClone(full);
+  for(const [dx,dy]of [[.1,-.15],[-5,8],[5,-8]]){
+   const moved=panCrop(full,rect,dx,dy,{aspect}),after=cropImage(moved.full,moved.rect,{aspect});
+   for(const key of ['x','y','w','h'])assert.ok(Math.abs(after[key]-before[key])<.00001,key);
+   assert.ok(moved.rect.x>=0&&moved.rect.y>=0&&moved.rect.x+moved.rect.w<=1&&moved.rect.y+moved.rect.h<=1);
+   assert.equal(after.url,item.url);assert.equal(after.id,item.id);
+  }
+  assert.deepEqual(full,original);
+ }
 });
 test('crop survives repeated record save/reopen and copies; invalid crop is rejected at the storage boundary',()=>{
  const record=newRecord('16:9'),photo=cleanItem({...item,assetRefs:undefined,crop:{x:.2,y:.1,w:.6,h:.8}});record.slides[0].items=[photo];
