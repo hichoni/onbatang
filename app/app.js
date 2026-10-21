@@ -18,12 +18,14 @@ import {openLessonResults} from './lesson-results-ui.js';
 import {cleanGaiActivity,gaiAppCover,gaiAppResult} from '../src/gai-app.js';
 import {mountGaiApp} from './gai-app.js';
 import {createShowTools} from './show-tools.js';
+import {PRINT_LAYOUTS,printHtml} from './print.js';
+import {findText,replaceText} from './find-replace.js';
 import {ONBATANG_VERSION} from './version.js';
 import {createGaiMaker,gaiLessonContext} from './gai-maker.js';
 import {
   createEditor, designView, designToBlob, configure, settings, reshapeItems, layoutList, layoutItems, icon, cleanDesign, hasMotion, playDesign, playTransition,
   COMBOS, TRANSITIONS, designsToVideo, canMakeVideo, canFilmScenes, filmPlan, MAX_FILM_SECONDS, videoSize, STAYS, DEFAULT_STAY, scenePlayer, dropScene, sceneUrl, youTubePlayers,
-  fontFamilyOf, fontList,
+  fontFamilyOf, fontList, textLimit,
 } from '../src/index.js';
 import { HERO_ART, HERO_VIEW } from './hero-art.js';
 import { startTour, stopTour, tourSeen, markTourSeen, HOME_STEPS, EDITOR_STEPS } from './tour.js';
@@ -623,6 +625,15 @@ function openDesign(record, isNew) {
     el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' }),
     name, O.status, ...(material ? [material] : []), ...(lesson?[lesson]:[]), ...(accountLibrary?[accountLibrary]:[]), el('span', { class: 'cv-bar-gap' }), shapes, el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' }), tourButton('editor', O), show, down);
   const shell = editorShell(O, bar);
+  // ? : 꾸미는 화면 단축키 표(글을 쓰는 칸에서는 그냥 글자다). 아무 데도 누르지 않은 때에도 듣도록 문서에 단다.
+  const onHelpKey = (e) => {
+    if (!shell.isConnected) { document.removeEventListener('keydown', onHelpKey); return; }
+    if (e.key !== '?' || e.ctrlKey || e.metaKey || e.altKey || e.isComposing || document.querySelector('.modal-backdrop, .cv-show')
+      || e.target.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return;
+    e.preventDefault();
+    openShortcuts();
+  };
+  document.addEventListener('keydown', onHelpKey);
   markRatio(O, shapes);
   setView('edit');
   app.replaceChildren(shell);
@@ -727,7 +738,7 @@ function slideView(design, aspect, sceneEdge = 640) {
 }
 // 띠의 작은 그림에 붙이는 이름: 몇 번째 장인지 + 영상 장면 · 움직임이 있는지.
 function slideLabel(i, design) {
-  const marks = [hasVideo(design) ? '영상 있음' : '', hasMotion(design) ? '움직임 있음' : ''].filter(Boolean);
+  const marks = [design.hidden ? '발표에서 숨김' : '', hasVideo(design) ? '영상 있음' : '', hasMotion(design) ? '움직임 있음' : ''].filter(Boolean);
   return `${i + 1}번째 장${marks.length ? ` (${marks.join(' · ')})` : ''}`;
 }
 function renderStrip(O) {
@@ -753,12 +764,13 @@ function renderStrip(O) {
     const design = i === O.at ? O.editor.getDesign() : d;
     const moves = hasMotion(design);
     return el('button', {
-      class: `cv-slide${i === O.at ? ' on' : ''}${moves ? ' moves' : ''}${hasVideo(design) ? ' film' : ''}`, type: 'button', 'aria-label': slideLabel(i, design),
+      class: `cv-slide${i === O.at ? ' on' : ''}${moves ? ' moves' : ''}${hasVideo(design) ? ' film' : ''}${design.hidden ? ' skip' : ''}`, type: 'button', 'aria-label': slideLabel(i, design),
       'aria-pressed': String(i === O.at), dataset: { slide: String(i) },
       onClick: () => goSlide(O, i),
     }, el('span', { class: 'cv-slide-no', text: String(i + 1) }), el('span', { class: 'cv-slide-view', 'aria-hidden': 'true' }, slideView(design, aspect)),
     el('span', { class: 'cv-slide-vd', 'aria-hidden': 'true' }, ic('video')),
-    el('span', { class: 'cv-slide-fx', 'aria-hidden': 'true' }, ic('motion')));
+    el('span', { class: 'cv-slide-fx', 'aria-hidden': 'true' }, ic('motion')),
+    el('span', { class: 'cv-slide-skip', 'aria-hidden': 'true', text: '숨김' }));
   });
   const tool = (icon, label, title, onClick, disabled = false) => el('button', { class: 'cv-slide-tool', type: 'button', title, 'aria-label': title, disabled, onClick }, ...face(icon, label));
   const del = tool('trash', '지우기', '이 장 지우기', () => {
@@ -874,8 +886,9 @@ function renderMaterialNavigation(O,left=0) {
     class:`cv-slide${index===at?' on':''}`,type:'button','aria-label':`전체 자료 ${index+1}쪽${value.page.source?.pageNumber?` · 원본 ${value.page.source.pageNumber}쪽`:''}`,
     dataset:{pageId:value.page.id},onClick:()=>navigateMaterialPage(O,node.materialValue)
    },el('span',{class:'cv-slide-no'}),el('span',{class:'cv-slide-view','aria-hidden':'true'}));}
-   node.materialValue=value;node.classList.toggle('on',index===at);node.setAttribute('aria-pressed',String(index===at));
-   node.setAttribute('aria-label',`전체 자료 ${index+1}쪽${value.page.source?.pageNumber?` · 원본 ${value.page.source.pageNumber}쪽`:''}`);
+   node.materialValue=value;node.classList.toggle('on',index===at);node.setAttribute('aria-pressed',String(index===at));node.classList.toggle('skip',!!value.page.hidden);
+   if(!node.querySelector('.cv-slide-skip'))node.append(el('span',{class:'cv-slide-skip','aria-hidden':'true',text:'숨김'}));
+   node.setAttribute('aria-label',`전체 자료 ${index+1}쪽${value.page.source?.pageNumber?` · 원본 ${value.page.source.pageNumber}쪽`:''}${value.page.hidden?' · 발표에서 숨김':''}`);
    Object.assign(node.dataset,{materialPage:String(index),documentId:value.record.id});
    if(value.record.id===O.record.id)node.dataset.slide=String(value.index);else delete node.dataset.slide;
    node.querySelector('.cv-slide-no').textContent=String(index+1);
@@ -966,16 +979,100 @@ function slideMenuGroups(O, { strip = false } = {}) {
       { icon: 'template', label: '틀 고르기', run: () => O.editor.openTab('layout') },
     ],
     [{ icon: 'pencil', label: '발표자 노트 적기', run: openNotes }],
+    strip ? [] : [
+      { icon: 'swap', label: '찾아 바꾸기', run: () => openFindReplace(O) },
+      { icon: 'check', label: '단축키 보기', hint: '?', run: () => openShortcuts() },
+    ],
     [
       { icon: 'plus', label: '새 장 더하기', run: press(add), disabled: off(add) },
       { icon: 'duplicate', label: '이 장 복제', run: press(dup), disabled: off(dup) },
       { icon: 'left', label: '앞으로 옮기기', hint: strip ? 'Alt+←' : '', run: press(left), disabled: off(left) },
       { icon: 'right', label: '뒤로 옮기기', hint: strip ? 'Alt+→' : '', run: press(right), disabled: off(right) },
     ],
-    [{ icon: 'play', label: '이 장부터 발표', run: () => present(O) }],
+    [
+      { icon: 'play', label: '이 장부터 발표', run: () => present(O) },
+      // 숨긴 장: 지우지 않고 발표 · HTML 수업 · PDF 에서만 건너뛴다(정답 장, 예비 앱 장 등). PPTX 에는 숨긴 슬라이드로 들어간다.
+      O.editor.getDesign().hidden
+        ? { icon: 'screen', label: '숨기기 풀기', run: () => setSlideHidden(O, false) }
+        : { icon: 'screen', label: '발표에서 숨기기', run: () => setSlideHidden(O, true) },
+    ],
     // 띠의 지우기는 두 번 눌러야 지워진다(실수 방지). 메뉴에서 고른 것은 이미 한 번 확인한 것이라 바로 지운다.
     [{ icon: 'trash', label: '이 장 지우기', run: press(del, 2), disabled: off(del), danger: true }],
   ];
+}
+// 꾸미는 화면의 단축키 표(? 로 연다). 발표 화면의 단축키는 발표 중에 ? 로 본다(show-keys.js).
+const EDITOR_KEYS = [
+  ['누르기 · Shift+누르기 · 빈 곳 끌기', '고르기 · 여럿 고르기'],
+  ['화살표 (Shift: 크게)', '고른 것 옮기기'],
+  ['Enter · 두 번 누르기', '글 고치기'],
+  ['Esc', '고르기 풀기 · 글 고치기 끝내기'],
+  ['Delete · Backspace', '지우기'],
+  ['Ctrl+C · Ctrl+X · Ctrl+V', '복사 · 잘라내기 · 붙여넣기'],
+  ['Ctrl+D', '복제'],
+  ['Ctrl+Z · Ctrl+Y (Ctrl+Shift+Z)', '실행 취소 · 다시 실행'],
+  ['Ctrl+A', '모두 고르기'],
+  ['Ctrl+G · Ctrl+Shift+G', '그룹으로 묶기 · 풀기'],
+  ['Ctrl+B', '굵게(글)'],
+  ['I', '스포이드: 화면에서 색 찍기'],
+  ['Alt (끄는 동안)', '가운데 맞춤 잠깐 끄기'],
+  ['우클릭 · Shift+F10', '메뉴'],
+  ['Alt+← · Alt+→ (슬라이드 목록)', '장 순서 옮기기'],
+  ['?', '이 표 열기'],
+];
+const escCloses = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeModal(); } };
+function openShortcuts() {
+  const list = el('dl', { class: 'cv-keys' }, ...EDITOR_KEYS.flatMap(([k, v]) => [el('dt', { text: k }), el('dd', { text: v })]));
+  const box = el('section', { class: 'cv-keys-box', tabindex: '-1', 'aria-labelledby': 'cv-keys-title', onKeydown: escCloses },
+    el('h2', { id: 'cv-keys-title', text: '꾸미는 화면 단축키' }), list,
+    el('p', { class: 'cv-down-note', text: '발표하는 동안의 단축키(번호로 가기 · 검은 화면 · 펜 · 발표자 화면 …)는 발표 화면에서 ? 를 눌러 봐요. Mac 에서는 Ctrl 대신 ⌘ 를 눌러요.' }));
+  openModal(box);
+  requestAnimationFrame(() => box.focus({ preventScroll: true }));
+}
+// 찾아 바꾸기: 지금 연 자료(여러 파트로 된 전체 자료면 지금 연 파트)의 모든 장 글상자와, 고르면 발표자 노트.
+function openFindReplace(O) {
+  if (O.closed || videoBusy(O) || O.inlineImport) return;
+  const find = el('input', { class: 'cv-find-input', type: 'text', 'aria-label': '찾을 글', placeholder: '찾을 글', maxlength: '200' });
+  const replace = el('input', { class: 'cv-find-input', type: 'text', 'aria-label': '바꿀 글', placeholder: '바꿀 글(비우면 지워요)', maxlength: '200' });
+  const notes = el('input', { type: 'checkbox', checked: true }), cased = el('input', { type: 'checkbox' });
+  const result = el('p', { class: 'cv-down-note', role: 'status', 'aria-live': 'polite' });
+  const hits = el('div', { class: 'cv-find-hits' });
+  const options = () => ({ find: find.value, replace: replace.value, notes: notes.checked, caseSensitive: cased.checked });
+  const slides = () => { O.slides[O.at] = O.editor.getDesign(); return O.slides; };
+  const update = () => {
+    const found = findText(slides(), options());
+    result.textContent = !find.value ? '찾을 글을 적어요.' : found.total ? `${found.slides.length}장에서 ${found.total}곳을 찾았어요. 장 번호를 누르면 그 장으로 가요.` : '찾은 곳이 없어요. 잠긴 글상자는 찾지 않아요.';
+    hits.replaceChildren(...found.slides.map(({ index, count }) => el('button', { class: `btn chip${index === O.at ? ' on' : ''}`, type: 'button', onClick: () => { goSlide(O, index); update(); } }, `${index + 1}장 · ${count}곳`)));
+    all.disabled = !found.total;
+  };
+  const all = el('button', { class: 'btn btn-primary', type: 'button', onClick: () => {
+    const r = replaceText(slides(), { ...options(), limit: textLimit });
+    if (!r.count && !r.skipped) { update(); return; }
+    O.slides = r.slides;
+    O.editor.setDesign(O.slides[O.at]);
+    renderStrip(O);
+    touched(O);
+    update();
+    result.textContent = `${r.count}곳을 바꿨어요.${r.skipped ? ` 글자 수가 넘치는 글상자 ${r.skipped}개는 바꾸지 않았어요.` : ''} 되돌리려면 반대로 한 번 더 바꿔요.`;
+  } }, '모두 바꾸기');
+  for (const input of [find, replace]) input.addEventListener('input', update);
+  for (const box of [notes, cased]) box.addEventListener('change', update);
+  find.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); const first = hits.querySelector('button'); first?.click(); } });
+  openModal(el('section', { class: 'cv-find-box', 'aria-labelledby': 'cv-find-title', onKeydown: escCloses },
+    el('h2', { id: 'cv-find-title', text: '찾아 바꾸기' }),
+    O.materialDeck ? el('p', { class: 'cv-down-note', text: '여러 파트로 된 전체 자료는 지금 연 파트의 장에서 찾아요.' }) : null,
+    el('label', { class: 'cv-find-row' }, el('span', { text: '찾기' }), find),
+    el('label', { class: 'cv-find-row' }, el('span', { text: '바꾸기' }), replace),
+    el('div', { class: 'cv-find-opts' }, el('label', {}, notes, ' 발표자 노트도'), el('label', {}, cased, ' 영어 대소문자 구분')),
+    result, hits,
+    el('div', { class: 'cv-find-actions' }, el('button', { class: 'btn btn-ghost', type: 'button', onClick: closeModal }, '닫기'), all)), { onClose: () => O.editor.refresh() });
+  update();
+  requestAnimationFrame(() => find.focus());
+}
+function setSlideHidden(O, hidden) {
+  if (O.closed || videoBusy(O)) return;
+  O.editor.patchSlide({ hidden });
+  renderStrip(O);
+  toast(hidden ? '이 장은 발표할 때 건너뛰어요. 지우지 않았고, 편집·저장·PPTX 에는 그대로 있어요.' : '이 장을 다시 발표에 넣었어요.', 3500);
 }
 function goSlide(O, i) {
   if (O.closed || i === O.at || !O.slides[i] || videoBusy(O)) return;
@@ -1183,9 +1280,13 @@ async function present(O) {
   stopTour();
   O.editor.quiet();          // 꾸미기 판에서 틀어 보던 영상을 멈추고 카메라를 끈다(발표 화면 뒤에서 소리가 나지 않게)
   // 그리는 것과 움직임의 차례가 같은 요소를 가리키도록, 정리한 디자인 하나로 둘 다 한다(그릴 때와 같은 방법으로 정리한다).
-  let entries=lessonPages(O),slides=entries.map(v=>cleanDesign(v.page,{keepSpaces:true}));
+  // 숨긴 장은 발표에서 건너뛴다(지우지 않는다). 지금 장이 숨긴 장이면 그다음 보이는 장부터.
+  const showable=()=>lessonPages(O).filter(v=>!v.page.hidden);
+  const everyPage=lessonPages(O),here=Math.max(0,everyPage.findIndex(v=>v.page.id===O.editor.getDesign().id));
+  let entries=showable(),slides=entries.map(v=>cleanDesign(v.page,{keepSpaces:true}));
+  if(!entries.length){toast('모든 장을 숨겼어요. 발표할 장의 숨기기를 풀어주세요.',4000);return;}
   const aspect = aspectOf(O.record),working=new Map(),savedResults=new Map();
-  let i=Math.max(0,entries.findIndex(v=>v.page.id===O.editor.getDesign().id)),savingActivity=false,closed=false;
+  let i=Math.max(0,entries.findIndex(v=>everyPage.findIndex(w=>w.page.id===v.page.id)>=here)),savingActivity=false,closed=false;
   let pixel=null;
   let tools = null;          // 발표 도구(검은 화면 · 펜 · 레이저 · 전체 보기 · 발표자 화면 …, show-tools.js)
   let parts = null;          // 지금 장의 요소 움직임(조종기)
@@ -1283,11 +1384,12 @@ async function present(O) {
           const updated=gai?cleanGaiActivity({...design.activity,state:cells.state}):{...design.activity,cells:[...cells]},result=gai?gaiAppResult(updated,cells,aspectOf(record)):pixelArtResult(updated,cells,aspectOf(record),pixelArtImage(updated));
           result.origin={documentId:record.id,pageId:design.id,revision:record.revision};
           const next=record.slides.map(p=>p.id===design.id?{...p,activity:updated}:p),index=next.findIndex(p=>p.id===design.id);
-          next.splice(index+1,0,result);const ids=entries.map(v=>v.page.id);ids.splice(ids.indexOf(design.id)+1,0,result.id);
+          // 전체 자료의 쪽 순서는 숨긴 장까지 모두 넣어 저장한다(발표 목록은 숨긴 장을 빼고 보여 줄 뿐이다).
+          next.splice(index+1,0,result);const ids=lessonPages(O).map(v=>v.page.id);ids.splice(ids.indexOf(design.id)+1,0,result.id);
           await commitActivityDocument(O,{...record,slides:next},ids,result.id,record.id===O.record.id?O.persistedRecord:record);
           working.set(design.id,gai?cells.state:[...cells]);savedResults.set(signature,result.id);
           if(gai&&cells.imageOmitted)toast('앱 화면 그림은 생략하고 답과 진행 상태를 저장했어요.');
-          entries=lessonPages(O);slides=entries.map(v=>cleanDesign(v.page,{keepSpaces:true}));i=slides.findIndex(p=>p.id===result.id);draw(1);
+          entries=showable();slides=entries.map(v=>cleanDesign(v.page,{keepSpaces:true}));i=slides.findIndex(p=>p.id===result.id);draw(1);
         }finally{savingActivity=false;}
       }});
       ease(host,[{opacity:0,transform:'scale(.965)'},{opacity:1,transform:'scale(1)'}],260);return;
@@ -1904,7 +2006,7 @@ function askDownload(O, btn) {
   const n = O.slides.length;
   const pref = exportPref();
   const can = canMakeVideo();
-  const pick = { kind: pref.video && can ? 'video' : pref.jpg ? 'jpg' : 'png', all: pref.all && n > 1, stay: pref.stay, pptxMode: 'editable', htmlNotes: false, size: pref.size, vsize: pref.vsize };
+  const pick = { kind: pref.video && can ? 'video' : pref.jpg ? 'jpg' : 'png', all: pref.all && n > 1, stay: pref.stay, pptxMode: 'editable', htmlNotes: false, printLayout: 'slides', size: pref.size, vsize: pref.vsize };
   // 장마다 바탕에 깐 영상이 있는지: ''(없다) · 'yes'(있다) · 'gone'(있는데 그 파일이 이 기기에 없다. 조금 뒤에 알게 된다)
   const scenes = currentSlides(O).map((d) => (hasVideo(d) ? 'yes' : ''));
   currentSlides(O).forEach((d, i) => {
@@ -1938,6 +2040,7 @@ function askDownload(O, btn) {
     // 옵션을 고를 때는 만들지 않는다. 마지막 단추에서만 현재 선택을 실행한다.
     if (pick.kind === 'pptx') { makePptx(O, {all: pick.all, mode: pick.pptxMode}); return; }
     if (pick.kind === 'html') { makeHtmlLesson(O, {notes: pick.htmlNotes}); return; }
+    if (pick.kind === 'pdf') { printDeck(O, {layout: pick.printLayout}); return; }
     if (pick.kind === 'video' && (!can || filmMs(pick.stay) > MAX_FILM_SECONDS * 1000)) return;
     closeModal();
     if (pick.kind === 'video') {
@@ -1980,7 +2083,8 @@ function askDownload(O, btn) {
     const video = pick.kind === 'video';
     const pptx = pick.kind === 'pptx';
     const html=pick.kind==='html';
-    const scopeN=(pptx||html)&&O.materialDeck?O.materialDeck.documents.reduce((total,row)=>total+(row.id===O.record.id?O.slides.length:row.slides.length),0):n;
+    const pdf=pick.kind==='pdf';
+    const scopeN=(pptx||html||pdf)&&O.materialDeck?O.materialDeck.documents.reduce((total,row)=>total+(row.id===O.record.id?O.slides.length:row.slides.length),0):n;
     const scopeAt=pptx&&O.materialDeck?materialPages(O).findIndex(value=>value.record.id===O.record.id&&value.index===O.at):O.at;
     const ms = video ? filmMs(pick.stay) : 0;
     const long = ms > MAX_FILM_SECONDS * 1000;
@@ -1989,8 +2093,9 @@ function askDownload(O, btn) {
       choice('cv-down-format', 'JPG', '용량이 작은 그림', pick.kind === 'jpg', {type: 'jpg'}, {kind: 'jpg'}),
       choice('cv-down-format', 'PPTX', 'PowerPoint 파일', pptx, {type: 'pptx'}, {kind: 'pptx'}),
       choice('cv-down-format', 'HTML 수업', '슬라이드와 활동을 함께 실행', html, {type: 'html'}, {kind: 'html'}),
+      choice('cv-down-format', 'PDF·인쇄', '종이로 뽑거나 PDF로 저장', pdf, {type: 'pdf'}, {kind: 'pdf'}),
       choice('cv-down-format', '영상', '움직임까지 담기', video, {type: 'video'}, {kind: 'video'}, can ? {} : {disabled: true, title: NO_VIDEO})))];
-    rows.push(section('저장할 쪽', html?el('p',{class:'cv-down-note',text:`전체 ${scopeN}쪽과 픽셀아트 활동을 한 HTML 파일로 담아요.`}):video
+    rows.push(section('저장할 쪽', pdf?el('p',{class:'cv-down-note',text:`전체 ${scopeN}쪽을 차례대로 담아요. 발표에서 숨긴 장은 빼요.`}):html?el('p',{class:'cv-down-note',text:`전체 ${scopeN}쪽과 픽셀아트 활동을 한 HTML 파일로 담아요. 발표에서 숨긴 장은 빼요.`}):video
       ? el('p', {class: 'cv-down-note', text: `모든 장 (${n}장)을 순서대로 영상 하나에 담아요.`})
       : scopeN > 1 ? el('div', {class: 'cv-down-chips'},
         chip(`지금 장 (${scopeAt + 1}번째)`, !pick.all, () => set({all: false}), {scope: 'one'}),
@@ -2011,6 +2116,13 @@ function askDownload(O, btn) {
         chip('함께 넣기 · 내가 발표할 때',pick.htmlNotes,()=>set({htmlNotes:true}),{notes:'on'})),
         el('p',{class:'cv-down-note',text:pick.htmlNotes?'노트는 발표자 화면(S)에서만 보여요. 이 파일을 받은 사람은 파일 안의 노트를 볼 수 있어요.':'노트를 빼고 담아요. 슬라이드와 활동은 그대로예요.'})));
     }
+    else if(pdf){
+      // 인쇄 모양: 슬라이드 한 장씩(가로) · 노트와 함께(세로, 파워포인트의 노트 페이지) · 한 쪽에 여러 장(유인물)
+      rows.push(section('인쇄 모양',el('div',{class:'cv-down-chips'},
+        ...PRINT_LAYOUTS.map(v=>chip(v.name,pick.printLayout===v.id,()=>set({printLayout:v.id}),{printLayout:v.id}))),
+        el('p',{class:'cv-down-note',text:PRINT_LAYOUTS.find(v=>v.id===pick.printLayout).hint})));
+      rows.push(el('p',{class:'cv-down-note',text:'인쇄 창이 열리면 프린터로 뽑거나, 대상에서 "PDF로 저장"을 골라 PDF 파일로 저장해요. 영상·움직임은 멈춘 모습으로 나와요.'}));
+    }
     else rows.push(section(video ? '영상 화질' : '이미지 화질',
       el('p', {class: 'cv-down-note', text: '클수록 또렷하지만 파일 용량이 커져요.'}),
       el('div', {class: `cv-sizes${video ? ' two' : ''}`}, ...(video ? videoSizes() : imageSizes()))));
@@ -2028,16 +2140,16 @@ function askDownload(O, btn) {
     body.replaceChildren(...rows);
     body.scrollTop = scrollTop;
     if (active && Object.keys(active).length) body.querySelector(Object.entries(active).map(([k, v]) => `button[data-${k}="${v}"]`).join(''))?.focus({preventScroll: true});
-    const range = video || html || pick.all ? `모든 장 ${scopeN}장` : `지금 장 (${scopeAt + 1}/${scopeN})`;
-    const label = video ? '영상' : pptx ? `PPTX ${pick.pptxMode === 'editable' ? '편집형' : '이미지형'}` : pick.kind.toUpperCase();
+    const range = video || html || pdf || pick.all ? `모든 장 ${scopeN}장` : `지금 장 (${scopeAt + 1}/${scopeN})`;
+    const label = pdf ? 'PDF·인쇄' : video ? '영상' : pptx ? `PPTX ${pick.pptxMode === 'editable' ? '편집형' : '이미지형'}` : pick.kind.toUpperCase();
     summaryTitle.textContent = `${label} · ${range}`;
     const px = video ? videoSize(aspect, VIDEO_SIZES.find(size => size.id === pick.vsize).short) : exportSize(pick.size, aspect);
-    summaryDetail.textContent = html?'인터넷 연결 없이 실행하는 수업 파일 · 원본은 보존돼요.':pptx ? 'PPTX 한 파일 · 원본과 편집 자료는 그대로 보관돼요.' : video
+    summaryDetail.textContent = pdf?`${PRINT_LAYOUTS.find(v=>v.id===pick.printLayout).name} · 인쇄 창에서 PDF로 저장할 수 있어요.`:html?'인터넷 연결 없이 실행하는 수업 파일 · 원본은 보존돼요.':pptx ? 'PPTX 한 파일 · 원본과 편집 자료는 그대로 보관돼요.' : video
       ? `${px.width} × ${px.height}px · 약 ${secondsText(ms)} · 만든 뒤 미리보고 저장해요.`
       : `${px.width} × ${px.height}px · ${pick.all && n > 1 ? `${label} ${n}장을 ZIP 한 파일로 저장해요.` : '그림 한 파일로 저장해요.'}`;
     submit.disabled = video && long;
     submit.toggleAttribute('data-pptx-save', pptx);
-    submit.replaceChildren(...face('download', video ? '영상 만들기' : `${pptx ? 'PPTX' : label} 내려받기`));
+    submit.replaceChildren(...face('download', pdf ? '인쇄 창 열기' : video ? '영상 만들기' : `${pptx ? 'PPTX' : label} 내려받기`));
   };
   draw();
   const wasInert = app.inert;
@@ -2069,13 +2181,50 @@ const saveBlob = (blob, name) => {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 30000);
 };
+// PDF·인쇄: 장마다 그림을 만들어 인쇄용 문서(보이지 않는 틀)에 깔고, 브라우저의 인쇄 창을 연다("PDF로 저장"도 여기서).
+// 바깥 라이브러리 없이 @page 로 쪽을 나눈다. 숨긴 장은 뺀다. 원본과 저장본은 바꾸지 않는다.
+async function printDeck(O,{layout='slides'}={}){
+  const abort=new AbortController(),status=el('p',{role:'status',text:'인쇄할 쪽을 준비하고 있어요…'});
+  openModal(el('section',{},el('h2',{text:'PDF·인쇄'}),status,el('button',{class:'btn',onClick:closeModal},'취소')),{onClose:()=>abort.abort()});
+  const urls=[];
+  try{
+    await persistEditorAction(O);if(O.materialLoadingPromise)await O.materialLoadingPromise;
+    const entries=lessonPages(O).filter(v=>!v.page.hidden),pages=[];
+    if(!entries.length)throw Error('모든 장을 숨겨서 뽑을 장이 없어요.');
+    for(const [index,value]of entries.entries()){
+      if(abort.signal.aborted)return;
+      status.textContent=`${index+1} / ${entries.length}쪽을 준비하고 있어요…`;
+      const aspect=aspectOf(value.record);setupApp(value.record);
+      const {width}=exportSize('medium',aspect);
+      const {blob}=await designToBlob(value.page,{width,aspect,type:'image/png'});
+      const url=URL.createObjectURL(blob);urls.push(url);
+      pages.push({url,aspect,notes:value.page.notes||'',number:index+1});
+    }
+    if(abort.signal.aborted)return;
+    status.textContent='인쇄 창을 여는 중이에요…';
+    const frame=el('iframe',{class:'cv-print-frame',title:'인쇄용 문서','aria-hidden':'true',tabindex:'-1'});
+    document.body.append(frame);
+    const doc=frame.contentDocument;
+    doc.open();doc.write(printHtml(O.materialDeck?.title||O.record.name,pages,layout));doc.close();
+    await Promise.all([...doc.images].map(img=>img.decode().catch(()=>{})));
+    if(abort.signal.aborted){frame.remove();return;}
+    closeModal();
+    const done=()=>{frame.remove();for(const url of urls)URL.revokeObjectURL(url);};
+    frame.contentWindow.addEventListener('afterprint',()=>setTimeout(done,500),{once:true});
+    setTimeout(done,10*60*1000);
+    frame.contentWindow.focus();frame.contentWindow.print();
+  }catch(error){if(!abort.signal.aborted)status.textContent=`인쇄할 쪽을 만들지 못했어요. ${error.message||''} 원본과 편집 자료는 그대로예요.`;for(const url of urls)URL.revokeObjectURL(url);}
+  finally{setupApp(O.record);}
+}
 async function makeHtmlLesson(O,{notes=false}={}){
   const abort=new AbortController(),status=el('p',{role:'status',text:'수업 화면을 만들고 있어요…'});
   const box=el('section',{},el('h2',{text:'HTML 수업 내려받기'}),status,el('button',{class:'btn',onClick:closeModal},'취소'));
   openModal(box,{onClose:()=>abort.abort()});
   try{
     await persistEditorAction(O);if(O.materialLoadingPromise)await O.materialLoadingPromise;
-    const entries=lessonPages(O),pages=[];
+    // 숨긴 장은 발표용 HTML 수업에 넣지 않는다.
+    const entries=lessonPages(O).filter(v=>!v.page.hidden),pages=[];
+    if(!entries.length)throw Error('모든 장을 숨겨서 담을 장이 없어요.');
     for(const [index,value]of entries.entries()){
       if(abort.signal.aborted)return;
       status.textContent=`${index+1} / ${entries.length}쪽을 수업에 담고 있어요…`;

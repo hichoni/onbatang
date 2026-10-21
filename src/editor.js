@@ -9,7 +9,7 @@ import {
   cleanBg, cleanItems, cleanDesign, emptyDesign, cleanItem, cleanImg, moveLayer, newPresetText, newEmoji, newShape, newArt, newYouTube, newPhoto, moveItem, rotateItem,
   designMotion, reorder, duplicateItem, pasteItem, itemLabel, sizeOf, resizeTo, sizeRange, alignItem, coverItem, layoutItems, EDGE, canEdge, canRound, cornerOf, THICK, isLine, thickOf, thicken,
   designVideo, cleanVideo, trimVideo, videoSeconds, videoTime, VIDEO_FITS, MIN_VIDEO, rebaseItems, alignBoxes, distributeBoxes, clampShift, scaleItems, regroup, newGroupId,
-  styleOf, applyStyle,
+  styleOf, applyStyle, LINE_SPACINGS, ALT_LIMIT,
 } from './model.js';
 import { ENTERS, COMBOS, TRANSITIONS, STILL, planMotion, playEnter, playDesign, playTransition } from './motion.js';
 import { searchStickers } from './stickers.js';
@@ -229,7 +229,7 @@ export function createEditor({
   const camBox = el('div', { class: 'fe-cam', role: 'group', 'aria-label': '카메라로 찍기', tabindex: '-1' });
   // 발표자 노트: 그 장을 발표할 때 발표자만 보는 글. 그림에는 나오지 않는다. 프로젝트가 notes 조각을 놓을 자리를 정한다.
   const notesInput = el('textarea', {
-    class: 'fe-notes-input', rows: '3', maxlength: String(NOTES_LIMIT), spellcheck: 'false', 'aria-label': '발표자 노트',
+    class: 'fe-notes-input', rows: '3', maxlength: String(NOTES_LIMIT), spellcheck: 'true', 'aria-label': '발표자 노트',
     placeholder: '발표할 때 나만 볼 메모를 적어요. 슬라이드 그림에는 나오지 않아요.',
     onInput: () => {
       if (!card) return;
@@ -1107,6 +1107,7 @@ export function createEditor({
           row('crop', '자르기', '', openCrop),
           row('swap', '사진 바꾸기', '', replacePhoto, { disabled: busy }),
           row('cover', '바탕으로 깔기', '', toBackground),
+          row('pencil', it.alt ? '그림 설명 고치기' : '그림 설명 적기', '', () => { if (pop !== 'alt') toggle('alt'); }),
         ] : [],
         [row('align', '페이지 가운데로', '', centerOnPage)],
         [
@@ -2285,6 +2286,7 @@ export function createEditor({
           title: `정렬: ${ALIGN_NAME[it.align]} (누를 때마다 왼쪽 → 가운데 → 오른쪽)`, name: `정렬: ${ALIGN_NAME[it.align]}`, cls: 'icon align',
         }),
         pick('highlight', '바탕색', 'bgc', { title: '글 뒤에 색 깔기' }),
+        pick('border', '효과', 'textfx', { title: '줄 간격 · 글 테두리 · 그림자' }),
         tb(icon('pencil'), () => startEdit(true), { title: '글 고치기 (Enter): 카드에서 글을 두 번 눌러도 돼요', name: '글 고치기', on: editing === sel, cls: 'icon edit' }));
     } else if (it.t === 'shape') {
       // 면으로 된 도형은 채우기·테두리를 따로 정한다(네모·둥근 네모는 모서리도). 선·체크처럼 가는 꾸밈은 색만 바꾼다.
@@ -2320,6 +2322,7 @@ export function createEditor({
         tb(lab('crop', '자르기'), openCrop, {title:'사진 위에서 바로 잘라요 · 사진을 두 번 눌러도 열려요',name:'이미지 자르기',cls:'crop'}),
         tb(lab('eraser', '배경 제거'), () => (pop === 'cut' ? toggle('cut') : openCut()), { on: pop === 'cut', title: '사진의 배경을 투명하게 지워요', name: '배경 제거', cls: 'has-pop cut' }),
         pick('mask', '모양', 'mask', { title: '사진의 테두리 모양(동그라미 · 둥근 네모 …)' }),
+        pick('pencil', it.alt ? '설명 ✓' : '설명', 'alt', { title: '그림 설명: 화면을 읽어 주는 프로그램과 PPTX 에 쓰여요' }),
         tb(lab('cover', '배경으로'), toBackground, { title: '카드에 꽉 차게 키워 맨 뒤에 깔아요', name: '배경으로 깔기', cls: 'cover' }));
     }
 
@@ -2430,6 +2433,39 @@ export function createEditor({
         class: `fe-chip${it.mask === m.id ? ' on' : ''}`, type: 'button', 'aria-pressed': String(it.mask === m.id), onClick: () => change({ mask: m.id }),
       }, m.name)))];
     } else if (pop === 'cut' && it.t === 'image' && cut) body = cutBody();
+    else if (pop === 'textfx' && it.t === 'text') {
+      // 글 효과: 줄 간격 · 글 테두리 · 그림자. 사진 위에 놓은 제목이 잘 읽히게.
+      const chip = (label, on, patch, data) => el('button', {
+        class: `fe-chip${on ? ' on' : ''}`, type: 'button', 'aria-pressed': String(on), dataset: data, onClick: () => change(patch),
+      }, label);
+      const lh = it.lh || 1.3;
+      body = [
+        el('div', { class: 'fe-poshead', text: '줄 간격' }),
+        el('div', { class: 'fe-row' }, ...LINE_SPACINGS.map((v) => chip(String(v), Math.abs(lh - v) < .001, { lh: v }, { lineSpacing: String(v) }))),
+        el('div', { class: 'fe-poshead', text: '글 테두리' }),
+        el('div', { class: 'fe-row' },
+          chip('없음', !it.stroke, { stroke: undefined }, { stroke: 'none' }),
+          chip('흰 테두리', it.stroke === '#ffffff', { stroke: '#ffffff' }, { stroke: 'white' }),
+          chip('검은 테두리', it.stroke === '#1d2433', { stroke: '#1d2433' }, { stroke: 'dark' })),
+        el('div', { class: 'fe-poshead', text: '그림자' }),
+        el('div', { class: 'fe-row' },
+          chip('없음', !it.shadow, { shadow: undefined }, { shadow: 'none' }),
+          chip('그림자', !!it.shadow, { shadow: true }, { shadow: 'on' })),
+        el('p', { class: 'fe-note', text: '테두리와 그림자는 그림·영상·PPTX 로 내려받을 때도 함께 나와요.' }),
+      ];
+    } else if (pop === 'alt' && it.t === 'image') {
+      // 그림 설명(대체 텍스트): 다 쓰고 칸을 벗어나거나 Enter 를 누르면 저장한다(글자마다 되돌리기 기록이 쌓이지 않게).
+      const box = el('textarea', { class: 'fe-alt-input', rows: '3', maxlength: String(ALT_LIMIT), 'aria-label': '그림 설명', placeholder: '예: 운동장에서 줄넘기를 하는 학생들', value: it.alt || '' });
+      const save = () => { if ((cur()?.alt || '') !== box.value.trim()) change({ alt: box.value }); };
+      box.addEventListener('change', save);
+      box.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); save(); box.blur(); } e.stopPropagation(); });
+      body = [
+        el('div', { class: 'fe-poshead', text: '그림 설명' }),
+        box,
+        el('p', { class: 'fe-note', text: '눈이 불편한 친구에게 화면을 읽어 주는 프로그램이 이 글을 읽어요. PPTX 로 내려받으면 PowerPoint 의 "대체 텍스트"에 들어가요.' }),
+      ];
+      requestAnimationFrame(() => box.focus({ preventScroll: true }));
+    }
     popBox.hidden = !body;
     popBox.replaceChildren(...(body ? [
       el('button', { class: 'fe-pop-close', type: 'button', 'aria-label': '닫기', title: '닫기 (Esc)', onClick: () => toggle(pop) }, icon('close')),
@@ -3511,6 +3547,12 @@ export function createEditor({
     stage, toolbar, panel, mount, setDesign,
     /** 발표자 노트 칸(접고 펴는 칸). 프로젝트가 그림 아래 등 원하는 자리에 놓는다. 놓지 않으면 노트는 그대로 저장만 된다. */
     notes,
+    /** 장(슬라이드) 자체의 표시를 바꾼다: 지금은 hidden(발표에서 건너뛰기)만. 그림이 아니라서 되돌리기 기록에는 넣지 않는다. */
+    patchSlide: (patch) => {
+      if (!card || !patch || typeof patch !== 'object') return;
+      if ('hidden' in patch) { if (patch.hidden === true) card.hidden = true; else delete card.hidden; }
+      onChange();
+    },
     /** 카드 밖(그림 둘레의 빈 곳)을 우클릭했을 때: 고르기를 풀고 카드의 빈 곳 메뉴(붙여넣기 · 되돌리기 · slideMenu)를 띄운다. */
     menuAt: (x, y) => { if (!card) return; select(-1); openMenu(x, y, { keep: true }); },
     /** 프로젝트가 만든 메뉴를 편집기와 같은 모양으로 띄운다(슬라이드 목록 등). groups: [[{ icon, label, hint?, run, disabled?, danger? }]] */

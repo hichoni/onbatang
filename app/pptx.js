@@ -89,7 +89,10 @@ function nativeText(item, box, id, size, warn) {
   const family = typeface(item, warn), fontSize = Math.round(requestedSize);
   warn('FONT_NOT_EMBEDDED', '글자는 편집할 수 있으며, 받는 기기에 글꼴이 없으면 다른 글꼴로 보일 수 있어요.', {font: family});
   const style = `lang="ko-KR" sz="${fontSize}" b="${item.bold ? 1 : 0}" i="${item.italic ? 1 : 0}"${item.under ? ' u="sng"' : ''}`;
-  const properties = `<a:rPr ${style}>${solid(item.color, item.op)}<a:latin typeface="${xml(family)}"/><a:ea typeface="${xml(family)}"/><a:cs typeface="${xml(family)}"/></a:rPr>`;
+  // 글 테두리(a:ln)와 그림자(a:outerShdw). 화면의 테두리는 글자 크기의 약 9%라 PowerPoint 에서도 그 굵기로 맞춘다.
+  const outline = item.stroke ? `<a:ln w="${Math.round(requestedSize / 100 * 12700 * .09)}">${solid(item.stroke, item.op)}</a:ln>` : '';
+  const shadow = item.shadow ? '<a:effectLst><a:outerShdw blurRad="50800" dist="25400" dir="5400000" algn="t" rotWithShape="0"><a:srgbClr val="000000"><a:alpha val="50000"/></a:srgbClr></a:outerShdw></a:effectLst>' : '';
+  const properties = `<a:rPr ${style}>${outline}${solid(item.color, item.op)}${shadow}<a:latin typeface="${xml(family)}"/><a:ea typeface="${xml(family)}"/><a:cs typeface="${xml(family)}"/></a:rPr>`;
   const inset = item.bgc ? Math.round(item.size * size.width / 100 * .5) : 0;
   // CSS line-height multiplies the font size. DrawingML percentages multiply
   // the font's normal line metrics instead, making otherwise identical text taller.
@@ -100,7 +103,7 @@ function nativeText(item, box, id, size, warn) {
   return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${xml(item.id || `글상자 ${id}`)}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr>${transform(box, item)}<a:prstGeom prst="${item.bgc ? 'roundRect' : 'rect'}"><a:avLst/></a:prstGeom>${item.bgc ? solid(item.bgc, item.op) : '<a:noFill/>'}<a:ln><a:noFill/></a:ln></p:spPr><p:txBody><a:bodyPr wrap="${item.nowrap ? 'none' : 'square'}" lIns="${inset}" rIns="${inset}" tIns="${Math.round(inset * .44)}" bIns="${Math.round(inset * .44)}" anchor="${{top: 't', middle: 'ctr', bottom: 'b'}[item.valign] || 't'}"><a:noAutofit/></a:bodyPr><a:lstStyle/>${paragraphs}</p:txBody></p:sp>`;
 }
 function picture(box, id, relation, name, item = {}, crop = '') {
-  return `<p:pic><p:nvPicPr><p:cNvPr id="${id}" name="${xml(name)}"/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="${relation}">${item.op < 100 ? `<a:alphaModFix amt="${Math.round(item.op * 1000)}"/>` : ''}</a:blip>${crop}<a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr>${transform(box, item)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:ln><a:noFill/></a:ln></p:spPr></p:pic>`;
+  return `<p:pic><p:nvPicPr><p:cNvPr id="${id}" name="${xml(name)}"${item.alt ? ` descr="${xml(item.alt)}"` : ''}/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="${relation}">${item.op < 100 ? `<a:alphaModFix amt="${Math.round(item.op * 1000)}"/>` : ''}</a:blip>${crop}<a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr>${transform(box, item)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:ln><a:noFill/></a:ln></p:spPr></p:pic>`;
 }
 function canvasBlob(canvas) {
   return new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new PptxExportError('RASTER_FAILED', '그림을 파일로 만들지 못했어요.')), 'image/png'));
@@ -273,7 +276,7 @@ export async function createPptx({slides, aspect = 16 / 9, size, title = '온바
       }
     }
     abort(signal);
-    add(`ppt/slides/slide${pageNumber}.xml`, XML + `<p:sld ${namespaces}><p:cSld><p:bg><p:bgPr>${solid(backgroundOf(design.bg).bg)}<a:effectLst/></p:bgPr></p:bg><p:spTree>${group}${shapes.join('')}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>`);
+    add(`ppt/slides/slide${pageNumber}.xml`, XML + `<p:sld ${namespaces}${design.hidden ? ' show="0"' : ''}><p:cSld><p:bg><p:bgPr>${solid(backgroundOf(design.bg).bg)}<a:effectLst/></p:bgPr></p:bg><p:spTree>${group}${shapes.join('')}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>`);
     add(`ppt/slides/_rels/slide${pageNumber}.xml.rels`, rels(relations));
     slideIds.push(`<p:sldId id="${256 + index}" r:id="rId${index + 2}"/>`);
     content.push([`/ppt/slides/slide${pageNumber}.xml`, 'application/vnd.openxmlformats-officedocument.presentationml.slide+xml']);

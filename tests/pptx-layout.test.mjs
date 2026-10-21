@@ -48,7 +48,9 @@ test('PPT typography fields are bounded and only local allowlisted typefaces are
   const text=cleanItem({...label,h:999,lh:999,valign:'evil',typeface:'url(https://example.test/font)'});
   assert.equal(text.h,140);assert.equal(text.lh,4);assert.equal(text.valign,'top');assert.equal(text.typeface,undefined);
   const ordinary=cleanItem({...label,source:{kind:'local'}});
-  for(const key of ['h','valign','lh','nowrap','typeface']) assert.equal(ordinary[key],undefined);
+  for(const key of ['h','valign','nowrap','typeface']) assert.equal(ordinary[key],undefined);
+  // Line spacing is an ordinary text setting too (toolbar 줄 간격), still bounded.
+  assert.equal(ordinary.lh,label.lh);assert.equal(cleanItem({...label,source:{kind:'local'},lh:999}).lh,4);
 });
 
 test('render-only slide layout retains typography after private provenance is stripped', () => {

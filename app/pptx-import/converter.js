@@ -1,7 +1,7 @@
 import {inflateSync,zlibSync} from 'fflate';
 import {DOMParser} from '@xmldom/xmldom';
 import {crc32} from '../zip.js';
-import {cleanSize,DOCUMENT_LIMITS,SLIDE_LIMITS,legacyId,cleanNotes,slideNotes} from '../../src/document.js';
+import {cleanSize,DOCUMENT_LIMITS,SLIDE_LIMITS,legacyId,cleanNotes,slideNotes,cleanAlt} from '../../src/document.js';
 import {importConvertedDocument} from '../import-document.js';
 import {bulletChar,autoNumber} from './bullets.js';
 
@@ -382,7 +382,8 @@ async function pageData(context,path,pageNumber){
   if(root.namespaceURI!==NS.p||root.localName!=='sld')fail('INVALID_SLIDE','슬라이드 XML이 올바르지 않아요.',{pageNumber});
   const text=rawSlideText(doc),cSld=direct(root,'cSld',NS.p),tree=direct(cSld,'spTree',NS.p),items=[],seen=new Set();
   if(!tree)reject('INVALID_SLIDE','슬라이드 요소 목록이 없어요.');
-  if(attr(root,'show')==='0')warn('HIDDEN_SLIDE','원본에서 숨긴 장이에요. 선택하면 가져옵니다.');
+  const hidden=attr(root,'show')==='0';
+  if(hidden)warn('HIDDEN_SLIDE','원본에서 숨긴 장이에요. 가져오면 온바탕에서도 발표할 때 건너뛰는 숨긴 장이 돼요.');
   if(all(root,'timing',NS.p).length)warn('ANIMATION_OMITTED','애니메이션은 실행하지 않고 모든 요소의 정적 배치를 가져옵니다. 겹쳐 나타나는 내용은 원본과 비교해 주세요.');
   if(all(root,'transition',NS.p).length)warn('TRANSITION_OMITTED','장면 전환 효과는 가져오지 않아요.');
   const pageRels=rels.get(path)||new Map();let notesText='',speakerNotes='',inheritedBackground,theme,masterTextStyles;
@@ -442,7 +443,8 @@ async function pageData(context,path,pageNumber){
         if(!stretch||fillRect&&['l','t','r','b'].some(k=>Number(attr(fillRect,k)||0)!==0))fail('UNSUPPORTED_IMAGE_FILL','늘인 그림의 안쪽 여백이나 채우기 방식은 아직 가져올 수 없어요.');
         if(g.w<0.1||g.h<0.1||g.w>300*Math.max(1,size.height/size.width)||g.h>300*Math.max(1,size.width/size.height))fail('UNSUPPORTED_GEOMETRY','그림 크기가 편집 범위를 벗어났어요.');
         const {bytes,mime}=await rasterPicture(files[rel.target],rel.target,{crop:['l','t','r','b'].map(k=>Number(attr(crop,k)||0)/100000),mask:preset==='ellipse'?'ellipse':null,aspect:g.width/g.height},warn);
-        items.push({...meta('image'),t:'image',...position(g),url:`data:${mime};base64,${base64(bytes)}`});continue;
+        const alt=cleanAlt(attr(identity,'descr'));
+        items.push({...meta('image'),t:'image',...position(g),url:`data:${mime};base64,${base64(bytes)}`,...(alt?{alt}:{})});continue;
       }
       const body=direct(object,'txBody',NS.p),value=body?extractText(body):'',solid=direct(props,'solidFill'),line=direct(props,'ln'),noFill=direct(props,'noFill');
       const shapes={rect:'rect',roundRect:'round',ellipse:'circle',triangle:'tri',diamond:'diamond',rightArrow:'arrow',leftArrow:'arrow',wedgeRectCallout:'bubble'},custom=direct(props,'custGeom'),capsule=custom&&customCapsule(custom,g),stroke=visibleLine(line);
@@ -541,7 +543,7 @@ async function pageData(context,path,pageNumber){
   }
   if(itemBytes>PPTX_LIMITS.documentBytes-4096)reject('DOCUMENT_SIZE_LIMIT','이 장의 편집 데이터가 저장 한도를 넘어요.');
   return {pageNumber,title:text.split('\n').find(v=>v.trim())?.slice(0,80)||`${pageNumber}쪽`,text,notesText,fontUsage,warnings,canImport,estimatedBytes:itemBytes+1024,
-    slide:{id:legacyId('p',`${source.sha256}:${pageNumber}`),bg,...slideNotes({notes:speakerNotes}),source:{kind:'pptx',sourceDocumentId:source.sourceDocumentId,assetId:source.assetId,pageNumber,sha256:source.sha256},assetRefs:[source.assetId],items:canImport?items:[]}};
+    slide:{id:legacyId('p',`${source.sha256}:${pageNumber}`),bg,...slideNotes({notes:speakerNotes}),...(hidden?{hidden:true}:{}),source:{kind:'pptx',sourceDocumentId:source.sourceDocumentId,assetId:source.assetId,pageNumber,sha256:source.sha256},assetRefs:[source.assetId],items:canImport?items:[]}};
 }
 
 async function readPptx(file,options={}){

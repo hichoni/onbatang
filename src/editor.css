@@ -747,3 +747,7 @@
 }
 .fe-notes-input:focus { outline: 2px solid var(--fe-primary); outline-offset: 0; border-color: transparent; background: #fff; }
 @media (prefers-reduced-motion: reduce) { .fe-notes > summary::before { transition: none; } }
+
+/* 그림 설명 칸 */
+.fe-alt-input { box-sizing: border-box; width: 100%; min-height: 60px; resize: vertical; padding: 8px 10px; border: 1px solid var(--fe-line); border-radius: 8px; font: inherit; font-size: .9rem; line-height: 1.5; color: var(--fe-text); background: #fbfcff; }
+.fe-alt-input:focus { outline: 2px solid var(--fe-primary); outline-offset: 0; border-color: transparent; background: #fff; }

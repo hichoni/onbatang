@@ -25,6 +25,7 @@ export function itemView(item) {
     if (family) node.style.fontFamily = `"${family}", var(--fe-font, sans-serif)`;
     node.style.color = item.color;
     if (item.bgc) node.style.background = item.bgc;
+    node.style.textShadow = textShadow(item);
     if (!item.nowrap && hangsPunctuation(item)) hangParagraphEnds(node, item.text);
   } else if (item.t === 'emoji') {
     node = el('div', { class: 'fi fi-emoji', text: item.ch });
@@ -43,7 +44,7 @@ export function itemView(item) {
     const thumb = el('img', { class: 'fi-yt-thumb', src: ytThumb(item.yt), alt: '', draggable: 'false', decoding: 'async', referrerPolicy: 'no-referrer', onError: () => thumb.remove() });
     node = el('div', { class: 'fi fi-yt', dataset: { yt: item.yt, start: String(item.start || 0), auto: item.auto ? '1' : '0' } }, thumb, el('span', { class: 'fi-yt-play', html: YT_PLAY }));
   } else {
-    const img = el('img', { class: item.crop ? 'fi-crop-source' : `fi fi-image mk-${item.mask}`, src: item.url, alt: '', draggable: 'false', onError: () => node.classList.add('broken') });
+    const img = el('img', { class: item.crop ? 'fi-crop-source' : `fi fi-image mk-${item.mask}`, src: item.url, alt: item.alt || '', draggable: 'false', onError: () => node.classList.add('broken') });
     node = item.crop ? el('div', {class:`fi fi-image fi-cropped mk-${item.mask}`}, img) : img;
   }
   placeItem(node, item);
@@ -83,6 +84,13 @@ export function shapeThumb(id) {
 }
 
 /** 요소의 자리·크기·기울기·투명도를 화면에 반영한다(끌거나 막대를 움직이는 동안에는 이것만 다시 부른다). */
+// 글 테두리(stroke)는 여덟 방향 그림자로 그린다(글자 안쪽을 깎지 않고, 그림으로 내보낼 때도 같은 모양). 그림자(shadow)는 그 뒤에 한 겹.
+const RING = [[-1, -1], [1, -1], [-1, 1], [1, 1], [0, -1], [0, 1], [-1, 0], [1, 0]];
+export function textShadow(item) {
+  const out = item.stroke ? RING.map(([x, y]) => `${x * .045}em ${y * .045}em 0 ${item.stroke}`) : [];
+  if (item.shadow) out.push('.05em .09em .18em rgba(0, 0, 0, .5)');
+  return out.join(', ');
+}
 export function placeItem(node, item) {
   node.style.left = `${item.x}%`;
   node.style.top = `${item.y}%`;

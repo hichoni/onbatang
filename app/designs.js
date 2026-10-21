@@ -9,7 +9,7 @@
 // 그림은 이 기기(브라우저의 IndexedDB, store.js)에만 저장된다. 서버로는 아무것도 보내지 않는다.
 
 /** 고를 수 있는 화면 비율(aspect 는 가로 ÷ 세로). */
-import { SCHEMA_VERSION, DOCUMENT_LIMITS, DocumentError, fail, isId, newId, legacyId, cleanSize, metadata, cleanAssets, validatePageInput, validateReferences, slideNotes } from '../src/document.js';
+import { SCHEMA_VERSION, DOCUMENT_LIMITS, DocumentError, fail, isId, newId, legacyId, cleanSize, metadata, cleanAssets, validatePageInput, validateReferences, slideNotes, slideHidden } from '../src/document.js';
 import { cleanActivity } from '../src/activity.js';
 import {cleanCrop} from '../src/crop.js';
 export { SCHEMA_VERSION, DocumentError };
@@ -111,7 +111,7 @@ export function slideVideo(slide) {
   return { video };
 }
 /** 장에 딸린 것 모두(움직임 · 영상 장면 · 발표자 노트). 슬라이드를 새로 짜 맞추는 곳({ bg, items } 를 만드는 곳)마다 함께 펼쳐 넣는다(빠뜨리면 저장하면서 사라진다). */
-export const slideExtra = (slide) => ({ ...metadata(slide, { identity: true }), ...slideMotion(slide), ...slideVideo(slide), ...slideNotes(slide), ...(slide?.activity === undefined ? {} : {activity:cleanActivity(slide.activity)}) });
+export const slideExtra = (slide) => ({ ...metadata(slide, { identity: true }), ...slideMotion(slide), ...slideVideo(slide), ...slideNotes(slide), ...slideHidden(slide), ...(slide?.activity === undefined ? {} : {activity:cleanActivity(slide.activity)}) });
 export function withSlideMotion(slide, motion) {
   const { pa, tr, ...extra } = slideExtra(slide);
   return { bg: slide.bg, items: slide.items, ...extra, ...slideMotion(motion) };
@@ -135,7 +135,7 @@ export function unusedVideos(files, designId, used, more = []) {
 }
 
 // Visual fields remain compatible with model.js; nested extension data is explicitly validated.
-const ITEM_FIELDS = ['t', 'x', 'y', 'w', 'h', 'rot', 'op', 'lock', 'g', 'an', 'aw', 'fx', 'fy', 'text', 'size', 'color', 'font', 'bold', 'italic', 'under', 'align', 'valign', 'lh', 'nowrap', 'hangingPunct', 'typeface', 'bgc', 'ch', 'shape', 'r', 'line', 'lc', 'hollow', 'art', 'yt', 'start', 'auto', 'url', 'path', 'mask'];
+const ITEM_FIELDS = ['t', 'x', 'y', 'w', 'h', 'rot', 'op', 'lock', 'g', 'an', 'aw', 'fx', 'fy', 'text', 'size', 'color', 'font', 'bold', 'italic', 'under', 'align', 'valign', 'lh', 'nowrap', 'hangingPunct', 'typeface', 'bgc', 'ch', 'shape', 'r', 'line', 'lc', 'hollow', 'art', 'yt', 'start', 'auto', 'url', 'path', 'mask', 'alt', 'stroke', 'shadow'];
 const cleanSlide = (d, index, documentId) => {
   if (!d || typeof d !== 'object' || Array.isArray(d)) fail('INVALID_PAGE', `slides.${index}`, d);
   const pageId = d.id ?? legacyId('p', `${documentId}:page:${index}`);
