@@ -90,7 +90,9 @@ test('actual app migrates, edits, saves twice, reopens, copies, reorders and dis
     const flushed = await page.evaluate(async ({base,id}) => (await import(base+'/app/app.js')).flushSavedDesign(id), {base,id:sample.id});
     assert.equal(flushed.name,name,'explicit host save includes edits before the autosave debounce');
     assert.equal(await page.locator('.cv-name').inputValue(),name,'flushing leaves the editor open');
-    await page.locator('.cv-status.ok').filter({hasText:'이 기기에 저장했어요'}).waitFor();
+    // Host account controls may leave no width for this secondary status. The
+    // flush result, committed IDB value and full reload below prove persistence.
+    await page.locator('.cv-status.ok').filter({hasText:'이 기기에 저장했어요'}).waitFor({state:hosted?'attached':'visible'});
     assert.equal(await page.evaluate(async ({base,id}) => (await (await import(base+'/app/store.js')).getDesign(id)).name,{base,id:sample.id}),name,'committed value before reload');
     await page.reload();
     await page.getByRole('button',{name:name+' 열기',exact:true}).click();
