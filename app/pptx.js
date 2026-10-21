@@ -5,7 +5,7 @@ import {cleanDesign, settings, fontList, backgroundOf, hangsPunctuation} from '.
 import {designToBlob, designSheet} from '../src/export.js';
 import {itemView, paintCard} from '../src/render.js';
 import {sceneFrame} from '../src/scene.js';
-import {linkEnds} from '../src/links.js';
+import {linkEnds, linkControl} from '../src/links.js';
 
 export const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 export const PPTX_MAX_SLIDES = 200;
@@ -70,10 +70,21 @@ function itemBox(item, size, textHeight) {
 // 연결선 → PowerPoint 의 직선 연결선(straightConnector1). 굵기 · 색 · 점선 · 화살표 머리가 그대로 고칠 수 있게 들어간다.
 // (두 도형에 "붙는" 연결은 하지 않는다: PowerPoint 에서 도형을 옮기면 선은 제자리에 남는다.)
 function nativeLink(item, id, size) {
-  const [[x1, y1], [x2, y2]] = linkEnds(item, settings().aspect).map(([x, y]) => [x * size.width / 100, y * size.height / 100]);
-  const flip = `${x2 < x1 ? ' flipH="1"' : ''}${y2 < y1 ? ' flipV="1"' : ''}`;
+  const toEmu = ([x, y]) => [x * size.width / 100, y * size.height / 100];
+  const [[x1, y1], [x2, y2]] = linkEnds(item, settings().aspect).map(toEmu);
   const head = item.head === 'both' ? '<a:headEnd type="triangle"/>' : '', tail = item.head !== 'none' ? '<a:tailEnd type="triangle"/>' : '';
-  return `<p:cxnSp><p:nvCxnSpPr><p:cNvPr id="${id}" name="${xml(item.id || `연결선 ${id}`)}"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr><p:spPr><a:xfrm${flip}><a:off x="${Math.round(Math.min(x1, x2))}" y="${Math.round(Math.min(y1, y2))}"/><a:ext cx="${Math.max(1, Math.round(Math.abs(x2 - x1)))}" cy="${Math.max(1, Math.round(Math.abs(y2 - y1)))}"/></a:xfrm><a:prstGeom prst="straightConnector1"><a:avLst/></a:prstGeom><a:ln w="${Math.max(1, Math.round(item.line / 100 * size.width))}" cap="${item.dash ? 'flat' : 'rnd'}">${solid(item.color, item.op)}${item.dash ? '<a:prstDash val="dash"/>' : ''}${head}${tail}</a:ln></p:spPr></p:cxnSp>`;
+  const ln = `<a:ln w="${Math.max(1, Math.round(item.line / 100 * size.width))}" cap="${item.dash ? 'flat' : 'rnd'}">${solid(item.color, item.op)}${item.dash ? '<a:prstDash val="dash"/>' : ''}${head}${tail}</a:ln>`;
+  const control = linkControl(item, settings().aspect);
+  if (control) {
+    // 곡선: 2차 베지어 하나로 된 열린 도형(채우기 없음). 화살표 머리는 선(ln)에 붙어 그대로 고칠 수 있다.
+    const [qx, qy] = toEmu(control);
+    const left = Math.min(x1, x2, qx), top = Math.min(y1, y2, qy);
+    const w = Math.max(1, Math.round(Math.max(x1, x2, qx) - left)), h = Math.max(1, Math.round(Math.max(y1, y2, qy) - top));
+    const pt = (x, y) => `<a:pt x="${Math.round(x - left)}" y="${Math.round(y - top)}"/>`;
+    return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${xml(item.id || `연결선 ${id}`)}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${Math.round(left)}" y="${Math.round(top)}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm><a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="0" t="0" r="r" b="b"/><a:pathLst><a:path w="${w}" h="${h}" fill="none"><a:moveTo>${pt(x1, y1)}</a:moveTo><a:quadBezTo>${pt(qx, qy)}${pt(x2, y2)}</a:quadBezTo></a:path></a:pathLst></a:custGeom><a:noFill/>${ln}</p:spPr></p:sp>`;
+  }
+  const flip = `${x2 < x1 ? ' flipH="1"' : ''}${y2 < y1 ? ' flipV="1"' : ''}`;
+  return `<p:cxnSp><p:nvCxnSpPr><p:cNvPr id="${id}" name="${xml(item.id || `연결선 ${id}`)}"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr><p:spPr><a:xfrm${flip}><a:off x="${Math.round(Math.min(x1, x2))}" y="${Math.round(Math.min(y1, y2))}"/><a:ext cx="${Math.max(1, Math.round(Math.abs(x2 - x1)))}" cy="${Math.max(1, Math.round(Math.abs(y2 - y1)))}"/></a:xfrm><a:prstGeom prst="straightConnector1"><a:avLst/></a:prstGeom>${ln}</p:spPr></p:cxnSp>`;
 }
 function nativeShape(item, box, id, size) {
   const rounded = ['round', 'pill', 'line'].includes(item.shape) || item.r > 0;

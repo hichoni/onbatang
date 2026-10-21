@@ -153,3 +153,35 @@ test('duplicating the slide and the joined pieces keeps the copies joined; PNG a
   assert.equal(out.arrow, true);
   assert.deepEqual(external, []);
 });
+
+test('a connector turns into a curve from its toolbar, flips its bend, and the PNG draws the curve', options, async t => {
+  const {page, external} = await setup(t);
+  const shapes = page.locator('.cv-canvas .fe-card .fi-shape');
+  await shapes.nth(0).click();
+  await shapes.nth(1).click({modifiers: ['Shift']});
+  await page.locator('.fe-bar button').filter({hasText: '연결선'}).click();
+  await page.locator('.cv-canvas .fe-card .fi-link').waitFor();
+  const [p1, p2] = await ends(page);
+  await page.mouse.click((p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2);
+  await page.locator('.fe-bar button').filter({hasText: '화살표'}).click();
+  await page.locator('[data-curve="on"]').click();
+  await saved(page, r => r.slides[0].items.find(it => it.t === 'link')?.curve === 1);
+  assert.equal(await page.locator('.cv-canvas .fe-card .fi-link path.fi-link-line').count(), 1);
+  await page.locator('[data-bend-link="1"]').click();
+  await saved(page, r => r.slides[0].items.find(it => it.t === 'link')?.curve === -1);
+  // The curve's midpoint (t = .5) is inked in the exported picture; the straight midpoint is not.
+  const out = await page.evaluate(async () => {
+    const {designToCanvas, cleanDesign} = await import('/src/index.js');
+    const {linkEnds, linkControl} = await import('/src/links.js');
+    const slide = cleanDesign((await window.readSaved()).slides[0], {keepSpaces: true});
+    const link = slide.items.find(it => it.t === 'link');
+    const [[x1, y1], [x2, y2]] = linkEnds(link, 16 / 9), [cx, cy] = linkControl(link, 16 / 9);
+    const mid = [(.25 * x1 + .5 * cx + .25 * x2) * 8, (.25 * y1 + .5 * cy + .25 * y2) * 4.5], flat = [(x1 + x2) / 2 * 8, (y1 + y2) / 2 * 4.5];
+    const made = await designToCanvas(slide, {width: 800, aspect: 16 / 9}), ctx = made.canvas.getContext('2d');
+    const dark = ([x, y]) => { let best = 255; for (let dx = -2; dx <= 2; dx++) for (let dy = -2; dy <= 2; dy++) { const [r, g, b] = ctx.getImageData(Math.round(x) + dx, Math.round(y) + dy, 1, 1).data; best = Math.min(best, Math.max(r, g, b)); } return best; };
+    return {curve: dark(mid), straight: dark(flat)};
+  });
+  assert.ok(out.curve < 90, `curve midpoint ${out.curve}`);
+  assert.ok(out.straight > 200, `straight midpoint ${out.straight}`);
+  assert.deepEqual(external, []);
+});
