@@ -85,6 +85,10 @@ test('이어 움직이기 moves the duplicated element from its old place to its
   assert.equal(mid.moved, '1');
   assert.ok(mid.x > .25 && mid.x < .75, `mid ${mid.x}`);
   assert.ok(mid.w > .1 && mid.w < .2, `mid width ${mid.w}`);
+  // Smooth: the moving element animates only transform/opacity (no layout properties), on a promoted layer.
+  const props = await page.evaluate(() => { const n = [...document.querySelectorAll('.cv-show-stage > .fe-card')].at(-1).querySelector('.fi-shape'); return {keys: [...new Set(n.getAnimations().flatMap(a => a.effect.getKeyframes().flatMap(Object.keys)))].sort(), will: n.style.willChange}; });
+  assert.deepEqual(props.keys.filter(k => !['offset', 'easing', 'composite', 'computedOffset'].includes(k)), ['opacity', 'transform']);
+  assert.equal(props.will, 'transform, opacity');
   await page.waitForFunction(() => document.querySelectorAll('.cv-show-stage > .fe-card').length === 1);
   const end = await where();
   assert.equal(end.morphing, false);

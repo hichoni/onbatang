@@ -5,6 +5,7 @@ import { shapeAsset, shapeSvg } from './shapes.js';
 import { artSvg, loadArt, artReady } from './art.js';
 import { sceneView } from './scene.js';
 import { ytThumb, ytEmbed, YT_ORIGIN } from './youtube.js';
+import { linkSvg } from './links.js';
 
 // 유튜브 영상의 재생 단추(유튜브의 빨간 단추 모양)
 const YT_PLAY = '<svg viewBox="0 0 68 48" aria-hidden="true" focusable="false"><path d="M66.5 7.7A8.5 8.5 0 0 0 60.5 1.7C55.2.3 34 .3 34 .3s-21.2 0-26.5 1.4A8.5 8.5 0 0 0 1.5 7.7C.1 13 .1 24 .1 24s0 11 1.4 16.3a8.5 8.5 0 0 0 6 6C12.8 47.7 34 47.7 34 47.7s21.2 0 26.5-1.4a8.5 8.5 0 0 0 6-6C67.9 35 67.9 24 67.9 24s0-11-1.4-16.3z" fill="#f03"/><path d="M45 24 27 14v20z" fill="#fff"/></svg>';
@@ -27,6 +28,9 @@ export function itemView(item) {
     if (item.bgc) node.style.background = item.bgc;
     node.style.textShadow = textShadow(item);
     if (!item.nowrap && hangsPunctuation(item)) hangParagraphEnds(node, item.text);
+  } else if (item.t === 'link') {
+    // 연결선: 두 조각 사이의 선(links.js 가 계산한 자리). 선 둘레만 눌린다(빈 네모는 밑의 조각을 가리지 않는다).
+    node = el('div', { class: `fi fi-link${item.dash ? ' dash' : ''}`, html: linkSvg(item) });
   } else if (item.t === 'emoji') {
     node = el('div', { class: 'fi fi-emoji', text: item.ch });
   } else if (item.t === 'shape') {

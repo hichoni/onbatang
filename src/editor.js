@@ -15,6 +15,7 @@ import { ENTERS, COMBOS, TRANSITIONS, EMPHASES, STILL, planMotion, playEnter, pl
 import { searchStickers } from './stickers.js';
 import { ART_PACKS, artSvg, artColorable, artReady, loadArt, searchArt } from './art.js';
 import { designView, itemView, placeItem, paintCard, shapeThumb } from './render.js';
+import { layoutLinks, relink, LINK_LINE } from './links.js';
 import { sceneView, scenePlayer, keepScene, probeVideo, ACCEPT_VIDEOS } from './scene.js';
 import { icon } from './icons.js';
 import { parseYouTube, ytStart, ytTime, ytWatch } from './youtube.js';
@@ -98,7 +99,7 @@ export function createEditor({
     palettes=updatePalettes(palettes,action);
     try{colorPalettes?.write(palettes);}catch{notify('이 기기에 팔레트를 저장하지 못했어요. 이번 화면에서는 계속 쓸 수 있어요.',4000);}
   }
-  function colorTarget(){const it=cur();if(many.length||it?.lock)return null;if(!it)return {value:backgroundOf(card.bg).bg,apply:setBg};if(['text','shape','art'].includes(it.t)&&it.color)return {value:it.color,apply:it.t==='shape'?fillWith:hex=>change({color:hex})};return null;}
+  function colorTarget(){const it=cur();if(many.length||it?.lock)return null;if(!it)return {value:backgroundOf(card.bg).bg,apply:setBg};if(['text','shape','art','link'].includes(it.t)&&it.color)return {value:it.color,apply:it.t==='shape'?fillWith:hex=>change({color:hex})};return null;}
   function eyedropper(value,onPick,fallback){
     return el('button',{class:'fe-btn fe-eyedropper',type:'button','aria-label':'화면에서 색 추출',title:'화면에서 색 추출 (I) · Esc로 취소',onClick:()=>sampleColor(value,onPick,fallback)},icon('eyedropper'),el('span',{text:'스포이드'}));
   }
@@ -633,7 +634,26 @@ export function createEditor({
   for (const type of ['pointerdown', 'pointerup', 'dblclick', 'contextmenu']) camBox.addEventListener(type, (e) => e.stopPropagation());
 
   // 고른 것 둘레의 테두리와 손잡이를 그 자리·크기에 맞춘다.
+  // 연결선: 잇는 조각이 움직이면(끌기 · 크기 · 글자판) 선을 다시 계산해 그 자리에 다시 그린다. 고르기 테두리를 그리기 전에 부른다.
+  function syncLinks() {
+    const list = items();
+    if (!list.some((it) => it.t === 'link')) return;
+    const next = layoutLinks(list, settings().aspect);
+    if (next.length !== list.length) return;          // 잇는 조각이 없어진 선은 목록이 바뀔 때(listChanged) 뺀다
+    let moved = false;
+    next.forEach((it, i) => {
+      const was = list[i];
+      if (it.t !== 'link' || !nodes[i] || (was.x === it.x && was.y === it.y && was.w === it.w && was.h === it.h && was.pts?.join() === it.pts.join())) return;
+      moved = true;
+      const node = itemView(it);
+      node.classList.toggle('sel', nodes[i].classList.contains('sel'));
+      nodes[i].replaceWith(node);
+      nodes[i] = node;
+    });
+    if (moved) card.items = next;
+  }
   function syncSel() {
+    syncLinks();
     if(cropJob && (pop!=='crop'||cur()?.id!==cropJob.item.id||cur()?.url!==cropJob.item.url))dismissCrop();
     nodes.forEach((n, i) => n.classList.toggle('sel', i === sel || many.includes(i)));
     const it = cur();
@@ -642,7 +662,8 @@ export function createEditor({
     drawMany();
     const id = it?.id || '';
     if (onSelect && id !== lastSelId) { lastSelId = id; onSelect(id); }
-    selBox.hidden = !it || !node || !!cropJob;
+    // 연결선은 손잡이가 없다(잇는 조각을 옮기면 따라온다). 고른 선은 빛나는 것으로 보인다(editor.css).
+    selBox.hidden = !it || !node || !!cropJob || it.t === 'link';
     if (selBox.hidden) return;
     selBox.style.left = `${it.x}%`;
     selBox.style.top = `${it.y}%`;
@@ -827,6 +848,18 @@ export function createEditor({
   // 목록이 통째로 바뀌는 일(넣기·삭제·순서·복제·템플릿)을 한 뒤에 부른다.
   function listChanged(nextSel, nextMany = []) {
     if (card.id) card.items = card.items.map(it => it.id ? it : { ...it, id: newId() });
+    // 잇던 조각을 지웠으면 그 연결선도 뺀다(고른 번호도 그만큼 당긴다). 남은 선은 다시 계산한다.
+    if (card.items.some((it) => it.t === 'link')) {
+      const ids = new Set(card.items.filter((it) => it.t !== 'link' && it.id).map((it) => it.id));
+      const alive = card.items.map((it) => it.t !== 'link' || (ids.has(it.from) && ids.has(it.to) && it.from !== it.to));
+      const at = []; let n = 0;
+      alive.forEach((ok, i) => { at[i] = ok ? n++ : -1; });
+      if (n !== card.items.length) {
+        nextSel = nextSel >= 0 ? at[nextSel] ?? -1 : nextSel;
+        nextMany = nextMany.map((i) => at[i]).filter((i) => i >= 0);
+      }
+      card.items = layoutLinks(card.items.filter((_, i) => alive[i]), settings().aspect);
+    }
     sel = nextMany.length >= 2 ? -1 : nextSel;
     many = nextMany.length >= 2 ? nextMany : [];
     pop = null;
@@ -880,6 +913,7 @@ export function createEditor({
 
   function copy() {
     if (many.length) { copyMany(); return; }
+    if (cur()?.t === 'link') { notify('연결선은 조각 두 개를 골라 새로 이어요(같은 자리에 겹치지 않게 복제하지 않아요).', 3500); return; }
     const dup = duplicateItem(items(), sel);
     if (!dup) { notify(cur()?.t === 'image' ? `사진은 카드 한 장에 ${settings().maxPhotos}장까지예요.` : `카드 한 장에는 조각을 ${settings().maxItems}개까지 놓을 수 있어요.`); return; }
     endEdit();
@@ -912,10 +946,35 @@ export function createEditor({
     for (const i of many) {
       const dup = duplicateItem(list, list.indexOf(items()[i]));
       if (!dup) { failed = items()[i]; continue; }
-      made.push({ ...dup, lock: false });
+      made.push({ ...dup, lock: false, from0: items()[i].id });
       list = [...list, dup];
     }
-    addMany(regroup(made), failed ? fullNote(failed.t === 'image') : '');
+    addMany(relinkCopies(regroup(made)), failed ? fullNote(failed.t === 'image') : '');
+  }
+  // 함께 복제·붙여넣기한 연결선은 새로 생긴 두 조각을 잇는다(from0: 그 조각의 원래 이름표. 넣기 전에 뺀다).
+  // 새 조각에 이름표가 없으면 붙여 준다(연결선은 이름표로 잇는다).
+  function relinkCopies(made) {
+    const ided = made.map(({ from0, ...it }) => ({ it: it.id ? it : { ...it, id: newId() }, from0 }));
+    const map = new Map(ided.filter((v) => v.from0 && v.it.t !== 'link').map((v) => [v.from0, v.it.id]));
+    return relink(ided.map((v) => v.it), map);
+  }
+  // 고른 두 조각을 연결선으로 잇는다(고른 차례가 아니라 위·왼쪽에 있는 것에서 다른 것으로). 선은 두 조각보다 뒤에 깔린다.
+  function linkMany() {
+    const pick = many.filter((i) => items()[i].t !== 'link');
+    if (pick.length !== 2) { notify('연결선은 조각 두 개를 골라야 이을 수 있어요(Shift 를 누른 채 누르기).', 3500); return; }
+    if (items().length >= settings().maxItems) { notify(`카드 한 장에는 조각을 ${settings().maxItems}개까지 놓을 수 있어요.`); return; }
+    endEdit();
+    stopDrag();
+    remember();
+    const list = items().map((it, i) => (pick.includes(i) && !it.id ? { ...it, id: newId() } : it));
+    const [a, b] = pick.map((i) => list[i]).sort((p, q) => p.y - q.y || p.x - q.x);
+    if (list.some((it) => it.t === 'link' && ((it.from === a.id && it.to === b.id) || (it.from === b.id && it.to === a.id)))) { notify('이미 이어져 있어요.', 2500); past.pop(); return; }
+    const link = cleanItem({ t: 'link', id: newId(), from: a.id, to: b.id, head: 'end', color: '#1d2433', line: LINK_LINE.base });
+    const at = Math.min(...pick);
+    card.items = [...list.slice(0, at), link, ...list.slice(at)];
+    listChanged(at);
+    notify('연결선으로 이었어요. 두 조각 중 하나를 옮기면 선이 따라와요. 선을 누르면 색·굵기·화살표를 바꿔요.', 4000);
+    focusStage();
   }
   // 고른 것들을 한 그룹으로 묶는다 · 그룹을 푼다.
   function groupMany() {
@@ -972,10 +1031,10 @@ export function createEditor({
     for (const k of clipboard) {
       const it = pasteItem(list, k, at ? { x: at.x + k.x - cx, y: at.y + k.y - cy } : null);
       if (!it) { failed = k; continue; }
-      made.push(it);
+      made.push({ ...it, from0: k.id });
       list = [...list, it];
     }
-    const fresh = regroup(made);                 // 붙여 넣은 것은 원래 그룹과 따로 묶인다
+    const fresh = relinkCopies(regroup(made));   // 붙여 넣은 것은 원래 그룹과 따로 묶인다 · 함께 붙인 연결선은 새 조각끼리 잇는다
     if (fresh.length === 1 && !failed) { add(fresh[0], { edit: false }); return; }
     addMany(fresh, failed ? fullNote(failed.t === 'image') : '');
   }
@@ -1080,7 +1139,8 @@ export function createEditor({
           row('pageT', '위쪽 맞춤', '', () => arrangeMany('align', 'top')),
           row('pageM', '중간 맞춤', '', () => arrangeMany('align', 'middle')),
         ],
-        [isGroup() ? row('ungroup', '그룹 해제', 'Ctrl+Shift+G', ungroupMany) : row('group', '그룹으로 묶기', 'Ctrl+G', groupMany), row('lock', '모두 잠금', '', lockMany)],
+        [isGroup() ? row('ungroup', '그룹 해제', 'Ctrl+Shift+G', ungroupMany) : row('group', '그룹으로 묶기', 'Ctrl+G', groupMany), row('lock', '모두 잠금', '', lockMany),
+          ...(many.length === 2 && many.every((i) => items()[i].t !== 'link') ? [row('right', '연결선으로 잇기', '', linkMany)] : [])],
         [row('trash', `${many.length}개 삭제`, 'Delete', remove, { danger: true })],
       ];
     } else if (!it) {
@@ -1572,6 +1632,7 @@ export function createEditor({
     focusStage();
     const it = cur();
     if (!it) return;
+    if (it.t === 'link') return;                     // 연결선은 끌어 옮기지 않는다(잇는 조각을 옮긴다)
     try { stage.setPointerCapture(e.pointerId); } catch { /* 잡지 못해도 계속한다 */ }
     const rect = stage.getBoundingClientRect();
     const cx = rect.left + rect.width * it.x / 100;
@@ -1760,7 +1821,8 @@ export function createEditor({
     if (it.lock) { if (e.key === 'Escape') select(-1); return; }
     const rect = stage.getBoundingClientRect(), step = e.shiftKey ? 10 : 1;
     const arrows = { ArrowLeft: [-step / rect.width * 100, 0], ArrowRight: [step / rect.width * 100, 0], ArrowUp: [0, -step / rect.height * 100], ArrowDown: [0, step / rect.height * 100] };
-    if (arrows[e.key]) {
+    if (arrows[e.key] && it.t === 'link') e.preventDefault();
+    else if (arrows[e.key]) {
       e.preventDefault();
       remember();
       put(moveItem(it, it.x + arrows[e.key][0], it.y + arrows[e.key][1], { snap: false }).item);
@@ -2216,6 +2278,8 @@ export function createEditor({
             ? tb(lab('ungroup', '그룹 해제'), ungroupMany, { title: '그룹 해제 (Ctrl+Shift+G)', name: '그룹 해제', cls: 'grouping' })
             : tb(lab('group', '그룹'), groupMany, { title: '그룹으로 묶기 (Ctrl+G): 한 번 누르면 함께 골라져요', name: '그룹으로 묶기', cls: 'grouping' })),
         el('span', { class: 'fe-sep' }),
+        many.length === 2 && many.every((i) => items()[i].t !== 'link') ? group('잇기', tb(lab('right', '연결선'), linkMany, { title: '고른 두 조각을 연결선(화살표)으로 이어요. 조각을 옮기면 선이 따라와요', name: '연결선으로 잇기', cls: 'linking' })) : null,
+        many.length === 2 ? el('span', { class: 'fe-sep' }) : null,
         group('작업',
           tb(icon('duplicate'), copyMany, { title: '모두 복제 (Ctrl+D)', name: '모두 복제', cls: 'icon dup' }),
           tb(icon('lock'), lockMany, { title: '모두 잠금', name: '모두 잠금', cls: 'icon lock' })),
@@ -2312,6 +2376,13 @@ export function createEditor({
         ink.style.background = it.color;
         own.push(tb([icon('palette'), el('span', { class: 'fe-lbl', text: '색' }), ink], () => toggle('color'), { title: '그림 색', name: '그림 색', on: pop === 'color', cls: 'has-pop color' }));
       }
+    } else if (it.t === 'link') {
+      // 연결선: 색 · 굵기 · 화살표(끝 · 양쪽 · 없음) · 점선 · 방향 바꾸기. 자리는 잇는 두 조각이 정한다.
+      const ink = el('span', { class: 'fe-ink dot' });
+      ink.style.background = it.color;
+      own.push(tb([icon('palette'), el('span', { class: 'fe-lbl', text: '색' }), ink], () => toggle('color'), { title: '선 색', name: '선 색', on: pop === 'color', cls: 'has-pop color' }),
+        pick('thick', '굵기', 'lthick', { title: '선의 굵기' }),
+        pick('right', '화살표', 'arrow', { title: '화살표 · 점선 · 방향' }));
     } else if (it.t === 'yt') {
       // 유튜브 영상: 발표할 때 누르면 그 자리에서 틀어진다. 시작 시각을 정하고, 유튜브에서 미리 볼 수 있다.
       own.push(
@@ -2333,8 +2404,8 @@ export function createEditor({
       group('스타일', ...own, colorTarget()?eyedropper(colorTarget().value,colorTarget().apply):null, pick('opacity', '투명도', 'op', { title: '투명도: 낮출수록 비쳐 보여요' })),
       el('span', { class: 'fe-sep' }),
       group('배치',
-        it.t === 'text' ? null : pick('resize', '크기', 'size', { title: '조각의 크기 (가로세로 비율은 그대로)' }),      // 텍스트는 − 숫자 + 로 바꾼다
-        it.t === 'text' || it.t === 'yt' ? null : pick('flipH', '뒤집기', 'flip', { title: '좌우·상하 뒤집기, 바로 세우기' }),
+        it.t === 'text' || it.t === 'link' ? null : pick('resize', '크기', 'size', { title: '조각의 크기 (가로세로 비율은 그대로)' }),      // 텍스트는 − 숫자 + 로 바꾼다
+        it.t === 'text' || it.t === 'yt' || it.t === 'link' ? null : pick('flipH', '뒤집기', 'flip', { title: '좌우·상하 뒤집기, 바로 세우기' }),
         pick('layers', '위치', 'pos', { title: '겹치는 순서와 페이지 정렬' })),
       el('span', { class: 'fe-sep' }),
       group('작업',
@@ -2375,7 +2446,7 @@ export function createEditor({
       body = [el('div', { class: 'fe-poshead', text: '채우기 색' }),
         swatches(it.hollow ? '' : it.color, fillWith, { none: true, noneName: '채우기 없음 (테두리만)', label: '채우기 색' })];
     } else if (pop === 'color' && it.t !== 'image' && it.t !== 'emoji' && it.t !== 'yt' && (it.t !== 'art' || it.color)) {
-      const label = it.t === 'text' ? '글자 색' : it.t === 'art' ? '그림 색' : '도형 색';
+      const label = it.t === 'text' ? '글자 색' : it.t === 'art' ? '그림 색' : it.t === 'link' ? '선 색' : '도형 색';
       body = [el('div', { class: 'fe-poshead', text: label }), swatches(it.color, (hex) => change({ color: hex }), { label })];
     } else if (pop === 'edge' && canEdge(it)) {
       body = [el('div', { class: 'fe-poshead', text: '테두리 색' }),
@@ -2388,6 +2459,23 @@ export function createEditor({
         el('p', { class: 'fe-note', text: '0% 는 뾰족한 모서리, 100% 는 양 끝이 반원이에요.' })];
     } else if (pop === 'bgc' && it.t === 'text') {
       body = [el('div', { class: 'fe-poshead', text: '글 바탕색' }), swatches(it.bgc, (hex) => change({ bgc: hex }), { none: true, label: '글 바탕색' })];
+    } else if (pop === 'lthick' && it.t === 'link') {
+      body = [slider('굵기', Math.round(it.line / LINK_LINE.step), { min: Math.round(LINK_LINE.min / LINK_LINE.step), max: Math.round(LINK_LINE.max / LINK_LINE.step), step: 1 }, (c, v) => ({ ...c, line: Math.round(v * LINK_LINE.step * 100) / 100 }))];
+    } else if (pop === 'arrow' && it.t === 'link') {
+      const chip = (label, on, patch, data) => el('button', { class: `fe-chip${on ? ' on' : ''}`, type: 'button', 'aria-pressed': String(on), dataset: data, onClick: () => change(patch) }, label);
+      body = [
+        el('div', { class: 'fe-poshead', text: '화살표' }),
+        el('div', { class: 'fe-row' },
+          chip('끝에', it.head === 'end', { head: 'end' }, { head: 'end' }),
+          chip('양쪽', it.head === 'both', { head: 'both' }, { head: 'both' }),
+          chip('없음', it.head === 'none', { head: 'none' }, { head: 'none' })),
+        el('div', { class: 'fe-poshead', text: '선 모양' }),
+        el('div', { class: 'fe-row' },
+          chip('실선', !it.dash, { dash: undefined }, { dash: 'off' }),
+          chip('점선', !!it.dash, { dash: true }, { dash: 'on' }),
+          el('button', { class: 'fe-chip', type: 'button', dataset: { flipLink: '1' }, onClick: () => change({ from: it.to, to: it.from }) }, '방향 바꾸기')),
+        el('p', { class: 'fe-note', text: '두 조각 중 하나를 옮기거나 키우면 선이 따라와요. 조각을 지우면 선도 함께 없어져요.' }),
+      ];
     } else if (pop === 'thick' && isLine(it)) {
       // 세로로 긴 카드에서는 가장 가는 굵기가 조금 더 굵다(도형의 높이에 한도가 있어서). 막대의 처음 칸을 거기에 맞춘다.
       const first = Math.max(1, Math.ceil(thickOf(thicken(it, THICK.min)) / THICK.step - 1e-6) - 1);

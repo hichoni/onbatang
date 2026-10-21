@@ -10,6 +10,7 @@
 
 /** 고를 수 있는 화면 비율(aspect 는 가로 ÷ 세로). */
 import { SCHEMA_VERSION, DOCUMENT_LIMITS, DocumentError, fail, isId, newId, legacyId, cleanSize, metadata, cleanAssets, validatePageInput, validateReferences, slideNotes, slideHidden, slideTopic, slideDur } from '../src/document.js';
+import { relink } from '../src/links.js';
 import { cleanActivity } from '../src/activity.js';
 import {cleanCrop} from '../src/crop.js';
 export { SCHEMA_VERSION, DocumentError };
@@ -135,7 +136,7 @@ export function unusedVideos(files, designId, used, more = []) {
 }
 
 // Visual fields remain compatible with model.js; nested extension data is explicitly validated.
-const ITEM_FIELDS = ['t', 'x', 'y', 'w', 'h', 'rot', 'op', 'lock', 'g', 'an', 'aw', 'em', 'fx', 'fy', 'text', 'size', 'color', 'font', 'bold', 'italic', 'under', 'align', 'valign', 'lh', 'nowrap', 'hangingPunct', 'typeface', 'bgc', 'ch', 'shape', 'r', 'line', 'lc', 'hollow', 'art', 'yt', 'start', 'auto', 'url', 'path', 'mask', 'alt', 'stroke', 'shadow'];
+const ITEM_FIELDS = ['t', 'x', 'y', 'w', 'h', 'rot', 'op', 'lock', 'g', 'an', 'aw', 'em', 'fx', 'fy', 'text', 'size', 'color', 'font', 'bold', 'italic', 'under', 'align', 'valign', 'lh', 'nowrap', 'hangingPunct', 'typeface', 'bgc', 'ch', 'shape', 'r', 'line', 'lc', 'hollow', 'art', 'yt', 'start', 'auto', 'url', 'path', 'mask', 'alt', 'stroke', 'shadow', 'from', 'to', 'head', 'dash'];   // 연결선의 자리(pts · vh)는 저장하지 않는다: 읽을 때 잇는 두 조각에서 다시 계산한다
 const cleanSlide = (d, index, documentId) => {
   if (!d || typeof d !== 'object' || Array.isArray(d)) fail('INVALID_PAGE', `slides.${index}`, d);
   const pageId = d.id ?? legacyId('p', `${documentId}:page:${index}`);
@@ -286,7 +287,9 @@ export function copySlide(slides, at) {
   page.id = newId('p');
   if(page.activity)page.activity.id=newId('a');
   if (original.id) page.origin = { pageId: original.id };
-  page.items = page.items.map(e => ({ ...e, id: newId(), ...(e.id ? { origin: { elementId: e.id, ...(original.id ? { pageId: original.id } : {}) } } : {}) }));
+  const ids = new Map();
+  page.items = page.items.map(e => { const id = newId(); if (e.id) ids.set(e.id, id); return { ...e, id, ...(e.id ? { origin: { elementId: e.id, ...(original.id ? { pageId: original.id } : {}) } } : {}) }; });
+  page.items = relink(page.items, ids);          // 연결선은 복제한 장의 두 조각을 잇는다
   next.splice(at + 1, 0, page);
   return [next, at + 1];
 }

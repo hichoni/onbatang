@@ -96,7 +96,7 @@ const TRANSITION_DEFS = {
   // 이어 움직이기(키노트의 매직 무브): 앞 장과 이 장에 같은 요소가 있으면 그 요소가 제자리로 옮겨 가고(자리·크기·각도·색),
   // 나머지는 서서히 바뀐다. 짝은 matchItems 가 정한다. 두 장을 다 아는 곳(발표 화면)에서만 옮겨 가고,
   // 한 장만 아는 곳(미리 보기 · 영상 만들기)에서는 아래 frames 대로 서서히 바뀐다.
-  move: { name: '이어 움직이기', ms: 900, ease: 'ease-in-out', morph: true, next: () => [{ o: 0 }, { o: 1 }], old: () => [{ o: 1 }, { o: 0 }] },
+  move: { name: '이어 움직이기', ms: 1000, ease: 'cubic-bezier(.65, 0, .35, 1)', morph: true, next: () => [{ o: 0 }, { o: 1 }], old: () => [{ o: 1 }, { o: 0 }] },
 };
 /** 뒤집기 효과의 원근(화면에서의 px). 화면용 키프레임과 영상이 같은 값을 쓴다. */
 export const TURN_DEPTH = 1600;
@@ -180,7 +180,8 @@ export function planMotion(design) {
   const items = Array.isArray(design?.items) ? design.items : [];
   const combo = COMBO_DEFS[design?.pa] || null;
   const rows = items.map((it, i) => ({ i, it, role: roleOf(it) })).filter((r) => r.it);
-  const enterOf = (r) => (r.it.an === STILL ? null : ENTER_DEFS[r.it.an] ? r.it.an : combo ? combo.pick(r.role, r.it) : null);
+  // 연결선은 조합 효과에서 늘 닦아내듯(그려지듯) 나온다.
+  const enterOf = (r) => (r.it.an === STILL ? null : ENTER_DEFS[r.it.an] ? r.it.an : combo ? (r.it.t === 'link' ? 'wipe' : combo.pick(r.role, r.it)) : null);
   const moving = rows.map((r) => ({ ...r, enter: enterOf(r) }));
   // 누를 때: 읽는 차례대로. "누를 때 나타나는" 요소는 나타나는 차례가 먼저, 강조 효과가 있으면 그다음 누를 때 강조한다.
   // (강조 단계에는 emphasis 가 있고 enter 는 없다. 숨겨 두는 것은 enter 가 있는 단계뿐이다.)
@@ -472,6 +473,7 @@ export function playTransition(old, next, id, dir = 1, { from = null, to = null 
   const f = transitionFrames(id, dir);
   if (!f || !next || typeof next.animate !== 'function' || calm()) return { ms: 0, finish() {}, done: Promise.resolve() };
   const opts = { duration: f.ms, easing: f.easing, fill: 'both' };
+  const drop = lift([next, f.old ? old : null]);
   const anims = [next.animate(f.next, opts)];
   if (old && f.old) anims.push(old.animate(f.old, opts));
   // 끝나면(또는 바로 끝내면) 움직임을 걷어 낸다: 들어온 장은 아무것도 걸리지 않은 제 모습으로 남는다.
@@ -481,20 +483,30 @@ export function playTransition(old, next, id, dir = 1, { from = null, to = null 
     if (over) return;
     over = true;
     for (const a of anims) { try { a.cancel(); } catch { /* 이미 걷혔다 */ } }
+    drop();
   };
   const done = Promise.all(anims.map((a) => a.finished.catch(() => {}))).then(end);
   return { ms: f.ms, finish: end, done };
 }
 
-// 옮겨 가는 동안 맞추는 모습: 자리 · 크기 · 글자 크기 · 각도(transform) · 투명도 · 색. 두 장은 같은 크기로 겹쳐 있으므로
-// 화면에서 잰 값(px)을 그대로 이어 붙일 수 있다.
-const MORPH_KEYS = ['left', 'top', 'width', 'height', 'fontSize', 'opacity', 'color', 'backgroundColor'];
-function nodePose(node) {
-  const cs = getComputedStyle(node);
-  const out = { transform: node.style.transform || 'translate(-50%, -50%)' };
-  for (const k of MORPH_KEYS) out[k] = cs[k];
-  return out;
+// 옮겨 가는 요소는 transform 하나로만 움직인다(FLIP: 앞 장의 자리·크기·각도에서 제자리로). 자리·크기를 left·width 로 바꾸면
+// 프레임마다 화면을 다시 짜야 해서 끊기지만, transform·opacity 는 그래픽 장치가 맡아 매끄럽다. 글은 옮기는 동안만 크기가 늘고 줄며, 끝나면 제 글자로 또렷하다.
+// 두 장은 같은 크기로 겹쳐 있으므로 화면에서 잰 가운데 점의 차이를 그대로 옮긴 거리로 쓴다(돌린 요소도 가운데 점은 그대로다).
+const centerOf = (node) => { const r = node.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
+const morphTransform = (dx, dy, item, sx, sy) => `translate(${round(dx)}px, ${round(dy)}px) translate(-50%, -50%) rotate(${round(Number(item?.rot) || 0)}deg) scale(${round((item?.fx ? -1 : 1) * sx)}, ${round((item?.fy ? -1 : 1) * sy)})`;
+function morphFrames(oldNode, newNode, oldItem, newItem) {
+  const [ox, oy] = centerOf(oldNode), [nx, ny] = centerOf(newNode);
+  const sx = newNode.offsetWidth ? oldNode.offsetWidth / newNode.offsetWidth : 1;
+  const sy = newNode.offsetHeight ? oldNode.offsetHeight / newNode.offsetHeight : 1;
+  const a = getComputedStyle(oldNode), b = getComputedStyle(newNode);
+  const start = { transform: morphTransform(ox - nx, oy - ny, oldItem, sx, sy), opacity: a.opacity };
+  const end = { transform: morphTransform(0, 0, newItem, 1, 1), opacity: b.opacity };
+  if (a.color !== b.color) { start.color = a.color; end.color = b.color; }
+  if (a.backgroundColor !== b.backgroundColor) { start.backgroundColor = a.backgroundColor; end.backgroundColor = b.backgroundColor; }
+  return [start, end];
 }
+// 움직이는 동안만 그래픽 장치에 미리 올려 둔다(첫 프레임이 늦지 않게). 끝나면 걷는다.
+const lift = (nodes) => { for (const n of nodes) if (n?.style) n.style.willChange = 'transform, opacity'; return () => { for (const n of nodes) if (n?.style) n.style.willChange = ''; }; };
 
 /**
  * 이어 움직이기를 튼다. from · to 는 두 장의 디자인(카드의 요소와 차례가 같아야 한다).
@@ -521,14 +533,14 @@ function playMorph(old, next, from, to) {
   anims.push(back.animate([{ opacity: 0 }, { opacity: 1 }], opts));
   const moved = new Set(pairs.map(([, j]) => j));
   const gone = new Set(pairs.map(([i]) => i));
-  for (const [i, j] of pairs) {
-    const start = nodePose(was[i]);
-    const end = nodePose(now[j]);
+  const frames = pairs.map(([i, j]) => morphFrames(was[i], now[j], from.items[i], to.items[j]));
+  const drop = lift([back, ...pairs.map(([, j]) => now[j])]);
+  pairs.forEach(([i, j], k) => {
     now[j].dataset.moved = '1';
     was[i].style.visibility = 'hidden';
     hidden.push(was[i]);
-    anims.push(now[j].animate([start, end], opts));
-  }
+    anims.push(now[j].animate(frames[k], opts));
+  });
   was.forEach((n, i) => { if (!gone.has(i)) anims.push(n.animate([{ opacity: getComputedStyle(n).opacity }, { opacity: 0, offset: 0.5 }, { opacity: 0 }], opts)); });
   // 이 장에만 있는 것(영상 장면 판 · 안내 글 포함)은 앞 장의 것이 거의 사라진 뒤에 나타난다.
   [...next.children].forEach((n, k) => {
@@ -541,6 +553,7 @@ function playMorph(old, next, from, to) {
     over = true;
     for (const a of anims) { try { a.cancel(); } catch { /* 이미 걷혔다 */ } }
     back.remove();
+    drop();
     next.classList.remove('fe-morphing');
     for (const n of hidden) n.style.visibility = '';
   };

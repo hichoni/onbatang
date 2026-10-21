@@ -865,7 +865,9 @@ export async function filmToVideo(film, { fps = 30, bitrate = 8000000, onProgres
   };
   let started = 0;                 // 처음부터 만들기 시작한 횟수(두 번째부터는 "다시 만드는 중"이다)
   let lastError = null;
-  const kinds = await encodeKinds(film, fps, bitrate);
+  let kinds = await encodeKinds(film, fps, bitrate);
+  // 1초에 60장을 담지 못하는 기기·크기면 30장으로 담는다.
+  if (!kinds.length && fps > 30) { fps = 30; kinds = await encodeKinds(film, fps, bitrate); }
   // 소리: 영상 장면들의 소리를 한 번만 풀어 섞어 두고(track), 파일 종류에 맞게 인코딩한다(같은 종류는 한 번만).
   let track = null;
   let unheard = false;             // 소리가 있는데 풀지 못한 영상이 있었다
@@ -954,7 +956,8 @@ async function recordVideo(film, { fps, bitrate, onProgress, onRetry, signal }) 
   }
   if (!kind) throw new Error('이 브라우저에서는 영상으로 만들 수 없어요');
   const record = async (k) => {
-    const made = await recordFilm(film, { kind: k, fps, bitrate, onProgress, signal });
+    // 틀면서 녹화하는 길은 화면 시계를 따라가므로 1초에 30장까지만 담는다(느린 기기에서 프레임이 빠지지 않게).
+    const made = await recordFilm(film, { kind: k, fps: Math.min(fps, 30), bitrate, onProgress, signal });
     // 틀어 봐서 "안 된다"가 분명할 때만 버린다(가려진 탭에서는 알 수 없다. 그때는 그대로 쓴다).
     if (made && (await playable(made.blob)) === false) throw new Error('만든 영상을 틀 수 없어요');
     return made;
@@ -990,7 +993,7 @@ async function recordVideo(film, { fps, bitrate, onProgress, onRetry, signal }) 
  * 그만뒀으면 null.
  */
 export async function designsToVideo(designs, {
-  width = 1920, height = 1080, stay = DEFAULT_STAY, fps = 30, canvas = null, onProgress = () => {}, onRetry = () => {}, signal = null, fixBlob = null,
+  width = 1920, height = 1080, stay = DEFAULT_STAY, fps = 0, canvas = null, onProgress = () => {}, onRetry = () => {}, signal = null, fixBlob = null,
 } = {}) {
   if (!canMakeVideo()) throw new Error('이 브라우저에서는 영상으로 만들 수 없어요');
   // 파일이 이 기기에 없는 영상 장면은 미리 뗀다(시간표에서도 영상의 길이를 세지 않는다. 그 장은 바탕색만 나온다).
@@ -1011,7 +1014,8 @@ export async function designsToVideo(designs, {
   if (seconds > 160) bitrate = Math.max(2500000, Math.min(bitrate, Math.round(1.6e9 / seconds)));
   const count = list.filter((d) => d.video).length;
   try {
-    const made = await filmToVideo(film, { fps, bitrate, onProgress, onRetry, signal, fixBlob });
+    // 움직임이 매끄럽게: 한 장씩 인코딩하는 길에서는 1초에 60장(못 하면 30장), 녹화하는 길은 30장.
+    const made = await filmToVideo(film, { fps: fps || (live ? 60 : 30), bitrate, onProgress, onRetry, signal, fixBlob });
     // 움직이는 채로 담으려 했지만 읽지 못한 영상 장면(film.stills)도 멈춘 그림으로 담긴 것이다.
     const stills = live ? Math.min(count, film.stills()) : count;
     return made ? { ...made, missingFonts: film.missingFonts(), scenes: count - stills, stills } : null;

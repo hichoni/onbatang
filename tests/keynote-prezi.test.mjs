@@ -37,9 +37,10 @@ test('이어 움직이기 is a stored transition that crossfades where only one 
   assert.equal(morphs('move'), true);
   assert.equal(morphs('fade'), false);
   assert.equal(cleanDesign({id: 'ppage00001', bg: '#fff', tr: 'move', items: []}).tr, 'move');
-  const half = transitionPose('move', 1, 450);
+  const half = transitionPose('move', 1, 500);
   assert.ok(half.next.o > 0 && half.next.o < 1 && half.old.o > 0 && half.old.o < 1);
-  assert.equal(transitionPose('move', 1, 900).done, true);
+  assert.equal(transitionPose('move', 1, 1000).done, true);
+  assert.equal(transitionPose('move', 1, 900).done, false);
   // Element entrances still plan normally; the player skips the ones it moved.
   assert.equal(planMotion({tr: 'move', pa: 'fade', items: [text('etext00001', 'a')]}).auto.length, 1);
 });
