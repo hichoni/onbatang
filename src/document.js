@@ -4,6 +4,16 @@ export const DOCUMENT_LIMITS = Object.freeze({ pages: 20, items: 40, photos: 10,
 // Imported slides keep authored text boxes and pictures as individual elements.
 // The public marker also works after a guest projection removes provenance.
 export const SLIDE_LIMITS = Object.freeze({ items: 40, photos: 40, text: 4096 });
+// Speaker notes are plain text for the presenter only: never drawn on the slide.
+export const NOTES_LIMIT = 5000;
+/** 발표자 노트. 글이 아니거나 비어 있으면 ''(저장하지 않는다). 너무 긴 것은 자르고 조종 문자는 뺀다(줄바꿈·탭은 둔다). */
+export function cleanNotes(value) {
+  if (typeof value !== 'string') return '';
+  const text = value.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').slice(0, NOTES_LIMIT);
+  return text.trim() ? text : '';
+}
+/** 장에 노트가 있으면 { notes }, 없으면 {} (장을 새로 짜 맞추는 곳마다 함께 펼쳐 넣는다). */
+export const slideNotes = slide => { const notes = cleanNotes(slide?.notes); return notes ? { notes } : {}; };
 export const isSlideItem = item => item?.layout === 'slide' || item?.source?.kind === 'pptx';
 export const itemTextLimit = (item, ordinary = DOCUMENT_LIMITS.text) => isSlideItem(item) ? Math.max(ordinary, SLIDE_LIMITS.text) : ordinary;
 export function pageLimits(page, ordinary = DOCUMENT_LIMITS) {

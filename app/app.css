@@ -308,6 +308,8 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"], body.mc-app :is(#app,.cv-a
 }
 .cv-strip { order: 2; }
 .cv-tools { order: 3; }
+/* 발표자 노트: 그림 바로 아래(좁은 화면은 슬라이드 띠 아래)에 접어 둔다. 펴면 몇 줄 적는 칸이 나온다. */
+.cv-work > .fe-notes { order: 2; }
 
 /* ---- 슬라이드 띠: 작은 그림들 + 새 장 | 옮기기·복제·지우기 ---- */
 .cv-strip { display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap; padding: 8px 10px; border: 1px solid var(--cv-line); border-radius: var(--cv-r-l); background: #fff; }
@@ -404,7 +406,7 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"], body.mc-app :is(#app,.cv-a
 
   /* 가운데: 도구 막대 · 그림 · 슬라이드 띠. 옆 칸보다 위에 그린다(펼친 칸이 옆 칸 자리를 덮는다). */
   .cv-work {
-    grid-row: 3; grid-column: 2; position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; gap: 0;
+    grid-row: 3; grid-column: 2; position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto auto; gap: 0;
     min-height: 0; container: cvwork / inline-size;
   }
   .cv-app > .cv-work > * { order: 0; }
@@ -461,7 +463,7 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"], body.mc-app :is(#app,.cv-a
 .cv-show-stage .fe-card { grid-area: 1 / 1; width: 100%; pointer-events: none; }
 .cv-show-bar {
   position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 999px;
-  background: rgba(20, 24, 34, .72); color: #fff; opacity: .35; transition: opacity .2s; cursor: default;
+  background: rgba(20, 24, 34, .72); color: #fff; opacity: .35; transition: opacity .2s; cursor: default; z-index: 10;
 }
 .cv-show:hover .cv-show-bar, .cv-show-bar:focus-within { opacity: 1; }
 .cv-show-count { min-width: 4.2em; text-align: center; font-weight: 800; font-variant-numeric: tabular-nums; }
@@ -469,7 +471,7 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"], body.mc-app :is(#app,.cv-a
 .cv-show-key:hover { background: rgba(255, 255, 255, .3); }
 .cv-show-key[hidden] { display: none; }      /* 영상 장면이 없는 장에서는 영상 단추를 감춘다 */
 .cv-show-key,.cv-show-count{white-space:nowrap;flex-shrink:0}
-@media(max-width:680px){.cv-show-bar{gap:6px;padding:8px;max-width:calc(100vw - 16px)}.cv-show-key{padding:8px 10px;min-height:44px}.cv-show-count{font-size:14px}}
+@media(max-width:680px){.cv-show-bar{gap:6px;padding:8px;left:8px;right:8px;width:max-content;max-width:calc(100vw - 16px);margin:0 auto;transform:none;flex-wrap:wrap;justify-content:center;border-radius:18px}.cv-show-key{padding:8px 10px;min-height:44px}.cv-show-count{font-size:14px}}
 @media (pointer: coarse) { .cv-show-bar { opacity: .9; } }
 
 /* ---- 내려받기 창: 파일 종류 → 저장할 장 → 설정 → 내려받기 ----

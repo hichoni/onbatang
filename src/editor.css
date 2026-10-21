@@ -727,3 +727,23 @@
  .fe-palette-color{width:44px;height:44px}.fe-palette-remove{font-size:22px}
  .fe-palette-name{font-size:16px}
 }
+
+/* ---- 발표자 노트(접고 펴는 칸). 발표할 때 발표자만 보는 글 ---- */
+.fe-notes { border-top: 1px solid var(--fe-line); background: #fff; }
+.fe-notes > summary {
+  display: flex; align-items: center; gap: 8px; padding: 6px 12px; cursor: pointer; list-style: none;
+  font-size: .82rem; font-weight: 700; color: var(--fe-muted); user-select: none;
+}
+.fe-notes > summary::-webkit-details-marker { display: none; }
+.fe-notes > summary::before { content: '▸'; font-size: .75em; transition: transform .16s ease; }
+.fe-notes[open] > summary::before { transform: rotate(90deg); }
+.fe-notes > summary:hover { color: var(--fe-text); }
+.fe-notes > summary:focus-visible { outline: 3px solid var(--fe-primary); outline-offset: -3px; }
+.fe-notes-mark { font-weight: 500; font-size: .76rem; color: var(--fe-muted); }
+.fe-notes.has-notes .fe-notes-mark { color: var(--fe-primary); font-weight: 700; }
+.fe-notes-input {
+  display: block; box-sizing: border-box; width: calc(100% - 24px); margin: 0 12px 10px; min-height: 64px; max-height: 30vh; resize: vertical;
+  padding: 8px 10px; border: 1px solid var(--fe-line); border-radius: 8px; font: inherit; font-size: .9rem; line-height: 1.5; color: var(--fe-text); background: #fbfcff;
+}
+.fe-notes-input:focus { outline: 2px solid var(--fe-primary); outline-offset: 0; border-color: transparent; background: #fff; }
+@media (prefers-reduced-motion: reduce) { .fe-notes > summary::before { transition: none; } }

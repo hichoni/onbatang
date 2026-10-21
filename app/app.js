@@ -9,7 +9,7 @@ import { onbatangLoading,deferredOnbatangLoading } from './loading.js';
 import {bindFilmstrip,bindSlideTray} from './filmstrip.js';
 import {orderPages,movePage} from './page-order.js';
 import {createLocalPalettes} from './palettes.js';
-import {newId} from '../src/document.js';
+import {newId,slideNotes} from '../src/document.js';
 import {newPixelActivity,pixelArtCover,pixelArtResult} from '../src/pixel-art.js';
 import {mountPixelArt,createPixelArtSetup,pixelArtImage} from './pixel-art.js';
 import {createHtmlLesson} from './html-lesson.js';
@@ -17,6 +17,7 @@ import {activityDefinitionHash} from './lesson-results.js';
 import {openLessonResults} from './lesson-results-ui.js';
 import {cleanGaiActivity,gaiAppCover,gaiAppResult} from '../src/gai-app.js';
 import {mountGaiApp} from './gai-app.js';
+import {createShowTools} from './show-tools.js';
 import {createGaiMaker,gaiLessonContext} from './gai-maker.js';
 import {
   createEditor, designView, designToBlob, configure, settings, reshapeItems, layoutList, layoutItems, icon, cleanDesign, hasMotion, playDesign, playTransition,
@@ -30,7 +31,7 @@ import { fixWebmBlob } from './webm.js';
 // 영상 장면을 카메라로 찍을 때 쓰는 카메라(찍기 · 멈추기 · 앞뒤 카메라 바꾸기).
 import { createCamera, canRecord } from './camera.js';
 import {
-  RATIOS, RATIO_KEY, MAX_DESIGNS, MAX_SLIDES, MAX_NAME, EXPORT_SIZES, DEFAULT_EXPORT, EXPORT_KEY, VIDEO_SIZES, DEFAULT_VIDEO, exportSize, ratioOf, newRecord, nextNumber,
+  RATIOS, RATIO_KEY, NOTES_OPEN_KEY, MAX_DESIGNS, MAX_SLIDES, MAX_NAME, EXPORT_SIZES, DEFAULT_EXPORT, EXPORT_KEY, VIDEO_SIZES, DEFAULT_VIDEO, exportSize, ratioOf, newRecord, nextNumber,
   isBlank, fileName, whenText, sortRecords, addSlide, copySlide, removeSlide, moveSlide,
   libraryOf, dropPhoto, slideMotion, slideVideo, slideExtra, hasVideo, deckVideos, unusedVideos, cleanBrand,
   migrateRecord, aspectOf, canvasRatioOf, copyRecord, withSlideMotion,
@@ -675,7 +676,10 @@ function editorShell(O, bar) {
   const work = el('section', { class: 'cv-work', 'aria-label': '그림' },
     el('div', { class: 'cv-tools' }, O.editor.toolbar),
     el('div', { class: 'cv-canvas' }, O.editor.stage),
-    O.strip, fold);
+    O.editor.notes, O.strip, fold);
+  // 노트 칸을 펴 두었는지는 이 기기에 기억한다(다음에 열 때도 그대로).
+  try { O.editor.notes.open = localStorage.getItem(NOTES_OPEN_KEY) === '1'; } catch { /* 저장 공간이 막힌 기기: 접어 둔다 */ }
+  O.editor.notes.addEventListener('toggle', () => { try { localStorage.setItem(NOTES_OPEN_KEY, O.editor.notes.open ? '1' : '0'); } catch { /* 기억하지 못해도 칸은 그대로 쓴다 */ } });
   const shell = O.shell = el('div', { class: 'cv-app' }, bar, O.alert, side, work);
   setFold(false);
   return shell;
@@ -1126,6 +1130,7 @@ async function present(O) {
   const aspect = aspectOf(O.record),working=new Map(),savedResults=new Map();
   let i=Math.max(0,entries.findIndex(v=>v.page.id===O.editor.getDesign().id)),savingActivity=false,closed=false;
   let pixel=null;
+  let tools = null;          // 발표 도구(검은 화면 · 펜 · 레이저 · 전체 보기 · 발표자 화면 …, show-tools.js)
   let parts = null;          // 지금 장의 요소 움직임(조종기)
   let turning = null;        // 틀고 있는 전환 효과
   let leaving = null;        // 나가는 중인 장(전환이 끝나면 뗀다)
@@ -1198,6 +1203,7 @@ async function present(O) {
   const draw = (dir = 0) => {
     pixel?.destroy();pixel=null;
     settle();
+    tools?.changed();
     const design = slides[i];
     const ar=aspectOf(entries[i].record);
     overlay.style.setProperty('--cv-show-ratio',String(ar));
@@ -1209,7 +1215,7 @@ async function present(O) {
       for(const n of [...stage.children])drop(n);film?.pause();for(const p of tube)p.pause();film=null;tube=[];markFilm();parts=null;
       const host=el('section',{class:'cv-show-activity',dataset:{pixelApp:''}});stage.append(host);
       const gai=design.activity.kind==='gai-app',activity=gai?{...design.activity,state:working.get(design.id)||design.activity.state}:{...design.activity,cells:working.get(design.id)||design.activity.cells};
-      pixel=(gai?mountGaiApp:mountPixelArt)(host,{activity,onChange:value=>working.set(design.id,value),onSave:async cells=>{
+      pixel=(gai?mountGaiApp:mountPixelArt)(host,{activity,onKey:appKey,onChange:value=>working.set(design.id,value),onSave:async cells=>{
         if(savingActivity||closed)return;
         savingActivity=true;
         try{
@@ -1267,24 +1273,41 @@ async function present(O) {
     i = to;
     draw(step);
   };
+  // 번호·처음·끝·전체 보기로 그 쪽에 바로 간다(앞으로 가면 그 장의 전환으로, 뒤로 가면 거꾸로).
+  const jump = (to) => {
+    if (savingActivity) return;
+    to = Math.max(0, Math.min(slides.length - 1, to));
+    if (to === i) return;
+    const dir = to > i ? 1 : -1;
+    i = to;
+    draw(dir);
+  };
+  // 앱 안을 누른 뒤에도 프레젠터(리모컨)의 넘기기 단추와 Esc 는 발표가 듣는다(앱이 그 글쇠를 쓰지 않았을 때 앱이 알려 준다).
+  const appKey = (key) => { if (['PageDown', 'PageUp', 'Escape'].includes(key)) tools?.handle({ key, code: key }); };
   const onKey = (e) => {
-    if(e.target?.closest?.('.cv-show-activity')&&e.key!=='Escape')return;
+    // 앱·그림판 안에서 치는 글쇠는 앱의 것이다. 프레젠터의 넘기기(PageDown · PageUp)와 Esc 만 발표가 듣는다.
+    if(e.target?.closest?.('.cv-show-activity')&&!['Escape','PageDown','PageUp'].includes(e.key))return;
     // 아래 막대의 단추에 초점이 있을 때 스페이스 · 엔터는 그 단추를 누르는 글쇠다(다음 장으로 넘기지 않는다).
     if ((e.key === ' ' || e.key === 'Enter') && e.target?.closest?.('.cv-show-key')) { e.stopPropagation(); return; }
-    // K: 영상 장면을 멈추거나 다시 튼다(글쇠의 자리로 견준다. 한글 입력 상태에서도 듣게).
-    if (e.code === 'KeyK' && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); e.stopPropagation(); toggleFilm(); return; }
     // 유튜브를 틀었으면 스페이스 바는 멈추기 · 다시 틀기다(다음 장은 → · PageDown · 누르기).
     if (e.key === ' ' && tubeNow()) { e.preventDefault(); e.stopPropagation(); tubeNow().toggle(); return; }
-    const step = e.key === 'Escape' ? 0 : ['ArrowRight', 'ArrowDown', 'PageDown', ' ', 'Enter'].includes(e.key) ? 1 : ['ArrowLeft', 'ArrowUp', 'PageUp', 'Backspace'].includes(e.key) ? -1 : null;
-    if (step === null) return;
+    // 넘기기 · 번호로 가기 · 검은 화면 · 펜 · 전체 보기 · 발표자 화면 · K(영상) … 글쇠 약속은 show-keys.js 에 있다(HTML 수업과 같다).
+    if (!tools?.handle(e)) return;
     e.preventDefault();
     e.stopPropagation();          // 발표하는 동안에는 글쇠가 편집기로 가지 않게 한다
-    if (step === 0) close(); else go(step);
   };
-  const onFull = () => { if (!document.fullscreenElement && overlay.dataset.full === '1') close(); };
+  // 전체 화면이 풀리면 발표를 끝낸다(Esc 로 푼 것). 다만 발표자 화면을 열면 브라우저가 전체 화면을 풀 수 있으므로,
+  // 그때는 창 안에서 이어 간다(F 로 다시 켠다).
+  const onFull = () => {
+    if (document.fullscreenElement === overlay) { overlay.dataset.full = '1'; return; }
+    if (document.fullscreenElement || overlay.dataset.full !== '1') return;
+    overlay.dataset.full = '0';
+    if (!tools?.presenting()) close();
+  };
   function close() {
     if(savingActivity)return;
     closed=true;pixel?.destroy();pixel=null;
+    tools?.destroy();tools=null;
     settle();
     clearTimeout(filmTimer);
     clearTimeout(tubeTimer);
@@ -1298,18 +1321,29 @@ async function present(O) {
     document.body.classList.remove('modal-open');
     if(O.recoveryRequired)closeDesign(O);
   }
-  const overlay = el('div', { class: `cv-show${slides.some(page=>page.activity)?' cv-show-lesson':''}`, role: 'dialog', 'aria-label': '발표 화면', tabindex: '-1', onClick: e => {if(!e.composedPath().some(n=>n.classList?.contains('cv-show-activity')))go(1);} },
+  const overlay = el('div', { class: `cv-show${slides.some(page=>page.activity)?' cv-show-lesson':''}`, role: 'dialog', 'aria-label': '발표 화면', tabindex: '-1', onClick: e => {if(tools?.claimClick(e))return;if(!e.composedPath().some(n=>n.classList?.contains('cv-show-activity')))go(1);} },
     stage,
-    el('div', { class: 'cv-show-bar' }, btn(ic('left'), '앞 장', () => go(-1)), count, btn(ic('right'), '다음 장', () => go(1)), filmBtn, btn([ic('close'), '끝내기'], '발표 끝내기 (Esc)', close)));
+    el('div', { class: 'cv-show-bar' }, btn(ic('left'), '앞 장', () => go(-1)), count, btn(ic('right'), '다음 장', () => go(1)), filmBtn));
   overlay.style.setProperty('--cv-show-ratio', String(aspect));
+  tools = createShowTools(overlay, {
+    total: () => slides.length, index: () => i, next: () => go(1), prev: () => go(-1), go: jump, close, video: toggleFilm,
+    ratio: (k) => aspectOf(entries[k].record),
+    thumb: (k) => slideView(slides[k], aspectOf(entries[k].record), 480),
+    preview: (k) => slideView(slides[k], aspectOf(entries[k].record), 960),
+    notes: (k) => slides[k]?.notes || '',
+    label: (k) => (slides[k]?.activity ? '활동' : entries[k]?.page.source?.kind === 'result' ? '결과' : ''),
+    title: O.record.name, notify: toast, keyClass: 'cv-show-key',
+  });
+  overlay.querySelector('.cv-show-bar').append(...tools.buttons, btn([ic('close'), '끝내기'], '발표 끝내기 (Esc)', close));
   document.body.append(overlay);
   document.body.classList.add('modal-open');
   draw();
   document.addEventListener('keydown', onKey, true);
   overlay.focus({ preventScroll: true });
   // 화면 가득 채워 본다(막힌 곳에서는 창 안에서 보여 준다).
+  document.addEventListener('fullscreenchange', onFull);
   if (overlay.requestFullscreen) {
-    overlay.requestFullscreen().then(() => { overlay.dataset.full = '1'; document.addEventListener('fullscreenchange', onFull); }).catch(() => {});
+    overlay.requestFullscreen().then(() => { overlay.dataset.full = '1'; }).catch(() => {});
   }
 }
 
@@ -1813,7 +1847,7 @@ function askDownload(O, btn) {
   const n = O.slides.length;
   const pref = exportPref();
   const can = canMakeVideo();
-  const pick = { kind: pref.video && can ? 'video' : pref.jpg ? 'jpg' : 'png', all: pref.all && n > 1, stay: pref.stay, pptxMode: 'editable', size: pref.size, vsize: pref.vsize };
+  const pick = { kind: pref.video && can ? 'video' : pref.jpg ? 'jpg' : 'png', all: pref.all && n > 1, stay: pref.stay, pptxMode: 'editable', htmlNotes: false, size: pref.size, vsize: pref.vsize };
   // 장마다 바탕에 깐 영상이 있는지: ''(없다) · 'yes'(있다) · 'gone'(있는데 그 파일이 이 기기에 없다. 조금 뒤에 알게 된다)
   const scenes = currentSlides(O).map((d) => (hasVideo(d) ? 'yes' : ''));
   currentSlides(O).forEach((d, i) => {
@@ -1846,7 +1880,7 @@ function askDownload(O, btn) {
   const submit = el('button', { class: 'btn btn-primary cv-down-submit', type: 'button', 'data-download-save': '', onClick: () => {
     // 옵션을 고를 때는 만들지 않는다. 마지막 단추에서만 현재 선택을 실행한다.
     if (pick.kind === 'pptx') { makePptx(O, {all: pick.all, mode: pick.pptxMode}); return; }
-    if (pick.kind === 'html') { makeHtmlLesson(O); return; }
+    if (pick.kind === 'html') { makeHtmlLesson(O, {notes: pick.htmlNotes}); return; }
     if (pick.kind === 'video' && (!can || filmMs(pick.stay) > MAX_FILM_SECONDS * 1000)) return;
     closeModal();
     if (pick.kind === 'video') {
@@ -1912,7 +1946,14 @@ function askDownload(O, btn) {
         ? '지원하지 않는 조각은 개별 이미지로 담아요. 글꼴 파일은 포함하지 않아 여는 기기에 해당 글꼴이 필요해요.'
         : '글이나 요소를 따로 수정하기는 어려워요.'}),
       el('p', {class: 'cv-down-note', text: '영상과 움직임은 정지한 모습으로 담아요.'})));
-    else if(html)rows.push(el('p',{class:'cv-down-note',text:'브라우저에서 같은 화면으로 슬라이드와 픽셀아트를 실행해요. 일반 슬라이드는 그림으로, 영상·움직임은 정지한 모습으로 담아요. 만든 결과를 포함해 HTML을 다시 내려받을 수 있어요.'}));
+    else if(html){
+      rows.push(el('p',{class:'cv-down-note',text:'브라우저에서 같은 화면으로 슬라이드와 픽셀아트를 실행해요. 일반 슬라이드는 그림으로, 영상·움직임은 정지한 모습으로 담아요. 만든 결과를 포함해 HTML을 다시 내려받을 수 있어요. 온바탕과 같은 발표 모드(단축키·펜·전체 보기·발표자 화면)로 띄울 수 있어요.'}));
+      // 발표자 노트는 선생님 것이다: 학생에게 나눠 줄 파일에 실수로 담기지 않게 처음에는 빼 둔다.
+      rows.push(section('발표자 노트',el('div',{class:'cv-down-chips'},
+        chip('넣지 않기 · 학생에게 줄 때',!pick.htmlNotes,()=>set({htmlNotes:false}),{notes:'off'}),
+        chip('함께 넣기 · 내가 발표할 때',pick.htmlNotes,()=>set({htmlNotes:true}),{notes:'on'})),
+        el('p',{class:'cv-down-note',text:pick.htmlNotes?'노트는 발표자 화면(S)에서만 보여요. 이 파일을 받은 사람은 파일 안의 노트를 볼 수 있어요.':'노트를 빼고 담아요. 슬라이드와 활동은 그대로예요.'})));
+    }
     else rows.push(section(video ? '영상 화질' : '이미지 화질',
       el('p', {class: 'cv-down-note', text: '클수록 또렷하지만 파일 용량이 커져요.'}),
       el('div', {class: `cv-sizes${video ? ' two' : ''}`}, ...(video ? videoSizes() : imageSizes()))));
@@ -1971,7 +2012,7 @@ const saveBlob = (blob, name) => {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 30000);
 };
-async function makeHtmlLesson(O){
+async function makeHtmlLesson(O,{notes=false}={}){
   const abort=new AbortController(),status=el('p',{role:'status',text:'수업 화면을 만들고 있어요…'});
   const box=el('section',{},el('h2',{text:'HTML 수업 내려받기'}),status,el('button',{class:'btn',onClick:closeModal},'취소'));
   openModal(box,{onClose:()=>abort.abort()});
@@ -1986,7 +2027,7 @@ async function makeHtmlLesson(O){
       const {blob}=await designToBlob(value.page,{width,aspect,type:'image/png'});
       const image=await new Promise((yes,no)=>{const reader=new FileReader();reader.onload=()=>yes(reader.result);reader.onerror=no;reader.readAsDataURL(blob);});
       const activity=value.page.activity;
-      pages.push({id:value.page.id,image,aspect,...(value.page.source?.kind==='result'?{result:true}:{}),...(activity?{activity,binding:{documentId:value.record.id,pageId:value.page.id,activityId:activity.id,kind:activity.kind,definitionHash:await activityDefinitionHash(activity)}}:{})});
+      pages.push({id:value.page.id,image,aspect,...(notes?slideNotes(value.page):{}),...(value.page.source?.kind==='result'?{result:true}:{}),...(activity?{activity,binding:{documentId:value.record.id,pageId:value.page.id,activityId:activity.id,kind:activity.kind,definitionHash:await activityDefinitionHash(activity)}}:{})});
     }
     if(abort.signal.aborted)return;
     const html=createHtmlLesson({title:O.materialDeck?.title||O.record.name,pages,target:lessonTarget(O)});

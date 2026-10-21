@@ -1,5 +1,5 @@
 import { el } from './ui.js';
-import { newId } from '../src/document.js';
+import { newId, cleanNotes } from '../src/document.js';
 import { cleanGaiActivity } from '../src/gai-app.js';
 import { mountGaiApp } from './gai-app.js';
 import {gaiOwl} from './brand.js';
@@ -8,12 +8,14 @@ import {gaiOwl} from './brand.js';
 export function gaiLessonContext(entries, selectedId, title = '', options) {
   const selected = entries.findIndex(row => row.page.id === selectedId);
   const text = page => page.items?.filter(item => item.t === 'text').map(item => String(item.text || '')).join(' ') || '';
+  // 선생님의 발표자 노트는 그 쪽에서 무엇을 묻고 설명하려는지 알려 준다. 고른 쪽(과 바로 앞뒤)만, 짧게 보낸다.
+  const notes = (page, limit) => { const value = cleanNotes(page.notes).slice(0, limit); return value ? { teacherNotes: value } : {}; };
   if(options){
     const ids=new Set(options.referenceIds||[]),chosen=entries.map(({page},index)=>({page,index})).filter(v=>ids.has(v.page.id));
     if(chosen.length>3||chosen.length!==ids.size||selected<0)throw Error('참고할 슬라이드를 최대 3쪽 선택해주세요.');
-    return JSON.stringify({title:String(title).slice(0,200),totalSlides:entries.length,insertAfter:selected+1,placement:{pageId:selectedId,position:selected+1,mode:options.editing?'replace':'after'},referenceOnly:true,slides:chosen.map(({page,index})=>({pageId:page.id,position:index+1,originalPage:page.source?.pageNumber||null,text:text(page).slice(0,3000)})),omittedSlides:entries.length-chosen.length});
+    return JSON.stringify({title:String(title).slice(0,200),totalSlides:entries.length,insertAfter:selected+1,placement:{pageId:selectedId,position:selected+1,mode:options.editing?'replace':'after'},referenceOnly:true,slides:chosen.map(({page,index})=>({pageId:page.id,position:index+1,originalPage:page.source?.pageNumber||null,text:text(page).slice(0,3000),...notes(page,1200)})),omittedSlides:entries.length-chosen.length});
   }
-  const rows = entries.map(({ page }, index) => ({ position: index + 1, originalPage: page.source?.pageNumber || null, text: text(page).slice(0, Math.abs(index - selected) <= 1 ? 700 : 100) }));
+  const rows = entries.map(({ page }, index) => ({ position: index + 1, originalPage: page.source?.pageNumber || null, text: text(page).slice(0, Math.abs(index - selected) <= 1 ? 700 : 100), ...(Math.abs(index - selected) <= 1 ? notes(page, 400) : {}) }));
   const value = { title: String(title).slice(0, 200), totalSlides: entries.length, insertAfter: selected + 1, referenceOnly: true, slides: rows, omittedSlides: 0 };
   // Preserve the current scene even near the end of a large material. Never
   // cut a serialized JSON string or silently drop the chosen slide's context.
@@ -137,7 +139,7 @@ export function createGaiMaker({ provider, activity, context, entries=[], select
   details.addEventListener('toggle',()=>{if(details.open)details.querySelector('pre').textContent=share.checked?(entries.length?gaiLessonContext(entries,afterPageId,title,{referenceIds:[...referenceIds],editing:!!activity}):context):'수업 흐름을 전달하지 않아요.';});
   root.append(el('header', {}, el('div', {}, el('h2', {},gaiOwl(),'가이X로 나만의 수업 앱'), el('p', { text: '수업 흐름 선택 → 대화 → 미리보기 → 슬라이드 안에서 실행' })), el('button', { type: 'button', class: 'btn', onClick: () => { if (busy && !controller) return; save(); onCancel(); } }, '편집으로 돌아가기')),entries.length?references:null,
     el('div', { class: 'gai-maker-body' }, el('section', { class: 'gai-maker-chat' }, connect, el('label', { class: 'gai-maker-share' }, share, 'PPT 수업 흐름 함께 전달'),el('label',{class:'gai-maker-share gai-maker-note'},screens,'선택한 슬라이드 화면도 전달'),
-      el('p', { class: 'gai-maker-note', text: '보내기를 누르면 체크한 쪽의 글·축소 화면과 앱을 넣을 위치를 가이X에 전달해요. 화면 전달을 끄면 글만 보냅니다. 원본 PPT 파일은 보내지 않아요. 기존 가이랩 계정의 AI 사용량이 적용돼요.' }),details,log, form, status),
+      el('p', { class: 'gai-maker-note', text: '보내기를 누르면 체크한 쪽의 글·발표자 노트·축소 화면과 앱을 넣을 위치를 가이X에 전달해요. 화면 전달을 끄면 글만 보냅니다. 원본 PPT 파일은 보내지 않아요. 기존 가이랩 계정의 AI 사용량이 적용돼요.' }),details,log, form, status),
       el('section', { class: 'gai-maker-stage' }, previewRoot, apply, el('p', { class: 'gai-maker-note', text: `${activity ? '앱을 고쳐서 반영하면 진행 상태는 새로 시작해요. 이전 결과 쪽은 남아요. ' : ''}앱과 결과는 이 기기에 저장돼요. HTML 수업으로 내려받으면 앱도 함께 실행할 수 있어요.` }))));
   root.addEventListener('keydown', event => event.stopPropagation());
   root.dispose = () => { if (disposed) return; save(); disposed = true; controller?.abort(); preview?.destroy();observer?.disconnect(); };
