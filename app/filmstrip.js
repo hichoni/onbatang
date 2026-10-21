@@ -56,66 +56,98 @@ export function bindFilmstrip(list,{reorder,busy=()=>false}={}){
 
 // Device-only workspace preferences. Folding/resizing never changes a drawing,
 // selected page, undo history or the native horizontal slide rail.
-export function bindSlideTray(strip,{key,sizeKey,navigation=()=>({}),step=()=>{}}={}){
+export function bindSlideTray(strip,{key,navigation=()=>({}),step=()=>{}}={}){
   const compact=window.matchMedia('(min-width:900px) and (min-height:520px) and (max-height:740px)');
+  const desktop=window.matchMedia('(min-width:900px) and (min-height:520px)');
   const controller=new AbortController(),on=(node,type,fn,options={})=>node.addEventListener(type,fn,{...options,signal:controller.signal});
-  let choice=null,height=92,drag=null;
-  try{const value=localStorage.getItem(key);if(value==='closed'||value==='open')choice=value==='closed';height=Math.max(64,Math.min(152,Number(localStorage.getItem(sizeKey))||92));}catch{}
+  let choice=null,panelHeight=null,drag=null,navButton=null,navCount='';
+  const heightKey=key+'.height';
+  try{
+    const value=localStorage.getItem(key);if(value==='closed'||value==='open')choice=value==='closed';
+    const savedHeight=Number(localStorage.getItem(heightKey));if(Number.isFinite(savedHeight)&&savedHeight>=88&&savedHeight<=2000)panelHeight=savedHeight;
+  }catch{}
   const closed=()=>choice??compact.matches;
-  const save=()=>{try{localStorage.setItem(key,closed()?'closed':'open');localStorage.setItem(sizeKey,String(height));}catch{}};
+  const save=()=>{try{localStorage.setItem(key,closed()?'closed':'open');if(panelHeight!==null)localStorage.setItem(heightKey,String(Math.round(panelHeight)));else localStorage.removeItem(heightKey);}catch{}};
+  function limits(){
+    const min=window.matchMedia('(pointer:coarse)').matches?104:88,work=strip.closest('.cv-work'),tools=work?.querySelector('.cv-tools');
+    const available=desktop.matches&&work?.clientHeight?work.clientHeight-(tools?.offsetHeight||0)-180:innerHeight*.65;
+    return {min,max:Math.max(min,Math.floor(Math.min(innerHeight*.65,available)))};
+  }
+  const closeMenu=()=>{const menu=strip.querySelector('.cv-tray-menu');if(menu)menu.open=false;};
   function refresh(){
     const collapsed=closed(),body=strip.querySelector('.cv-tray-body'),toggle=strip.querySelector('.cv-tray-toggle'),grip=strip.querySelector('.cv-tray-grip');
     const wasClosed=strip.classList.contains('cv-tray-collapsed');
     if(collapsed&&body?.contains(document.activeElement))toggle?.focus({preventScroll:true});
-    strip.classList.toggle('cv-tray-collapsed',collapsed);strip.style.setProperty('--cv-thumb-height',`${height}px`);
+    const range=limits();strip.classList.toggle('cv-tray-collapsed',collapsed);
+    // Keep the user's preferred pixels even if a smaller viewport temporarily
+    // clamps them. Only an intentional resize replaces the stored preference.
+    strip.style.height=!collapsed&&panelHeight!==null?`${Math.max(range.min,Math.min(range.max,panelHeight))}px`:'';
+    strip.style.maxHeight=!collapsed&&panelHeight!==null?`${range.max}px`:'';
     if(body)body.hidden=collapsed;
+    let preview=64;
+    if(!collapsed&&panelHeight!==null){
+      const css=getComputedStyle(strip),header=strip.querySelector('.cv-strip-header');
+      preview=Math.max(24,Math.floor(Math.max(range.min,Math.min(range.max,panelHeight))-(header?.offsetHeight||28)-parseFloat(css.paddingTop)-parseFloat(css.paddingBottom)-(parseFloat(css.rowGap)||0)-14));
+    }
+    strip.style.setProperty('--cv-thumb-height',`${preview}px`);
     if(wasClosed&&!collapsed){
       const list=strip.querySelector('.cv-slide-list'),selected=list?.querySelector('.cv-slide.on');
       if(selected){const box=list.getBoundingClientRect(),r=selected.getBoundingClientRect();list.scrollLeft+=r.left<box.left+8?r.left-box.left-8:r.right>box.right-8?r.right-box.right+8:0;}
     }
     if(toggle){toggle.setAttribute('aria-expanded',String(!collapsed));toggle.setAttribute('aria-label',`슬라이드 목록 ${collapsed?'펼치기':'접기'}`);toggle.querySelector('span').textContent=collapsed?'목록 펼치기':'목록 접기';}
-    if(grip){grip.setAttribute('aria-valuenow',String(collapsed?0:height));grip.setAttribute('aria-valuetext',collapsed?'접힘':`미리보기 높이 ${height}px`);}
-    const size=strip.querySelector('.cv-strip-size input');if(size)size.value=String(height);
-    const state=navigation();for(const button of strip.querySelectorAll('[data-tray-step]'))button.disabled=Number(button.dataset.trayStep)<0?!state.previous:!state.next;
+    if(grip){const actual=Math.round(strip.getBoundingClientRect().height);grip.setAttribute('aria-valuemax',String(range.max));grip.setAttribute('aria-valuenow',String(collapsed?0:actual));grip.setAttribute('aria-valuetext',collapsed?'접힘':`목록 창 높이 ${actual}px`);}
+    const size=strip.querySelector('[data-tray-height]');if(size){size.min=String(range.min);size.max=String(range.max);size.value=String(collapsed?(panelHeight??120):Math.round(strip.getBoundingClientRect().height));}
+    const first=strip.querySelector('[data-tray-step]'),count=strip.querySelector('.cv-slide-count')?.textContent;
+    if(first!==navButton||count!==navCount){
+      navButton=first;navCount=count;const state=navigation();
+      for(const button of strip.querySelectorAll('[data-tray-step]'))button.disabled=Number(button.dataset.trayStep)<0?!state.previous:!state.next;
+    }
   }
-  const fold=value=>{choice=value;refresh();save();};
+  const fold=value=>{choice=value;closeMenu();refresh();save();};
   on(strip,'click',event=>{
     if(event.target.closest('.cv-tray-toggle'))fold(!closed());
+    if(event.target.closest('[data-tray-reset]')){panelHeight=null;choice=false;refresh();save();}
     const button=event.target.closest('[data-tray-step]');if(button&&!button.disabled)step(Number(button.dataset.trayStep));
+    if(event.target.closest('.cv-slide-tool,.cv-activity-add,.cv-activity-edit'))closeMenu();
   });
-  on(strip,'input',event=>{if(event.target.matches('.cv-strip-size input')){height=Number(event.target.value);refresh();save();}});
+  on(strip,'input',event=>{if(event.target.matches('[data-tray-height]')){panelHeight=Number(event.target.value);choice=false;refresh();save();}});
   on(strip,'keydown',event=>{
+    if(event.key==='Escape'&&strip.querySelector('.cv-tray-menu[open]')){event.preventDefault();closeMenu();strip.querySelector('.cv-tray-menu>summary').focus();return;}
     if(!event.target.closest('.cv-tray-grip'))return;
     if(!['ArrowUp','ArrowDown','Home','End','Enter',' '].includes(event.key))return;
     event.preventDefault();event.stopPropagation();
+    closeMenu();const range=limits(),actual=strip.getBoundingClientRect().height;
     if(event.key==='Home')choice=true;
     else if(['Enter',' '].includes(event.key))choice=!closed();
-    else if(event.key==='End'){choice=false;height=152;}
-    else if(event.key==='ArrowUp'){height=closed()?64:Math.min(152,height+8);choice=false;}
-    else if(height<=64)choice=true;else height-=8;
+    else if(event.key==='End'){choice=false;panelHeight=range.max;}
+    else if(event.key==='ArrowUp'){panelHeight=closed()?(panelHeight??range.min):Math.min(range.max,actual+16);choice=false;}
+    else if(!closed()){if(actual<=range.min+1)choice=true;else panelHeight=Math.max(range.min,actual-16);}
     refresh();save();
   });
   const finish=(cancel=false)=>{
     if(!drag)return;const before=drag;drag=null;
     strip.classList.remove('is-resizing');
-    if(cancel){choice=before.choice;height=before.height;}
+    if(cancel){choice=before.choice;panelHeight=before.height;}
     else if(!before.moved)choice=!before.closed;
     refresh();if(!cancel)save();
     try{strip.releasePointerCapture(before.id);}catch{}
   };
   on(strip,'pointerdown',event=>{
     if(event.button>0||drag||!event.target.closest('.cv-tray-grip'))return;
-    event.preventDefault();drag={id:event.pointerId,y:event.clientY,height,choice,closed:closed(),moved:false};
+    event.preventDefault();closeMenu();drag={id:event.pointerId,y:event.clientY,height:panelHeight,actual:strip.getBoundingClientRect().height,choice,closed:closed(),moved:false};
     strip.querySelector('.cv-tray-grip').focus({preventScroll:true});strip.setPointerCapture(event.pointerId);
   });
   on(strip,'pointermove',event=>{
     if(!drag||event.pointerId!==drag.id)return;
     const dy=drag.y-event.clientY;if(!drag.moved&&Math.abs(dy)<6)return;
     drag.moved=true;strip.classList.add('is-resizing');
-    const wanted=(drag.closed?0:drag.height)+dy;choice=wanted<40;
-    if(!choice)height=Math.max(64,Math.min(152,wanted));refresh();
+    const wanted=drag.actual+dy,range=limits();choice=wanted<64;
+    if(!choice)panelHeight=Math.round(Math.max(range.min,Math.min(range.max,wanted)));refresh();
   });
   for(const type of ['pointerup','pointercancel','lostpointercapture'])on(strip,type,event=>{if(drag&&event.pointerId===drag.id)finish(type==='pointercancel'||type==='lostpointercapture');});
-  on(window,'blur',()=>finish(true));on(compact,'change',refresh);
-  return {refresh,destroy(){finish(true);controller.abort();}};
+  on(document,'pointerdown',event=>{if(!strip.contains(event.target))closeMenu();}, {capture:true});
+  on(window,'blur',()=>finish(true));on(window,'resize',()=>refresh());on(compact,'change',()=>refresh());
+  const observer=typeof ResizeObserver==='function'?new ResizeObserver(()=>refresh()):null;
+  const work=strip.closest('.cv-work');if(work){observer?.observe(work);const tools=work.querySelector('.cv-tools');if(tools)observer?.observe(tools);}
+  return {refresh,destroy(){finish(true);observer?.disconnect();controller.abort();}};
 }

@@ -155,8 +155,8 @@ test('large horizontal filmstrip reorders across parts, preserves fixed original
  const {page,entry,base,checkIsolation}=await setup(t);await enterImport(page,entry);await inspectFile(page,'self-authored-21-pages.pptx',21);
  await page.locator('[data-import-save]').click();await page.locator('[data-inline-import]').waitFor({state:'detached'});await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);
  const before=await readLibrary(page,base),oldIds=before.graphs[0].pages.map(row=>row.page.id);
- assert.ok(await page.locator('.cv-slide-view').first().evaluate(node=>node.clientHeight)>=90);
- await page.getByLabel('슬라이드 미리보기 크기').fill('120');assert.equal(await page.locator('.cv-slide-view').first().evaluate(node=>node.clientHeight),120);
+ assert.equal(await page.locator('.cv-slide-view').first().evaluate(node=>node.clientHeight),64);
+ await page.locator('.cv-tray-menu>summary').click();await page.getByLabel('슬라이드 목록 창 높이').fill('180');assert.equal(Math.round((await page.locator('.cv-strip').boundingBox()).height),180);await page.locator('.cv-tray-menu>summary').click();
  await page.locator('.cv-slide-list').hover();await page.mouse.wheel(0,600);assert.ok(await page.locator('.cv-slide-list').evaluate(node=>node.scrollLeft)>0);
  const last=page.locator('[data-material-page="20"]');await last.focus();await page.keyboard.press('Alt+ArrowLeft');
  await page.waitForFunction(()=>!document.querySelector('#app').inert);
@@ -167,7 +167,7 @@ test('large horizontal filmstrip reorders across parts, preserves fixed original
  await page.waitForFunction(()=>document.querySelector('[data-material-page="0"]')?.getAttribute('aria-label')?.includes('원본 2쪽'));
  const ordered=await readLibrary(page,base),name=await page.locator('.cv-name').inputValue();
  await page.reload();await page.getByRole('button',{name:name+' 열기',exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);
- assert.equal(await page.locator('.cv-slide-view').first().evaluate(node=>node.clientHeight),120);
+ assert.equal(Math.round((await page.locator('.cv-strip').boundingBox()).height),180);
  assert.match(await page.locator('[data-material-page="19"]').getAttribute('aria-label'),/원본 21쪽/);
  await page.locator('.cv-down-btn').click();const dialog=page.getByRole('dialog',{name:'내려받기',exact:true});await dialog.locator('[data-type=pptx]').click();await dialog.locator('[data-scope=all]').click();await dialog.locator('[data-pptx=editable]').click();
  const output=await downloadBy(page,()=>dialog.locator('[data-pptx-save]').click()),files=unzipSync(output.bytes);assert.match(xml(files,'ppt/slides/slide1.xml'),/직접 만든 2쪽/);
@@ -184,15 +184,16 @@ test('short Chromebook workspace folds/resizes its tray and keeps whole-PPT navi
  assert.ok((await tray.boundingBox()).height<=60,'collapsed tray is a single compact row');
  const large=await stage.boundingBox();assert.ok(large.height>=330,'canvas retains useful height on a 650px viewport');
  for(let i=1;i<=20;i++){await page.getByRole('button',{name:'다음 슬라이드',exact:true}).click();await page.waitForFunction(n=>document.querySelector('[data-material-count]')?.textContent===`${n} / 21쪽 · 전체 PPT`,i+1);}
- await page.getByRole('button',{name:'슬라이드 목록 펼치기'}).click();const small=await stage.boundingBox();assert.ok(large.height>small.height+90,'folding returns real pixels to the canvas');
+ await page.getByRole('button',{name:'슬라이드 목록 펼치기'}).click();const small=await stage.boundingBox();assert.ok(large.height>small.height+60,'folding returns real pixels to the canvas');assert.ok((await tray.boundingBox()).height<=128,'default strip is a compact thumbnail row');
  const railBox=await page.locator('.cv-slide-list').boundingBox(),selectedBox=await page.locator('[data-material-page="20"]').boundingBox();assert.ok(selectedBox.x>=railBox.x&&selectedBox.x+selectedBox.width<=railBox.x+railBox.width,'reopening reveals the page selected while collapsed');
  assert.ok((await tray.boundingBox()).height<=650*.42+1);
  await page.locator('[data-material-page="19"]').click();await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='20 / 21쪽 · 전체 PPT');
  await page.getByRole('button',{name:'슬라이드 목록 접기'}).click();await page.getByRole('button',{name:'다음 슬라이드',exact:true}).click();await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='21 / 21쪽 · 전체 PPT');
  assert.equal(await page.getByRole('button',{name:'다음 슬라이드',exact:true}).isEnabled(),false);
  await page.getByRole('button',{name:'이전 슬라이드',exact:true}).click();await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='20 / 21쪽 · 전체 PPT');
- await grip.press('ArrowUp');assert.equal(await grip.getAttribute('aria-valuenow'),'64');await grip.press('End');assert.equal(await grip.getAttribute('aria-valuenow'),'152');
- let box=await grip.boundingBox();await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2,box.y+box.height/2+190,{steps:8});await page.mouse.up();
+ await grip.press('ArrowUp');assert.ok(Number(await grip.getAttribute('aria-valuenow'))>=88);await grip.press('End');assert.equal(await grip.getAttribute('aria-valuenow'),await grip.getAttribute('aria-valuemax'));
+ const down=Number(await grip.getAttribute('aria-valuenow'))-40;
+ let box=await grip.boundingBox();await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2,box.y+box.height/2+down,{steps:8});await page.mouse.up();
  assert.equal(await grip.getAttribute('aria-valuenow'),'0','dragging down folds the tray');
  box=await grip.boundingBox();await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2,box.y+box.height/2-110,{steps:8});await page.mouse.up();
  assert.ok(Number(await grip.getAttribute('aria-valuenow'))>=104,'dragging up restores and resizes the tray');
@@ -223,6 +224,28 @@ test('touch tray handle expands/cancels safely and its compact controls fit a ph
  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point]});for(let i=1;i<=8;i++)await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...point,y:point.y-100*i/8}]});await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await cdp.detach();
  assert.equal(await page.locator('.cv-tray-body').isVisible(),true);assert.ok(Number(await grip.getAttribute('aria-valuenow'))>=96);await page.getByRole('button',{name:'슬라이드 목록 접기'}).tap();
  await page.screenshot({path:resolve(root,'work/slide-tray-phone-collapsed.png'),fullPage:true});await checkIsolation({pptx:false});
+});
+
+test('tray pixel height persists across documents/reload, clamps temporarily and stays within its device namespace',options,async t=>{
+ const {page,context,entry,origin,base,checkIsolation}=await setup(t,{viewport:{width:1366,height:900}});await page.goto(entry);await page.locator('.cv-hero .cv-new-btn').click();
+ const tray=page.locator('.cv-strip'),grip=page.getByRole('separator',{name:'슬라이드 목록 높이 조절'});
+ assert.ok((await tray.boundingBox()).height<=128,'new default is a thin thumbnail strip');assert.equal(await page.locator('.cv-slide-tools').isVisible(),false,'page tools are tucked into the contextual menu');
+ await page.locator('.fe-tab[data-tab=text]').click();await page.locator('.fe-tabbody .fe-textadd').first().click();
+ await page.locator('.cv-name').fill('창 높이 유지 확인');await page.locator('.cv-back').click();await page.getByRole('button',{name:'창 높이 유지 확인 열기',exact:true}).click();
+ const record=await page.evaluate(async base=>(await (await import(base+'/app/store.js')).listDesigns()).find(r=>r.name==='창 높이 유지 확인'),base);
+ const height=async()=>Math.round((await tray.boundingBox()).height);
+ async function setHeight(value){await page.locator('.cv-tray-menu>summary').click();await page.getByLabel('슬라이드 목록 창 높이').fill(String(value));await page.locator('.cv-tray-menu>summary').click();}
+ await setHeight(197);assert.equal(await height(),197,'height control changes the whole panel in pixels');
+ const box=await grip.boundingBox();await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2,box.y+box.height/2-37,{steps:6});await page.mouse.up();assert.equal(await height(),234,'drag distance matches the panel boundary');
+ await page.locator('.cv-back').click();await page.getByRole('button',{name:'창 높이 유지 확인 열기',exact:true}).click();assert.equal(await height(),234,'reopening retains exact panel height');
+ await page.reload();await page.getByRole('button',{name:'창 높이 유지 확인 열기',exact:true}).click();assert.equal(await height(),234,'full reload retains exact panel height');
+ const saved=await page.evaluate(async({base,id})=>(await import(base+'/app/store.js')).getDesign(id),{base,id:record.id});assert.deepEqual(saved,record,'workspace settings do not write the drawing or undo history');
+ await setHeight(430);await page.setViewportSize({width:1000,height:560});await page.waitForFunction(()=>Number(document.querySelector('.cv-tray-grip').getAttribute('aria-valuenow'))<430);assert.ok(await height()<430);
+ assert.equal(await page.evaluate(()=>localStorage.getItem('onbatang.filmstrip-tray.v1.minican.height')),'430','viewport clamp never overwrites preferred height');
+ await page.setViewportSize({width:1366,height:900});await page.waitForFunction(()=>Math.round(document.querySelector('.cv-strip').getBoundingClientRect().height)===430);
+ await setHeight(197);await page.locator('.cv-back').click();await page.locator('.cv-hero .cv-new-btn').click();assert.equal(await height(),197,'a new document on this device uses the same preference');
+ const other=await context.newPage(),otherErrors=[];other.on('pageerror',error=>otherErrors.push(error.message));await other.goto(origin+base+'/isolated.html');await other.locator('.cv-hero .cv-new-btn').click();assert.ok(Math.round((await other.locator('.cv-strip').boundingBox()).height)<=128,'another storage/account namespace keeps its own default');assert.deepEqual(otherErrors,[]);await other.close();
+ await checkIsolation({pptx:false});
 });
 
 test('direct eyedropper, four named palettes, undo, cancel, stale selection and reload',options,async t=>{
