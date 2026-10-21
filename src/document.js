@@ -16,6 +16,42 @@ export function cleanNotes(value) {
 export const slideNotes = slide => { const notes = cleanNotes(slide?.notes); return notes ? { notes } : {}; };
 /** 발표할 때 건너뛰는(숨긴) 장이면 { hidden: true }, 아니면 {} (그 장은 지우지 않고 편집·저장·PPTX 에는 남는다). */
 export const slideHidden = slide => (slide?.hidden === true ? { hidden: true } : {});
+/** 주제(구역) 이름: 이 장부터 새 주제가 시작된다(PowerPoint 의 구역). 한 줄 글로 40자까지. 비면 ''. */
+export const TOPIC_LIMIT = 40;
+export function cleanTopic(value) {
+  if (typeof value !== 'string') return '';
+  return Array.from(value.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim()).slice(0, TOPIC_LIMIT).join('').trim();
+}
+/**
+ * 발표에 나오는 장들의 주제 이름(id → 이름). 숨긴 장에서 시작한 주제는 그다음에 나오는 장으로 넘긴다
+ * (그 장에 제 주제가 있으면 그것을 쓴다). 발표 · HTML 수업 · 전체 보기가 함께 쓴다.
+ */
+export function shownTopics(pages) {
+  const out = new Map();
+  let pending = '';
+  for (const page of Array.isArray(pages) ? pages : []) {
+    const name = cleanTopic(page?.topic);
+    if (page?.hidden === true) { if (name) pending = name; continue; }
+    if (name || pending) out.set(page?.id, name || pending);
+    pending = '';
+  }
+  return out;
+}
+/** 장에 주제 이름이 있으면 { topic }, 없으면 {}. */
+export const slideTopic = slide => { const topic = cleanTopic(slide?.topic); return topic ? { topic } : {}; };
+/**
+ * 장 목록을 주제로 묶는다: 주제 이름이 있는 장에서 새 묶음이 시작된다. 첫 주제 앞의 장들은 이름 없는 묶음('')이다.
+ * 돌려주는 것: [{ name, start(첫 장 번호), end(끝 장 번호, 포함) }] (장이 없으면 [])
+ */
+export function topicGroups(names) {
+  const out = [];
+  (Array.isArray(names) ? names : []).forEach((value, i) => {
+    const name = cleanTopic(value);
+    if (!out.length || name) out.push({ name, start: i, end: i });
+    else out[out.length - 1].end = i;
+  });
+  return out;
+}
 /** 그림 설명(대체 텍스트)의 한도와 정리: 한 줄 글로(조종 문자·줄바꿈은 빈칸으로, 앞뒤 빈칸은 뺀다). 비면 ''. */
 export const ALT_LIMIT = 300;
 export function cleanAlt(value) {

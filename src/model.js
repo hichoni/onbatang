@@ -14,7 +14,7 @@ import { SHAPE_ASSETS, SHAPE_GROUPS, shapeAsset } from './shapes.js';
 import { isArtId, artColorable, artAspect, artPack, artName } from './art.js';
 import { isYouTubeId, ytStart, ytTime } from './youtube.js';
 import { ENTER_IDS, COMBO_IDS, TRANSITION_IDS, STILL } from './motion.js';
-import { metadata, newId, fail, validatePageInput, isSlideItem, itemTextLimit, pageLimits, slideNotes, slideHidden, cleanAlt, ALT_LIMIT } from './document.js';
+import { metadata, newId, fail, validatePageInput, isSlideItem, itemTextLimit, pageLimits, slideNotes, slideHidden, slideTopic, cleanAlt, ALT_LIMIT } from './document.js';
 export { cleanAlt, ALT_LIMIT };
 import { cleanActivity } from './activity.js';
 import { cleanCrop } from './crop.js';
@@ -365,7 +365,7 @@ export function cleanItems(items, opts) {
 export function cleanDesign(design, opts) {
   const d = design && typeof design === 'object' ? design : {};
   const options = d.id ? { ...opts, strict: true, keepSpaces: true } : opts;
-  return { ...metadata(d, { identity: true }), bg: cleanBg(d.bg), items: cleanItems(d.items, options), ...designMotion(d), ...designVideo(d), ...slideNotes(d), ...slideHidden(d), ...(d.activity === undefined ? {} : {activity:cleanActivity(d.activity)}) };
+  return { ...metadata(d, { identity: true }), bg: cleanBg(d.bg), items: cleanItems(d.items, options), ...designMotion(d), ...designVideo(d), ...slideNotes(d), ...slideHidden(d), ...slideTopic(d), ...(d.activity === undefined ? {} : {activity:cleanActivity(d.activity)}) };
 }
 /**
  * 디자인의 움직임: pa(요소들의 조합 효과) · tr(이 장이 넘어올 때의 전환 효과). 정해 둔 것만 담아 돌려준다(없으면 빈 객체).

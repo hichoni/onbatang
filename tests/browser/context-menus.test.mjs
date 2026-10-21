@@ -11,7 +11,7 @@ const root = resolve(fileURLToPath(new URL('../../', import.meta.url)));
 const options = {skip: !process.env.MINICAN_PLAYWRIGHT_PATH, timeout: 120000};
 const html = `<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/src/editor.css"><link rel="stylesheet" href="/app/app.css"><body class="mc-app"><main id="app"></main><script type="module">
 import {startMinican} from '/app/app.js';import {newRecord} from '/app/designs.js';import {putDesign,getDesign,setStorageName} from '/app/store.js';
-setStorageName('menu-fixture');
+setStorageName('menu-fixture');try{localStorage.setItem('onbatang-tour-seen-v1:editor','1');}catch{}
 const canvas=document.createElement('canvas');canvas.width=40;canvas.height=20;const c=canvas.getContext('2d');c.fillStyle='#1c7ed6';c.fillRect(0,0,40,20);
 const seed=newRecord('16:9');seed.name='우클릭 검수';
 seed.slides=[{id:'pmenu00001',bg:'#ffffff',items:[

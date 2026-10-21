@@ -80,6 +80,10 @@ const TRANSITION_DEFS = {
     next: (d) => [{ turn: 90 * d, o: 0 }, { at: 0.5, turn: 90 * d, o: 1, ease: 'ease-out' }, { turn: 0, o: 1 }],
     old: (d) => [{ turn: 0, o: 1, ease: 'ease-in' }, { at: 0.5, turn: -90 * d, o: 1 }, { at: 0.5, turn: -90 * d, o: 0 }, { turn: -90 * d, o: 0 }],
   },
+  // 이어 움직이기(키노트의 매직 무브): 앞 장과 이 장에 같은 요소가 있으면 그 요소가 제자리로 옮겨 가고(자리·크기·각도·색),
+  // 나머지는 서서히 바뀐다. 짝은 matchItems 가 정한다. 두 장을 다 아는 곳(발표 화면)에서만 옮겨 가고,
+  // 한 장만 아는 곳(미리 보기 · 영상 만들기)에서는 아래 frames 대로 서서히 바뀐다.
+  move: { name: '이어 움직이기', ms: 900, ease: 'ease-in-out', morph: true, next: () => [{ o: 0 }, { o: 1 }], old: () => [{ o: 1 }, { o: 0 }] },
 };
 /** 뒤집기 효과의 원근(화면에서의 px). 화면용 키프레임과 영상이 같은 값을 쓴다. */
 export const TURN_DEPTH = 1600;
@@ -205,6 +209,50 @@ export function transitionFrames(id, dir = 1) {
   const d = dir < 0 ? -1 : 1;
   return { ms: def.ms, easing: def.ease || TURN_EASE, next: def.next(d).map(turnKeyframe), old: def.old ? def.old(d).map(turnKeyframe) : null };
 }
+
+// ---------- 이어 움직이기: 두 장의 같은 요소 짝짓기 ----------
+
+// 요소의 내용(같은 글 · 같은 그림 · 같은 스티커 …). 이름표가 이어지지 않는 요소는 이것이 양쪽에 하나씩만 있을 때 짝이 된다.
+const contentOf = (it) => {
+  const v = it?.t === 'text' ? it.text : it?.t === 'image' ? it.url : it?.t === 'emoji' ? it.ch : it?.t === 'shape' ? `${it.shape}|${it.color}` : it?.t === 'art' ? it.art : it?.t === 'yt' ? it.yt : '';
+  return typeof v === 'string' && v ? `${it.t}|${v}` : '';
+};
+// 요소의 이름표와, 복제했을 때 적어 둔 원본의 이름표(designs.js 의 copySlide 가 origin.elementId 로 남긴다).
+const linksOf = (it) => [it?.id, it?.origin?.elementId].filter((v) => typeof v === 'string' && v);
+
+/**
+ * 앞 장(before)과 다음 장(after)의 요소 목록에서 "같은 요소"를 짝짓는다(DOM 을 모르는 순수 함수).
+ *   1) 종류가 같고 이름표가 같거나, 한쪽이 다른 쪽을 복제한 것이거나, 같은 원본에서 복제한 것
+ *   2) 남은 것끼리 종류와 내용(글 · 그림 주소 · 스티커 · 도형 모양과 색 …)이 같고, 그런 것이 양쪽에 하나씩만 있는 것
+ * 돌려주는 것: [[앞 장의 요소 번호, 다음 장의 요소 번호], …] (다음 장의 차례대로)
+ */
+export function matchItems(before, after) {
+  const a = Array.isArray(before) ? before : [];
+  const b = Array.isArray(after) ? after : [];
+  const pairs = [];
+  const usedA = new Set();
+  const usedB = new Set();
+  b.forEach((nb, j) => {
+    const keys = linksOf(nb);
+    if (!keys.length) return;
+    const i = a.findIndex((na, k) => !usedA.has(k) && na?.t === nb?.t && linksOf(na).some((v) => keys.includes(v)));
+    if (i >= 0) { pairs.push([i, j]); usedA.add(i); usedB.add(j); }
+  });
+  const count = (list, used) => {
+    const m = new Map();
+    list.forEach((it, k) => { const c = !used.has(k) && contentOf(it); if (c) m.set(c, [...(m.get(c) || []), k]); });
+    return m;
+  };
+  const left = count(a, usedA);
+  const right = count(b, usedB);
+  for (const [c, js] of right) {
+    const is = left.get(c);
+    if (is?.length === 1 && js.length === 1) pairs.push([is[0], js[0]]);
+  }
+  return pairs.sort((p, q) => p[1] - q[1]);
+}
+/** 그 전환이 두 장을 이어 움직이는 것인지. */
+export const morphs = (id) => !!TRANSITION_DEFS[id]?.morph;
 
 // ---------- 그 순간의 모습(영상으로 만들 때): 브라우저의 키프레임 계산을 그대로 따라 한다 ----------
 
@@ -347,7 +395,8 @@ export function playDesign(card, design, { delay = 0, still = false } = {}) {
   const plan = still ? { auto: [], clicks: [] } : planMotion(design);
   const running = [];
   const keep = (a) => { if (a) { running.push(a); a.finished.catch(() => {}); } };
-  for (const a of plan.auto) keep(playEnter(nodes[a.i], items[a.i], a.enter, { delay: delay + a.delay, mirror: a.mirror }));
+  // 이어 움직이기로 앞 장에서 옮겨 온 요소는 이미 화면에 있으므로 다시 나타나지 않는다(누를 때 나오는 것은 그대로 기다린다).
+  for (const a of plan.auto) if (!nodes[a.i]?.dataset.moved) keep(playEnter(nodes[a.i], items[a.i], a.enter, { delay: delay + a.delay, mirror: a.mirror }));
   const waiting = plan.clicks.filter((c) => nodes[c.i]);
   for (const c of waiting) nodes[c.i].style.visibility = 'hidden';
   const show = (c, animate) => {
@@ -376,7 +425,8 @@ export function playDesign(card, design, { delay = 0, still = false } = {}) {
  * 돌려주는 것: { ms(걸리는 시간. 틀지 않았으면 0), finish(): 바로 끝낸다(여러 번 불러도 된다), done: 끝나면 풀리는 약속 }
  * 끝난 뒤에는 두 장 모두 움직임이 걸리지 않은 제 모습이다(나가는 장을 떼는 일은 부른 쪽이 한다).
  */
-export function playTransition(old, next, id, dir = 1) {
+export function playTransition(old, next, id, dir = 1, { from = null, to = null } = {}) {
+  if (morphs(id) && old && next && from && to && typeof next.animate === 'function' && !calm()) return playMorph(old, next, from, to);
   const f = transitionFrames(id, dir);
   if (!f || !next || typeof next.animate !== 'function' || calm()) return { ms: 0, finish() {}, done: Promise.resolve() };
   const opts = { duration: f.ms, easing: f.easing, fill: 'both' };
@@ -392,4 +442,66 @@ export function playTransition(old, next, id, dir = 1) {
   };
   const done = Promise.all(anims.map((a) => a.finished.catch(() => {}))).then(end);
   return { ms: f.ms, finish: end, done };
+}
+
+// 옮겨 가는 동안 맞추는 모습: 자리 · 크기 · 글자 크기 · 각도(transform) · 투명도 · 색. 두 장은 같은 크기로 겹쳐 있으므로
+// 화면에서 잰 값(px)을 그대로 이어 붙일 수 있다.
+const MORPH_KEYS = ['left', 'top', 'width', 'height', 'fontSize', 'opacity', 'color', 'backgroundColor'];
+function poseOf(node) {
+  const cs = getComputedStyle(node);
+  const out = { transform: node.style.transform || 'translate(-50%, -50%)' };
+  for (const k of MORPH_KEYS) out[k] = cs[k];
+  return out;
+}
+
+/**
+ * 이어 움직이기를 튼다. from · to 는 두 장의 디자인(카드의 요소와 차례가 같아야 한다).
+ *   짝이 된 요소: 앞 장의 모습에서 이 장의 모습으로 옮겨 간다(앞 장의 것은 바로 감춘다).
+ *   짝이 없는 요소: 앞 장의 것은 사라지고, 이 장의 것은 조금 늦게 나타난다. 바탕도 서서히 바뀐다.
+ * 옮겨 온 요소에는 data-moved 를 달아 playDesign 이 다시 나타나게 하지 않는다.
+ * 돌려주는 것은 playTransition 과 같다(+ moved: 옮겨 온 요소의 수).
+ */
+function playMorph(old, next, from, to) {
+  const def = TRANSITION_DEFS.move;
+  const nodesOf = (card) => [...card.children].filter((n) => n.classList.contains('fi'));
+  const was = nodesOf(old);
+  const now = nodesOf(next);
+  const pairs = matchItems(from.items, to.items).filter(([i, j]) => was[i] && now[j]);
+  const opts = { duration: def.ms, easing: def.ease, fill: 'both' };
+  const anims = [];
+  const hidden = [];
+  // 이 장의 바탕은 따로 깐 판으로 서서히 나타난다(그동안 카드 자체는 비쳐 보여 앞 장의 바탕이 보인다).
+  const back = next.ownerDocument.createElement('div');
+  back.className = 'fe-morph-back';
+  back.setAttribute('aria-hidden', 'true');
+  next.prepend(back);
+  next.classList.add('fe-morphing');
+  anims.push(back.animate([{ opacity: 0 }, { opacity: 1 }], opts));
+  const moved = new Set(pairs.map(([, j]) => j));
+  const gone = new Set(pairs.map(([i]) => i));
+  for (const [i, j] of pairs) {
+    const start = poseOf(was[i]);
+    const end = poseOf(now[j]);
+    now[j].dataset.moved = '1';
+    was[i].style.visibility = 'hidden';
+    hidden.push(was[i]);
+    anims.push(now[j].animate([start, end], opts));
+  }
+  was.forEach((n, i) => { if (!gone.has(i)) anims.push(n.animate([{ opacity: getComputedStyle(n).opacity }, { opacity: 0, offset: 0.5 }, { opacity: 0 }], opts)); });
+  // 이 장에만 있는 것(영상 장면 판 · 안내 글 포함)은 앞 장의 것이 거의 사라진 뒤에 나타난다.
+  [...next.children].forEach((n, k) => {
+    if (n === back || (n.classList.contains('fi') && moved.has(now.indexOf(n)))) return;
+    anims.push(n.animate([{ opacity: 0 }, { opacity: 0, offset: 0.35 }, { opacity: getComputedStyle(n).opacity }], opts));
+  });
+  let over = false;
+  const end = () => {
+    if (over) return;
+    over = true;
+    for (const a of anims) { try { a.cancel(); } catch { /* 이미 걷혔다 */ } }
+    back.remove();
+    next.classList.remove('fe-morphing');
+    for (const n of hidden) n.style.visibility = '';
+  };
+  const done = Promise.all(anims.map((a) => a.finished.catch(() => {}))).then(end);
+  return { ms: def.ms, finish: end, done, moved: pairs.length };
 }

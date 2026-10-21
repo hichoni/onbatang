@@ -1,7 +1,7 @@
 import { cleanPixelActivity } from '../src/pixel-art.js';
 import { cleanActivity } from '../src/activity.js';
 import { cleanGaiResult } from '../src/gai-app.js';
-import { isId, newId, slideNotes } from '../src/document.js';
+import { isId, newId, slideNotes, slideTopic } from '../src/document.js';
 import { mountPixelArt } from './pixel-art.js';
 import { mountGaiApp } from './gai-app.js';
 import { el } from '../src/dom.js';
@@ -17,7 +17,7 @@ export function cleanHtmlLesson(raw) {
     if (!page || !isId(page.id) || seen.has(page.id) || !png(page.image) || !Number.isFinite(page.aspect) || page.aspect < .25 || page.aspect > 4) throw new Error('수업 슬라이드를 확인해 주세요.');
     seen.add(page.id); bytes += page.image.length;
     if (bytes > 200_000_000) throw new Error('수업 파일이 너무 커요. 그림 크기를 줄여 다시 내려받아 주세요.');
-    const out = { id: page.id, image: page.image, aspect: page.aspect, ...slideNotes(page) };
+    const out = { id: page.id, image: page.image, aspect: page.aspect, ...slideNotes(page), ...slideTopic(page) };
     if (out.notes) bytes += out.notes.length * 3;
     if (page.activity !== undefined) { out.activity = cleanActivity(page.activity); bytes += new TextEncoder().encode(JSON.stringify(out.activity)).length; }
     if(page.binding!==undefined){out.binding=cleanLessonBinding(page.binding);if(out.activity&&(out.binding.pageId!==out.id||out.binding.activityId!==out.activity.id||out.binding.kind!==out.activity.kind))throw Error('활동의 원본 연결 정보가 달라요.');}
@@ -109,7 +109,7 @@ export function mountHtmlLesson(raw, host = document.getElementById('onbatang-le
     const tools = createShowTools(host, {
       total: () => pages.length, index: () => current, next: () => navigate(1), prev: () => navigate(-1), go: goTo, close: endShow,
       thumb: slideImage, preview: slideImage, ratio: k => pages[k].aspect,
-      notes: k => pages[k].notes || '', label: k => pages[k].activity ? '활동' : pages[k].result ? '결과' : '',
+      notes: k => pages[k].notes || '', topic: k => pages[k].topic || '', label: k => pages[k].activity ? '활동' : pages[k].result ? '결과' : '',
       title: seed.title, notify: message => { status.textContent = message; }, keyClass: 'lesson-show-key',
     });
     const bar = el('div', { class: 'lesson-show-bar' }, showKey('◀', '앞 쪽', () => navigate(-1)), showCount, showKey('▶', '다음 쪽', () => navigate(1)), showClose, ...tools.buttons, showKey('끝내기', '발표 끝내기 (Esc)', endShow));
@@ -132,7 +132,7 @@ export function mountHtmlLesson(raw, host = document.getElementById('onbatang-le
     if (document.fullscreenElement === host) { show.full = true; return; }
     if (document.fullscreenElement || !show.full) return;
     show.full = false;
-    if (!show.tools.presenting()) endShow();
+    if (!show.tools.presenting() && !show.tools.camera()) endShow();
   };
   document.addEventListener('fullscreenchange', onFull);
   // 발표 모드에서 쪽(빈 곳)을 누르면 다음 쪽. 활동 화면과 단추를 누른 것은 그것들의 몫이다.

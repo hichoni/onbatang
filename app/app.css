@@ -1125,6 +1125,8 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero-go { display: flex
 .cv-slide.skip .cv-slide-view { opacity: .38; filter: grayscale(.6); }
 .cv-slide-skip { position: absolute; right: 3px; top: 3px; z-index: 1; display: none; padding: 0 5px; border-radius: 6px; background: rgba(23, 28, 68, .8); color: #fff; font-size: .62rem; font-weight: 800; line-height: 16px; pointer-events: none; }
 .cv-slide.skip .cv-slide-skip { display: block; }
+/* 주제가 시작되는 장: 작은 그림 아래에 주제 이름 */
+.cv-slide-topic { position: absolute; left: 3px; bottom: 3px; z-index: 1; max-width: calc(100% - 6px); padding: 0 6px; border-radius: 6px; background: rgba(61, 75, 192, .92); color: #fff; font-size: .62rem; font-weight: 800; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
 
 /* PDF·인쇄용 보이지 않는 틀 */
 .cv-print-frame { position: fixed; right: 0; bottom: 0; width: 0; height: 0; border: 0; visibility: hidden; }
