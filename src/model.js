@@ -16,6 +16,7 @@ import { isYouTubeId, ytStart, ytTime } from './youtube.js';
 import { ENTER_IDS, COMBO_IDS, TRANSITION_IDS, STILL } from './motion.js';
 import { metadata, newId, fail, validatePageInput, isSlideItem, itemTextLimit, pageLimits } from './document.js';
 import { cleanActivity } from './activity.js';
+import { cleanCrop } from './crop.js';
 
 export { SHAPE_GROUPS };
 
@@ -322,9 +323,10 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
   if (it.t === 'image') {
     const img = cleanImg(it);
     if (!img) return null;
+    const crop = cleanCrop(it.crop);
     return {
       t: 'image', ...base, ...flip, w: measure(base,it.w, photoMin(base), photoMax().w, 50), h: measure(base,it.h, photoMin(base), photoMax().h, 50),
-      mask: maskIds.includes(it.mask) ? it.mask : 'none', ...img,
+      mask: maskIds.includes(it.mask) ? it.mask : 'none', ...img, ...(crop ? {crop} : {}),
     };
   }
   return null;

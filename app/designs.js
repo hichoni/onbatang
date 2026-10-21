@@ -11,6 +11,7 @@
 /** 고를 수 있는 화면 비율(aspect 는 가로 ÷ 세로). */
 import { SCHEMA_VERSION, DOCUMENT_LIMITS, DocumentError, fail, isId, newId, legacyId, cleanSize, metadata, cleanAssets, validatePageInput, validateReferences } from '../src/document.js';
 import { cleanActivity } from '../src/activity.js';
+import {cleanCrop} from '../src/crop.js';
 export { SCHEMA_VERSION, DocumentError };
 
 export const RATIOS = [
@@ -142,7 +143,8 @@ const cleanSlide = (d, index, documentId) => {
   return { bg: d.bg, ...slideExtra({ ...d, id: pageId }), items: items.map((item, i) => {
     const out = {};
     for (const k of ITEM_FIELDS) if (['string', 'number', 'boolean'].includes(typeof item[k])) out[k] = item[k];
-    return { ...out, ...(item.layout==='slide'?{layout:'slide'}:{}), ...metadata({ ...item, id: item.id ?? legacyId('e', `${documentId}:${pageId}:${i}`) }, { identity: true }) };
+    const crop=item.t==='image'?cleanCrop(item.crop):null;
+    return { ...out, ...(crop?{crop}:{}), ...(item.layout==='slide'?{layout:'slide'}:{}), ...metadata({ ...item, id: item.id ?? legacyId('e', `${documentId}:${pageId}:${i}`) }, { identity: true }) };
   }) };
 };
 /**

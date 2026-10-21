@@ -259,7 +259,8 @@ export async function createPptx({slides, aspect = 16 / 9, size, title = '온바
         else if (item.t === 'image' && item.mask === 'none') {
           const loaded = await photo(item, signal), box = itemBox(item, slideSize), sourceAspect = loaded.width / loaded.height, targetAspect = box.w / box.h;
           const horizontal = sourceAspect > targetAspect, crop = Math.max(0, Math.round((1 - (horizontal ? targetAspect / sourceAspect : sourceAspect / targetAspect)) * 50000));
-          await raster(loaded, item.id || `사진 ${id}`, item, box, crop ? `<a:srcRect ${horizontal ? `l="${crop}" r="${crop}"` : `t="${crop}" b="${crop}"`}/>` : '');
+          const c=item.crop,explicit=c?`<a:srcRect l="${Math.round(c.x*100000)}" t="${Math.round(c.y*100000)}" r="${Math.round((1-c.x-c.w)*100000)}" b="${Math.round((1-c.y-c.h)*100000)}"/>`:null;
+          await raster(loaded, item.id || `사진 ${id}`, item, box, explicit??(crop ? `<a:srcRect ${horizontal ? `l="${crop}" r="${crop}"` : `t="${crop}" b="${crop}"`}/>` : ''));
         } else {
           itemWarn('ELEMENT_RASTERIZED', '이 요소는 모양을 보존한 그림으로 저장해요.', {type: item.t, ...(item.shape ? {shape: item.shape} : {})});
           const rendered = await cancellable(renderItem(design, itemIndex, options), signal);

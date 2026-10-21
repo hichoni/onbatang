@@ -43,7 +43,8 @@ export function itemView(item) {
     const thumb = el('img', { class: 'fi-yt-thumb', src: ytThumb(item.yt), alt: '', draggable: 'false', decoding: 'async', referrerPolicy: 'no-referrer', onError: () => thumb.remove() });
     node = el('div', { class: 'fi fi-yt', dataset: { yt: item.yt, start: String(item.start || 0), auto: item.auto ? '1' : '0' } }, thumb, el('span', { class: 'fi-yt-play', html: YT_PLAY }));
   } else {
-    node = el('img', { class: `fi fi-image mk-${item.mask}`, src: item.url, alt: '', draggable: 'false', onError: () => node.classList.add('broken') });
+    const img = el('img', { class: item.crop ? 'fi-crop-source' : `fi fi-image mk-${item.mask}`, src: item.url, alt: '', draggable: 'false', onError: () => node.classList.add('broken') });
+    node = item.crop ? el('div', {class:`fi fi-image fi-cropped mk-${item.mask}`}, img) : img;
   }
   placeItem(node, item);
   return node;
@@ -100,6 +101,10 @@ export function placeItem(node, item) {
   else {
     node.style.width = `${item.w}%`;
     node.style.height = `${item.h}%`;
+    if (item.t === 'image' && item.crop) {
+      const c=item.crop,source=node.querySelector('.fi-crop-source');
+      if(source)Object.assign(source.style,{width:`${100/c.w}%`,height:`${100/c.h}%`,left:`${-100*c.x/c.w}%`,top:`${-100*c.y/c.h}%`});
+    }
     if (item.t === 'shape') dressShape(node, item);
   }
 }
