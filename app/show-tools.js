@@ -68,7 +68,9 @@ export function ensureShowStyle(doc = document) {
  *   video()                           — K: 영상 멈추기·틀기(없으면 K 를 듣지 않는다)
  *   title · notify(message) · keyClass(발표 막대 단추에 붙일 class)
  * 돌려주는 것: { handle(event) 처리했으면 true · claimClick(event) 도구가 그 누르기를 썼으면 true · changed() 쪽이 바뀐 뒤 부른다 ·
- *   buttons(발표 막대에 넣을 단추들) · openPresenter() · destroy() }
+ *   buttons(발표 막대에 넣을 단추들) · openPresenter() · presenting() 발표자 화면이 열려 있는지 · destroy() }
+ * 전체 화면: F 와 단추로 root 를 전체 화면으로 켜고 끈다. 새 창(발표자 화면)을 열면 브라우저가 전체 화면을 풀 수 있다:
+ *   쓰는 쪽은 presenting() 이 참일 때 전체 화면이 풀려도 발표를 끝내지 않는다(창 안에서 이어 가고, F 로 다시 켠다).
  */
 export function createShowTools(root, opts) {
   const doc = root.ownerDocument;
@@ -90,7 +92,12 @@ export function createShowTools(root, opts) {
   const gridBtn = key('전체', '전체 보기 (G)', () => togglePanel('overview'));
   const presenterBtn = key('발표자', '발표자 화면 열기: 노트 · 다음 쪽 · 시간 (S)', () => openPresenter(), ' ost-wide');
   const helpBtn = key('?', '단축키 보기 (?)', () => togglePanel('help'));
-  const buttons = [penBtn, laserBtn, gridBtn, presenterBtn, helpBtn];
+  const fullBtn = key('전체 화면', '전체 화면 켜기 · 끄기 (F)', () => toggleFullscreen(), ' ost-wide');
+  const buttons = [penBtn, laserBtn, gridBtn, presenterBtn, fullBtn, helpBtn];
+  function toggleFullscreen() {
+    if (doc.fullscreenElement) doc.exitFullscreen?.().catch(() => {});
+    else root.requestFullscreen?.().catch(() => opts.notify?.('이 화면에서는 전체 화면을 켤 수 없어요.'));
+  }
 
   // ---------- 검은·흰 화면 ----------
   function setCurtain(kind) {
@@ -223,7 +230,7 @@ export function createShowTools(root, opts) {
     if (action.type === 'digits') { showDigits(action.value); return true; }
     showDigits('');
     if (panel) { if (action.type === 'close' || action.type === 'help' || action.type === 'overview' || panel === 'help') { closePanel(); return true; } }
-    if (curtain && !['black', 'white', 'presenter'].includes(action.type)) { setCurtain(curtain); return true; }
+    if (curtain && !['black', 'white', 'presenter', 'fullscreen'].includes(action.type)) { setCurtain(curtain); return true; }
     switch (action.type) {
       case 'close': if (tool) setTool(tool); else opts.close(); return true;
       case 'next': opts.next(); return true;
@@ -236,6 +243,7 @@ export function createShowTools(root, opts) {
       case 'pen': case 'laser': setTool(action.type); return true;
       case 'erase': erase(); return true;
       case 'presenter': openPresenter(); return true;
+      case 'fullscreen': toggleFullscreen(); return true;
       case 'video': if (!opts.video) return false; opts.video(); return true;
       default: return false;
     }
@@ -294,6 +302,7 @@ export function createShowTools(root, opts) {
       el('footer', { class: 'ost-p-foot' },
         pbtn('◀ 앞', '앞 쪽 (←)', () => opts.prev()), pbtn('다음 ▶', '다음 쪽 (→)', () => opts.next()),
         pbtn('검은 화면', '청중 화면을 잠깐 검게 (B)', () => setCurtain('black')),
+        el('span', { class: 'ost-p-label', text: '청중 화면이 작아졌으면 그 창을 누르고 F 를 눌러 전체 화면으로 돌려요.' }),
         el('span', { class: 'ost-p-gap' }),
         pbtn('발표 끝내기', '발표를 끝내요 (Esc)', () => opts.close())));
     resize(0);
@@ -321,6 +330,7 @@ export function createShowTools(root, opts) {
 
   return {
     handle, claimClick, buttons, openPresenter,
+    presenting: () => !!presenter && !presenter.win.closed,
     /** 쪽이 바뀐 뒤: 그린 것을 지우고, 열린 칸을 닫고, 발표자 화면을 맞춘다. */
     changed() { erase(); if (panel) closePanel(); renderPresenter(); },
     destroy() {

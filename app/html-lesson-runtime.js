@@ -126,7 +126,14 @@ export function mountHtmlLesson(raw, host = document.getElementById('onbatang-le
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     render();
   }
-  const onFull = () => { if (show?.full && !document.fullscreenElement) endShow(); };
+  // 전체 화면이 풀리면 발표 모드를 끝낸다. 발표자 화면을 열어 풀린 것이면 창 안에서 이어 간다(F 로 다시 켠다).
+  const onFull = () => {
+    if (!show) return;
+    if (document.fullscreenElement === host) { show.full = true; return; }
+    if (document.fullscreenElement || !show.full) return;
+    show.full = false;
+    if (!show.tools.presenting()) endShow();
+  };
   document.addEventListener('fullscreenchange', onFull);
   // 발표 모드에서 쪽(빈 곳)을 누르면 다음 쪽. 활동 화면과 단추를 누른 것은 그것들의 몫이다.
   host.addEventListener('click', event => {

@@ -14,7 +14,7 @@ test('presentation keys: PowerPoint-style navigation, remote clicker keys and to
   assert.deepEqual(showAction(key('Home')), {type: 'first'});
   assert.deepEqual(showAction(key('End')), {type: 'last'});
   assert.deepEqual(showAction(key('Escape')), {type: 'close'});
-  const letters = {b: 'black', w: 'white', g: 'overview', p: 'pen', l: 'laser', e: 'erase', s: 'presenter', k: 'video', h: 'help', n: 'next'};
+  const letters = {b: 'black', w: 'white', g: 'overview', p: 'pen', l: 'laser', e: 'erase', s: 'presenter', f: 'fullscreen', k: 'video', h: 'help', n: 'next'};
   for (const [k, type] of Object.entries(letters)) assert.deepEqual(showAction(key(k)), {type}, k);
   // Korean input mode: the physical key position still counts.
   assert.deepEqual(showAction({key: 'ㅠ', code: 'KeyB'}), {type: 'black'});

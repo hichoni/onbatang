@@ -1296,7 +1296,14 @@ async function present(O) {
     e.preventDefault();
     e.stopPropagation();          // 발표하는 동안에는 글쇠가 편집기로 가지 않게 한다
   };
-  const onFull = () => { if (!document.fullscreenElement && overlay.dataset.full === '1') close(); };
+  // 전체 화면이 풀리면 발표를 끝낸다(Esc 로 푼 것). 다만 발표자 화면을 열면 브라우저가 전체 화면을 풀 수 있으므로,
+  // 그때는 창 안에서 이어 간다(F 로 다시 켠다).
+  const onFull = () => {
+    if (document.fullscreenElement === overlay) { overlay.dataset.full = '1'; return; }
+    if (document.fullscreenElement || overlay.dataset.full !== '1') return;
+    overlay.dataset.full = '0';
+    if (!tools?.presenting()) close();
+  };
   function close() {
     if(savingActivity)return;
     closed=true;pixel?.destroy();pixel=null;
@@ -1334,8 +1341,9 @@ async function present(O) {
   document.addEventListener('keydown', onKey, true);
   overlay.focus({ preventScroll: true });
   // 화면 가득 채워 본다(막힌 곳에서는 창 안에서 보여 준다).
+  document.addEventListener('fullscreenchange', onFull);
   if (overlay.requestFullscreen) {
-    overlay.requestFullscreen().then(() => { overlay.dataset.full = '1'; document.addEventListener('fullscreenchange', onFull); }).catch(() => {});
+    overlay.requestFullscreen().then(() => { overlay.dataset.full = '1'; }).catch(() => {});
   }
 }
 
