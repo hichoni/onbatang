@@ -42,6 +42,7 @@ test('새 기능 안내: 안내를 이미 본 기기에 한 번, 처음 온 기�
   for (const f of readdirSync(new URL('./browser/', import.meta.url)).filter((x) => x.endsWith('.test.mjs'))) {
     const src = read(`./browser/${f}`);
     if (/onbatang-tour-seen-v1:editor|\['home', 'editor'/.test(src)) assert.ok(src.includes(NEWS_KEY), `${f}: ${NEWS_KEY}`);
+    for (const m of src.matchAll(/markTourSeen\('editor'\)/g)) assert.match(src.slice(m.index, m.index + 80), /markTourSeen\(tour\.NEWS_KEY\)/, `${f}: 새 기능 안내도 본 것으로`);
   }
   for (const w of ['연결선', '붙는 곳', '손잡이', '이어 움직이기', '강조', '숨기', '주제', '찾아 바꾸기', '전체 보기', '카메라', '자동 넘기기', '리허설', 'PDF', 'GIF', 'HTML', '새로 고쳐도']) assert.ok(words.includes(w), w);
 });

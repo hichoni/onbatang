@@ -42,7 +42,7 @@ test('PPT source text geometry and thin shapes survive cleaning, actual DOM, dev
  const cleaned=await page.evaluate(async({base,dbName,record})=>{
   const model=await import(base+'/src/model.js'),{migrateRecord}=await import(base+'/app/designs.js'),store=await import(base+'/app/store.js');
   model.configure({aspect:4/3});const first=model.cleanDesign(record.slides[0]),second=model.cleanDesign(first),migrated=migrateRecord({...record,slides:[second]});
-  store.setStorageName(dbName);await store.putDesign(migrated);(await import(base+'/app/tour.js')).markTourSeen('editor');
+  store.setStorageName(dbName);await store.putDesign(migrated);{const tour=await import(base+'/app/tour.js');tour.markTourSeen('editor');tour.markTourSeen(tour.NEWS_KEY);}
   return {first,second,migrated,stored:await store.getDesign(record.id)};
  },{base,dbName,record});
  assert.deepEqual(cleaned.first,cleaned.second,'repeated sanitizer is stable');assert.deepEqual(cleaned.stored,cleaned.migrated);

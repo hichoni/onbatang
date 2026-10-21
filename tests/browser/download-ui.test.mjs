@@ -28,7 +28,7 @@ test('download choices wait for confirmation and remain usable on short and narr
     record.slides=['#ff5500','#0055ff'].map((bg,index)=>({id:`pdownloadui00${index}`,bg,items:[
       {id:`edownloadui00${index}`,t:'text',text:`Self-authored page ${index+1}`,x:50,y:50,w:70,size:5},
     ]}));
-    await store.putDesign(record);(await import(base+'/app/tour.js')).markTourSeen('editor');return record.id;
+    await store.putDesign(record);{const tour=await import(base+'/app/tour.js');tour.markTourSeen('editor');tour.markTourSeen(tour.NEWS_KEY);}return record.id;
   },base);
   await page.goto(origin+(hosted?'/minican-app.html':'/app/index.html'));
   await page.getByRole('button',{name:'내려받기 화면 검증 열기',exact:true}).click();await page.locator('.cv-name').waitFor();

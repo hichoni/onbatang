@@ -33,7 +33,7 @@ test('actual editor resizes from the opposite corner, respects modifiers and kee
       {name:'일반 글상자 줄바꿈',items:[{id:'eresizenatural001',t:'text',x:50,y:50,w:38,size:3,rot:32,align:'l',text:'This self authored classroom note wraps into additional lines when its frame becomes narrower. Every word stays.',source:{kind:'local',filename:'self-authored-resize.txt',objectId:'paragraph-1'}}]},
     ];
     const records=[];for(const example of examples){const record=newRecord('16:9');record.name=example.name;record.source={kind:'local',filename:'self-authored-resize-fixture'};record.originalSize={width:1600,height:900,unit:'px'};record.slides=[{id:`presizecase00${records.length}`,bg:'paper',items:example.items.map(item=>cleanItem(item))}];await store.putDesign(record);records.push({id:record.id,name:record.name});}
-    (await import(base+'/app/tour.js')).markTourSeen('editor');return records;
+    {const tour=await import(base+'/app/tour.js');tour.markTourSeen('editor');tour.markTourSeen(tour.NEWS_KEY);}return records;
   },base);
   await page.goto(origin+(hosted?'/minican-app.html':'/app/index.html'));
   let current;

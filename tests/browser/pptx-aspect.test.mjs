@@ -30,7 +30,7 @@ async function setup(t){
  await context.addInitScript(()=>{try{const api=navigator.serviceWorker;if(api)api.register=async()=>undefined;}catch{}});
  await context.route('**/*',route=>{const url=new URL(route.request().url());if(url.origin===origin||['data:','blob:','about:'].includes(url.protocol))return route.continue();external.push(url.origin);return route.abort();});
  const page=await context.newPage();page.setDefaultTimeout(45000);page.on('pageerror',error=>errors.push(error.name));await page.goto(origin+'/seed.html');
- const square=await page.evaluate(async()=>{const {newRecord}=await import('/app/designs.js'),store=await import('/app/store.js');store.setStorageName('minican');const record=newRecord('1:1');record.name='기존 정사각형';record.slides[0].items=[{t:'text',text:'기존 정사각형 원문',x:50,y:50,w:70,size:5}];const saved=await store.putDesign(record);(await import('/app/tour.js')).markTourSeen('editor');return saved;});
+ const square=await page.evaluate(async()=>{const {newRecord}=await import('/app/designs.js'),store=await import('/app/store.js');store.setStorageName('minican');const record=newRecord('1:1');record.name='기존 정사각형';record.slides[0].items=[{t:'text',text:'기존 정사각형 원문',x:50,y:50,w:70,size:5}];const saved=await store.putDesign(record);{const tour=await import('/app/tour.js');tour.markTourSeen('editor');tour.markTourSeen(tour.NEWS_KEY);}return saved;});
  return {page,origin,square,errors,external};
 }
 async function graph(page,id){return page.evaluate(async id=>{const library=(await import('/app/pptx-import/library.js')).createPptxLibrary({storage:'minican'});try{return id?await library.getMaterial({id}):await library.listMaterials();}finally{await library.close();}},id);}
