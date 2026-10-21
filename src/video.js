@@ -21,7 +21,7 @@ import { el } from './dom.js';
 import { itemView, paintCard } from './render.js';
 import { cleanDesign, fontFamilyOf } from './model.js';
 import { designSheet } from './export.js';
-import { transitionPose, clipInsets, TURN_DEPTH } from './motion.js';
+import { transitionPose, clipInsets, TURN_DEPTH, tweenItem, contentChanged } from './motion.js';
 import { filmPlan, slidePoses, filmCells, packCells, DEFAULT_STAY, MAX_FILM_SECONDS } from './film.js';
 import { mp4Parts, webmParts } from './mux.js';
 import { sceneBlob } from './scene.js';
@@ -151,8 +151,41 @@ function closeScene(scene) {
   scene.own = null;
 }
 
+// 이어 움직이기(영상): 짝이 된 요소마다 앞 장의 모습에서 이 장의 모습까지의 중간 모습을 진짜 값으로 여러 장 그려 둔다(tweenItem).
+// 늘이거나 줄인 그림이 아니라 둥글기 · 테두리 · 색 · 글자 크기가 그 순간의 값인 그림이라, 옮겨 가는 동안 모든 모습이 이어진다.
+// 몇 장을 그릴지는 요소의 넓이에 맞춘다(큰 사진은 덜, 작은 조각은 더. 메모리를 지키려고).
+const TWEEN_STEPS = 24, TWEEN_LEAST = 8, TWEEN_PIXELS = 36e6;
+async function buildTweens(before, design, turn, W, H) {
+  const pairs = (turn.pairs || []).filter(([i, j]) => before.items[i] && design.items[j]);
+  if (!pairs.length) return null;
+  const area = (it) => Math.max(1, ((Number(it.w) || 10) / 100) * W) * Math.max(1, ((Number(it.h) || Number(it.w) || 10) / 100) * H) * 1.6;
+  const need = pairs.reduce((sum, [i, j]) => sum + Math.max(area(before.items[i]), area(design.items[j])) * (contentChanged(before.items[i], design.items[j]) ? 2 : 1), 0);
+  const steps = Math.max(TWEEN_LEAST, Math.min(TWEEN_STEPS, Math.floor(TWEEN_PIXELS / need)));
+  const items = [], tracks = new Map();
+  for (const [i, j] of pairs) {
+    const a = before.items[i], b = design.items[j], two = contentChanged(a, b), track = { b: [], a: two ? [] : null };
+    for (let k = 0; k <= steps; k++) {
+      track.b.push(items.length); items.push(tweenItem(a, b, k / steps));
+      if (two) { track.a.push(items.length); items.push(tweenItem(a, b, k / steps, { content: 'a' })); }
+    }
+    tracks.set(j, track);
+  }
+  const sheetDesign = { bg: design.bg, items };
+  const boxes = await measure(sheetDesign, W, H);
+  const cells = filmCells(sheetDesign, { moves: items.map((_, i) => ({ i })) }, boxes, W, H).filter((c) => c.i >= 0);
+  const sheets = packCells(cells), canvases = [];
+  for (const s of sheets) canvases.push((await designSheet(sheetDesign, s.cells, { width: W, height: H, sheetWidth: s.width, sheetHeight: s.height })).canvas);
+  const layerOf = new Map(cells.map((c) => [c.i, { img: canvases[c.sheet], sx: c.at.x, sy: c.at.y, w: c.box.w, h: c.box.h, ox: c.box.x, oy: c.box.y, cx: (items[c.i].x / 100) * W, cy: (items[c.i].y / 100) * H }]));
+  const out = new Map();
+  for (const [j, t] of tracks) {
+    const b = t.b.map((n) => layerOf.get(n)), a = t.a?.map((n) => layerOf.get(n)) || null;
+    if (b.every(Boolean) && (!a || a.every(Boolean))) out.set(j, { steps, b, a });
+  }
+  return { tracks: out, canvases };
+}
+
 // 한 장을 그릴 준비: 칸을 나누고 큰 그림에 그려, 프레임마다 옮겨 붙일 "겹(layer)"들로 만든다.
-async function buildSlide(design, slide, W, H) {
+async function buildSlide(design, slide, W, H, before = null) {
   // 움직이는 것이 없으면 잴 것도 없다: 통째로 한 칸이다(그림으로 내려받을 때와 같다).
   // 영상 장면이 있는 장은 요소들을 바탕과 따로 그려야 해서(그 사이에 영상이 들어간다) 잰다.
   const boxes = slide.moves.length || slide.split?.length || design.video ? await measure(design, W, H) : null;
@@ -177,10 +210,11 @@ async function buildSlide(design, slide, W, H) {
   });
   // 영상 장면: 시간표에 트는 때가 적혀 있을 때만(멈춘 그림으로 담는 길에서는 적혀 있지 않다) 릴을 연다.
   const scene = slide.scene && design.video ? await openScene(design.video, slide.scene) : null;
-  return { slide, layers, canvases, missingFonts: [...missingFonts], scene };
+  const tweens = slide.turn?.pairs && before ? await buildTweens(before, design, slide.turn, W, H) : null;
+  return { slide, layers, canvases, missingFonts: [...missingFonts], scene, tweens };
 }
 function freeSlide(built) {
-  for (const c of built?.canvases || []) { c.width = 0; c.height = 0; }
+  for (const c of [...(built?.canvases || []), ...(built?.tweens?.canvases || [])]) { c.width = 0; c.height = 0; }
   closeScene(built?.scene);
 }
 
@@ -304,7 +338,28 @@ function drawMorph(ctx, W, H, from, to, turn, p, flat, n) {
   ctx.drawImage(flat(1, n, 0, skipNew), 0, 0);
   ctx.restore();
   const mix = (a, b) => a + (b - a) * p;
+  const q = Math.min(1, Math.max(0, p));
+  // 중간 모습들 가운데 지금(q)에 가까운 두 장을 같은 가운데에 맞춰 겹친다(자리는 매끄럽게, 모습은 아주 작은 걸음으로 이어진다).
+  const track = (list, steps, alpha) => {
+    if (alpha <= 0.001) return;
+    const f = q * steps, k = Math.min(steps - 1, Math.floor(f)), fr = f - k, L0 = list[k], L1 = list[k + 1];
+    const cx = L0.cx + (L1.cx - L0.cx) * fr, cy = L0.cy + (L1.cy - L0.cy) * fr;
+    for (const [L, a] of [[L0, alpha], [L1, alpha * fr]]) {
+      if (a <= 0.001) continue;
+      ctx.save();
+      ctx.globalAlpha = a;
+      ctx.translate(cx - L.cx, cy - L.cy);
+      ctx.drawImage(L.img, L.sx, L.sy, L.w, L.h, L.ox, L.oy, L.w, L.h);
+      ctx.restore();
+    }
+  };
   for (const [i, j] of pairs) {
+    const tw = to.tweens?.tracks.get(j);
+    if (tw) {
+      // 내용이 달라졌으면 앞 내용의 갈래는 사라지고 새 내용의 갈래가 나타난다(둘 다 같은 자리 · 같은 모습으로 옮겨 간다).
+      if (tw.a) { track(tw.a, tw.steps, 1 - q); track(tw.b, tw.steps, q); } else track(tw.b, tw.steps, 1);
+      continue;
+    }
     const A = from.layers.find((L) => L.i === i), B = to.layers.find((L) => L.i === j);
     if (!A || !B || !A.bw || !B.bw || !A.bh || !B.bh) continue;
     // 지금의 가운데 · 각도 · 크기(제 방향으로 잰 가로 · 세로)
@@ -321,8 +376,7 @@ function drawMorph(ctx, W, H, from, to, turn, p, flat, n) {
       ctx.drawImage(L.img, L.sx, L.sy, L.w, L.h, L.ox, L.oy, L.w, L.h);
       ctx.restore();
     };
-    // 같은 모습이면 앞 것 위에 새것을 서서히 겹친다(옮기는 동안 흐려지지 않게). 달라졌으면 앞 것은 사라지고 새것이 나타난다.
-    const q = Math.min(1, Math.max(0, p));
+    // (중간 모습을 그리지 못했을 때만) 같은 모습이면 앞 것 위에 새것을 서서히 겹치고, 달라졌으면 앞 것은 사라지고 새것이 나타난다.
     place(A, changed.has(j) ? 1 - q : 1);
     place(B, q);
   }
@@ -379,7 +433,7 @@ export function createFilm(designs, { width = 1920, height = 1080, stay = DEFAUL
   function ready(n) {
     if (!plan.slides[n]) return Promise.reject(new Error('없는 장이에요'));
     if (!jobs.has(n)) {
-      const job = buildSlide(list[n], plan.slides[n], W, H).then((b) => {
+      const job = buildSlide(list[n], plan.slides[n], W, H, n > 0 ? list[n - 1] : null).then((b) => {
         // 준비하는 사이에 버려졌으면(그만뒀으면) 바로 치운다.
         if (jobs.get(n) !== job) { freeSlide(b); return null; }
         for (const f of b.missingFonts) missing.add(f);

@@ -84,3 +84,39 @@ test('the SVG has the line, heads by choice and a wide hit line; PPTX gets a nat
   assert.doesNotMatch(xml.match(/<p:cxnSp>.*?<\/p:cxnSp>/)[0], /flip/);
   configure({aspect: 1});
 });
+
+test('curved connectors bend to the chosen side, fit their bulge in the box and point their heads along the curve', async () => {
+  const {linkControl, CURVE_BEND} = await import('../src/links.js');
+  const a = box('eboxaaaaa1', 20, 50), b = box('eboxaaaaa2', 80, 50);
+  const up = linkGeometry(a, b, {aspect: 1, curve: 1}), down = linkGeometry(a, b, {aspect: 1, curve: -1});
+  assert.equal(up.pts.length, 6);
+  const [ux, uy] = linkControl(up, 1), [, dy] = linkControl(down, 1);
+  // Going left→right, "left of travel" is up on screen.
+  assert.ok(Math.abs(ux - 50) < .01 && Math.abs(uy - (50 - 60 * CURVE_BEND)) < .01, `${ux} ${uy}`);
+  assert.ok(Math.abs(dy - (50 + 60 * CURVE_BEND)) < .01);
+  // The box holds the curve's peak (halfway to the control point), not just the two ends.
+  // Ends leave the boxes towards the control point (above the centre line).
+  const [[x1, y1], [x2, y2]] = linkEnds(up, 1);
+  const top = up.y - up.h / 2, peak = .25 * y1 + .5 * uy + .25 * y2, pad = Math.max(1.5, LINK_LINE.base * 3 + 1);
+  assert.ok(Math.abs(top - (peak - pad)) < .05, `top ${top} peak ${peak}`);
+  assert.ok(y1 < 50 && y2 < 50 && x1 > 25 && x2 < 75, JSON.stringify([x1, y1, x2, y2]));
+  const svg = linkSvg({...up, color: '#1d2433', line: .5, head: 'end'});
+  assert.match(svg, /<path class="fi-link-line" d="M[-\d.]+ [-\d.]+Q[-\d.]+ [-\d.]+ [-\d.]+ [-\d.]+"/);
+  assert.doesNotMatch(svg, /<line/);
+  // The end head points along the tangent (down-right here), so its tip is the right-most, lowest point.
+  const pts = svg.match(/points="([^"]+)"/)[1].split(' ').map(p => p.split(',').map(Number));
+  assert.ok(pts[0][0] > pts[1][0] && pts[0][0] > pts[2][0]);
+  configure({aspect: 1});
+  const clean = cleanDesign({id: 'ppage00001', bg: '#fff', items: [a, b, link({curve: -1}), link({id: 'elink00002', from: 'eboxaaaaa2', to: 'eboxaaaaa1', curve: 2})]});
+  const [l1, l2] = clean.items.filter(it => it.t === 'link');
+  assert.equal(l1.curve, -1);
+  assert.equal(l1.pts.length, 6);
+  assert.equal(Object.hasOwn(l2, 'curve'), false);
+  assert.equal(l2.pts.length, 4);
+  assert.deepEqual(Object.keys(styleOf(l1).values).sort(), ['color', 'curve', 'head', 'line', 'op']);
+  // PPTX: an open custom path with a quadratic curve and the same line/arrow settings.
+  const {bytes} = await createPptx({slides: [clean], size: {width: 9144000, height: 9144000, unit: 'emu'}});
+  const xml = new TextDecoder().decode(unzipSync(bytes)['ppt/slides/slide1.xml']);
+  assert.match(xml, /<p:sp><p:nvSpPr><p:cNvPr id="\d+" name="elink00001"\/>.*?<a:path w="\d+" h="\d+" fill="none"><a:moveTo><a:pt x="\d+" y="\d+"\/><\/a:moveTo><a:quadBezTo><a:pt x="\d+" y="\d+"\/><a:pt x="\d+" y="\d+"\/><\/a:quadBezTo><\/a:path>.*?<a:noFill\/><a:ln w="\d+" cap="rnd">.*?<a:tailEnd type="triangle"\/><\/a:ln>/);
+  assert.equal((xml.match(/<p:cxnSp>/g) || []).length, 1, 'the straight one is still a connector');
+});
