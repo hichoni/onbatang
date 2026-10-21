@@ -569,6 +569,8 @@ function openDesign(record, isNew) {
     // 올린 파일을 지웠다: 다른 장에서 쓴 것도 지운다(지금 장은 편집기가 지운다). 띠의 작은 그림을 다시 그린다.
     // 움직임 칸의 "모든 장에 똑같이"
     onMotionAll: (motion) => applyMotionAll(O, motion),
+    // 카드의 빈 곳(과 그 둘레)을 우클릭하면 나오는 장(슬라이드) 메뉴
+    slideMenu: () => slideMenuGroups(O),
     // 영상 장면(그 장의 바탕에 까는 영상): 파일은 이 기기에 두고(videos.js), 어느 그림에 딸린 것인지 함께 적는다.
     // 저장하지 못하면 오류가 나고, 편집기가 영상을 넣지 않은 채 알린다(저장되지 않은 영상을 그림에 적어 두지 않는다).
     saveVideo: (made) => saveVideo({ blob: made.blob, design: O.record.id, seconds: made.seconds }),
@@ -676,9 +678,28 @@ function editorShell(O, bar) {
   }
   // 가운데: 고른 요소의 도구 막대 · 그림 · 슬라이드 띠(지금 장 고르기, 장 더하기·복제·옮기기·지우기)
   O.strip = el('div', { class: 'cv-strip', role: 'group', 'aria-label': '슬라이드' });
+  // 슬라이드 목록의 작은 그림을 우클릭: 그 장을 고르고 장 메뉴(새 장 · 복제 · 옮기기 · 이 장부터 발표 · 지우기)를 띄운다.
+  // 전체 자료의 다른 파트에 있는 장은 먼저 그 파트를 연다(누른 것과 같다).
+  O.strip.addEventListener('contextmenu', (e) => {
+    const tile = e.target.closest?.('.cv-slide');
+    if (!tile || tile.classList.contains('add') || tile.disabled || O.inlineImport || O.closed) return;
+    e.preventDefault();
+    if (tile.dataset.slide === undefined) { tile.click(); return; }
+    const i = Number(tile.dataset.slide);
+    if (i !== O.at) goSlide(O, i);
+    if (i !== O.at) return;
+    O.editor.showMenu(e.clientX, e.clientY, slideMenuGroups(O, { strip: true }), { label: `${i + 1}번째 장 메뉴` });
+  });
+  // 그림 둘레의 빈 곳을 우클릭해도 브라우저 메뉴 대신 카드의 빈 곳과 같은 메뉴를 띄운다.
+  const canvasBox = el('div', { class: 'cv-canvas' }, O.editor.stage);
+  canvasBox.addEventListener('contextmenu', (e) => {
+    if (O.editor.stage.contains(e.target) || e.target.closest?.('.cv-activity-config, input, textarea, select, [contenteditable="true"]') || O.inlineImport) return;
+    e.preventDefault();
+    O.editor.menuAt(e.clientX, e.clientY);
+  });
   const work = el('section', { class: 'cv-work', 'aria-label': '그림' },
     el('div', { class: 'cv-tools' }, O.editor.toolbar),
-    el('div', { class: 'cv-canvas' }, O.editor.stage),
+    canvasBox,
     O.editor.notes, O.strip, fold);
   // 노트 칸을 펴 두었는지는 이 기기에 기억한다(다음에 열 때도 그대로).
   try { O.editor.notes.open = localStorage.getItem(NOTES_OPEN_KEY) === '1'; } catch { /* 저장 공간이 막힌 기기: 접어 둔다 */ }
@@ -923,6 +944,31 @@ function refreshThumb(O) {
   tile.setAttribute('aria-label', slideLabel(O.at, design));
 }
 /** 다른 장으로 간다. 지금 장은 편집기에서 꺼내 두고, 그 장을 편집기에 끼운다(실행 취소 기록은 장마다 따로라 비워진다). */
+// 장(슬라이드) 메뉴: 카드의 빈 곳 · 그 둘레 · 슬라이드 목록에서 우클릭할 때 함께 쓴다.
+// 옮기기 · 복제 · 지우기는 슬라이드 띠의 단추를 그대로 눌러서, 전체 자료(여러 파트)에서도 같은 저장 규칙을 따른다.
+function slideMenuGroups(O, { strip = false } = {}) {
+  const tools = [...(O.strip?.querySelectorAll('.cv-slide-tool') || [])], add = O.strip?.querySelector('.cv-slide.add');
+  const [left, right, dup, del] = tools;
+  const press = (node, times = 1) => () => { for (let k = 0; k < times && node?.isConnected && !node.disabled; k++) node.click(); };
+  const off = (node) => !node || node.disabled;
+  const openNotes = () => { O.editor.notes.open = true; O.editor.notes.querySelector('textarea')?.focus({ preventScroll: false }); };
+  return [
+    strip ? [] : [
+      { icon: 'palette', label: '바탕색 바꾸기', run: () => O.editor.openTab('bg') },
+      { icon: 'template', label: '틀 고르기', run: () => O.editor.openTab('layout') },
+    ],
+    [{ icon: 'pencil', label: '발표자 노트 적기', run: openNotes }],
+    [
+      { icon: 'plus', label: '새 장 더하기', run: press(add), disabled: off(add) },
+      { icon: 'duplicate', label: '이 장 복제', run: press(dup), disabled: off(dup) },
+      { icon: 'left', label: '앞으로 옮기기', hint: strip ? 'Alt+←' : '', run: press(left), disabled: off(left) },
+      { icon: 'right', label: '뒤로 옮기기', hint: strip ? 'Alt+→' : '', run: press(right), disabled: off(right) },
+    ],
+    [{ icon: 'play', label: '이 장부터 발표', run: () => present(O) }],
+    // 띠의 지우기는 두 번 눌러야 지워진다(실수 방지). 메뉴에서 고른 것은 이미 한 번 확인한 것이라 바로 지운다.
+    [{ icon: 'trash', label: '이 장 지우기', run: press(del, 2), disabled: off(del), danger: true }],
+  ];
+}
 function goSlide(O, i) {
   if (O.closed || i === O.at || !O.slides[i] || videoBusy(O)) return;
   O.slides[O.at] = O.editor.getDesign();

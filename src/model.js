@@ -775,6 +775,36 @@ export function clampShift(items, dx, dy) {
   ];
 }
 
+// ---------- 스타일 복사 · 붙여넣기 ----------
+// 캔바의 "스타일 복사", 파워포인트의 "서식 복사"처럼 꾸밈 값만 옮긴다(글·자리·크기·사진은 그대로).
+// 종류마다 옮길 수 있는 값이 다르다. 둘 다 가진 값만 옮긴다(예: 글 → 도형이면 색과 투명도만).
+const STYLE_KEYS = {
+  text: ['color', 'font', 'typeface', 'size', 'bold', 'italic', 'under', 'align', 'valign', 'lh', 'bgc', 'op'],
+  shape: ['color', 'line', 'lc', 'hollow', 'r', 'op'],
+  art: ['color', 'op'],
+  emoji: ['op'],
+  image: ['mask', 'op'],
+  yt: ['op'],
+};
+/** 요소의 꾸밈 값 { t, values } (스타일을 옮길 수 없는 것이면 null). */
+export function styleOf(item) {
+  const keys = STYLE_KEYS[item?.t];
+  if (!keys) return null;
+  const values = {};
+  for (const k of keys) if (item[k] !== undefined) values[k] = item[k];
+  return { t: item.t, values };
+}
+/** styleOf 로 담아 둔 꾸밈 값을 요소에 입힌다. 담아 둔 쪽에 없던 값은 지운다(굵게가 아니었으면 굵게를 푼다). 잠긴 것·옮길 값이 없는 것은 그대로 돌려준다. */
+export function applyStyle(item, style) {
+  const mine = STYLE_KEYS[item?.t], theirs = STYLE_KEYS[style?.t];
+  if (!mine || !theirs || item.lock) return item;
+  let keys = mine.filter((k) => theirs.includes(k));
+  if (item.t === 'art' && !artColorable(item.art)) keys = keys.filter((k) => k !== 'color');
+  const next = { ...item };
+  for (const k of keys) { if (style.values[k] === undefined) delete next[k]; else next[k] = style.values[k]; }
+  return next;
+}
+
 /** 사진을 카드에 꽉 차게 키워 가운데에 놓는다(배경처럼 깔 때). 기울기와 뒤집기는 그대로 둔다. */
 export function coverItem(item) {
   if (item.t !== 'image') return item;
