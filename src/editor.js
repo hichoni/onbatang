@@ -3,7 +3,7 @@
 // 계산과 규칙은 model.js·cutout.js(순수 함수)에 있고, 여기는 화면과 손가락·마우스·키보드만 다룬다.
 // 저장소는 모른다: 사진을 어디에 올릴지는 uploadImage 로, 무엇이 바뀌었는지는 onChange 로 프로젝트가 정한다.
 import { el, toast } from './dom.js';
-import { newId } from './document.js';
+import { newId, cleanNotes, NOTES_LIMIT } from './document.js';
 import {
   COLORS, SHAPES, SHAPE_GROUPS, MASKS, OPACITY, TEXT_PRESETS, settings, configure, reshapeItems, backgroundOf, fontList, fontFamilyOf, layoutList, textLimit, clip,
   cleanBg, cleanItems, cleanDesign, emptyDesign, cleanItem, cleanImg, moveLayer, newPresetText, newEmoji, newShape, newArt, newYouTube, newPhoto, moveItem, rotateItem,
@@ -223,6 +223,25 @@ export function createEditor({
   const fileInput = el('input', { type: 'file', accept: ACCEPT_IMAGES, hidden: true, onChange: onPhotoPicked });
   const videoInput = el('input', { type: 'file', accept: ACCEPT_VIDEOS, hidden: true, onChange: onVideoPicked });
   const camBox = el('div', { class: 'fe-cam', role: 'group', 'aria-label': '카메라로 찍기', tabindex: '-1' });
+  // 발표자 노트: 그 장을 발표할 때 발표자만 보는 글. 그림에는 나오지 않는다. 프로젝트가 notes 조각을 놓을 자리를 정한다.
+  const notesInput = el('textarea', {
+    class: 'fe-notes-input', rows: '3', maxlength: String(NOTES_LIMIT), spellcheck: 'false', 'aria-label': '발표자 노트',
+    placeholder: '발표할 때 나만 볼 메모를 적어요. 슬라이드 그림에는 나오지 않아요.',
+    onInput: () => {
+      if (!card) return;
+      const text = cleanNotes(notesInput.value);
+      if (text) card.notes = text; else delete card.notes;
+      markNotes();
+      onChange();
+    },
+  });
+  const notesMark = el('span', { class: 'fe-notes-mark' });
+  const notes = el('details', { class: 'fe-notes' }, el('summary', {}, el('span', { text: '발표자 노트' }), notesMark), notesInput);
+  function markNotes() {
+    const length = card?.notes?.length || 0;
+    notesMark.textContent = length ? `${length}자` : '비어 있어요';
+    notes.classList.toggle('has-notes', !!length);
+  }
 
   const items = () => card.items;
   const cur = () => (sel >= 0 ? card.items[sel] : null);
@@ -3310,6 +3329,9 @@ export function createEditor({
     if (card.id) card.items = card.items.map(it => it.id ? it : { ...it, id: newId() });
     setMotion(card);
     setVideo(card);
+    if (cleanNotes(card.notes)) card.notes = cleanNotes(card.notes); else delete card.notes;
+    notesInput.value = card.notes || '';
+    markNotes();
     closeCamera();                     // 찍던 것은 그만둔다(다른 장의 바탕이 되면 안 된다)
     scene?.player.pause();
     if (scene) scene.shown = -1;       // 같은 영상을 쓰는 다른 장이면 그 장의 첫 모습으로 맞춘다
@@ -3378,6 +3400,8 @@ export function createEditor({
 
   const api = {
     stage, toolbar, panel, mount, setDesign,
+    /** 발표자 노트 칸(접고 펴는 칸). 프로젝트가 그림 아래 등 원하는 자리에 놓는다. 놓지 않으면 노트는 그대로 저장만 된다. */
+    notes,
     /** Host navigation can restore an existing tool without knowing its DOM selectors. */
     openTab: id => { if (card && tabsHere().some(([name]) => name === id)) openTab(id); },
     /** 함께 꾸밀 때: 다른 사람이 바꾼 것을 끼워 넣는다 merge(design, patch) · 지금 끼워 넣어도 되는지 idle() */

@@ -8,6 +8,14 @@ const clone=value=>JSON.parse(JSON.stringify(value));
 // This helper is injected before the generated source. It only accepts an
 // explicit parent capture request; it never asks the host to create a result.
 function canvasHelper(bridge){
+ // Presentation remotes send PageDown/PageUp. Inside the app frame the host
+ // cannot hear them, so forward only those (and Escape) when the app did not
+ // use the key itself. Window bubbling runs after the app's own handlers.
+ window.addEventListener('keydown',event=>{
+  if(event.defaultPrevented||event.ctrlKey||event.metaKey||event.altKey||!['PageDown','PageUp','Escape'].includes(event.key))return;
+  if(event.key!=='Escape'&&event.target?.closest?.('input,textarea,select,[contenteditable]:not([contenteditable=false])'))return;
+  parent.postMessage({type:'onbatang-app-key',bridge,key:event.key},'*');
+ });
  // Explicit pixel surfaces only: do not mistake palettes, number tables or
  // arbitrary app buttons for a drawing. #pixel-grid supports saved older apps.
  function pixelCanvas(grid){
@@ -58,7 +66,7 @@ function wrapper(bridge,source){
  frame.style.cssText='display:block;width:100%;height:100%;border:0;background:white';
  window.addEventListener('message',event=>{
   const d=event.data;if(!d||d.bridge!==bridge)return;
-  if(event.source===frame.contentWindow&&['gai-classroom-report','onbatang-app-captured'].includes(d.type))parent.postMessage(d,'*');
+  if(event.source===frame.contentWindow&&['gai-classroom-report','onbatang-app-captured','onbatang-app-key'].includes(d.type))parent.postMessage(d,'*');
   else if(event.source===parent&&['gai-classroom-state','gai-classroom-result','onbatang-app-capture'].includes(d.type))frame.contentWindow?.postMessage(d,'*');
  });
  frame.srcdoc=source;document.body.append(frame);
@@ -69,7 +77,7 @@ function sandboxSource(activity,bridge){
  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${policy}"><style>html,body{height:100%;margin:0;overflow:hidden}</style></head><body><script>(${wrapper.toString()})(${json(bridge)},${json(inner)});<\/script></body></html>`;
 }
 
-export function mountGaiApp(root,{activity:raw,onChange,onSave,saveLabel='결과를 다음 슬라이드에 저장',saveMessage='결과를 다음 슬라이드에 저장했어요.',hint='픽셀아트·그림판은 PNG 그림과 답을 함께 다음 슬라이드에 저장해요.',roomState}={}){
+export function mountGaiApp(root,{activity:raw,onChange,onSave,onKey,saveLabel='결과를 다음 슬라이드에 저장',saveMessage='결과를 다음 슬라이드에 저장했어요.',hint='픽셀아트·그림판은 PNG 그림과 답을 함께 다음 슬라이드에 저장해요.',roomState}={}){
  const activity=cleanGaiActivity(raw),bridge=crypto.randomUUID();let checkpoint=clone(activity.state),reported={state:{},answer:'',score:null,completed:false,progress:0},destroyed=false,busy=false,ready=false,reportError=false,inFlight=0,serial=Promise.resolve(),capture=null;
  const frame=el('iframe',{class:'gai-app-frame',title:activity.title,sandbox:'allow-scripts',referrerpolicy:'no-referrer',allow:"camera 'none'; microphone 'none'; geolocation 'none'; clipboard-read 'none'; clipboard-write 'none'"});
  const status=el('p',{class:'gai-app-status',role:'status','aria-live':'polite',text:'앱의 진행 기록을 연결하고 있어요. 연결되면 결과를 저장할 수 있어요.'});
@@ -81,6 +89,7 @@ export function mountGaiApp(root,{activity:raw,onChange,onSave,saveLabel='결과
  const snapshot=()=>({connected:!!currentRoom,room:{phase:'running',round:1,message:'온바탕에서 연습하고 있어요.',ranking:false,...currentRoom},me:{id:'practice',nickname:'연습',checkpoint:clone(checkpoint),...clone(reported)},participants:[]});
  const handler=event=>{
   const d=event.data;if(destroyed||event.source!==frame.contentWindow||d?.bridge!==bridge)return;
+  if(d.type==='onbatang-app-key'){if(['PageDown','PageUp','Escape'].includes(d.key))onKey?.(d.key);return;}
   if(d.type==='onbatang-app-captured'){
    if(!capture||d.request!==capture.request)return;
    let image;try{if(d.image!==undefined)image=cleanGaiImage(d.image);}catch{/* Invalid app-supplied pictures never reach a slide. */}

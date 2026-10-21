@@ -1,10 +1,11 @@
 import { cleanPixelActivity } from '../src/pixel-art.js';
 import { cleanActivity } from '../src/activity.js';
 import { cleanGaiResult } from '../src/gai-app.js';
-import { isId, newId } from '../src/document.js';
+import { isId, newId, slideNotes } from '../src/document.js';
 import { mountPixelArt } from './pixel-art.js';
 import { mountGaiApp } from './gai-app.js';
 import { el } from '../src/dom.js';
+import { createShowTools } from './show-tools.js';
 import {cleanLessonTarget,cleanLessonBinding,returnedResultsFromLesson} from './lesson-results.js';
 
 const png = value => typeof value === 'string' && /^data:image\/png;base64,[A-Za-z\d+/=]+$/.test(value) && value.length <= 4_000_000;
@@ -16,7 +17,8 @@ export function cleanHtmlLesson(raw) {
     if (!page || !isId(page.id) || seen.has(page.id) || !png(page.image) || !Number.isFinite(page.aspect) || page.aspect < .25 || page.aspect > 4) throw new Error('수업 슬라이드를 확인해 주세요.');
     seen.add(page.id); bytes += page.image.length;
     if (bytes > 200_000_000) throw new Error('수업 파일이 너무 커요. 그림 크기를 줄여 다시 내려받아 주세요.');
-    const out = { id: page.id, image: page.image, aspect: page.aspect };
+    const out = { id: page.id, image: page.image, aspect: page.aspect, ...slideNotes(page) };
+    if (out.notes) bytes += out.notes.length * 3;
     if (page.activity !== undefined) { out.activity = cleanActivity(page.activity); bytes += new TextEncoder().encode(JSON.stringify(out.activity)).length; }
     if(page.binding!==undefined){out.binding=cleanLessonBinding(page.binding);if(out.activity&&(out.binding.pageId!==out.id||out.binding.activityId!==out.activity.id||out.binding.kind!==out.activity.kind))throw Error('활동의 원본 연결 정보가 달라요.');}
     if (bytes > 200_000_000) throw new Error('수업 파일이 너무 커요. 그림 크기를 줄여 다시 내려받아 주세요.');
@@ -76,7 +78,13 @@ export function mountHtmlLesson(raw, host = document.getElementById('onbatang-le
       status.textContent='원래 온바탕 자료에서 「HTML 수업 결과 가져오기」를 누르고 이 JSON 파일을 선택해주세요.';
     }catch(error){status.textContent=error.message;}
   }});
-  host.replaceChildren(el('header', { class: 'lesson-header' }, el('div', {}, el('span', { class: 'lesson-brand', text: '온바탕 수업' }), title),el('div',{class:'lesson-downloads'},download,returnResults)),
+  // 발표 모드: 온바탕 안의 발표와 같은 글쇠·도구(show-tools.js). 화면 가득 한 쪽씩, 누르면 다음 쪽.
+  let show = null;
+  const showCount = el('span', { class: 'lesson-show-count' });
+  const showKey = (label, title, onClick) => el('button', { type: 'button', class: 'lesson-show-key', title, 'aria-label': title, onclick: event => { event.stopPropagation(); onClick(); } }, label);
+  const showClose = showKey('활동 닫기', '활동 화면 닫기', () => returnToCover.click());
+  const present = el('button', { type: 'button', class: 'lesson-download lesson-present', text: '▶ 발표 모드', title: '화면 가득 발표해요. 단축키는 ? 로 볼 수 있어요.', onclick: () => startShow() });
+  host.replaceChildren(el('header', { class: 'lesson-header' }, el('div', {}, el('span', { class: 'lesson-brand', text: '온바탕 수업' }), title),el('div',{class:'lesson-downloads'},present,download,returnResults)),
     el('nav', { class: 'lesson-navigation', 'aria-label': '슬라이드 이동' }, previous, count, next, returnToCover), stage, status,
     el('footer', { class: 'lesson-footer', text: '활동과 결과는 이 브라우저에 저장돼요. 다른 기기에서는 현재 수업을 내려받아 여세요.' }));
   function persist() {
@@ -89,15 +97,52 @@ export function mountHtmlLesson(raw, host = document.getElementById('onbatang-le
       persistent = true;
     } catch { persistent = false; status.textContent = '브라우저에 저장하지 못했어요. 지금 작업은 그대로 있어요. 현재 수업 내려받기로 결과를 보관해 주세요.'; }
   }
-  function navigate(step) {
-    const to = current + step;
-    if (to < 0 || to >= pages.length) return;
+  function navigate(step) { goTo(current + step); }
+  function goTo(to) {
+    if (to < 0 || to >= pages.length || to === current) return;
     app?.destroy(); app = null; executing = false; current = to; persist(); render();
   }
+  const slideImage = k => el('img', { src: pages[k].image, alt: '' });
+  function startShow() {
+    if (show) return;
+    host.classList.add('lesson-show');
+    const tools = createShowTools(host, {
+      total: () => pages.length, index: () => current, next: () => navigate(1), prev: () => navigate(-1), go: goTo, close: endShow,
+      thumb: slideImage, preview: slideImage, ratio: k => pages[k].aspect,
+      notes: k => pages[k].notes || '', label: k => pages[k].activity ? '활동' : pages[k].result ? '결과' : '',
+      title: seed.title, notify: message => { status.textContent = message; }, keyClass: 'lesson-show-key',
+    });
+    const bar = el('div', { class: 'lesson-show-bar' }, showKey('◀', '앞 쪽', () => navigate(-1)), showCount, showKey('▶', '다음 쪽', () => navigate(1)), showClose, ...tools.buttons, showKey('끝내기', '발표 끝내기 (Esc)', endShow));
+    host.append(bar);
+    show = { tools, bar, full: false };
+    const mine = show;
+    host.requestFullscreen?.().then(() => { mine.full = true; }).catch(() => {});
+    render(); host.focus?.({ preventScroll: true });
+  }
+  function endShow() {
+    if (!show) return;
+    const { tools, bar } = show; show = null;
+    tools.destroy(); bar.remove(); host.classList.remove('lesson-show');
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    render();
+  }
+  const onFull = () => { if (show?.full && !document.fullscreenElement) endShow(); };
+  document.addEventListener('fullscreenchange', onFull);
+  // 발표 모드에서 쪽(빈 곳)을 누르면 다음 쪽. 활동 화면과 단추를 누른 것은 그것들의 몫이다.
+  host.addEventListener('click', event => {
+    if (!show || event.target.closest('button,a,input,textarea,select,.lesson-activity,.lesson-show-bar')) return;
+    if (show.tools.claimClick(event)) return;
+    navigate(1);
+  });
+  // 앱 안을 누른 뒤에도 프레젠터의 넘기기 단추와 Esc 는 수업이 듣는다.
+  const appKey = key => { if (show) show.tools.handle({ key, code: key }); else if (key === 'PageDown') navigate(1); else if (key === 'PageUp') navigate(-1); };
   function render() {
     previous.disabled = current === 0; next.disabled = current === pages.length - 1;
     const page = pages[current]; count.textContent = `${current + 1} / ${pages.length}쪽${page.activity ? ' · 활동' : page.result ? ' · 결과' : ''}`;
-    returnToCover.hidden = !executing;
+    showCount.textContent = `${current + 1} / ${pages.length}`;
+    returnToCover.hidden = !executing; showClose.hidden = !executing;
+    host.style.setProperty('--lesson-ratio', String(page.aspect));
+    show?.tools.changed();
     if (executing) return;
     const scene = el('section', { class: 'lesson-scene' });
     scene.append(el('img', { class: 'lesson-slide', src: page.image, alt: `${current + 1}쪽${page.activity ? ` ${page.activity.title}` : page.result ? ' 활동 결과' : ''}` }));
@@ -105,7 +150,7 @@ export function mountHtmlLesson(raw, host = document.getElementById('onbatang-le
       executing = true; returnToCover.hidden = false;
       const target = el('section', { class: 'lesson-scene lesson-activity' }); stage.replaceChildren(target);
       if(page.activity.kind==='gai-app'){
-        app=mountGaiApp(target,{activity:page.activity,onChange:state=>{page.activity=cleanActivity({...page.activity,state});persist();},onSave:async rawResult=>{
+        app=mountGaiApp(target,{activity:page.activity,onKey:appKey,onChange:state=>{page.activity=cleanActivity({...page.activity,state});persist();},onSave:async rawResult=>{
           const value=cleanGaiResult(rawResult);page.activity=cleanActivity({...page.activity,state:value.state});
           const signature=JSON.stringify([page.id,value]),existing=pages.findIndex(p=>p.id===savedResults.get(signature));
           if(existing>=0){app?.destroy();app=null;executing=false;current=existing;persist();render();return;}
@@ -137,12 +182,23 @@ export function mountHtmlLesson(raw, host = document.getElementById('onbatang-le
     stage.replaceChildren(scene);
   }
   const keys = event => {
-    if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || event.target.closest('button,input,textarea,select,[contenteditable=true],.pixel-app,.gai-app-runtime')) return;
+    if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+    // 앱·그림판 안에서 치는 글쇠는 앱의 것이다. 프레젠터의 넘기기(PageDown · PageUp)와 발표 모드의 Esc 만 수업이 듣는다.
+    const clicker = ['PageDown', 'PageUp'].includes(event.key) || (show && event.key === 'Escape');
+    if (event.target.closest('.pixel-app,.gai-app-runtime') && !clicker) return;
+    if (show) {
+      if (event.target.closest('button') && (event.key === 'Enter' || event.key === ' ')) return;
+      if (show.tools.handle(event)) { event.preventDefault(); event.stopPropagation(); }
+      return;
+    }
+    if (event.target.closest('button,input,textarea,select,[contenteditable=true]') && !clicker) return;
     if (event.key === 'ArrowRight' || event.key === 'PageDown' || event.key === ' ') { event.preventDefault(); navigate(1); }
     else if (event.key === 'ArrowLeft' || event.key === 'PageUp') { event.preventDefault(); navigate(-1); }
+    else if (event.key === 'Home') { event.preventDefault(); goTo(0); }
+    else if (event.key === 'End') { event.preventDefault(); goTo(pages.length - 1); }
   };
   document.addEventListener('keydown', keys); render();
-  return { getPages: () => pages, destroy() { app?.destroy(); document.removeEventListener('keydown', keys); host.replaceChildren(); } };
+  return { getPages: () => pages, startShow, endShow, destroy() { endShow(); app?.destroy(); document.removeEventListener('keydown', keys); document.removeEventListener('fullscreenchange', onFull); host.replaceChildren(); } };
 }
 
 async function gaiResultImage(activity,result,aspect){

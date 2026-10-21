@@ -38,6 +38,9 @@ const solid = (value, opacity = 100) => `<a:solidFill><a:srgbClr val="${color(va
 const rels = entries => XML + `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${entries.map(([id, type, target]) => `<Relationship Id="${xml(id)}" Type="${R}/${type}" Target="${xml(target)}"/>`).join('')}</Relationships>`;
 const group = '<p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>';
 const namespaces = `xmlns:a="${A}" xmlns:r="${R}" xmlns:p="${P}"`;
+// 발표자 노트: 노트 쪽(세로 A4 비율)의 아래쪽 본문 칸에 글만 적는다. PowerPoint 의 노트 창에 그대로 보인다.
+const NOTES_BODY = '<p:nvSpPr><p:cNvPr id="2" name="Notes Placeholder 1"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr><p:nvPr><p:ph type="body" idx="1"/></p:nvPr></p:nvSpPr><p:spPr><a:xfrm><a:off x="685800" y="4400550"/><a:ext cx="5486400" cy="3600450"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr>';
+const notesText = text => `<p:sp>${NOTES_BODY}<p:txBody><a:bodyPr/><a:lstStyle/>${text.split('\n').map(line => line ? `<a:p><a:r><a:rPr lang="ko-KR" dirty="0"/><a:t xml:space="preserve">${xml(line)}</a:t></a:r></a:p>` : '<a:p><a:endParaRPr lang="ko-KR"/></a:p>').join('')}</p:txBody></p:sp>`;
 
 function dimensions(size, aspect) {
   let ratio = Number.isFinite(aspect) && aspect >= .25 && aspect <= 4 ? aspect : 16 / 9;
@@ -218,7 +221,7 @@ export async function createPptx({slides, aspect = 16 / 9, size, title = '온바
   if (typeof title !== 'string' || title.length > 1000) fail('INVALID_TITLE', '파일 제목을 확인해 주세요.');
   xml(title);
   const slideSize = dimensions(size, aspect), input = structuredClone(slides), warnings = [], files = [], media = [], content = [], slideIds = [];
-  let byteCount = 0;
+  let byteCount = 0, noted = false;
   const add = (name, value) => { const bytes = typeof value === 'string' ? encoder.encode(value) : value; byteCount += bytes.length + name.length * 2 + 100; if (byteCount > PPTX_MAX_BYTES) fail('PPTX_SIZE_LIMIT', 'PPTX 파일이 128MB를 넘어요. 자료를 나누어 내보내 주세요.'); files.push({name, bytes}); };
   const warn = (pageNumber, elementId) => (code, message, extra = {}) => warnings.push({code, pageNumber, ...(elementId ? {elementId} : {}), message, ...extra});
   async function addImage(rendered, warning) {
@@ -238,6 +241,7 @@ export async function createPptx({slides, aspect = 16 / 9, size, title = '온바
     const design = cleanDesign(raw, {keepSpaces: true});
     if (design.items.length !== raw.items.length || design.items.some((item, n) => item.t !== raw.items[n].t || (item.t === 'text' && item.text !== raw.items[n].text))) fail('UNSUPPORTED_CONTENT', '정리 과정에서 달라지는 요소가 있어요. 원본을 보존하기 위해 내보내기를 멈췄어요.', {pageNumber});
     const pageWarn = warn(pageNumber), relations = [['rId1', 'slideLayout', '../slideLayouts/slideLayout1.xml']], shapes = [];
+    if (design.notes) relations.push([`rId${relations.length + 1}`, 'notesSlide', `../notesSlides/notesSlide${pageNumber}.xml`]);
     const full = {x: 0, y: 0, w: slideSize.width, h: slideSize.height};
     async function raster(result, name, item = {}, box = full, crop = '') {
       const mediaName = await addImage(result, warn(pageNumber, item.id));
@@ -273,6 +277,12 @@ export async function createPptx({slides, aspect = 16 / 9, size, title = '온바
     add(`ppt/slides/_rels/slide${pageNumber}.xml.rels`, rels(relations));
     slideIds.push(`<p:sldId id="${256 + index}" r:id="rId${index + 2}"/>`);
     content.push([`/ppt/slides/slide${pageNumber}.xml`, 'application/vnd.openxmlformats-officedocument.presentationml.slide+xml']);
+    if (design.notes) {
+      add(`ppt/notesSlides/notesSlide${pageNumber}.xml`, XML + `<p:notes ${namespaces}><p:cSld><p:spTree>${group}${notesText(design.notes)}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:notes>`);
+      add(`ppt/notesSlides/_rels/notesSlide${pageNumber}.xml.rels`, rels([['rId1', 'notesMaster', '../notesMasters/notesMaster1.xml'], ['rId2', 'slide', `../slides/slide${pageNumber}.xml`]]));
+      content.push([`/ppt/notesSlides/notesSlide${pageNumber}.xml`, 'application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml']);
+      noted = true;
+    }
     onProgress?.({completed: pageNumber, total: input.length, pageNumber});
   }
   const parts = [
@@ -281,13 +291,15 @@ export async function createPptx({slides, aspect = 16 / 9, size, title = '온바
     ['/ppt/slideLayouts/slideLayout1.xml', 'application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml'],
     ['/ppt/theme/theme1.xml', 'application/vnd.openxmlformats-officedocument.theme+xml'],
     ['/docProps/core.xml', 'application/vnd.openxmlformats-package.core-properties+xml'],
-    ['/docProps/app.xml', 'application/vnd.openxmlformats-officedocument.extended-properties+xml'], ...content];
+    ['/docProps/app.xml', 'application/vnd.openxmlformats-officedocument.extended-properties+xml'], ...content,
+    ...(noted ? [['/ppt/notesMasters/notesMaster1.xml', 'application/vnd.openxmlformats-officedocument.presentationml.notesMaster+xml'], ['/ppt/theme/theme2.xml', 'application/vnd.openxmlformats-officedocument.theme+xml']] : [])];
+  const notesMasterId = `rId${input.length + 2}`;
   add('[Content_Types].xml', XML + `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Default Extension="jpeg" ContentType="image/jpeg"/>${parts.map(([name, type]) => `<Override PartName="${name}" ContentType="${type}"/>`).join('')}</Types>`);
   add('_rels/.rels', XML + `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${R}/officeDocument" Target="ppt/presentation.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="${R}/extended-properties" Target="docProps/app.xml"/></Relationships>`);
   add('docProps/core.xml', XML + `<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>${xml(title)}</dc:title><dc:creator>온바탕</dc:creator></cp:coreProperties>`);
   add('docProps/app.xml', XML + `<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>온바탕</Application><Slides>${input.length}</Slides></Properties>`);
-  add('ppt/presentation.xml', XML + `<p:presentation ${namespaces}><p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId1"/></p:sldMasterIdLst><p:sldIdLst>${slideIds.join('')}</p:sldIdLst><p:sldSz cx="${slideSize.width}" cy="${slideSize.height}"/><p:notesSz cx="6858000" cy="9144000"/><p:defaultTextStyle/></p:presentation>`);
-  add('ppt/_rels/presentation.xml.rels', rels([['rId1', 'slideMaster', 'slideMasters/slideMaster1.xml'], ...input.map((_, i) => [`rId${i + 2}`, 'slide', `slides/slide${i + 1}.xml`])]));
+  add('ppt/presentation.xml', XML + `<p:presentation ${namespaces}><p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId1"/></p:sldMasterIdLst>${noted ? `<p:notesMasterIdLst><p:notesMasterId r:id="${notesMasterId}"/></p:notesMasterIdLst>` : ''}<p:sldIdLst>${slideIds.join('')}</p:sldIdLst><p:sldSz cx="${slideSize.width}" cy="${slideSize.height}"/><p:notesSz cx="6858000" cy="9144000"/><p:defaultTextStyle/></p:presentation>`);
+  add('ppt/_rels/presentation.xml.rels', rels([['rId1', 'slideMaster', 'slideMasters/slideMaster1.xml'], ...input.map((_, i) => [`rId${i + 2}`, 'slide', `slides/slide${i + 1}.xml`]), ...(noted ? [[notesMasterId, 'notesMaster', 'notesMasters/notesMaster1.xml']] : [])]));
   const colorMap = '<p:clrMap accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" bg1="lt1" bg2="lt2" folHlink="folHlink" hlink="hlink" tx1="dk1" tx2="dk2"/>';
   add('ppt/slideMasters/slideMaster1.xml', XML + `<p:sldMaster ${namespaces}><p:cSld><p:spTree>${group}</p:spTree></p:cSld>${colorMap}<p:sldLayoutIdLst><p:sldLayoutId id="2147483649" r:id="rId1"/></p:sldLayoutIdLst><p:txStyles><p:titleStyle/><p:bodyStyle/><p:otherStyle/></p:txStyles></p:sldMaster>`);
   add('ppt/slideMasters/_rels/slideMaster1.xml.rels', rels([['rId1', 'slideLayout', '../slideLayouts/slideLayout1.xml'], ['rId2', 'theme', '../theme/theme1.xml']]));
@@ -295,7 +307,13 @@ export async function createPptx({slides, aspect = 16 / 9, size, title = '온바
   add('ppt/slideLayouts/_rels/slideLayout1.xml.rels', rels([['rId1', 'slideMaster', '../slideMasters/slideMaster1.xml']]));
   const colors = {dk1:'000000',lt1:'FFFFFF',dk2:'1D2433',lt2:'FFFDF5',accent1:'1C7ED6',accent2:'2F9E44',accent3:'FFD43B',accent4:'E03131',accent5:'7048E8',accent6:'F76707',hlink:'0563C1',folHlink:'954F72'};
   const fill = '<a:solidFill><a:schemeClr val="phClr"/></a:solidFill>';
-  add('ppt/theme/theme1.xml', XML + `<a:theme xmlns:a="${A}" name="온바탕"><a:themeElements><a:clrScheme name="온바탕">${Object.entries(colors).map(([key, value]) => `<a:${key}><a:srgbClr val="${value}"/></a:${key}>`).join('')}</a:clrScheme><a:fontScheme name="온바탕"><a:majorFont><a:latin typeface="Arial"/><a:ea typeface="맑은 고딕"/><a:cs typeface="Arial"/></a:majorFont><a:minorFont><a:latin typeface="Arial"/><a:ea typeface="맑은 고딕"/><a:cs typeface="Arial"/></a:minorFont></a:fontScheme><a:fmtScheme name="온바탕"><a:fillStyleLst>${fill.repeat(3)}</a:fillStyleLst><a:lnStyleLst>${[6350,12700,19050].map(width => `<a:ln w="${width}" cap="flat" cmpd="sng" algn="ctr">${fill}<a:prstDash val="solid"/><a:miter lim="800000"/></a:ln>`).join('')}</a:lnStyleLst><a:effectStyleLst>${'<a:effectStyle><a:effectLst/></a:effectStyle>'.repeat(3)}</a:effectStyleLst><a:bgFillStyleLst>${fill.repeat(3)}</a:bgFillStyleLst></a:fmtScheme></a:themeElements></a:theme>`);
+  const theme = XML + `<a:theme xmlns:a="${A}" name="온바탕"><a:themeElements><a:clrScheme name="온바탕">${Object.entries(colors).map(([key, value]) => `<a:${key}><a:srgbClr val="${value}"/></a:${key}>`).join('')}</a:clrScheme><a:fontScheme name="온바탕"><a:majorFont><a:latin typeface="Arial"/><a:ea typeface="맑은 고딕"/><a:cs typeface="Arial"/></a:majorFont><a:minorFont><a:latin typeface="Arial"/><a:ea typeface="맑은 고딕"/><a:cs typeface="Arial"/></a:minorFont></a:fontScheme><a:fmtScheme name="온바탕"><a:fillStyleLst>${fill.repeat(3)}</a:fillStyleLst><a:lnStyleLst>${[6350,12700,19050].map(width => `<a:ln w="${width}" cap="flat" cmpd="sng" algn="ctr">${fill}<a:prstDash val="solid"/><a:miter lim="800000"/></a:ln>`).join('')}</a:lnStyleLst><a:effectStyleLst>${'<a:effectStyle><a:effectLst/></a:effectStyle>'.repeat(3)}</a:effectStyleLst><a:bgFillStyleLst>${fill.repeat(3)}</a:bgFillStyleLst></a:fmtScheme></a:themeElements></a:theme>`;
+  add('ppt/theme/theme1.xml', theme);
+  if (noted) {
+    add('ppt/theme/theme2.xml', theme);
+    add('ppt/notesMasters/notesMaster1.xml', XML + `<p:notesMaster ${namespaces}><p:cSld><p:spTree>${group}<p:sp>${NOTES_BODY}<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:endParaRPr lang="ko-KR"/></a:p></p:txBody></p:sp></p:spTree></p:cSld>${colorMap}</p:notesMaster>`);
+    add('ppt/notesMasters/_rels/notesMaster1.xml.rels', rels([['rId1', 'theme', '../theme/theme2.xml']]));
+  }
   abort(signal); const bytes = zipStore(files); abort(signal);
   if (bytes.length > PPTX_MAX_BYTES) fail('PPTX_SIZE_LIMIT', 'PPTX 파일이 128MB를 넘어요.');
   return {blob: new Blob([bytes], {type: PPTX_MIME}), bytes, mimeType: PPTX_MIME, ext: 'pptx', slideCount: input.length, warnings, size: {width: slideSize.width, height: slideSize.height, unit: 'emu'}};

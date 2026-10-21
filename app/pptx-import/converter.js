@@ -1,7 +1,7 @@
 import {inflateSync,zlibSync} from 'fflate';
 import {DOMParser} from '@xmldom/xmldom';
 import {crc32} from '../zip.js';
-import {cleanSize,DOCUMENT_LIMITS,SLIDE_LIMITS,legacyId} from '../../src/document.js';
+import {cleanSize,DOCUMENT_LIMITS,SLIDE_LIMITS,legacyId,cleanNotes,slideNotes} from '../../src/document.js';
 import {importConvertedDocument} from '../import-document.js';
 import {bulletChar,autoNumber} from './bullets.js';
 
@@ -125,6 +125,11 @@ function extractText(body){
   return all(body,'p').map(p=>children(p).map(n=>n.localName==='br'?'\n':n.localName==='tab'?'\t':all(n,'t').map(t=>t.textContent).join('')).join('')).join('\n');
 }
 function rawSlideText(slide){return extractText(slide);}
+/** 노트 쪽에서 발표자가 적은 글(본문 칸)만 읽는다. 쪽 번호·머리글·날짜 칸은 뺀다. */
+function notesBodyText(notes){
+  const body=all(notes,'sp',NS.p).filter(sp=>{const ph=all(sp,'ph',NS.p)[0];return ph&&(attr(ph,'type')==='body'||!attr(ph,'type')&&attr(ph,'idx')==='1');});
+  return cleanNotes(body.map(sp=>all(sp,'txBody',NS.p).map(extractText).join('\n')).join('\n').replace(/\n+$/,''));
+}
 const paragraphText=p=>children(p).map(n=>n.localName==='br'?'\n':n.localName==='tab'?'\t':all(n,'t').map(t=>t.textContent).join('')).join('');
 /** extractText with each paragraph's list marker (its own or inherited) written in front, since the editor has no lists. */
 function bulletedText(body,styles=[]){
@@ -380,11 +385,11 @@ async function pageData(context,path,pageNumber){
   if(attr(root,'show')==='0')warn('HIDDEN_SLIDE','원본에서 숨긴 장이에요. 선택하면 가져옵니다.');
   if(all(root,'timing',NS.p).length)warn('ANIMATION_OMITTED','애니메이션은 실행하지 않고 모든 요소의 정적 배치를 가져옵니다. 겹쳐 나타나는 내용은 원본과 비교해 주세요.');
   if(all(root,'transition',NS.p).length)warn('TRANSITION_OMITTED','장면 전환 효과는 가져오지 않아요.');
-  const pageRels=rels.get(path)||new Map();let notesText='',inheritedBackground,theme,masterTextStyles;
+  const pageRels=rels.get(path)||new Map();let notesText='',speakerNotes='',inheritedBackground,theme,masterTextStyles;
   for(const rel of pageRels.values()){
     if(rel.external){if(rel.type==='hyperlink')warn('EXTERNAL_LINK_OMITTED','외부 하이퍼링크 동작은 제외하고 내용을 가져옵니다.');else reject('EXTERNAL_RESOURCE','외부 파일을 불러와야 하는 장은 가져올 수 없어요.');continue;}
     if(['video','audio','media','oleObject','chart','diagramData','diagramDrawing'].includes(rel.type))reject('UNSUPPORTED_MEDIA','영상·소리·차트·개체가 있는 장은 아직 가져올 수 없어요.');
-    if(rel.type==='notesSlide'){notesText=rawSlideText(xml(rel.target));warn('NOTES_NOT_IMPORTED','발표자 메모는 편집 장에 넣지 않으며 검사 결과와 원본에 남깁니다.');}
+    if(rel.type==='notesSlide'){const notesDoc=xml(rel.target);notesText=rawSlideText(notesDoc);speakerNotes=notesBodyText(notesDoc);}
     if(rel.type==='hyperlink')warn('LINK_OMITTED','슬라이드 링크 동작은 제외하고 내용을 가져옵니다.');
     if(rel.type==='slideLayout'){
       const layout=xml(rel.target),layoutTree=all(layout,'spTree',NS.p)[0];
@@ -536,7 +541,7 @@ async function pageData(context,path,pageNumber){
   }
   if(itemBytes>PPTX_LIMITS.documentBytes-4096)reject('DOCUMENT_SIZE_LIMIT','이 장의 편집 데이터가 저장 한도를 넘어요.');
   return {pageNumber,title:text.split('\n').find(v=>v.trim())?.slice(0,80)||`${pageNumber}쪽`,text,notesText,fontUsage,warnings,canImport,estimatedBytes:itemBytes+1024,
-    slide:{id:legacyId('p',`${source.sha256}:${pageNumber}`),bg,source:{kind:'pptx',sourceDocumentId:source.sourceDocumentId,assetId:source.assetId,pageNumber,sha256:source.sha256},assetRefs:[source.assetId],items:canImport?items:[]}};
+    slide:{id:legacyId('p',`${source.sha256}:${pageNumber}`),bg,...slideNotes({notes:speakerNotes}),source:{kind:'pptx',sourceDocumentId:source.sourceDocumentId,assetId:source.assetId,pageNumber,sha256:source.sha256},assetRefs:[source.assetId],items:canImport?items:[]}};
 }
 
 async function readPptx(file,options={}){
