@@ -1068,6 +1068,8 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero-go { display: flex
 .cv-tray-options .cv-activity-add,.cv-tray-options .cv-activity-edit{font-size:13px;padding:7px 10px;min-height:36px}
 @media(pointer:coarse){
  .cv-tray-toggle,.cv-strip .cv-tray-page,.cv-tray-menu>summary{min-width:44px;min-height:44px}
+ /* Keep the 44px sorting grip away from the thumbnail's selection centre. */
+ .cv-tray-body .cv-slide:not(.add){min-width:112px}
  .cv-tray-grip{height:32px;top:-16px}
  .cv-tray-grip::before{top:11px}
  .cv-tray-options{bottom:60px}

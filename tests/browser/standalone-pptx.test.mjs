@@ -226,6 +226,16 @@ test('touch tray handle expands/cancels safely and its compact controls fit a ph
  await page.screenshot({path:resolve(root,'work/slide-tray-phone-collapsed.png'),fullPage:true});await checkIsolation({pptx:false});
 });
 
+test('compact touch 4:3 thumbnails select their centre without starting a sort',options,async t=>{
+ const {page,entry,checkIsolation}=await setup(t,{viewport:{width:390,height:844},touch:true});
+ await enterImport(page,entry);await inspectFile(page,'self-authored-4x3.pptx',2);await page.locator('[data-import-save]').tap();await page.locator('[data-inline-import]').waitFor({state:'detached'});await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===2);
+ const ids=await page.locator('[data-material-page]').evaluateAll(nodes=>nodes.map(n=>n.dataset.pageId));
+ await page.locator('[data-material-page="1"]').tap();await page.locator('[data-material-page="1"][aria-pressed=true]').waitFor({timeout:5000});
+ await page.locator('[data-material-page="0"]').tap();await page.locator('[data-material-page="0"][aria-pressed=true]').waitFor({timeout:5000});
+ await page.locator('[data-material-page="1"] .cv-slide-grip').tap();await page.locator('[data-material-page="1"][aria-pressed=true]').waitFor({timeout:5000});
+ assert.deepEqual(await page.locator('[data-material-page]').evaluateAll(nodes=>nodes.map(n=>n.dataset.pageId)),ids,'selecting a compact thumbnail never changes the page order');await checkIsolation();
+});
+
 test('tray pixel height persists across documents/reload, clamps temporarily and stays within its device namespace',options,async t=>{
  const {page,context,entry,origin,base,checkIsolation}=await setup(t,{viewport:{width:1366,height:900}});await page.goto(entry);await page.locator('.cv-hero .cv-new-btn').click();
  const tray=page.locator('.cv-strip'),grip=page.getByRole('separator',{name:'슬라이드 목록 높이 조절'});
