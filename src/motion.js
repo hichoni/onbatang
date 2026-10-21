@@ -4,6 +4,7 @@
 // 디자인에 적는 값(정했을 때만 적는다. 그래서 예전 디자인은 그대로다)
 //   - 요소  an: 나타나는 효과(ENTERS 의 id). 'none' 이면 조합 효과가 있어도 가만히 있는다.
 //           aw: true 면 "누를 때" 나타난다(발표하다가 한 번 누를 때마다 하나씩).
+//           em: 강조 효과(EMPHASES 의 id). 이미 보이는 요소가 누를 때 한 번 움직이고 제자리로 돌아온다(키노트의 동작 강조).
 //   - 디자인 pa: 조합 효과(COMBOS 의 id) · tr: 이 장이 넘어올 때의 전환 효과(TRANSITIONS 의 id).
 //
 // 움직임은 Web Animations(element.animate)로 틀고, 끝나면 흔적이 남지 않는다(요소의 스타일을 건드리지 않는다).
@@ -36,6 +37,18 @@ const ENTER_DEFS = {
   drift: { name: '둥실', ms: 1100, ease: 'ease-out', frames: [{ o: 0, x: -5 }, { at: 0.5, o: 1 }, {}] },
   flicker: { name: '깜빡이며', ms: 800, ease: 'linear', frames: [{ o: 0 }, { at: 0.12, o: 1 }, { at: 0.24, o: 0.15 }, { at: 0.4, o: 1 }, { at: 0.54, o: 0.3 }, { at: 0.7, o: 1 }, { at: 0.82, o: 0.6 }, {}] },
 };
+// 강조 효과: 나타난 뒤에 누르면 한 번 움직이고 제 모습으로 돌아온다. 처음과 끝이 늘 제 모습이다(frames 의 꼴은 ENTER_DEFS 와 같다).
+const EMPH_DEFS = {
+  pulse: { name: '두근두근', ms: 760, ease: 'ease-in-out', frames: [{}, { at: 0.25, k: 1.12 }, { at: 0.5, k: 1 }, { at: 0.75, k: 1.12 }, {}] },
+  shake: { name: '흔들기', ms: 620, ease: 'linear', frames: [{}, { at: 0.14, x: -2 }, { at: 0.3, x: 2 }, { at: 0.46, x: -2 }, { at: 0.62, x: 2 }, { at: 0.8, x: -1 }, {}] },
+  grow: { name: '커졌다 돌아오기', ms: 820, ease: 'ease-in-out', frames: [{}, { at: 0.45, k: 1.3 }, {}] },
+  spin: { name: '한 바퀴', ms: 900, ease: 'ease-in-out', frames: [{}, { r: 360 }] },
+  flash: { name: '반짝반짝', ms: 900, ease: 'linear', frames: [{}, { at: 0.2, o: 0.15 }, { at: 0.4, o: 1 }, { at: 0.6, o: 0.15 }, { at: 0.8, o: 1 }, {}] },
+  jump: { name: '폴짝', ms: 680, ease: 'linear', frames: [{ ease: 'ease-out' }, { at: 0.35, y: -6, ease: 'ease-in' }, { at: 0.6, y: 0, ease: 'ease-out' }, { at: 0.78, y: -1.8, ease: 'ease-in' }, {}] },
+};
+/** 강조 효과들 [{ id, name }]. */
+export const EMPHASES = Object.entries(EMPH_DEFS).map(([id, d]) => ({ id, name: d.name }));
+export const EMPHASIS_IDS = EMPHASES.map((e) => e.id);
 /** 요소가 나타나는 효과들 [{ id, name }] (고르는 칸에 이 차례로 나온다). */
 export const ENTERS = Object.entries(ENTER_DEFS).map(([id, d]) => ({ id, name: d.name }));
 export const ENTER_IDS = ENTERS.map((e) => e.id);
@@ -118,8 +131,14 @@ const clipOf = (clip, flipped) => `inset(${clipInsets(clip, flipped).map((v) => 
  *   scale: 거리의 배율(고르는 칸의 작은 본보기는 칸이 작아서 크게 준다) · mirror: 좌우를 뒤집어(오른쪽에서) 온다
  * 돌려주는 것: { keyframes, ms, easing }
  */
-export function enterKeyframes(item, id, { scale = 1, mirror = false } = {}) {
-  const def = ENTER_DEFS[id];
+export function enterKeyframes(item, id, opts = {}) {
+  return keyframesOf(ENTER_DEFS[id], item, opts);
+}
+/** 강조 효과의 키프레임(enterKeyframes 와 같은 꼴). 모르는 효과면 null. */
+export function emphasisKeyframes(item, id, opts = {}) {
+  return keyframesOf(EMPH_DEFS[id], item, opts);
+}
+function keyframesOf(def, item, { scale = 1, mirror = false } = {}) {
   if (!def) return null;
   const full = (Number.isFinite(item?.op) ? item.op : 100) / 100;
   const last = def.frames.length - 1;
@@ -163,8 +182,13 @@ export function planMotion(design) {
   const rows = items.map((it, i) => ({ i, it, role: roleOf(it) })).filter((r) => r.it);
   const enterOf = (r) => (r.it.an === STILL ? null : ENTER_DEFS[r.it.an] ? r.it.an : combo ? combo.pick(r.role, r.it) : null);
   const moving = rows.map((r) => ({ ...r, enter: enterOf(r) }));
-  const clicks = moving.filter((r) => r.it.aw === true).sort(readingOrder)
-    .map((r, n) => ({ i: r.i, enter: r.enter || 'fade', mirror: !!combo?.swing && n % 2 === 1 }));
+  // 누를 때: 읽는 차례대로. "누를 때 나타나는" 요소는 나타나는 차례가 먼저, 강조 효과가 있으면 그다음 누를 때 강조한다.
+  // (강조 단계에는 emphasis 가 있고 enter 는 없다. 숨겨 두는 것은 enter 가 있는 단계뿐이다.)
+  const clicks = moving.filter((r) => r.it.aw === true || EMPH_DEFS[r.it.em]).sort(readingOrder)
+    .flatMap((r, n) => [
+      ...(r.it.aw === true ? [{ i: r.i, enter: r.enter || 'fade', mirror: !!combo?.swing && n % 2 === 1 }] : []),
+      ...(EMPH_DEFS[r.it.em] ? [{ i: r.i, emphasis: r.it.em }] : []),
+    ]);
   const shown = moving.filter((r) => r.it.aw !== true && r.enter);
   const backs = shown.filter((r) => r.role === BACK);
   const rest = shown.filter((r) => r.role !== BACK).sort(readingOrder);
@@ -181,7 +205,7 @@ export function planMotion(design) {
 export function hasMotion(design) {
   if (!design) return false;
   if (TRANSITION_DEFS[design.tr] || COMBO_DEFS[design.pa]) return true;
-  return (Array.isArray(design.items) ? design.items : []).some((it) => it && (ENTER_DEFS[it.an] || it.aw === true));
+  return (Array.isArray(design.items) ? design.items : []).some((it) => it && (ENTER_DEFS[it.an] || it.aw === true || EMPH_DEFS[it.em]));
 }
 
 // 장의 모습 하나를 화면용 키프레임으로 적는다.
@@ -321,8 +345,18 @@ export function enterTime(id) {
  * 돌려주는 것: { x · y(옮긴 거리. 카드 너비를 100 으로 본 값) · k(크기 배율) · r(더 돌린 각도) · o(투명도 배율 0~1) · clip(가린 정도 0~100) · done(다 나왔는지) }
  * ms 가 0 보다 작으면(아직 차례가 아니면) 처음 모습, 길이를 넘으면 다 나온 모습이다. enterKeyframes 를 브라우저가 틀었을 때와 같은 값이다.
  */
-export function enterPose(id, ms, { mirror = false, scale = 1 } = {}) {
-  const def = ENTER_DEFS[id];
+export function enterPose(id, ms, opts = {}) {
+  return poseOf(ENTER_DEFS[id], ms, opts);
+}
+/** 강조 효과가 시작한 지 ms 가 지났을 때의 모습(enterPose 와 같은 꼴. 시작 전과 끝난 뒤는 제 모습). 모르는 효과면 null. */
+export function emphasisPose(id, ms, opts = {}) {
+  return poseOf(EMPH_DEFS[id], Math.max(0, ms), opts);
+}
+/** 강조 효과의 길이(ms). 모르는 효과면 0. */
+export function emphasisTime(id) {
+  return EMPH_DEFS[id]?.ms || 0;
+}
+function poseOf(def, ms, { mirror = false, scale = 1 } = {}) {
   if (!def) return null;
   const p = easeFn(def.ease || SOFT)(unit(ms / def.ms));
   const at = offsetsOf(def.frames);
@@ -379,6 +413,13 @@ export function playEnter(node, item, id, { delay = 0, scale = 1, mirror = false
   return node.animate(k.keyframes, { duration: k.ms, delay, easing: k.easing, fill: 'backwards' });
 }
 
+/** 요소 하나를 강조 효과로 한 번 움직인다(끝나면 흔적이 없다). 틀지 못했으면 null. */
+export function playEmphasis(node, item, id) {
+  const k = emphasisKeyframes(item, id);
+  if (!k || !node || typeof node.animate !== 'function' || calm()) return null;
+  return node.animate(k.keyframes, { duration: k.ms, easing: k.easing });
+}
+
 /**
  * 한 장의 움직임을 튼다. card 는 그 디자인을 그린 카드(designView), design 은 그 디자인(정리된 것: 카드의 요소와 차례가 같아야 한다).
  *   delay: 시작을 늦춘다(전환 효과가 끝난 뒤에 시작할 때) · still: 참이면 움직이지 않고 다 나온 모습으로 둔다(앞 장으로 돌아갈 때)
@@ -398,8 +439,9 @@ export function playDesign(card, design, { delay = 0, still = false } = {}) {
   // 이어 움직이기로 앞 장에서 옮겨 온 요소는 이미 화면에 있으므로 다시 나타나지 않는다(누를 때 나오는 것은 그대로 기다린다).
   for (const a of plan.auto) if (!nodes[a.i]?.dataset.moved) keep(playEnter(nodes[a.i], items[a.i], a.enter, { delay: delay + a.delay, mirror: a.mirror }));
   const waiting = plan.clicks.filter((c) => nodes[c.i]);
-  for (const c of waiting) nodes[c.i].style.visibility = 'hidden';
+  for (const c of waiting) if (c.enter) nodes[c.i].style.visibility = 'hidden';
   const show = (c, animate) => {
+    if (c.emphasis) { if (animate) keep(playEmphasis(nodes[c.i], items[c.i], c.emphasis)); return; }
     nodes[c.i].style.visibility = '';
     if (animate) keep(playEnter(nodes[c.i], items[c.i], c.enter, { mirror: c.mirror }));
   };
@@ -447,7 +489,7 @@ export function playTransition(old, next, id, dir = 1, { from = null, to = null 
 // 옮겨 가는 동안 맞추는 모습: 자리 · 크기 · 글자 크기 · 각도(transform) · 투명도 · 색. 두 장은 같은 크기로 겹쳐 있으므로
 // 화면에서 잰 값(px)을 그대로 이어 붙일 수 있다.
 const MORPH_KEYS = ['left', 'top', 'width', 'height', 'fontSize', 'opacity', 'color', 'backgroundColor'];
-function poseOf(node) {
+function nodePose(node) {
   const cs = getComputedStyle(node);
   const out = { transform: node.style.transform || 'translate(-50%, -50%)' };
   for (const k of MORPH_KEYS) out[k] = cs[k];
@@ -480,8 +522,8 @@ function playMorph(old, next, from, to) {
   const moved = new Set(pairs.map(([, j]) => j));
   const gone = new Set(pairs.map(([i]) => i));
   for (const [i, j] of pairs) {
-    const start = poseOf(was[i]);
-    const end = poseOf(now[j]);
+    const start = nodePose(was[i]);
+    const end = nodePose(now[j]);
     now[j].dataset.moved = '1';
     was[i].style.visibility = 'hidden';
     hidden.push(was[i]);

@@ -471,7 +471,7 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"], body.mc-app :is(#app,.cv-a
 .cv-show-key:hover { background: rgba(255, 255, 255, .3); }
 .cv-show-key[hidden] { display: none; }      /* 영상 장면이 없는 장에서는 영상 단추를 감춘다 */
 .cv-show-key,.cv-show-count{white-space:nowrap;flex-shrink:0}
-@media(max-width:680px){.cv-show-bar{gap:6px;padding:8px;left:8px;right:8px;width:max-content;max-width:calc(100vw - 16px);margin:0 auto;transform:none;flex-wrap:wrap;justify-content:center;border-radius:18px}.cv-show-key{padding:8px 10px;min-height:44px}.cv-show-count{font-size:14px}}
+@media(max-width:960px){.cv-show-bar{gap:6px;padding:8px;left:8px;right:8px;width:max-content;max-width:calc(100vw - 16px);margin:0 auto;transform:none;flex-wrap:wrap;justify-content:center;border-radius:18px}.cv-show-key{padding:8px 10px;min-height:44px}.cv-show-count{font-size:14px}}
 @media (pointer: coarse) { .cv-show-bar { opacity: .9; } }
 
 /* ---- 내려받기 창: 파일 종류 → 저장할 장 → 설정 → 내려받기 ----
@@ -1125,6 +1125,9 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero-go { display: flex
 .cv-slide.skip .cv-slide-view { opacity: .38; filter: grayscale(.6); }
 .cv-slide-skip { position: absolute; right: 3px; top: 3px; z-index: 1; display: none; padding: 0 5px; border-radius: 6px; background: rgba(23, 28, 68, .8); color: #fff; font-size: .62rem; font-weight: 800; line-height: 16px; pointer-events: none; }
 .cv-slide.skip .cv-slide-skip { display: block; }
+/* 리허설 결과 */
+.cv-rehearse-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 6px; max-height: 40vh; overflow: auto; margin: 0; padding: 0; list-style: none; }
+.cv-rehearse-list li { display: flex; justify-content: space-between; gap: 8px; padding: 6px 10px; border-radius: var(--cv-r-s); background: var(--soft); font-variant-numeric: tabular-nums; }
 /* 주제가 시작되는 장: 작은 그림 아래에 주제 이름 */
 .cv-slide-topic { position: absolute; left: 3px; bottom: 3px; z-index: 1; max-width: calc(100% - 6px); padding: 0 6px; border-radius: 6px; background: rgba(61, 75, 192, .92); color: #fff; font-size: .62rem; font-weight: 800; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
 

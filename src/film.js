@@ -2,13 +2,13 @@
 // 실제로 그림을 그리고 녹화하는 일은 video.js 가 한다.
 //
 // 발표는 사람이 눌러서 넘기지만 영상은 저절로 흘러가야 한다. 그래서 이렇게 정한다.
-//   - 한 장은 머무는 시간(stay. 초)만큼 보인다. 전환 효과가 있으면 그 효과가 끝난 때부터 센다.
+//   - 한 장은 머무는 시간(stay. 초)만큼 보인다. 리허설로 잰 시간(design.dur)이 있는 장은 그 시간이다. 전환 효과가 있으면 그 효과가 끝난 때부터 센다.
 //   - 저절로 나오는 요소는 발표할 때와 같은 차례 · 같은 간격으로 나온다.
 //   - "누를 때" 나오는 요소는 읽는 차례대로 하나씩 저절로 나온다. 남은 시간에 고르게 나누되, 너무 급하거나 느리지 않게 한다.
 //   - 요소가 다 나온 뒤에도 읽을 틈(TAIL)은 남긴다. 그래서 요소가 많은 장은 머무는 시간보다 조금 길어진다.
 //   - 영상 장면(그 장의 바탕에 깐 영상)은 발표할 때처럼 그 장이 열리면(전환 효과가 끝나면) 틀기 시작해서, 쓰는 구간이 끝날 때까지 튼다.
 //     그래서 영상 장면이 있는 장은 적어도 그 영상의 길이만큼 이어진다. 끝난 뒤에는 마지막 모습에 잠깐 머문다.
-import { planMotion, enterPose, enterTime, transitionPose } from './motion.js';
+import { planMotion, enterPose, enterTime, emphasisPose, emphasisTime, transitionPose } from './motion.js';
 
 /** 고를 수 있는 머무는 시간(초)과 기본값. */
 export const STAYS = [3, 5, 8];
@@ -33,6 +33,7 @@ const staySeconds = (stay) => (Number.isFinite(stay) ? Math.min(30, Math.max(1, 
  *     turn:   이 장이 들어올 때의 전환 효과 { id, ms }. 없으면 null(첫 장은 늘 없다)
  *     lead:   요소가 나오기 시작하는 때(ms. 이 장이 시작된 때부터)
  *     moves:  움직이는 요소들 [{ i(요소 번호), enter, mirror, start(시작하는 때), ms(길이), click(누를 때 나오던 것인지) }]
+ *             강조 효과는 enter 대신 emphasis 가 있다(누를 때의 차례대로 저절로 한 번 움직인다)
  *     settle: 모든 요소가 다 나온 때
  *     ms:     이 장의 길이(다음 장이 시작되는 때)
  *     scene:  (영상 장면이 있는 장만) 바탕 영상을 트는 때 { start(트기 시작하는 때), ms(쓰는 구간의 길이) }
@@ -43,9 +44,11 @@ const staySeconds = (stay) => (Number.isFinite(stay) ? Math.min(30, Math.max(1, 
  *         파일이 이 기기에 없는 영상 장면은 부르는 쪽이 디자인에서 미리 떼고 준다.
  */
 export function filmPlan(designs, { stay = DEFAULT_STAY, scenes = true } = {}) {
-  const stayMs = staySeconds(stay) * 1000;
+  const stayAll = staySeconds(stay) * 1000;
   const slides = (Array.isArray(designs) ? designs : []).map((design, n) => {
     const plan = planMotion(design);
+    // 리허설로 잰 시간이 있는 장은 그 시간만큼 머문다(고른 머무는 시간 대신).
+    const stayMs = Number.isInteger(design?.dur) && design.dur >= 1 ? Math.min(design.dur, 600) * 1000 : stayAll;
     const pose = n > 0 ? transitionPose(design?.tr) : null;
     const turn = pose ? { id: design.tr, ms: pose.ms } : null;
     const lead = turn ? turn.ms : n === 0 && plan.auto.length + plan.clicks.length ? FIRST_LEAD : 0;
@@ -54,7 +57,9 @@ export function filmPlan(designs, { stay = DEFAULT_STAY, scenes = true } = {}) {
     if (count) {
       const least = Math.max(STEP_LEAST, Math.min(STEP_MIN, CLICKS_MAX / count));
       const step = Math.round(Math.max(least, Math.min(STEP_MAX, (stayMs - plan.ms - TAIL) / count)));
-      plan.clicks.forEach((c, k) => moves.push({ i: c.i, enter: c.enter, mirror: c.mirror, start: lead + plan.ms + step * (k + 1), ms: enterTime(c.enter), click: true }));
+      plan.clicks.forEach((c, k) => moves.push(c.emphasis
+        ? { i: c.i, emphasis: c.emphasis, start: lead + plan.ms + step * (k + 1), ms: emphasisTime(c.emphasis), click: true }
+        : { i: c.i, enter: c.enter, mirror: c.mirror, start: lead + plan.ms + step * (k + 1), ms: enterTime(c.enter), click: true }));
     }
     const settle = moves.reduce((m, v) => Math.max(m, v.start + v.ms), lead);
     const video = scenes && design?.video && design.video.out > design.video.in ? design.video : null;
@@ -74,7 +79,9 @@ export function slidePoses(slide, local) {
   for (const m of slide?.moves || []) {
     const at = local - m.start;
     if (at >= m.ms) continue;
-    const pose = enterPose(m.enter, at, { mirror: m.mirror });
+    // 강조는 차례가 오기 전에는 제 모습이다(나타나기처럼 숨어 기다리지 않는다).
+    if (m.emphasis && at < 0) continue;
+    const pose = m.emphasis ? emphasisPose(m.emphasis, at) : enterPose(m.enter, at, { mirror: m.mirror });
     if (pose) poses.set(m.i, pose);
   }
   return poses;

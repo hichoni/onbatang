@@ -2,7 +2,7 @@
 // 온바탕 안의 발표와 내려받은 HTML 수업이 같은 도구를 쓴다. 쪽을 그리고 넘기는 일은 쓰는 쪽이 하고, 이 모듈은 그 위에 얹힌다.
 // 모양(CSS)은 이 모듈이 들고 다닌다: 내려받은 HTML 과 발표자 화면 창에도 같은 모양이 따라가게(바깥 파일을 부르지 않는다).
 import { el } from '../src/dom.js';
-import { showAction, pageIndex, swipeStep, showClock, SHOW_KEYS } from './show-keys.js';
+import { showAction, pageIndex, swipeStep, showClock, autoDelay, SHOW_KEYS } from './show-keys.js';
 import { topicGroups } from '../src/document.js';
 
 const STYLE_ID = 'onbatang-show-tools-style';
@@ -40,6 +40,8 @@ const STYLE = `
 .ost-cam{position:absolute;z-index:6;width:var(--ost-cam,20%);aspect-ratio:1;border-radius:50%;overflow:hidden;border:4px solid #fff;box-shadow:0 6px 24px rgba(0,0,0,.35);background:#20263c;pointer-events:auto;cursor:grab;touch-action:none;display:none}
 .ost-cam.on{display:block}.ost-cam.big{--ost-cam:34%}.ost-cam:active{cursor:grabbing}
 .ost-cam video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);pointer-events:none}
+.ost-rehearse{position:absolute;left:20px;top:18px;z-index:9;padding:6px 12px;border-radius:10px;background:rgba(201,42,42,.9);color:#fff;font:700 15px/1.3 system-ui,sans-serif;pointer-events:none;display:none}
+.ost-rehearse.on{display:block}
 @media (max-width:680px){.ost-key.ost-wide{display:none!important}}
 .ost-presenter{margin:0;height:100vh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;background:#11151f;color:#f1f3f9;font-family:system-ui,sans-serif}
 .ost-p-head{display:flex;align-items:center;gap:14px;padding:10px 16px;background:#1b2130;flex-wrap:wrap}
@@ -79,6 +81,8 @@ export function ensureShowStyle(doc = document) {
  *   notes(i) · label(i)               — 그 쪽의 발표자 노트(글) · 종류 이름표(활동 · 결과 등, 없으면 '')
  *   ratio(i)                          — 그 쪽의 가로÷세로
  *   topic(i)                          — 그 쪽에서 시작하는 주제 이름(없으면 ''. 프레지처럼 전체 보기를 주제로 묶는다)
+ *   dwell(i) · steps(i)               — 자동 넘기기: 그 쪽에 머무는 시간(초, 없으면 기본) · 누를 때 나오는 걸음 수
+ *   saveTimes(seconds[])              — 리허설로 잰 쪽마다의 시간(초, 들르지 않은 쪽은 null)을 받는다. 없으면 리허설을 쓰지 않는다
  *   video()                           — K: 영상 멈추기·틀기(없으면 K 를 듣지 않는다)
  *   title · notify(message) · keyClass(발표 막대 단추에 붙일 class)
  * 돌려주는 것: { handle(event) 처리했으면 true · claimClick(event) 도구가 그 누르기를 썼으면 true · changed() 쪽이 바뀐 뒤 부른다 ·
@@ -103,7 +107,10 @@ export function createShowTools(root, opts) {
   camVideo.muted = true;
   const camEl = el('div', { class: 'ost-cam', role: 'img', 'aria-label': '발표자 카메라 창 (C 로 끄기)', title: '끌어서 옮기기 · 두 번 눌러 크기 바꾸기 · C 로 끄기' }, camVideo);
   let camStream = null, camTurn = 0, camDrag = null;
-  root.append(ink, dot, camEl, curtainEl, digits, panelEl);
+  // 자동 넘기기 · 리허설
+  let autoOn = false, autoTimer = 0, autoDone = 0, rehearsing = false, times = [], here = -1, since = 0, rehearseTick = 0;
+  const rehearseEl = el('div', { class: 'ost-rehearse', role: 'status', 'aria-live': 'off' });
+  root.append(ink, dot, camEl, curtainEl, digits, panelEl, rehearseEl);
 
   const key = (label, title, onClick, more = '') => el('button', { class: `${opts.keyClass || ''} ost-key${more}`, type: 'button', title, 'aria-label': title, onClick: (e) => { e.stopPropagation(); onClick(); } }, label);
   const penBtn = key('펜', '펜으로 쓰기 (P)', () => setTool('pen'));
@@ -114,10 +121,71 @@ export function createShowTools(root, opts) {
   const helpBtn = key('?', '단축키 보기 (?)', () => togglePanel('help'));
   const fullBtn = key('전체 화면', '전체 화면 켜기 · 끄기 (F)', () => toggleFullscreen(), ' ost-wide');
   const camBtn = key('카메라', '내 얼굴 카메라 창 (C)', () => toggleCamera());
-  const buttons = [penBtn, laserBtn, gridBtn, camBtn, presenterBtn, fullBtn, helpBtn];
+  const autoBtn = key('자동', '자동 넘기기: 끝나면 처음부터 다시 (A)', () => toggleAuto(), ' ost-wide');
+  const rehearseBtn = opts.saveTimes ? key('리허설', '리허설: 장마다 걸린 시간 재기 (R)', () => toggleRehearse(), ' ost-wide') : null;
+  const buttons = [penBtn, laserBtn, gridBtn, camBtn, autoBtn, ...(rehearseBtn ? [rehearseBtn] : []), presenterBtn, fullBtn, helpBtn];
   function toggleFullscreen() {
     if (doc.fullscreenElement) doc.exitFullscreen?.().catch(() => {});
     else root.requestFullscreen?.().catch(() => opts.notify?.('이 화면에서는 전체 화면을 켤 수 없어요.'));
+  }
+
+  // ---------- 자동 넘기기(키노트의 자동 재생 · 반복) ----------
+  // 그 쪽의 머무는 시간을 누를 때 나오는 걸음과 다음 쪽 사이에 나눠 하나씩 넘긴다. 마지막 쪽 다음은 처음 쪽이다(교실 앞 화면에 틀어 두기).
+  // 전체 보기·검은 화면이 열려 있으면 기다렸다가 다시 잰다. 손으로 넘기면 그 쪽부터 다시 잰다.
+  function scheduleAuto() {
+    clearTimeout(autoTimer);
+    if (!autoOn) return;
+    const i = opts.index(), steps = Math.max(0, opts.steps?.(i) || 0);
+    autoTimer = setTimeout(() => {
+      if (!autoOn) return;
+      if (panel || curtain) { scheduleAuto(); return; }
+      if (autoDone < steps) { autoDone += 1; opts.next(); scheduleAuto(); return; }
+      if (opts.index() >= opts.total() - 1) { if (opts.total() > 1) opts.go(0); else scheduleAuto(); return; }
+      opts.next();
+    }, autoDelay(opts.dwell?.(i), steps));
+  }
+  function toggleAuto() {
+    autoOn = !autoOn;
+    autoBtn.classList.toggle('on', autoOn);
+    autoBtn.setAttribute('aria-pressed', String(autoOn));
+    autoDone = 0;
+    scheduleAuto();
+    opts.notify?.(autoOn ? '자동 넘기기를 켰어요. 리허설로 잰 시간이 있는 장은 그 시간만큼, 없으면 8초씩 머물고 끝나면 처음부터 다시 해요. A 로 꺼요.' : '자동 넘기기를 껐어요.');
+    renderPresenter();
+  }
+
+  // ---------- 리허설(키노트의 발표 연습) ----------
+  // 켜 둔 동안 쪽마다 머문 시간을 더해 간다. 끄거나 발표를 끝내면 잰 시간을 쓰는 쪽에 넘긴다(저장할지는 그쪽이 묻는다).
+  function noteTime() {
+    if (!rehearsing || here < 0) return;
+    times[here] = (times[here] || 0) + (Date.now() - since) / 1000;
+    since = Date.now();
+  }
+  function paintRehearse() {
+    if (!rehearsing) return;
+    const i = opts.index(), now = (times[i] || 0) + (here === i ? (Date.now() - since) / 1000 : 0);
+    const all = times.reduce((sum, v) => sum + (v || 0), 0) + (Date.now() - since) / 1000;
+    rehearseEl.textContent = `리허설 · 이 쪽 ${showClock(now * 1000)} · 전체 ${showClock(all * 1000)}`;
+  }
+  function toggleRehearse(finish = false) {
+    if (!opts.saveTimes) return;
+    if (!rehearsing) {
+      if (finish) return;
+      rehearsing = true; times = Array.from({ length: opts.total() }, () => null); here = opts.index(); since = Date.now();
+      rehearseEl.classList.add('on');
+      rehearseBtn.classList.add('on'); rehearseBtn.setAttribute('aria-pressed', 'true');
+      paintRehearse();
+      rehearseTick = setInterval(paintRehearse, 500);
+      opts.notify?.('리허설을 시작했어요. 평소처럼 발표하면 장마다 걸린 시간을 재요. R 로 그만 재요.');
+    } else {
+      noteTime();
+      rehearsing = false; clearInterval(rehearseTick);
+      rehearseEl.classList.remove('on');
+      rehearseBtn.classList.remove('on'); rehearseBtn.setAttribute('aria-pressed', 'false');
+      const got = times.map((v) => (v == null ? null : Math.max(1, Math.round(v))));
+      if (got.some((v) => v != null)) opts.saveTimes(got);
+    }
+    renderPresenter();
   }
 
   // ---------- 카메라 창 ----------
@@ -351,7 +419,7 @@ export function createShowTools(root, opts) {
     if (action.type === 'digits') { showDigits(action.value); return true; }
     showDigits('');
     if (panel) { if (action.type === 'close' || action.type === 'help' || action.type === 'overview' || panel === 'help') { closePanel(); return true; } }
-    if (curtain && !['black', 'white', 'presenter', 'fullscreen', 'camera'].includes(action.type)) { setCurtain(curtain); return true; }
+    if (curtain && !['black', 'white', 'presenter', 'fullscreen', 'camera', 'auto', 'rehearse'].includes(action.type)) { setCurtain(curtain); return true; }
     switch (action.type) {
       case 'close': if (tool) setTool(tool); else opts.close(); return true;
       case 'next': opts.next(); return true;
@@ -367,6 +435,8 @@ export function createShowTools(root, opts) {
       case 'fullscreen': toggleFullscreen(); return true;
       case 'video': if (!opts.video) return false; opts.video(); return true;
       case 'camera': toggleCamera(); return true;
+      case 'auto': toggleAuto(); return true;
+      case 'rehearse': if (!opts.saveTimes) return false; toggleRehearse(); return true;
       default: return false;
     }
   }
@@ -444,7 +514,7 @@ export function createShowTools(root, opts) {
     let topic = '';
     for (let k = i; k >= 0 && !topic; k--) topic = opts.topic?.(k) || '';
     presenter.count.textContent = `${i + 1} / ${n}`;
-    presenter.status.textContent = [topic ? `주제: ${topic}` : '', label, curtain === 'black' ? '청중 화면: 검은 화면' : curtain === 'white' ? '청중 화면: 흰 화면' : ''].filter(Boolean).join(' · ');
+    presenter.status.textContent = [topic ? `주제: ${topic}` : '', autoOn ? '자동 넘기기 중' : '', rehearsing ? '리허설 중' : '', label, curtain === 'black' ? '청중 화면: 검은 화면' : curtain === 'white' ? '청중 화면: 흰 화면' : ''].filter(Boolean).join(' · ');
     presenter.now.style.setProperty('--ost-ratio', String(opts.ratio(i)));
     presenter.now.replaceChildren(opts.preview(i));
     if (i + 1 < n) { presenter.next.style.setProperty('--ost-ratio', String(opts.ratio(i + 1))); presenter.next.replaceChildren(opts.preview(i + 1)); }
@@ -458,14 +528,22 @@ export function createShowTools(root, opts) {
     presenting: () => !!presenter && !presenter.win.closed,
     camera: () => camEl.classList.contains('on'),
     /** 쪽이 바뀐 뒤: 그린 것을 지우고, 열린 칸을 닫고, 발표자 화면을 맞춘다. */
-    changed() { erase(); if (panel) closePanel(); renderPresenter(); },
+    changed() {
+      erase(); if (panel) closePanel();
+      // 리허설: 떠난 쪽의 시간을 적고 새 쪽에서 다시 잰다. 자동 넘기기: 새 쪽에서 다시 잰다.
+      if (rehearsing) { noteTime(); here = opts.index(); since = Date.now(); paintRehearse(); }
+      autoDone = 0; scheduleAuto();
+      renderPresenter();
+    },
     destroy() {
       clearTimeout(digitTimer);
       stopCamera();
+      autoOn = false; clearTimeout(autoTimer);
+      toggleRehearse(true);
       doc.defaultView.removeEventListener('resize', onResize);
       if (presenter && !presenter.win.closed) presenter.win.close();
       presenter = null;
-      for (const node of [ink, dot, camEl, curtainEl, digits, panelEl]) node.remove();
+      for (const node of [ink, dot, camEl, curtainEl, digits, panelEl, rehearseEl]) node.remove();
     },
   };
 }

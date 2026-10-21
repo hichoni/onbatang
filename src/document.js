@@ -16,6 +16,9 @@ export function cleanNotes(value) {
 export const slideNotes = slide => { const notes = cleanNotes(slide?.notes); return notes ? { notes } : {}; };
 /** 발표할 때 건너뛰는(숨긴) 장이면 { hidden: true }, 아니면 {} (그 장은 지우지 않고 편집·저장·PPTX 에는 남는다). */
 export const slideHidden = slide => (slide?.hidden === true ? { hidden: true } : {});
+/** 리허설로 잰 그 장의 머무는 시간(초, 1~3600 의 정수). 자동 넘기기와 영상 만들기가 쓴다. 없거나 틀리면 {}. */
+export const DUR_LIMIT = 3600;
+export const slideDur = slide => (Number.isInteger(slide?.dur) && slide.dur >= 1 && slide.dur <= DUR_LIMIT ? { dur: slide.dur } : {});
 /** 주제(구역) 이름: 이 장부터 새 주제가 시작된다(PowerPoint 의 구역). 한 줄 글로 40자까지. 비면 ''. */
 export const TOPIC_LIMIT = 40;
 export function cleanTopic(value) {

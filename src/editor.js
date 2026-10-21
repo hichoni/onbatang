@@ -11,7 +11,7 @@ import {
   designVideo, cleanVideo, trimVideo, videoSeconds, videoTime, VIDEO_FITS, MIN_VIDEO, rebaseItems, alignBoxes, distributeBoxes, clampShift, scaleItems, regroup, newGroupId,
   styleOf, applyStyle, LINE_SPACINGS, ALT_LIMIT,
 } from './model.js';
-import { ENTERS, COMBOS, TRANSITIONS, STILL, planMotion, playEnter, playDesign, playTransition, morphs } from './motion.js';
+import { ENTERS, COMBOS, TRANSITIONS, EMPHASES, STILL, planMotion, playEnter, playEmphasis, playDesign, playTransition, morphs } from './motion.js';
 import { searchStickers } from './stickers.js';
 import { ART_PACKS, artSvg, artColorable, artReady, loadArt, searchArt } from './art.js';
 import { designView, itemView, placeItem, paintCard, shapeThumb } from './render.js';
@@ -2791,6 +2791,11 @@ export function createEditor({
       const c = demoCard(design);
       view.append(c);
       play = () => playEnter(c.firstElementChild, design.items[0], id);
+    } else if (kind === 'emph') {
+      const design = cleanDesign(DEMO.enter);
+      const c = demoCard(design);
+      view.append(c);
+      play = () => playEmphasis(c.firstElementChild, design.items[0], id);
     } else if (kind === 'combo') {
       const design = cleanDesign({ ...DEMO.combo, pa: id });
       const c = demoCard(design);
@@ -2908,14 +2913,18 @@ export function createEditor({
   function setWait(on) {
     if (!!cur()?.aw !== on) change({ aw: on || undefined });
   }
+  function setEmphasis(id) {
+    if ((cur()?.em || '') !== (id || '')) change({ em: id || undefined });
+    if (id && nodes[sel]) { stopPreview(); showStage(); playEmphasis(nodes[sel], cur(), id); }
+  }
 
   function tabBody() {
     if (tab === 'motion') {
       const here = designMotion(card);
-      const waits = items().filter((k) => k.aw).length;
+      const waits = items().filter((k) => k.aw || k.em).length;
       // 고른 요소가 있으면 맨 위에 그 요소의 움직임이 나온다. 정하지 않은 요소는 장의 조합 효과를 따른다(조합 효과가 없으면 처음부터 보인다).
       const it = cur();
-      const mine = it && !it.lock ? motionPart('mine', [sel, itemLabel(it), it.an || '', !!it.aw, here.pa || ''].join('|'), () => {
+      const mine = it && !it.lock ? motionPart('mine', [sel, itemLabel(it), it.an || '', !!it.aw, it.em || '', here.pa || ''].join('|'), () => {
         const follow = { id: '', name: here.pa ? '장의 효과대로' : '없음' };
         const choices = [follow, ...(here.pa ? [{ id: STILL, name: '가만히' }] : []), ...ENTERS];
         const now = it.an === STILL && !here.pa ? '' : it.an || '';
@@ -2929,6 +2938,11 @@ export function createEditor({
             group: 'mine', name: c.name, on: now === c.id, kind: c.id && c.id !== STILL ? 'enter' : c.id === '' && here.pa ? 'follow' : 'none', id: c.id,
             onPick: () => setEnter(c.id),
           }))),
+          el('div', { class: 'fe-head', text: '누를 때 강조하기' }),
+          el('div', { class: 'fe-motions', role: 'group', 'aria-label': '고른 조각의 강조 효과', dataset: { group: 'emph' } },
+            motionTile({ group: 'emph', name: '없음', on: !it.em, kind: 'none', onPick: () => setEmphasis('') }),
+            ...EMPHASES.map((c) => motionTile({ group: 'emph', name: c.name, on: it.em === c.id, kind: 'emph', id: c.id, onPick: () => setEmphasis(c.id) }))),
+          it.em ? el('p', { class: 'fe-note', text: it.aw ? '누르면 나타나고, 한 번 더 누르면 강조해요.' : '이미 보이는 조각이 발표하다가 누를 때 한 번 움직이고 제자리로 돌아와요. 누를 때 나오는 다른 조각과 위에서부터 차례로 이어져요.' }) : null,
         ];
       }) : [];
       const combos = motionPart('combo', here.pa || '', () => [
@@ -2967,7 +2981,7 @@ export function createEditor({
         ...mine, ...combos, ...turns,
         el('div', { class: 'fe-row fe-motion-go' },
           el('button', { class: 'fe-btn primary', type: 'button', onClick: () => previewPage() }, icon('play'), '이 장 미리 보기'), all),
-        hint || waits ? el('p', { class: 'fe-note', text: `${hint}${waits ? `이 장에는 누를 때 나오는 요소가 ${waits}개 있어요.` : ''}`.trim() }) : null,
+        hint || waits ? el('p', { class: 'fe-note', text: `${hint}${waits ? `이 장에는 누를 때 나오거나 강조하는 요소가 ${waits}개 있어요.` : ''}`.trim() }) : null,
         el('p', { class: 'fe-note', text: settings().motionNote || '움직임은 "발표"를 누르면 보여요. 내려받은 그림에는 움직임이 없어요.' }),
       ];
     }
@@ -3561,6 +3575,7 @@ export function createEditor({
       if (!card || !patch || typeof patch !== 'object') return;
       if ('hidden' in patch) { if (patch.hidden === true) card.hidden = true; else delete card.hidden; }
       if ('topic' in patch) { const topic = cleanTopic(patch.topic); if (topic) card.topic = topic; else delete card.topic; }
+      if ('dur' in patch) { if (Number.isInteger(patch.dur) && patch.dur >= 1) card.dur = patch.dur; else delete card.dur; }
       onChange();
     },
     /** 카드 밖(그림 둘레의 빈 곳)을 우클릭했을 때: 고르기를 풀고 카드의 빈 곳 메뉴(붙여넣기 · 되돌리기 · slideMenu)를 띄운다. */
