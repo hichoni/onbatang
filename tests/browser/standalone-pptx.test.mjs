@@ -175,6 +175,56 @@ test('large horizontal filmstrip reorders across parts, preserves fixed original
  await checkIsolation();
 });
 
+test('short Chromebook workspace folds/resizes its tray and keeps whole-PPT navigation and originals',options,async t=>{
+ const {page,entry,base,checkIsolation}=await setup(t,{viewport:{width:1366,height:650}});
+ await enterImport(page,entry);await inspectFile(page,'self-authored-21-pages.pptx',21);await page.locator('[data-import-save]').click();await page.locator('[data-inline-import]').waitFor({state:'detached'});
+ await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);
+ const original=await readLibrary(page,base),ids=original.graphs[0].pages.map(v=>v.page.id),tray=page.locator('.cv-strip'),stage=page.locator('.cv-canvas .fe-stage'),grip=page.getByRole('separator',{name:'슬라이드 목록 높이 조절'});
+ assert.equal(await page.getByRole('button',{name:'슬라이드 목록 펼치기'}).getAttribute('aria-expanded'),'false');
+ assert.ok((await tray.boundingBox()).height<=60,'collapsed tray is a single compact row');
+ const large=await stage.boundingBox();assert.ok(large.height>=330,'canvas retains useful height on a 650px viewport');
+ for(let i=1;i<=20;i++){await page.getByRole('button',{name:'다음 슬라이드',exact:true}).click();await page.waitForFunction(n=>document.querySelector('[data-material-count]')?.textContent===`${n} / 21쪽 · 전체 PPT`,i+1);}
+ await page.getByRole('button',{name:'슬라이드 목록 펼치기'}).click();const small=await stage.boundingBox();assert.ok(large.height>small.height+90,'folding returns real pixels to the canvas');
+ const railBox=await page.locator('.cv-slide-list').boundingBox(),selectedBox=await page.locator('[data-material-page="20"]').boundingBox();assert.ok(selectedBox.x>=railBox.x&&selectedBox.x+selectedBox.width<=railBox.x+railBox.width,'reopening reveals the page selected while collapsed');
+ assert.ok((await tray.boundingBox()).height<=650*.42+1);
+ await page.locator('[data-material-page="19"]').click();await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='20 / 21쪽 · 전체 PPT');
+ await page.getByRole('button',{name:'슬라이드 목록 접기'}).click();await page.getByRole('button',{name:'다음 슬라이드',exact:true}).click();await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='21 / 21쪽 · 전체 PPT');
+ assert.equal(await page.getByRole('button',{name:'다음 슬라이드',exact:true}).isEnabled(),false);
+ await page.getByRole('button',{name:'이전 슬라이드',exact:true}).click();await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='20 / 21쪽 · 전체 PPT');
+ await grip.press('ArrowUp');assert.equal(await grip.getAttribute('aria-valuenow'),'64');await grip.press('End');assert.equal(await grip.getAttribute('aria-valuenow'),'152');
+ let box=await grip.boundingBox();await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2,box.y+box.height/2+190,{steps:8});await page.mouse.up();
+ assert.equal(await grip.getAttribute('aria-valuenow'),'0','dragging down folds the tray');
+ box=await grip.boundingBox();await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2,box.y+box.height/2-110,{steps:8});await page.mouse.up();
+ assert.ok(Number(await grip.getAttribute('aria-valuenow'))>=104,'dragging up restores and resizes the tray');
+ const after=await readLibrary(page,base);assert.deepEqual(after.originals,original.originals);assert.deepEqual(after.sources,original.sources);assert.deepEqual(after.graphs[0].pages.map(v=>v.page.id),ids);
+ await grip.press('Home');const name=await page.locator('.cv-name').inputValue();await page.reload();await page.getByRole('button',{name:name+' 열기',exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);
+ assert.equal(await page.getByRole('button',{name:'슬라이드 목록 펼치기'}).getAttribute('aria-expanded'),'false','device preference survives full reload');
+ await mkdir(resolve(root,'work'),{recursive:true});await page.screenshot({path:resolve(root,'work/slide-tray-chromebook-collapsed.png'),fullPage:true});
+ await page.getByRole('button',{name:'슬라이드 목록 펼치기'}).click();await page.screenshot({path:resolve(root,'work/slide-tray-chromebook-expanded.png'),fullPage:true});await checkIsolation();
+});
+
+test('tray follows a short viewport until manually chosen; compact tools stay reachable',options,async t=>{
+ const {page,entry,checkIsolation}=await setup(t,{viewport:{width:1366,height:900}});await page.goto(entry);await page.locator('.cv-hero .cv-new-btn').click();
+ assert.equal(await page.getByRole('button',{name:'슬라이드 목록 접기'}).getAttribute('aria-expanded'),'true');
+ await page.setViewportSize({width:1024,height:600});await page.getByRole('button',{name:'슬라이드 목록 펼치기'}).waitFor();
+ await page.locator('.fe-tab[data-tab=text]').click();await page.getByRole('button',{name:'큰 제목',exact:true}).click();const bar=page.locator('.cv-tools .fe-bar');assert.ok((await bar.boundingBox()).height<=64,'short-screen tools use one horizontal row');
+ const remove=bar.getByRole('button',{name:'삭제',exact:true});await remove.scrollIntoViewIfNeeded();const rb=await remove.boundingBox(),bb=await bar.boundingBox();assert.ok(rb.x>=bb.x-1&&rb.x+rb.width<=bb.x+bb.width+1,'last tool can scroll into view');
+ await page.getByRole('button',{name:'슬라이드 목록 펼치기'}).click();await page.setViewportSize({width:1000,height:560});assert.equal(await page.getByRole('button',{name:'슬라이드 목록 접기'}).getAttribute('aria-expanded'),'true');
+ assert.ok((await page.locator('.cv-strip').boundingBox()).height<=560*.42+1);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+ await page.getByRole('button',{name:'슬라이드 목록 접기'}).click();assert.ok((await page.locator('.cv-canvas .fe-stage').boundingBox()).height>300);await checkIsolation({pptx:false});
+});
+
+test('touch tray handle expands/cancels safely and its compact controls fit a phone',options,async t=>{
+ const {page,context,entry,checkIsolation}=await setup(t,{viewport:{width:390,height:844},touch:true});await page.goto(entry);await page.locator('.cv-hero .cv-new-btn').tap();
+ await page.getByRole('button',{name:'슬라이드 목록 접기'}).tap();assert.equal(await page.locator('.cv-tray-body').isVisible(),false);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+ const grip=page.getByRole('separator',{name:'슬라이드 목록 높이 조절'});await grip.scrollIntoViewIfNeeded();const box=await grip.boundingBox(),cdp=await context.newCDPSession(page),point={x:box.x+box.width/2,y:box.y+box.height/2,id:1,radiusX:1,radiusY:1,force:1};
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point]});for(let i=1;i<=8;i++)await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...point,y:point.y-100*i/8}]});await cdp.send('Input.dispatchTouchEvent',{type:'touchCancel',touchPoints:[]});
+ assert.equal(await page.locator('.cv-tray-body').isVisible(),false,'cancelled gesture restores the prior panel state');
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point]});for(let i=1;i<=8;i++)await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...point,y:point.y-100*i/8}]});await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await cdp.detach();
+ assert.equal(await page.locator('.cv-tray-body').isVisible(),true);assert.ok(Number(await grip.getAttribute('aria-valuenow'))>=96);await page.getByRole('button',{name:'슬라이드 목록 접기'}).tap();
+ await page.screenshot({path:resolve(root,'work/slide-tray-phone-collapsed.png'),fullPage:true});await checkIsolation({pptx:false});
+});
+
 test('direct eyedropper, four named palettes, undo, cancel, stale selection and reload',options,async t=>{
  const {page,entry}=await setup(t);await page.goto(entry);await page.locator('.cv-hero .cv-new-btn').click();await page.locator('.fe-tab[data-tab=bg]').click();
  await page.evaluate(()=>{window.EyeDropper=class{async open(){return {sRGBHex:'#123456'};}};});
@@ -292,13 +342,13 @@ async function setup(t,{base='',viewport={width:1440,height:1000},touch=false}={
  const page=await context.newPage();page.setDefaultTimeout(45000);
  page.on('pageerror',error=>errors.push(error.message));page.on('worker',worker=>workers.push(worker.url()));
  const entry=origin+base+'/app/index.html';
- async function checkIsolation(){
+ async function checkIsolation({pptx=true}={}){
   assert.deepEqual(errors,[],'no uncaught page errors, including sandbox preview frames');
   assert.deepEqual(external,[],'the standalone flow makes no off-origin requests');
   assert.equal(serviceWorkers,0,'no service worker escapes the isolated test context');
   assert.deepEqual(unexpectedPaths,[],'subpath hosting must not fall back to absolute root assets');
-  assert.ok(workers.some(url=>url.startsWith(origin+base+'/app/pptx-import/vendor/pptx-worker.js')),'real bundled conversion worker ran');
-  assert.ok(requests.includes(base+'/app/pptx-import/vendor/preview-frame.html'),'real sandbox preview frame loaded');
+  if(pptx){assert.ok(workers.some(url=>url.startsWith(origin+base+'/app/pptx-import/vendor/pptx-worker.js')),'real bundled conversion worker ran');
+  assert.ok(requests.includes(base+'/app/pptx-import/vendor/preview-frame.html'),'real sandbox preview frame loaded');}
  }
  return {page,context,entry,origin,base,requests,checkIsolation};
 }

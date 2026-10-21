@@ -1028,6 +1028,48 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero-go { display: flex
 /* Activity settings stay in the editor; playback occupies the same lesson stage. */
 .cv-activity-config{position:absolute;inset:0;z-index:8;overflow:auto;padding:20px;background:#eef4ef;overscroll-behavior:contain}
 .cv-canvas:has(>.cv-activity-config){position:relative}
+
+/* The slide tray gives its height back to the live canvas when folded. Its
+   header stays available; thumbnails/actions scroll inside a bounded drawer. */
+.cv-strip{position:relative;grid-template-rows:auto minmax(0,1fr);min-height:0;gap:6px}
+.cv-tray-body{display:grid;gap:6px;min-height:0;min-width:0;overflow-y:auto;overscroll-behavior-y:contain}
+.cv-tray-toggle{display:inline-flex;align-items:center;gap:8px;flex:none;min-height:36px;padding:5px 10px;border:1px solid var(--cv-line);border-radius:9px;background:#fffdf8;color:var(--text);font-size:.8rem;font-weight:650;white-space:nowrap;cursor:pointer}
+.cv-tray-chevron{display:inline-block;font-size:18px;line-height:1}
+.cv-tray-grip{position:absolute;z-index:4;top:-10px;left:calc(50% - 38px);width:76px;height:24px;cursor:ns-resize;touch-action:none;user-select:none}
+.cv-tray-grip::before{content:'';position:absolute;top:9px;left:16px;right:16px;height:5px;border-radius:999px;background:#96aba5;box-shadow:0 0 0 2px #fffdf8}
+.cv-tray-grip:hover::before,.cv-tray-grip:focus-visible::before{background:var(--primary)}
+.cv-tray-grip:focus-visible{outline:3px solid var(--primary);outline-offset:-2px;border-radius:10px}
+.cv-strip.is-resizing{user-select:none;cursor:ns-resize}
+.cv-strip .cv-tray-page{display:none}
+.cv-tray-collapsed{padding-top:5px;padding-bottom:5px;gap:0}
+.cv-tray-collapsed .cv-strip-header{display:flex;flex-wrap:nowrap;gap:8px;min-height:36px}
+.cv-tray-collapsed :is(.cv-strip-guide,.cv-strip-size,.cv-slide-scroll:not(.cv-tray-page)){display:none}
+.cv-tray-collapsed .cv-slide-count{margin-right:auto;white-space:nowrap;font-size:.82rem}
+.cv-tray-collapsed .cv-tray-chevron{transform:rotate(180deg)}
+.cv-tray-collapsed .cv-tray-page{display:grid;place-items:center;flex:none;min-height:36px;min-width:36px}
+@media(pointer:coarse){
+ .cv-tray-toggle,.cv-tray-collapsed .cv-tray-page{min-width:44px;min-height:44px}
+ .cv-tray-grip{width:88px;height:44px;left:calc(50% - 44px);top:-20px}
+ .cv-tray-grip::before{top:19px}
+}
+@media(min-width:900px) and (min-height:520px){
+ .cv-strip{max-height:min(42dvh,320px);padding:8px 12px}
+ .cv-tray-collapsed{padding-top:5px;padding-bottom:5px}
+}
+@media(min-width:900px) and (min-height:520px) and (max-height:740px){
+ /* Keep all tools reachable in one horizontal row on Chromebook-height windows. */
+ .cv-tools .fe-bar{min-height:50px;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;align-content:center;scrollbar-width:thin}
+ .cv-tools .fe-bar>*{flex-shrink:0}
+ .cv-tools .fe-bar:has(.fe-crop-title) .fe-hint{display:none}
+}
+@media(max-width:600px){
+ .cv-strip-header{display:flex;gap:6px}
+ .cv-strip-header .cv-slide-count{margin-right:auto}
+ .cv-strip-header .cv-strip-guide{flex-basis:100%;order:3}
+ .cv-tray-toggle{min-height:44px}
+ .cv-tray-collapsed .cv-tray-page{min-width:44px;min-height:44px}
+ .cv-tray-collapsed .cv-slide-count{white-space:normal}
+}
 .cv-activity-add,.cv-activity-edit{min-height:44px;white-space:nowrap;padding:9px 14px}
 .cv-activity-edit[hidden]{display:none}
 .cv-show-stage:has(.cv-show-activity){aspect-ratio:auto!important;width:100%!important;height:calc(100dvh - 76px)!important;max-width:none!important;max-height:none!important}

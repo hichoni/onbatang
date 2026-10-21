@@ -6,7 +6,7 @@
 import { el, toast, openModal, closeModal } from './ui.js';
 import { onbatangLogo,gaiOwl } from './brand.js';
 import { onbatangLoading,deferredOnbatangLoading } from './loading.js';
-import {bindFilmstrip} from './filmstrip.js';
+import {bindFilmstrip,bindSlideTray} from './filmstrip.js';
 import {orderPages,movePage} from './page-order.js';
 import {createLocalPalettes} from './palettes.js';
 import {newId} from '../src/document.js';
@@ -801,8 +801,17 @@ function decorateStrip(O){
   const size=el('input',{type:'range',min:'64',max:'152',step:'8',value:String(height),'aria-label':'슬라이드 미리보기 크기',onInput:()=>{O.strip.style.setProperty('--cv-thumb-height',`${size.value}px`);try{localStorage.setItem(key,size.value);}catch{}}});
   const scroll=(text,dir)=>el('button',{class:'cv-slide-scroll',type:'button','aria-label':text,onClick:()=>list.scrollBy({left:dir*list.clientWidth*.75,behavior:CALM.matches?'auto':'smooth'})},dir<0?'‹':'›');
   const guide=window.matchMedia('(pointer: coarse)').matches?'손잡이로 순서 변경 · 목록을 밀어 이동':'끌어서 순서 변경 · 휠로 가로 이동';
-  const header=el('div',{class:'cv-strip-header'},count,el('span',{class:'cv-strip-guide',text:guide}),el('label',{class:'cv-strip-size'},'크기',size),scroll('목록 왼쪽 보기',-1),scroll('목록 오른쪽 보기',1));
-  O.strip.prepend(header);list.tabIndex=0;
+  const bodyId=O.trayId??=newId('u');
+  const toggle=el('button',{class:'cv-tray-toggle',type:'button','aria-controls':bodyId},el('span',{},'목록 접기'),el('span',{class:'cv-tray-chevron','aria-hidden':'true'},'⌄'));
+  const page=(dir,text)=>el('button',{class:'cv-slide-scroll cv-tray-page',type:'button',dataset:{trayStep:String(dir)},'aria-label':text},dir<0?'‹':'›');
+  const header=el('div',{class:'cv-strip-header'},toggle,count,page(-1,'이전 슬라이드'),page(1,'다음 슬라이드'),el('span',{class:'cv-strip-guide',text:guide}),el('label',{class:'cv-strip-size'},'크기',size),scroll('목록 왼쪽 보기',-1),scroll('목록 오른쪽 보기',1));
+  const body=el('div',{class:'cv-tray-body',id:bodyId},...O.strip.children);
+  const grip=el('div',{class:'cv-tray-grip',role:'separator',tabindex:'0','aria-orientation':'horizontal','aria-label':'슬라이드 목록 높이 조절','aria-controls':bodyId,'aria-valuemin':'0','aria-valuemax':'152',title:'위아래로 끌어 목록 높이 조절 · 누르면 접기/펼치기 · 방향키로도 조절'});
+  O.strip.replaceChildren(grip,header,body);list.tabIndex=0;
+  O.tray??=bindSlideTray(O.strip,{key:`onbatang.filmstrip-tray.v1.${storageName()}`,sizeKey:key,
+    navigation:()=>{const at=O.materialDeck?materialPages(O).findIndex(v=>v.record.id===O.record.id&&v.index===O.at):O.at,n=O.materialDeck?materialPages(O).length:O.slides.length;return {previous:at>0,next:at<n-1};},
+    step:delta=>{if(O.materialDeck){const pages=materialPages(O),at=pages.findIndex(v=>v.record.id===O.record.id&&v.index===O.at);if(pages[at+delta])navigateMaterialPage(O,pages[at+delta]);}else goSlide(O,O.at+delta);}});
+  O.tray.refresh();
   O.stripDrag=bindFilmstrip(list,{reorder:(from,to)=>reorderStrip(O,from,to),busy:()=>O.closed||O.leaving||!!O.inlineImport||app.inert});
 }
 
@@ -863,6 +872,7 @@ function renderMaterialNavigation(O,left=0) {
   rail.scrollLeft=left;
   if(selected&&O.materialScrollTarget!==key){const box=rail.getBoundingClientRect(),r=selected.getBoundingClientRect();rail.scrollLeft+=r.left<box.left+8?r.left-box.left-8:r.right>box.right-8?r.right-box.right+8:0;}
   O.materialScrollTarget=key;
+  O.tray?.refresh();
 }
 async function navigateMaterialPage(O,value) {
   if(O.closed||O.leaving||O.inlineImport||moving||app.inert||hostFlush||videoBusy(O))return;
@@ -1453,6 +1463,7 @@ async function leaveEditor(O, { requireSaved = false, waitForSync = false } = {}
   O.activityConfig?.remove();O.activityConfig=null;
   O.materialLoading?.dispose();
   O.stripDrag?.destroy();
+  O.tray?.destroy();
   if (accountFor(O.record)) {
     const uploading = pusher.flush(O.record.id);
     if (waitForSync) await uploading;            // 바깥 화면으로 가면 이 앱이 닫히므로 올리기까지 기다린다
