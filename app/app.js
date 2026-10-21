@@ -796,19 +796,22 @@ async function reorderStrip(O,from,to){
 }
 function decorateStrip(O){
   const list=O.strip.querySelector('.cv-slide-list'),count=O.strip.querySelector('.cv-slide-count');
-  const key=`onbatang.filmstrip-size.v1.${storageName()}`;let height=92;try{height=Math.max(64,Math.min(152,Number(localStorage.getItem(key))||92));}catch{}
-  O.strip.style.setProperty('--cv-thumb-height',`${height}px`);
-  const size=el('input',{type:'range',min:'64',max:'152',step:'8',value:String(height),'aria-label':'슬라이드 미리보기 크기',onInput:()=>{O.strip.style.setProperty('--cv-thumb-height',`${size.value}px`);try{localStorage.setItem(key,size.value);}catch{}}});
+  const size=el('input',{type:'range',min:'88',max:'600',step:'1',value:'120','aria-label':'슬라이드 목록 창 높이',dataset:{trayHeight:''}});
   const scroll=(text,dir)=>el('button',{class:'cv-slide-scroll',type:'button','aria-label':text,onClick:()=>list.scrollBy({left:dir*list.clientWidth*.75,behavior:CALM.matches?'auto':'smooth'})},dir<0?'‹':'›');
   const guide=window.matchMedia('(pointer: coarse)').matches?'손잡이로 순서 변경 · 목록을 밀어 이동':'끌어서 순서 변경 · 휠로 가로 이동';
   const bodyId=O.trayId??=newId('u');
-  const toggle=el('button',{class:'cv-tray-toggle',type:'button','aria-controls':bodyId},el('span',{},'목록 접기'),el('span',{class:'cv-tray-chevron','aria-hidden':'true'},'⌄'));
+  const toggle=el('button',{class:'cv-tray-toggle',type:'button','aria-controls':bodyId,title:'슬라이드 목록 접기/펼치기'},el('span',{class:'cv-tray-toggle-label'},'목록 접기'),el('span',{class:'cv-tray-chevron','aria-hidden':'true'},'⌄'));
   const page=(dir,text)=>el('button',{class:'cv-slide-scroll cv-tray-page',type:'button',dataset:{trayStep:String(dir)},'aria-label':text},dir<0?'‹':'›');
-  const header=el('div',{class:'cv-strip-header'},toggle,count,page(-1,'이전 슬라이드'),page(1,'다음 슬라이드'),el('span',{class:'cv-strip-guide',text:guide}),el('label',{class:'cv-strip-size'},'크기',size),scroll('목록 왼쪽 보기',-1),scroll('목록 오른쪽 보기',1));
-  const body=el('div',{class:'cv-tray-body',id:bodyId},...O.strip.children);
+  const options=el('div',{class:'cv-tray-options'},el('div',{class:'cv-tray-options-heading'},el('b',{},'슬라이드 도구'),el('button',{class:'cv-tray-reset',type:'button',dataset:{trayReset:''}},'창 높이 초기화')),
+    O.strip.querySelector('.cv-slide-tools'),
+    el('div',{class:'cv-tray-options-row'},el('label',{class:'cv-strip-size'},'창 높이',size),scroll('목록 왼쪽 보기',-1),scroll('목록 오른쪽 보기',1)),
+    el('p',{class:'cv-strip-guide',text:guide}),O.strip.querySelector('.cv-material-hint'));
+  const menu=el('details',{class:'cv-tray-menu'},el('summary',{'aria-label':'슬라이드 도구 열기',title:'슬라이드 복제·삭제·순서·높이·결과 가져오기'},'···'),options);
+  const header=el('div',{class:'cv-strip-header'},toggle,count,page(-1,'이전 슬라이드'),page(1,'다음 슬라이드'),menu);
+  const body=el('div',{class:'cv-tray-body',id:bodyId},list);
   const grip=el('div',{class:'cv-tray-grip',role:'separator',tabindex:'0','aria-orientation':'horizontal','aria-label':'슬라이드 목록 높이 조절','aria-controls':bodyId,'aria-valuemin':'0','aria-valuemax':'152',title:'위아래로 끌어 목록 높이 조절 · 누르면 접기/펼치기 · 방향키로도 조절'});
   O.strip.replaceChildren(grip,header,body);list.tabIndex=0;
-  O.tray??=bindSlideTray(O.strip,{key:`onbatang.filmstrip-tray.v1.${storageName()}`,sizeKey:key,
+  O.tray??=bindSlideTray(O.strip,{key:`onbatang.filmstrip-tray.v1.${storageName()}`,
     navigation:()=>{const at=O.materialDeck?materialPages(O).findIndex(v=>v.record.id===O.record.id&&v.index===O.at):O.at,n=O.materialDeck?materialPages(O).length:O.slides.length;return {previous:at>0,next:at<n-1};},
     step:delta=>{if(O.materialDeck){const pages=materialPages(O),at=pages.findIndex(v=>v.record.id===O.record.id&&v.index===O.at);if(pages[at+delta])navigateMaterialPage(O,pages[at+delta]);}else goSlide(O,O.at+delta);}});
   O.tray.refresh();

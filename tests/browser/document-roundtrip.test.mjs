@@ -104,7 +104,7 @@ test('actual app migrates, edits, saves twice, reopens, copies, reorders and dis
   assert.deepEqual(saved.assets,sample.assets);
   assert.deepEqual(saved.slides.map(p=>[p.id,p.items.map(e=>[e.id,e.source,e.assetRefs])]),sample.slides.map(p=>[p.id,p.items.map(e=>[e.id,e.source,e.assetRefs])]));
   // Native slide controls use the same stable page identity.
-  await page.getByRole('button',{name:'이 장을 뒤로 옮기기',exact:true}).click();
+  await page.locator('.cv-tray-menu>summary').click();await page.getByRole('button',{name:'이 장을 뒤로 옮기기',exact:true}).click();
   await page.locator('.cv-back').click();
   const moved = await page.evaluate(async ({base,id}) => (await import(base+'/app/store.js')).getDesign(id), {base,id:sample.id});
   assert.equal(moved.slides[1].id,sample.slides[0].id);
