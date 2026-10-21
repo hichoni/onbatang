@@ -8,6 +8,8 @@ import {createHash} from 'node:crypto';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {resolve,extname,sep} from 'node:path';
 import {unzipSync} from 'fflate';
+// 공용 첫 쪽은 새로 고치면 꾸미던 그림을 다시 연다(v0.42). 목록에서 다시 여는 것을 보려고 그때는 내 그림으로 나간다.
+const reloadToList=async page=>{await page.reload();await page.waitForFunction(()=>!document.getElementById('onba-splash'));if(await page.evaluate(()=>document.body.classList.contains('cv-editing'))){await page.locator('.cv-back').click();await page.locator('.cv-home-title').waitFor();}};
 
 const root=resolve(fileURLToPath(new URL('../../',import.meta.url))),fixture=resolve(root,'tools/fixtures/pptx/self-authored-4x3.pptx');
 const options={skip:!process.env.MINICAN_PLAYWRIGHT_PATH,timeout:180000};
@@ -121,7 +123,7 @@ test('standalone inline file/slide/font/image workflow keeps editor DOM until co
  assert.equal(navigations.length,navCount);assert.equal(await page.evaluate(()=>window.inlineHomeTransitions),0);assert.ok(await page.evaluate(()=>window.previewFallbacks.length)>0);
  await page.locator('.cv-name').fill('새 인라인 PPT 저장');const finalDraft=await page.evaluate(async id=>(await import('/app/app.js')).flushSavedDesign(id),newGraph.documents[0].id);assert.equal(finalDraft.name,'새 인라인 PPT 저장');
  for(const mode of ['editable','image']){const files=await editorDownload(page,mode),xml=new TextDecoder().decode(files['ppt/presentation.xml']);assert.match(xml,/<p:sldSz cx="9144000" cy="6858000"/);assert.equal(Object.keys(files).filter(name=>/^ppt\/slides\/slide\d+\.xml$/.test(name)).length,2);}
- await page.reload();await page.getByRole('button',{name:'새 인라인 PPT 저장 열기',exact:true}).click();await page.locator('.cv-name').waitFor();assert.equal(await page.locator('.cv-name').inputValue(),'새 인라인 PPT 저장');assert.deepEqual(await draft(page,oldId),savedOld);assert.deepEqual(await readLibrary(page),imported);assert.equal(sha(await readFile(fixture)),inputHash);await isolated({worker:true});
+ await reloadToList(page);await page.getByRole('button',{name:'새 인라인 PPT 저장 열기',exact:true}).click();await page.locator('.cv-name').waitFor();assert.equal(await page.locator('.cv-name').inputValue(),'새 인라인 PPT 저장');assert.deepEqual(await draft(page,oldId),savedOld);assert.deepEqual(await readLibrary(page),imported);assert.equal(sha(await readFile(fixture)),inputHash);await isolated({worker:true});
 });
 
 

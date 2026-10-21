@@ -8,6 +8,8 @@ const STORE = 'designs';
 const ORIGINALS = 'originals';
 let issues = [];
 export const listDesignIssues = () => issues.slice();
+// 아주 옛 모양(schemaVersion 없음)으로 적혀 있는 그림들. 이것을 덮어쓸 때는 원본을 먼저 따로 둔다(putDesign).
+const legacy = new Set();
 const NAME_RULE = /^[a-z][a-z0-9.-]{0,40}$/;
 
 /** 저장소의 이름을 정한다. 앱을 시작하기 전에 한 번 부른다. */
@@ -28,7 +30,8 @@ const open = () => (dbJob ||= new Promise((resolve, reject) => {
   q.onerror = () => reject(q.error);
   q.onblocked = () => reject(new Error('blocked'));
 }).catch((ex) => { dbJob = null; throw ex; }));
-const run = async (mode, work, stores = [STORE]) => {
+// commit: 할 일을 다 건 뒤 바로 마친다(창이 사라져도 이미 마친 쓰기는 남는다). 끝을 알리는 곳을 단 다음에 마친다.
+const run = async (mode, work, stores = [STORE], { commit = false } = {}) => {
   const db = await open();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(stores, mode);
@@ -36,6 +39,7 @@ const run = async (mode, work, stores = [STORE]) => {
     tx.oncomplete = () => resolve(req?.result);
     tx.onerror = () => reject(tx.error);
     tx.onabort = () => reject(tx.error || new Error('aborted'));
+    if (commit) queueMicrotask(() => { try { tx.commit?.(); } catch { /* 이미 끝났거나 멈춘 일 */ } });
   });
 };
 
@@ -45,6 +49,7 @@ export async function listDesigns() {
   issues = [];
   const records = [];
   for (const raw of all || []) {
+    if (raw?.id && raw.schemaVersion === undefined) legacy.add(raw.id);
     try { records.push(migrateRecord(raw)); }
     catch (error) {
       if (!(error instanceof DocumentError)) throw error;
@@ -57,6 +62,7 @@ export async function listDesigns() {
 export async function getDesign(id) {
   const raw = await run('readonly', (s) => s.get(id));
   if (!raw) return null;
+  if (raw.schemaVersion === undefined) legacy.add(id);
   const clean = migrateRecord(raw);
   if (raw.schemaVersion === undefined) await putDesign(clean);
   return clean;
@@ -65,9 +71,17 @@ export async function getDesign(id) {
 export async function getOriginalDesign(id) {
   return (await run('readonly', s => s.get(id), [ORIGINALS])) ?? await run('readonly', s => s.get(id));
 }
-/** 저장(같은 이름표면 덮어쓴다). */
+/**
+ * 저장(같은 이름표면 덮어쓴다).
+ * 곧바로 쓰고 바로 마친다(commit): 먼저 읽고 그 결과를 받은 뒤에 쓰면, 그 사이에 창을 새로 고치거나 닫을 때 저장이 버려지고
+ * 그 뒤에 줄 선 저장까지 함께 버려진다. 아주 옛 모양(schemaVersion 없음)의 그림만 원본을 먼저 따로 두려고 읽은 뒤에 쓴다.
+ */
 export async function putDesign(record) {
   const clean = migrateRecord(record);
+  if (record.schemaVersion !== undefined && !legacy.has(clean.id)) {
+    await run('readwrite', (s) => s.put(clean, clean.id), [STORE], { commit: true });
+    return clean;
+  }
   await run('readwrite', (s, tx) => {
     const q = s.get(clean.id);
     q.onsuccess = () => {
@@ -83,6 +97,7 @@ export async function putDesign(record) {
     };
     return q;
   }, [STORE, ORIGINALS]);
+  legacy.delete(clean.id);
   return clean;
 }
 /** Replace a draft only if it is still the snapshot that was pinned. */

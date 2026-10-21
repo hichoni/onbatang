@@ -7,6 +7,8 @@ import {createHash} from 'node:crypto';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {resolve,extname,sep} from 'node:path';
 import {unzipSync,zipSync} from 'fflate';
+// 공용 첫 쪽은 새로 고치면 꾸미던 그림을 다시 연다(v0.42). 목록에서 다시 여는 것을 보려고 그때는 내 그림으로 나간다.
+const reloadToList=async page=>{await page.reload();await page.waitForFunction(()=>!document.getElementById('onba-splash'));if(await page.evaluate(()=>document.body.classList.contains('cv-editing'))){await page.locator('.cv-back').click();await page.locator('.cv-home-title').waitFor();}};
 
 const root=resolve(fileURLToPath(new URL('../../',import.meta.url)));
 const options={skip:!process.env.MINICAN_PLAYWRIGHT_PATH,timeout:300000};
@@ -78,7 +80,7 @@ test('imported 16:9, 4:3 and custom 17:10 canvases follow original dimensions ac
   records.push({...entry,materialId:imported.materialRef.id,documentId:payload.id,saved});
  }
  // Recreate the app/module realm, then alternate source sizes with a pre-existing square drawing.
- await page.reload();await page.locator('.cv-home-title').waitFor();await openLibrary(page);
+ await reloadToList(page);await page.locator('.cv-home-title').waitFor();await openLibrary(page);
  for(const entry of [records[2],records[0],records[1]]){
   await page.locator(`[data-pptx-material="${entry.materialId}"]`).getByRole('button',{name:'자료 열기',exact:true}).click();await page.locator('[data-pptx-edit]').click();await assertCanvas(page,entry.width/entry.height,{label:`원본 비율 · ${entry.id}`,preset:entry.preset});
   await page.locator('.cv-back').click();await page.locator('.cv-home-title').waitFor();

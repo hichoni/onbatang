@@ -4,6 +4,8 @@ import {createServer} from 'node:http';
 import {readFile,mkdir} from 'node:fs/promises';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {resolve,extname,sep} from 'node:path';
+// 공용 첫 쪽은 새로 고치면 꾸미던 그림을 다시 연다(v0.42). 목록에서 다시 여는 것을 보려고 그때는 내 그림으로 나간다.
+const reloadToList=async page=>{await page.reload();await page.waitForFunction(()=>!document.getElementById('onba-splash'));if(await page.evaluate(()=>document.body.classList.contains('cv-editing'))){await page.locator('.cv-back').click();await page.locator('.cv-home-title').waitFor();}};
 
 test('actual editor resizes from the opposite corner, respects modifiers and keeps saved geometry',
  {skip:!process.env.MINICAN_PLAYWRIGHT_PATH,timeout:60000},async t=>{
@@ -145,7 +147,7 @@ test('actual editor resizes from the opposite corner, respects modifiers and kee
   near((await geometry()).w,small.w,'merely grabbing a padded handle never jumps in width');near((await geometry()).h,small.h,'merely grabbing a padded handle never jumps in height');
   const tiny=await drag('.fe-scale.se',10,7);anchored(tiny,'se','padded tiny selection');near(tiny.after.w,tiny.before.w+10,'tiny width uses pointer movement, not padded frame size');near(tiny.after.h,tiny.before.h+7,'tiny height uses pointer movement, not padded frame size');
   const tinySaved=await persisted();
-  await page.reload();await page.getByRole('button',{name:current.name+' 열기',exact:true}).click();await page.locator('.cv-name').waitFor();
+  await reloadToList(page);await page.getByRole('button',{name:current.name+' 열기',exact:true}).click();await page.locator('.cv-name').waitFor();
   const reopened=await persisted();assert.deepEqual(reopened.slides[0].items,tinySaved.slides[0].items,'local save and reload retain exact element geometry and identity');
   await open(fixtures[5]);
   const naturalOriginal=await persisted();assert.equal(naturalOriginal.slides[0].items[0].h,undefined);assert.equal(naturalOriginal.slides[0].items[0].layout,undefined,'ordinary text stays on its natural-height model path');
@@ -176,7 +178,7 @@ test('actual editor resizes from the opposite corner, respects modifiers and kee
   await page.locator('.cv-app-root').evaluate(node=>node.inert=true);
   try{await persisted();assert.equal(await page.locator('.cv-app-root').evaluate(node=>node.inert),true,'a previously inert app remains inert after flushing');}
   finally{await page.locator('.cv-app-root').evaluate(node=>node.inert=false);}
-  await page.reload();await page.getByRole('button',{name:current.name+' 열기',exact:true}).click();await page.locator('.cv-name').waitFor();
+  await reloadToList(page);await page.getByRole('button',{name:current.name+' 열기',exact:true}).click();await page.locator('.cv-name').waitFor();
   const naturalReopened=await persisted();
   for(const key of ['id','source','originalSize'])assert.deepEqual(naturalReopened[key],naturalSaved[key],`reopening retains document ${key}`);
   assert.deepEqual(naturalReopened.slides,naturalSaved.slides,'reopening retains natural wrapping geometry, page ID and original content');

@@ -3,6 +3,9 @@
     "site": "onbatang",
     "public": "work/firebase-public",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "redirects": [
+      {"source": "/", "destination": "/app/", "type": 302}
+    ],
     "headers": [
       {"source": "**/*.html", "headers": [{"key": "Cache-Control", "value": "no-cache"}]},
       {"source": "**/*.js", "headers": [{"key": "Cache-Control", "value": "no-cache"}]},

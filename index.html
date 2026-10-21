@@ -20,11 +20,21 @@
   <meta name="twitter:title" content="온바탕 — 생각을 펼치는 따뜻한 디자인 공간" />
   <meta name="twitter:description" content="글·도형·사진을 놓고 끌어서 카드·포스터·발표 자료를 꾸며요. 설치 없이 무료로, PPTX·HTML·영상으로 내려받고 바로 발표해요." />
   <meta name="twitter:image" content="https://onbatang.web.app/app/brand/og-image.png" />
-  <!-- 이 저장소를 GitHub Pages 로 열면 첫 주소에서 바로 앱으로 간다. -->
+  <!-- 이 저장소를 GitHub Pages 로 열면 첫 주소에서 바로 앱으로 간다(공용 Firebase 는 서버가 먼저 /app/ 으로 보낸다). -->
   <meta http-equiv="refresh" content="0; url=app/" />
   <link rel="canonical" href="app/" />
+  <script>location.replace('app/' + location.search + location.hash);</script>
+  <!-- 넘어가는 동안에도 앱의 여는 화면과 같은 모습(글자만 귀퉁이에 뜨지 않게). -->
+  <style>
+    html,body{margin:0;height:100%}
+    body{display:grid;place-content:center;justify-items:center;gap:18px;background:radial-gradient(ellipse at 100% 0,#f9edd8 0,transparent 55%),radial-gradient(ellipse at 0 100%,#e8f3ed 0,transparent 55%),#f5f5ef;color:#24322d;font-family:system-ui,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;letter-spacing:-.025em}
+    img{display:block}
+    a{color:#5f7168;font-size:.95rem;text-decoration:none}
+  </style>
 </head>
 <body>
-  <p><a href="app/">온바탕 열기</a></p>
+  <img src="app/brand/symbol-primary.svg" width="132" height="94" alt="">
+  <img src="app/brand/wordmark-primary.svg" width="196" height="60" alt="온바탕">
+  <a href="app/">온바탕을 여는 중이에요…</a>
 </body>
 </html>
