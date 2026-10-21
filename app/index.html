@@ -24,23 +24,58 @@
   <meta name="application-name" content="온바탕">
   <link rel="icon" type="image/svg+xml" href="./brand/app-icon.svg?v=b1">
   <link rel="apple-touch-icon" href="./brand/app-icon-192.png?v=b1">
-  <link rel="stylesheet" href="../src/editor.css?v=0.41.0" />
-  <link rel="stylesheet" href="./app.css?v=0.41.0" />
-  <link rel="stylesheet" href="./brand.css?v=0.41.0" />
+  <link rel="stylesheet" href="../src/editor.css?v=0.42.0" />
+  <link rel="stylesheet" href="./app.css?v=0.42.0" />
+  <link rel="stylesheet" href="./brand.css?v=0.42.0" />
+  <!-- 첫 화면이 다 그려지기 전까지 덮는 여는 화면. 바깥 CSS 를 받기 전에도 바로 제 모습이 나오게 여기에 둔다. -->
+  <style>
+    .onba-splash{position:fixed;inset:0;z-index:5000;display:grid;place-content:center;justify-items:center;gap:18px;padding:24px;background:radial-gradient(ellipse at 100% 0,#f9edd8 0,transparent 55%),radial-gradient(ellipse at 0 100%,#e8f3ed 0,transparent 55%),#f5f5ef;color:#24322d;font-family:system-ui,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;letter-spacing:-.025em;text-align:center;transition:opacity .35s ease,visibility .35s}
+    .onba-splash.is-done{opacity:0;visibility:hidden;pointer-events:none}
+    .onba-splash svg{width:132px;height:94px;overflow:visible}
+    .onba-splash path{transform-box:fill-box;transform-origin:center;animation:onba-splash-in 2.8s cubic-bezier(.22,.7,.3,1) infinite}
+    .onba-splash .p0{--x:-18px;--y:12px;--r:-12deg}.onba-splash .p1{--x:17px;--y:-13px;--r:15deg;animation-delay:.12s}.onba-splash .p2{--x:13px;--y:15px;--r:16deg;animation-delay:.22s}
+    .onba-splash-name{display:block;width:min(196px,56vw);height:auto;margin-top:4px}
+    .onba-splash-slogan{margin:4px 0 0;font-size:clamp(1.2rem,3.6vw,1.55rem);font-weight:750;line-height:1.35;word-break:keep-all}
+    .onba-splash-slogan b{color:#286f62;font-weight:inherit}
+    .onba-splash-tips{position:relative;display:block;width:min(340px,86vw);height:1.6em;margin:0;padding:0;list-style:none;color:#5f7168;font-size:.95rem;line-height:1.6;overflow:hidden}
+    .onba-splash-tips li{position:absolute;inset:0;opacity:0;animation:onba-splash-tip 12.5s infinite both}
+    .onba-splash-tips li:nth-child(2){animation-delay:2.5s}.onba-splash-tips li:nth-child(3){animation-delay:5s}.onba-splash-tips li:nth-child(4){animation-delay:7.5s}.onba-splash-tips li:nth-child(5){animation-delay:10s}
+    @keyframes onba-splash-in{0%,100%{transform:translate(var(--x),var(--y)) rotate(var(--r));opacity:.35}32%,78%{transform:none;opacity:1}92%{opacity:.6}}
+    @keyframes onba-splash-tip{0%{opacity:0;transform:translateY(.8em)}3%,17%{opacity:1;transform:none}20%,100%{opacity:0;transform:translateY(-.8em)}}
+    @media (prefers-reduced-motion:reduce){.onba-splash path,.onba-splash-tips li{animation:none}.onba-splash-tips li:first-child{opacity:1}}
+  </style>
 </head>
 <body class="mc-app">
-  <main id="app"><div class="mc-boot" role="status"><img class="onba-boot-mark" src="./brand/app-icon.svg?v=b1" width="64" height="64" alt=""><p>온바탕을 여는 중이에요…</p></div></main>
+  <div class="onba-splash" id="onba-splash" role="status" aria-live="polite" aria-label="온바탕을 여는 중이에요">
+    <svg viewBox="-24 -20 180 126" aria-hidden="true" focusable="false"><path class="p0" fill="#286F62" d="M8 17C12 7 23 3 36 3C49 3 55 10 58 22C61 34 71 37 80 44C91 53 89 64 81 72C73 81 56 81 42 81H23C10 81 4 77 3 67C1 53 2 31 8 17Z"/><path class="p1" fill="#E5AF70" d="M66 5C78 3 99 4 110 9C124 15 128 27 128 43V49C128 53 125 54 122 50C113 39 101 34 86 30C72 27 66 20 63 11C62 8 63 6 66 5Z"/><path class="p2" fill="#EEEADD" d="M62 29C68 37 77 39 90 44C104 50 113 59 113 69C113 78 104 82 89 81H83C93 74 98 65 96 56C94 45 81 41 71 36C67 34 64 32 62 29Z"/></svg>
+    <img class="onba-splash-name" src="./brand/wordmark-primary.svg" width="196" height="60" alt="온바탕">
+    <p class="onba-splash-slogan">생각을 <b>바로</b>, 작품으로.</p>
+    <ul class="onba-splash-tips" aria-hidden="true">
+      <li>설치 없이 브라우저에서 바로 시작해요</li>
+      <li>PPTX · HTML · 영상 · GIF로 내려받아요</li>
+      <li>이어 움직이기로 키노트처럼 매끄럽게</li>
+      <li>연결선 · 도형 · 사진으로 나답게 꾸며요</li>
+      <li>서버 없이 이 기기에 저절로 저장돼요</li>
+    </ul>
+  </div>
+  <main id="app"></main>
   <script type="module">
     // 미니캔 앱 시작하기. 들여 쓰는 곳에서는 이 쪽을 본떠 글꼴 목록(그 프로젝트가 가진 글꼴 파일)과 저장소 이름만 바꾼다.
     // 글꼴은 app/fonts/ 의 OFL 무료 글꼴 15종이다(목록과 사용 조건은 app/fonts.js · app/fonts/*-OFL.txt).
     import { startOnbatang } from './standalone.js';
     import { ONBATANG_FONTS, ONBATANG_TITLE_FONT } from './fonts.js';
 
+    // 여는 화면은 첫 화면(또는 새로 고치기 전에 꾸미던 그림)이 다 그려지고 글꼴까지 받은 뒤에 걷는다(작게 떴다가 커지는 모습이 보이지 않게).
+    const splash = document.getElementById('onba-splash');
+    const lift = () => { splash.classList.add('is-done'); setTimeout(() => splash.remove(), 400); };
     startOnbatang({
       fonts: ONBATANG_FONTS,
       titleFont: ONBATANG_TITLE_FONT,
       storage: 'minican',
-    });
+      resume: true,
+    }).then(() => Promise.race([document.fonts?.ready, new Promise((done) => setTimeout(done, 1500))]))
+      .catch((error) => console.error(error))
+      .finally(() => requestAnimationFrame(lift));
   </script>
 </body>
 </html>

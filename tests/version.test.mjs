@@ -30,3 +30,20 @@ test('shared links show a title, description and a 1200×630 PNG preview (KakaoT
   assert.deepEqual([png.readUInt32BE(16), png.readUInt32BE(20)], [1200, 630]);
   assert.ok(png.length < 300000);
 });
+
+test('the first screen opens behind a branded splash, and the bare root address goes straight to the app', async () => {
+  const html = readFileSync(new URL('../app/index.html', import.meta.url), 'utf8');
+  // The splash sits outside #app (the app replaces #app) and is styled inline, so it looks right before any stylesheet arrives.
+  assert.match(html, /<div class="onba-splash" id="onba-splash"[^>]*>[\s\S]*<p class="onba-splash-slogan">생각을 <b>바로<\/b>, 작품으로\.<\/p>[\s\S]*<\/div>\s*<main id="app"><\/main>/);
+  assert.match(html, /<style>[\s\S]*\.onba-splash\{position:fixed;inset:0/);
+  assert.equal((html.match(/<ul class="onba-splash-tips"[\s\S]*?<\/ul>/)[0].match(/<li>/g) || []).length, 5);
+  // It lifts after the app (home list or the reopened drawing) and fonts are ready, even if starting fails.
+  assert.match(html, /resume: true,\s*\}\)\.then\(\(\) => Promise\.race\(\[document\.fonts\?\.ready,[\s\S]*\.finally\(\(\) => requestAnimationFrame\(lift\)\)/);
+  const root = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  assert.match(root, /<script>location\.replace\('app\/' \+ location\.search \+ location\.hash\);<\/script>/);
+  assert.doesNotMatch(root, />온바탕 열기</, 'no bare link flashes in the corner');
+  const hosting = JSON.parse(readFileSync(new URL('../firebase.json', import.meta.url), 'utf8')).hosting;
+  assert.deepEqual(hosting.redirects, [{source: '/', destination: '/app/', type: 302}]);
+  const {ONBATANG_TIPS} = await import('../app/loading.js');
+  assert.ok(ONBATANG_TIPS.length >= 5 && ONBATANG_TIPS.every(t => typeof t === 'string' && t.length > 8));
+});

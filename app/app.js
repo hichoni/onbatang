@@ -49,6 +49,7 @@ import { mergeAccount, createPusher, syncsRecord } from './sync.js';
 
 let app = null;
 let onView = () => {};
+let resumeOpen = false;       // 새로 고침한 뒤 꾸미던 그림을 다시 열지(startMinican 의 resume)
 let onBrandClick = null;
 let importAction = null;
 let materialAction = null;
@@ -153,6 +154,7 @@ function accountNote() {
 // ---------- 시작 ----------
 /** 내 그림들을 이 기기에서 다시 모은다. */
 async function refresh() {
+  const resume = S.phase === 'boot' && resumeOpen ? readOpen() : null;
   S.list = null;
   render();
   try {
@@ -164,6 +166,19 @@ async function refresh() {
     S.error = '이 창에서는 기기에 저장할 수 없어요. 그림을 만들 수는 있지만 새로 고침하면 사라져요. 다 만들면 바로 내려받아요.';
   }
   S.phase = 'home';
+  // 새로 고침하기 전에 꾸미던 그림이 있으면 첫 화면을 거치지 않고 그 그림 · 그 장을 다시 연다.
+  const again = resume && S.list.find((r) => r.id === resume.id);
+  if (again && !S.open) {
+    try {
+      openDesign(again, false);
+      if (Number.isSafeInteger(resume.at) && resume.at > 0 && resume.at < S.open.slides.length) goSlide(S.open, resume.at);
+      syncAccount();
+      return;
+    } catch (ex) {
+      console.warn(ex);
+      forgetOpen();
+    }
+  }
   render();
   syncAccount();
 }
@@ -543,6 +558,7 @@ function openDesign(record, isNew) {
   };
   delete O.record.slides;                // 슬라이드는 O.slides 가 맡는다(저장할 때 다시 넣는다)
   S.open = O;
+  rememberOpen(O);
   const first = isNew ? '꾸미기 시작하면 저절로 저장돼요' : accountFor(record) ? '저장돼 있어요' : '이 기기에 저장돼 있어요';
   O.status = el('span', { class: 'cv-status', role: 'status', text: first, title: first });
   // 저장하지 못했을 때는 위 막대 아래에 띠로 한 번 더 알린다(위 막대의 글은 자리가 좁아 잘릴 수 있다).
@@ -1674,7 +1690,7 @@ function touched(O) {
   clearTimeout(O.timer);
   O.timer = setTimeout(() => save(O), SAVE_DELAY);
 }
-async function save(O, { preserveBlank = false } = {}) {
+async function save(O, { preserveBlank = false, now = false } = {}) {
   clearTimeout(O.timer);
   O.timer = 0;
   if(O.recoveryRequired)return true; // The fixed receipt must never overwrite a conflicting draft.
@@ -1687,12 +1703,13 @@ async function save(O, { preserveBlank = false } = {}) {
   O.dirty = false;
   let ok = true;
   let kept = record;
-  const put = putDesign(record);
+  const put = putDesign(record, { now });
   O.putting = put.catch(() => {});             // 나갈 때 이 저장이 끝났는지 기다릴 수 있게 둔다
   try {
     kept = await put;
     O.persistedRecord=structuredClone(kept);
     O.saved = true;
+    rememberOpen(O);
   } catch (ex) {
     console.error(ex);
     ok = false;
@@ -1723,6 +1740,7 @@ async function leaveEditor(O, { requireSaved = false, waitForSync = false } = {}
   // 그 그림은 지우려던 영상을 아직 쓰고 있을 수 있다.
   if (ok && !O.dirty && O.localOk !== false) await tidyVideos(O.record.id, currentSlides(O));
   O.closed = true;
+  forgetOpen();
   O.activityConfig?.remove();O.activityConfig=null;
   O.materialLoading?.dispose();
   O.stripDrag?.destroy();
@@ -2536,8 +2554,22 @@ async function makeVideo(O, { vsize, stay }) {
 // 창을 닫거나 다른 곳으로 갈 때: 미뤄 둔 저장을 바로 한다.
 function flush() {
   const O = S.open;
-  if (O?.dirty) save(O);
+  const saving = !!O?.dirty;
+  if (saving) save(O, { now: true });           // 창이 곧 사라지므로 읽지 않고 바로 써서 마친다(store.js)
+  if (O && !O.closed) rememberOpen(O, saving);  // 막 처음 저장하는 그림도(저장이 아직 끝나지 않았다)
   if (O && pusher) pusher.flush(O.record.id);
+}
+// 새로 고침해도 꾸미던 그림 · 장으로 돌아오게: 이 창(탭)에만 무엇을 열어 두었는지 적어 둔다(resume 을 켠 곳만).
+const openKey = () => `onbatang-open-v1:${storageName()}`;
+function rememberOpen(O, saving = false) {
+  if (!resumeOpen || !(O.saved || saving)) return;
+  try { sessionStorage.setItem(openKey(), JSON.stringify({ id: O.record.id, at: O.at })); } catch { /* 기억하지 못하는 창 */ }
+}
+function forgetOpen() {
+  try { sessionStorage.removeItem(openKey()); } catch { /* 기억하지 못하는 창 */ }
+}
+function readOpen() {
+  try { const v = JSON.parse(sessionStorage.getItem(openKey())); return v && typeof v.id === 'string' ? v : null; } catch { return null; }
 }
 
 /**
@@ -2554,10 +2586,11 @@ function flush() {
  * - materialAction: {label, accepts?(record), open({designId,slideIndex})} 현재 그림 저장 후 같은 편집기에서 전체 자료 작업을 여는 선택 연결.
  *   기본 모드는 기존 호스트 이동 계약을 유지한다. 파일 해석과 저장은 호스트가 맡는다.
  * - activityAuthoring: 명시적으로 true인 호스트만 활동/앱 제작·설정을 제공한다. 기존 활동 실행·결과 저장은 항상 유지한다.
+ * - resume: true 면 새로 고침한 뒤 이 탭에서 꾸미던 그림 · 장을 다시 연다(공용 온바탕 첫 쪽이 켠다. 그림을 스스로 여는 들여 쓰는 곳은 끈 채로 둔다).
  * - lessonAction: {label, editorTitle?, accepts?(record), open({designId,slideIndex,inline})}; 저장 후 같은 편집 영역에서 호스트의 수업 구성/진행을 연다. 공용 기본값은 숨김.
  * - accountAction: {label,editorTitle?,open({from,designId?,inline})}; 첫 화면과 편집기 안의 계정 수업 목록. 기본값은 숨김이며 서버/로그인은 호스트가 담당한다.
  */
-export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, accountAction: accountLibrary = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false } = {}) {
+export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, accountAction: accountLibrary = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false, resume = false } = {}) {
   if (app) throw new Error('minican already started');
   if (!root) throw new Error('minican root');
   app = root;
@@ -2571,6 +2604,7 @@ export function startMinican({ root = document.getElementById('app'), fonts = []
   if(accountLibrary&&typeof accountLibrary.open==='function'&&typeof accountLibrary.label==='string'&&accountLibrary.label.trim())accountAction=accountLibrary;
   if(navigation&&typeof navigation.load==='function')materialNavigation=navigation;
   activityAuthoring=authoring===true;
+  resumeOpen=resume===true;
   if(maker&&typeof maker.connect==='function'&&typeof maker.generate==='function')appMaker=maker;
   if (account && ['pull', 'push', 'drop'].every((k) => typeof account[k] === 'function')) {
     sync = account;

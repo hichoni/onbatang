@@ -8,6 +8,8 @@ const STORE = 'designs';
 const ORIGINALS = 'originals';
 let issues = [];
 export const listDesignIssues = () => issues.slice();
+// 아주 옛 모양(schemaVersion 없음)으로 적혀 있는 그림들. 이것을 덮어쓸 때는 원본을 먼저 따로 둔다(putDesign).
+const legacy = new Set();
 const NAME_RULE = /^[a-z][a-z0-9.-]{0,40}$/;
 
 /** 저장소의 이름을 정한다. 앱을 시작하기 전에 한 번 부른다. */
@@ -45,6 +47,7 @@ export async function listDesigns() {
   issues = [];
   const records = [];
   for (const raw of all || []) {
+    if (raw?.id && raw.schemaVersion === undefined) legacy.add(raw.id);
     try { records.push(migrateRecord(raw)); }
     catch (error) {
       if (!(error instanceof DocumentError)) throw error;
@@ -57,6 +60,7 @@ export async function listDesigns() {
 export async function getDesign(id) {
   const raw = await run('readonly', (s) => s.get(id));
   if (!raw) return null;
+  if (raw.schemaVersion === undefined) legacy.add(id);
   const clean = migrateRecord(raw);
   if (raw.schemaVersion === undefined) await putDesign(clean);
   return clean;
@@ -65,9 +69,17 @@ export async function getDesign(id) {
 export async function getOriginalDesign(id) {
   return (await run('readonly', s => s.get(id), [ORIGINALS])) ?? await run('readonly', s => s.get(id));
 }
-/** 저장(같은 이름표면 덮어쓴다). */
-export async function putDesign(record) {
+/**
+ * 저장(같은 이름표면 덮어쓴다).
+ * now: 창을 닫거나 새로 고칠 때. 읽고 나서 쓰면 그 사이에 창이 사라져 저장이 버려지므로, 곧바로 쓰고 바로 마친다(commit).
+ *      옛 모양으로 적힌 그림은 원본을 먼저 둬야 하므로 평소처럼 저장한다.
+ */
+export async function putDesign(record, { now = false } = {}) {
   const clean = migrateRecord(record);
+  if (now && record.schemaVersion !== undefined && !legacy.has(clean.id)) {
+    await run('readwrite', (s, tx) => { const q = s.put(clean, clean.id); tx.commit?.(); return q; });
+    return clean;
+  }
   await run('readwrite', (s, tx) => {
     const q = s.get(clean.id);
     q.onsuccess = () => {
@@ -83,6 +95,7 @@ export async function putDesign(record) {
     };
     return q;
   }, [STORE, ORIGINALS]);
+  legacy.delete(clean.id);
   return clean;
 }
 /** Replace a draft only if it is still the snapshot that was pinned. */
