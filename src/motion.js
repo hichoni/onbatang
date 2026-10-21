@@ -276,6 +276,9 @@ export function matchItems(before, after) {
   }
   return pairs.sort((p, q) => p[1] - q[1]);
 }
+// 짝이 된 두 요소의 내용이나 꾸밈이 다른지(글 · 그림 · 색 …). 다르면 옮겨 가는 동안 앞 것은 사라지고 새것이 나타난다(겹쳐 보이지 않게).
+const LOOK_KEYS = ['text', 'url', 'ch', 'art', 'yt', 'shape', 'color', 'bgc', 'mask', 'crop', 'font', 'typeface', 'bold', 'italic', 'under', 'align', 'stroke', 'shadow', 'line', 'lc', 'hollow', 'head', 'dash', 'op'];
+export const looksChanged = (a, b) => LOOK_KEYS.some((k) => JSON.stringify(a?.[k]) !== JSON.stringify(b?.[k]));
 /** 그 전환이 두 장을 이어 움직이는 것인지. */
 export const morphs = (id) => !!TRANSITION_DEFS[id]?.morph;
 
@@ -520,7 +523,8 @@ function playMorph(old, next, from, to) {
   const nodesOf = (card) => [...card.children].filter((n) => n.classList.contains('fi'));
   const was = nodesOf(old);
   const now = nodesOf(next);
-  const pairs = matchItems(from.items, to.items).filter(([i, j]) => was[i] && now[j]);
+  // 누를 때 나타나는 요소는 짝짓지 않는다(그 차례에 나타난다. 영상도 같다).
+  const pairs = matchItems(from.items, to.items).filter(([i, j]) => was[i] && now[j] && to.items[j]?.aw !== true);
   const opts = { duration: def.ms, easing: def.ease, fill: 'both' };
   const anims = [];
   const hidden = [];
@@ -537,6 +541,14 @@ function playMorph(old, next, from, to) {
   const drop = lift([back, ...pairs.map(([, j]) => now[j])]);
   pairs.forEach(([i, j], k) => {
     now[j].dataset.moved = '1';
+    if (looksChanged(from.items[i], to.items[j])) {
+      // 글이나 그림이 달라졌으면: 앞 것도 새 자리로 함께 옮겨 가며 사라지고, 새것은 앞 자리에서 나타나며 온다(서로 겹쳐 녹듯이).
+      const back = morphFrames(now[j], was[i], to.items[j], from.items[i]).reverse();
+      anims.push(was[i].animate([{ ...back[0], opacity: getComputedStyle(was[i]).opacity }, { ...back[1], opacity: 0 }], opts));
+      anims.push(now[j].animate([{ ...frames[k][0], opacity: 0 }, frames[k][1]], opts));
+      lift([was[i]]);
+      return;
+    }
     was[i].style.visibility = 'hidden';
     hidden.push(was[i]);
     anims.push(now[j].animate(frames[k], opts));

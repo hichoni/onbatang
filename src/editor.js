@@ -3044,7 +3044,7 @@ export function createEditor({
         el('div', { class: 'fe-motions', role: 'group', 'aria-label': '전환 효과', dataset: { group: 'tr' } },
           motionTile({ group: 'tr', name: '없음', on: !here.tr, kind: 'none', onPick: () => setTransition('') }),
           ...TRANSITIONS.map((t) => motionTile({ group: 'tr', name: t.name, on: here.tr === t.id, kind: 'tr', id: t.id, onPick: () => setTransition(t.id) }))),
-        morphs(here.tr) ? el('p', { class: 'fe-note', text: '앞 장과 같은 조각(장을 복제해 만든 조각, 또는 글·그림이 같은 조각)이 발표할 때 제자리로 옮겨 가요. 앞 장을 복제한 뒤 조각을 옮기거나 키워 보세요. 여기와 영상에서는 서서히 바뀌어요.' }) : null,
+        morphs(here.tr) ? el('p', { class: 'fe-note', text: '앞 장과 같은 조각(장을 복제해 만든 조각, 또는 글·그림이 같은 조각)이 발표할 때 제자리로 옮겨 가요. 앞 장을 복제한 뒤 조각을 옮기거나 키워 보세요. 내려받은 영상에서도 옮겨 가요(이 편집 화면의 미리 보기는 서서히 바뀌어요).' }) : null,
       ]);
       // "모든 장에 똑같이"는 다른 장에 정해 둔 것을 덮어쓰고 되돌릴 수 없어서, 한 번 더 눌러야 한다.
       const ALL = '모든 장에 똑같이';

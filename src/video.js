@@ -155,7 +155,7 @@ function closeScene(scene) {
 async function buildSlide(design, slide, W, H) {
   // 움직이는 것이 없으면 잴 것도 없다: 통째로 한 칸이다(그림으로 내려받을 때와 같다).
   // 영상 장면이 있는 장은 요소들을 바탕과 따로 그려야 해서(그 사이에 영상이 들어간다) 잰다.
-  const boxes = slide.moves.length || design.video ? await measure(design, W, H) : null;
+  const boxes = slide.moves.length || slide.split?.length || design.video ? await measure(design, W, H) : null;
   const cells = filmCells(design, slide, boxes, W, H);
   const sheets = packCells(cells);
   const canvases = [];
@@ -206,12 +206,13 @@ function drawScene(ctx, W, H, scene, local) {
 }
 
 // 한 장을 그 순간(local)의 모습으로 그린다. local 이 Infinity 면 모두 다 나온 모습이다.
-function drawSlide(ctx, W, H, built, local) {
+function drawSlide(ctx, W, H, built, local, skip = null) {
   const poses = slidePoses(built.slide, local);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.globalAlpha = 1;
   ctx.clearRect(0, 0, W, H);
   for (const L of built.layers) {
+    if (skip && skip.has(L.i)) continue;              // 이어 움직이기: 옮겨 그릴 요소는 따로 그린다
     const p = L.i >= 0 ? poses.get(L.i) : null;
     if (!p) {
       ctx.drawImage(L.img, L.sx, L.sy, L.w, L.h, L.ox, L.oy, L.w, L.h);
@@ -289,6 +290,44 @@ function drawTurnSide(ctx, W, H, img, pose, depth) {
   ctx.restore();
 }
 
+// 이어 움직이기(영상): 짝 없는 것은 두 장을 서서히 바꾸고(앞 장 → 이 장), 짝이 된 요소는 따로 그려 둔 칸을
+// 앞 장의 자리·크기·각도에서 이 장의 것으로 옮겨 그린다(발표 화면의 FLIP 과 같은 모습). 옮기는 동안 앞 장의 그림 위에 이 장의 그림이 서서히 겹친다.
+// p: 0~1(전환 효과의 속도 곡선을 거친 값).
+function drawMorph(ctx, W, H, from, to, turn, p, flat, n) {
+  const pairs = turn.pairs, changed = new Set(turn.changed || []);
+  const skipOld = new Set(pairs.map(([i]) => i)), skipNew = new Set(pairs.map(([, j]) => j));
+  ctx.fillStyle = BACKDROP;
+  ctx.fillRect(0, 0, W, H);
+  ctx.drawImage(flat(0, n - 1, Infinity, skipOld), 0, 0);
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, Math.max(0, p));
+  ctx.drawImage(flat(1, n, 0, skipNew), 0, 0);
+  ctx.restore();
+  const mix = (a, b) => a + (b - a) * p;
+  for (const [i, j] of pairs) {
+    const A = from.layers.find((L) => L.i === i), B = to.layers.find((L) => L.i === j);
+    if (!A || !B || !A.bw || !B.bw || !A.bh || !B.bh) continue;
+    // 지금의 가운데 · 각도 · 크기(제 방향으로 잰 가로 · 세로)
+    const cx = mix(A.cx, B.cx), cy = mix(A.cy, B.cy), rot = mix(A.rot, B.rot), bw = mix(A.bw, B.bw), bh = mix(A.bh, B.bh);
+    // 그려 둔 칸은 제자리에 이미 기울어 있다: 제 각도를 풀고 · 제 방향으로 늘리고 · 지금 각도로 돌려 지금 자리에 놓는다.
+    const place = (L, alpha) => {
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(cx, cy);
+      ctx.rotate(rot * RAD);
+      ctx.scale(bw / L.bw, bh / L.bh);
+      ctx.rotate(-L.rot * RAD);
+      ctx.translate(-L.cx, -L.cy);
+      ctx.drawImage(L.img, L.sx, L.sy, L.w, L.h, L.ox, L.oy, L.w, L.h);
+      ctx.restore();
+    };
+    // 같은 모습이면 앞 것 위에 새것을 서서히 겹친다(옮기는 동안 흐려지지 않게). 달라졌으면 앞 것은 사라지고 새것이 나타난다.
+    const q = Math.min(1, Math.max(0, p));
+    place(A, changed.has(j) ? 1 - q : 1);
+    place(B, q);
+  }
+}
+
 // ---------- 필름: 그 순간의 그림을 그려 주는 것 ----------
 
 /**
@@ -329,10 +368,10 @@ export function createFilm(designs, { width = 1920, height = 1080, stay = DEFAUL
   // 한 장을 통째로 그려 둔 그림 두 장: 0 은 나가는 장, 1 은 지금 장. held 는 거기에 지금 무엇이 그려져 있는지.
   const flats = [null, null];
   const held = ['', ''];
-  const flat = (k, n, local) => {
-    const key = `${n}:${local}`;
+  const flat = (k, n, local, skip = null) => {
+    const key = `${n}:${local}${skip ? `:-${[...skip].join(',')}` : ''}`;
     if (!flats[k]) { flats[k] = document.createElement('canvas'); flats[k].width = W; flats[k].height = H; }
-    if (held[k] !== key) { drawSlide(flats[k].getContext('2d'), W, H, built.get(n), local); held[k] = key; }
+    if (held[k] !== key) { const c = flats[k].getContext('2d'); c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = 1; c.clearRect(0, 0, W, H); drawSlide(c, W, H, built.get(n), local, skip); held[k] = key; }
     return flats[k];
   };
   const forget = (n) => { for (const k of [0, 1]) if (held[k].startsWith(`${n}:`)) held[k] = ''; };
@@ -365,7 +404,9 @@ export function createFilm(designs, { width = 1920, height = 1080, stay = DEFAUL
     if (!built.has(n)) throw new Error('아직 준비되지 않은 장이에요');
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalAlpha = 1;
-    if (slide.turn && local < slide.turn.ms && built.has(n - 1)) {
+    if (slide.turn?.pairs && local < slide.turn.ms && built.has(n - 1)) {
+      drawMorph(ctx, W, H, built.get(n - 1), built.get(n), slide.turn, transitionPose(slide.turn.id, 1, local).next.o, flat, n);
+    } else if (slide.turn && local < slide.turn.ms && built.has(n - 1)) {
       // 전환 효과가 도는 동안: 나가는 장은 다 나온 모습, 들어오는 장은 요소가 나오기 전의 모습이다.
       const pose = transitionPose(slide.turn.id, 1, local);
       const old = flat(0, n - 1, Infinity);
