@@ -2477,11 +2477,22 @@ export function createEditor({
           chip('꺾어서', !!it.elbow, { elbow: it.elbow || (it.w >= it.vh ? 1 : -1), curve: undefined }, { elbow: 'on' }),
           it.curve ? el('button', { class: 'fe-chip', type: 'button', dataset: { bendLink: '1' }, onClick: () => change({ curve: -it.curve }) }, '반대로 휘기') : null,
           it.elbow ? el('button', { class: 'fe-chip', type: 'button', dataset: { turnLink: '1' }, onClick: () => change({ elbow: -it.elbow }) }, it.elbow > 0 ? '세로 먼저 꺾기' : '가로 먼저 꺾기') : null),
+        // 붙는 곳: 시작 조각 · 끝 조각마다 그 옆 가운데에 붙인다(자동이면 서로를 향하는 쪽).
+        el('div', { class: 'fe-poshead', text: '붙는 곳' }),
+        ...[['fromSide', '시작'], ['toSide', '끝']].map(([key, label]) => el('div', { class: 'fe-row fe-side-row', role: 'group', 'aria-label': `${label} 붙는 곳` },
+          el('span', { class: 'fe-side-lbl', text: label }),
+          // 좁은 칸에서도 한 줄에 들어가게 방향은 화살표로 보이고, 이름은 읽어 주는 글 · 풍선 도움말로 둔다.
+          ...[['auto', '자동', '자동'], ['top', '↑', '위'], ['right', '→', '오른쪽'], ['bottom', '↓', '아래'], ['left', '←', '왼쪽']].map(([side, face, name]) => {
+            const b = chip(face, (it[key] || 'auto') === side, { [key]: side === 'auto' ? undefined : side }, { [key]: side });
+            b.title = `${label}: ${name}`; b.setAttribute('aria-label', `${label} ${name}`);
+            if (side !== 'auto') b.classList.add('fe-side-chip');
+            return b;
+          }))),
         el('div', { class: 'fe-poshead', text: '선 모양' }),
         el('div', { class: 'fe-row' },
           chip('실선', !it.dash, { dash: undefined }, { dash: 'off' }),
           chip('점선', !!it.dash, { dash: true }, { dash: 'on' }),
-          el('button', { class: 'fe-chip', type: 'button', dataset: { flipLink: '1' }, onClick: () => change({ from: it.to, to: it.from }) }, '방향 바꾸기')),
+          el('button', { class: 'fe-chip', type: 'button', dataset: { flipLink: '1' }, onClick: () => change({ from: it.to, to: it.from, fromSide: it.toSide, toSide: it.fromSide }) }, '방향 바꾸기')),
         el('p', { class: 'fe-note', text: '두 조각 중 하나를 옮기거나 키우면 선이 따라와요. 조각을 지우면 선도 함께 없어져요.' }),
       ];
     } else if (pop === 'thick' && isLine(it)) {

@@ -18,7 +18,7 @@ import { metadata, newId, fail, validatePageInput, isSlideItem, itemTextLimit, p
 export { cleanAlt, ALT_LIMIT };
 import { cleanActivity } from './activity.js';
 import { cleanCrop } from './crop.js';
-import { LINK_HEADS, LINK_LINE, layoutLinks } from './links.js';
+import { LINK_HEADS, LINK_LINE, LINK_SIDES, layoutLinks } from './links.js';
 
 export { SHAPE_GROUPS };
 
@@ -339,6 +339,9 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
       ...(it.dash === true ? { dash: true } : {}),
       // 곡선과 꺾인 선은 둘 중 하나(둘 다 적혀 있으면 꺾인 선)
       ...((it.elbow === 1 || it.elbow === -1) ? { elbow: it.elbow } : it.curve === 1 || it.curve === -1 ? { curve: it.curve } : {}),
+      // 붙는 곳(없으면 알아서). 꾸밈이 아니라 잇는 자리라 스타일 복사에는 넣지 않는다.
+      ...(LINK_SIDES.includes(it.fromSide) ? { fromSide: it.fromSide } : {}),
+      ...(LINK_SIDES.includes(it.toSide) ? { toSide: it.toSide } : {}),
     };
     // 계산해 둔 자리는 그대로 받아 두었다가(그릴 때 바로 쓰게) cleanItems 에서 새로 맞춘다.
     if (Array.isArray(it.pts) && [4, 6, 8].includes(it.pts.length) && it.pts.every(Number.isFinite) && [it.w, it.h, it.vh].every((v) => Number.isFinite(v) && v > 0)) Object.assign(out, { w: it.w, h: it.h, vh: it.vh, pts: [...it.pts] });
