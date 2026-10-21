@@ -5,6 +5,8 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { resolve, extname, sep } from 'node:path';
+// 공용 첫 쪽은 새로 고치면 꾸미던 그림을 다시 연다(v0.42). 목록에서 다시 여는 것을 보려고 그때는 내 그림으로 나간다.
+const reloadToList=async page=>{await page.reload();await page.waitForFunction(()=>!document.getElementById('onba-splash'));if(await page.evaluate(()=>document.body.classList.contains('cv-editing'))){await page.locator('.cv-back').click();await page.locator('.cv-home-title').waitFor();}};
 
 test('actual app migrates, edits, saves twice, reopens, copies, reorders and displays 4:3 without data loss', {
   skip: !process.env.MINICAN_PLAYWRIGHT_PATH, timeout: 60000,
@@ -94,7 +96,7 @@ test('actual app migrates, edits, saves twice, reopens, copies, reorders and dis
     // flush result, committed IDB value and full reload below prove persistence.
     await page.locator('.cv-status.ok').filter({hasText:'이 기기에 저장했어요'}).waitFor({state:hosted?'attached':'visible'});
     assert.equal(await page.evaluate(async ({base,id}) => (await (await import(base+'/app/store.js')).getDesign(id)).name,{base,id:sample.id}),name,'committed value before reload');
-    await page.reload();
+    await reloadToList(page);
     await page.getByRole('button',{name:name+' 열기',exact:true}).click();
     await page.locator('.cv-name').waitFor();
   }

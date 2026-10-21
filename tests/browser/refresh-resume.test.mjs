@@ -53,8 +53,10 @@ test('a refresh right after typing keeps the edit and reopens the same drawing o
   await page.locator('.cv-strip .cv-slide:not(.add)').first().click();
   const card = await page.locator('.cv-canvas .fe-card').first().boundingBox();
   await page.mouse.dblclick(card.x + card.width * .3, card.y + card.height * .45);
+  await page.waitForFunction(() => document.activeElement?.isContentEditable);
   await page.keyboard.press('End');
   await page.keyboard.type(' 새로고침');
+  await page.waitForFunction(() => document.activeElement?.textContent.endsWith(' 새로고침'));
   // Well inside the 500 ms autosave delay: only the page-hide save can keep it.
   await page.waitForTimeout(80);
   await page.reload();
@@ -62,6 +64,7 @@ test('a refresh right after typing keeps the edit and reopens the same drawing o
   assert.equal(await editing(page), true, 'came back to the drawing, not the home screen');
   const [record] = await stored(page);
   assert.ok(record.slides.flatMap(s => s.items).some(it => it.t === 'text' && it.text.endsWith(' 새로고침')), 'the last typing was saved');
+  assert.equal(await page.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('onbatang-draft-v1:')).length), 0, 'the leave-time draft is cleared once it is stored');
   assert.equal(await page.locator('.cv-strip .cv-slide.on').evaluate(n => [...n.parentNode.querySelectorAll('.cv-slide:not(.add)')].indexOf(n)), 0);
   await page.locator('.cv-strip .cv-slide:not(.add)').nth(1).click();
   await page.waitForTimeout(700);

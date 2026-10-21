@@ -6,6 +6,8 @@ import {createHash} from 'node:crypto';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {resolve,extname,sep} from 'node:path';
 import {unzipSync} from 'fflate';
+// 공용 첫 쪽은 새로 고치면 꾸미던 그림을 다시 연다(v0.42). 목록에서 다시 여는 것을 보려고 그때는 내 그림으로 나간다.
+const reloadToList=async page=>{await page.reload();await page.waitForFunction(()=>!document.getElementById('onba-splash'));if(await page.evaluate(()=>document.body.classList.contains('cv-editing'))){await page.locator('.cv-back').click();await page.locator('.cv-home-title').waitFor();}};
 
 const root=resolve(fileURLToPath(new URL('../../',import.meta.url)));
 const fixture=name=>resolve(root,'tools/fixtures/pptx',name);
@@ -166,7 +168,7 @@ test('large horizontal filmstrip reorders across parts, preserves fixed original
  await page.locator('[data-material-page="0"]').dragTo(page.locator('[data-material-page="2"]'),{targetPosition:{x:150,y:30}});
  await page.waitForFunction(()=>document.querySelector('[data-material-page="0"]')?.getAttribute('aria-label')?.includes('원본 2쪽'));
  const ordered=await readLibrary(page,base),name=await page.locator('.cv-name').inputValue();
- await page.reload();await page.getByRole('button',{name:name+' 열기',exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);
+ await reloadToList(page);await page.getByRole('button',{name:name+' 열기',exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);
  assert.equal(Math.round((await page.locator('.cv-strip').boundingBox()).height),180);
  assert.match(await page.locator('[data-material-page="19"]').getAttribute('aria-label'),/원본 21쪽/);
  await page.locator('.cv-down-btn').click();const dialog=page.getByRole('dialog',{name:'내려받기',exact:true});await dialog.locator('[data-type=pptx]').click();await dialog.locator('[data-scope=all]').click();await dialog.locator('[data-pptx=editable]').click();
@@ -198,7 +200,7 @@ test('short Chromebook workspace folds/resizes its tray and keeps whole-PPT navi
  box=await grip.boundingBox();await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2,box.y+box.height/2-110,{steps:8});await page.mouse.up();
  assert.ok(Number(await grip.getAttribute('aria-valuenow'))>=104,'dragging up restores and resizes the tray');
  const after=await readLibrary(page,base);assert.deepEqual(after.originals,original.originals);assert.deepEqual(after.sources,original.sources);assert.deepEqual(after.graphs[0].pages.map(v=>v.page.id),ids);
- await grip.press('Home');const name=await page.locator('.cv-name').inputValue();await page.reload();await page.getByRole('button',{name:name+' 열기',exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);
+ await grip.press('Home');const name=await page.locator('.cv-name').inputValue();await reloadToList(page);await page.getByRole('button',{name:name+' 열기',exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);
  assert.equal(await page.getByRole('button',{name:'슬라이드 목록 펼치기'}).getAttribute('aria-expanded'),'false','device preference survives full reload');
  await mkdir(resolve(root,'work'),{recursive:true});await page.screenshot({path:resolve(root,'work/slide-tray-chromebook-collapsed.png'),fullPage:true});
  await page.getByRole('button',{name:'슬라이드 목록 펼치기'}).click();await page.screenshot({path:resolve(root,'work/slide-tray-chromebook-expanded.png'),fullPage:true});await checkIsolation();
@@ -248,7 +250,7 @@ test('tray pixel height persists across documents/reload, clamps temporarily and
  await setHeight(197);assert.equal(await height(),197,'height control changes the whole panel in pixels');
  const box=await grip.boundingBox();await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2,box.y+box.height/2-37,{steps:6});await page.mouse.up();assert.equal(await height(),234,'drag distance matches the panel boundary');
  await page.locator('.cv-back').click();await page.getByRole('button',{name:'창 높이 유지 확인 열기',exact:true}).click();assert.equal(await height(),234,'reopening retains exact panel height');
- await page.reload();await page.getByRole('button',{name:'창 높이 유지 확인 열기',exact:true}).click();assert.equal(await height(),234,'full reload retains exact panel height');
+ await reloadToList(page);await page.getByRole('button',{name:'창 높이 유지 확인 열기',exact:true}).click();assert.equal(await height(),234,'full reload retains exact panel height');
  const saved=await page.evaluate(async({base,id})=>(await import(base+'/app/store.js')).getDesign(id),{base,id:record.id});assert.deepEqual(saved,record,'workspace settings do not write the drawing or undo history');
  await setHeight(430);await page.setViewportSize({width:1000,height:560});await page.waitForFunction(()=>Number(document.querySelector('.cv-tray-grip').getAttribute('aria-valuenow'))<430);assert.ok(await height()<430);
  assert.equal(await page.evaluate(()=>localStorage.getItem('onbatang.filmstrip-tray.v1.minican.height')),'430','viewport clamp never overwrites preferred height');
@@ -330,7 +332,7 @@ test('symbol assembly loading and whole editor rail preserve every split page, f
   assert.equal(slideFiles(unzipSync(result.bytes)).length,21);
   await page.locator('.cv-pptx-export').getByRole('button',{name:'닫기',exact:true}).click();
  }
- await page.reload();await page.getByRole('button',{name:'전체 슬라이드 첫 파트 편집 열기',exact:true}).click();
+ await reloadToList(page);await page.getByRole('button',{name:'전체 슬라이드 첫 파트 편집 열기',exact:true}).click();
  await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);
  await page.locator('[data-material-page="20"]').click();
  await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='21 / 21쪽 · 전체 PPT');

@@ -5,6 +5,8 @@ import {createServer} from 'node:http';
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {resolve,extname,sep} from 'node:path';
+// 공용 첫 쪽은 새로 고치면 꾸미던 그림을 다시 연다(v0.42). 목록에서 다시 여는 것을 보려고 그때는 내 그림으로 나간다.
+const reloadToList=async page=>{await page.reload();await page.waitForFunction(()=>!document.getElementById('onba-splash'));if(await page.evaluate(()=>document.body.classList.contains('cv-editing'))){await page.locator('.cv-back').click();await page.locator('.cv-home-title').waitFor();}};
 
 const provenance=objectId=>({kind:'pptx',sourceDocumentId:'slayout20261018',pageNumber:1,objectId:String(objectId)});
 const record={
@@ -86,7 +88,7 @@ test('PPT source text geometry and thin shapes survive cleaning, actual DOM, dev
  const saved=await page.evaluate(async({base,id})=>(await import(base+'/app/app.js')).flushSavedDesign(id),{base,id:record.id});
  assert.equal(saved.name,'PPT 작은 요소 저장 뒤 재열기');assert.deepEqual(layout(saved.slides[0].items),layout(record.slides[0].items));
  assert.deepEqual(saved.originalSize,record.originalSize);assert.deepEqual(saved.source,record.source);assert.equal(saved.slides[0].id,record.slides[0].id);
- await page.reload();await page.getByRole('button',{name:saved.name+' 열기',exact:true}).click();await page.locator('.cv-name').waitFor();
+ await reloadToList(page);await page.getByRole('button',{name:saved.name+' 열기',exact:true}).click();await page.locator('.cv-name').waitFor();
  await page.evaluate(async base=>(await import(base+'/app/tour.js')).stopTour(),base);await page.evaluate(()=>document.fonts.ready);
  const reopened=await page.evaluate(async({base,id})=>(await import(base+'/app/store.js')).getDesign(id),{base,id:record.id});
  assert.deepEqual(layout(reopened.slides[0].items),layout(record.slides[0].items));assert.equal(reopened.id,record.id);assert.equal(reopened.revision,saved.revision);

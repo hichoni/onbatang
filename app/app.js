@@ -157,6 +157,7 @@ async function refresh() {
   const resume = S.phase === 'boot' && resumeOpen ? readOpen() : null;
   S.list = null;
   render();
+  if (S.phase === 'boot') await recoverDrafts();
   try {
     S.list = await listDesigns();
     S.error = '';
@@ -1690,7 +1691,7 @@ function touched(O) {
   clearTimeout(O.timer);
   O.timer = setTimeout(() => save(O), SAVE_DELAY);
 }
-async function save(O, { preserveBlank = false, now = false } = {}) {
+async function save(O, { preserveBlank = false, leaving = false } = {}) {
   clearTimeout(O.timer);
   O.timer = 0;
   if(O.recoveryRequired)return true; // The fixed receipt must never overwrite a conflicting draft.
@@ -1701,14 +1702,18 @@ async function save(O, { preserveBlank = false, now = false } = {}) {
   // 아직 아무것도 놓지 않은 새 그림은 저장하지 않는다(빈 그림이 목록에 쌓이지 않게).
   if (!preserveBlank && !O.saved && isBlank(record)) { O.dirty = false; setStatus(O, '꾸미기 시작하면 저절로 저장돼요'); return true; }
   O.dirty = false;
+  // 창을 떠나는 중이면 이 기기의 저장소(IndexedDB)가 쓰기를 마치기 전에 창이 사라질 수 있다.
+  // 그래서 곧바로 적히는 localStorage 에도 임시본을 남기고, 다음에 열 때 더 새것이면 되살린다(recoverDrafts).
+  if (leaving) keepDraft(record);
   let ok = true;
   let kept = record;
-  const put = putDesign(record, { now });
+  const put = putDesign(record);
   O.putting = put.catch(() => {});             // 나갈 때 이 저장이 끝났는지 기다릴 수 있게 둔다
   try {
     kept = await put;
     O.persistedRecord=structuredClone(kept);
     O.saved = true;
+    dropDraft(kept.id);
     rememberOpen(O);
   } catch (ex) {
     console.error(ex);
@@ -2555,9 +2560,32 @@ async function makeVideo(O, { vsize, stay }) {
 function flush() {
   const O = S.open;
   const saving = !!O?.dirty;
-  if (saving) save(O, { now: true });           // 창이 곧 사라지므로 읽지 않고 바로 써서 마친다(store.js)
+  if (saving) save(O, { leaving: true });
   if (O && !O.closed) rememberOpen(O, saving);  // 막 처음 저장하는 그림도(저장이 아직 끝나지 않았다)
   if (O && pusher) pusher.flush(O.record.id);
+}
+// 창을 떠날 때의 임시본(그림마다 하나). 저장소가 꽉 찼거나 그림이 너무 크면 남기지 않는다(그때는 IndexedDB 저장만 믿는다).
+const draftKey = (id) => `onbatang-draft-v1:${storageName()}:${id}`;
+function keepDraft(record) {
+  try { localStorage.setItem(draftKey(record.id), JSON.stringify(record)); } catch { /* 남기지 못해도 IndexedDB 저장은 그대로 한다 */ }
+}
+function dropDraft(id) {
+  try { localStorage.removeItem(draftKey(id)); } catch { /* 기억하지 못하는 창 */ }
+}
+/** 시작할 때: 남은 임시본이 이 기기에 저장된 것보다 새것이면(또는 저장된 것이 없으면) 그것으로 저장하고, 임시본은 지운다. */
+async function recoverDrafts() {
+  let keys = [];
+  try { keys = Object.keys(localStorage).filter((k) => k.startsWith(`onbatang-draft-v1:${storageName()}:`)); } catch { return; }
+  for (const key of keys) {
+    try {
+      const draft = JSON.parse(localStorage.getItem(key));
+      const stored = draft?.id ? await getDesign(draft.id) : null;
+      if (draft?.id && (!stored || (Number(stored.revision) || 0) < (Number(draft.revision) || 0))) await putDesign(draft);
+      localStorage.removeItem(key);
+    } catch (ex) {
+      console.warn(ex);            // 읽지 못한 임시본은 그대로 둔다(다음에 다시 해 본다)
+    }
+  }
 }
 // 새로 고침해도 꾸미던 그림 · 장으로 돌아오게: 이 창(탭)에만 무엇을 열어 두었는지 적어 둔다(resume 을 켠 곳만).
 const openKey = () => `onbatang-open-v1:${storageName()}`;
@@ -2568,8 +2596,13 @@ function rememberOpen(O, saving = false) {
 function forgetOpen() {
   try { sessionStorage.removeItem(openKey()); } catch { /* 기억하지 못하는 창 */ }
 }
+// 새로 고침 · 뒤로 가기로 돌아왔을 때만 다시 연다(주소를 새로 열면 첫 화면).
 function readOpen() {
-  try { const v = JSON.parse(sessionStorage.getItem(openKey())); return v && typeof v.id === 'string' ? v : null; } catch { return null; }
+  try {
+    if (!['reload', 'back_forward'].includes(performance.getEntriesByType('navigation')[0]?.type)) return null;
+    const v = JSON.parse(sessionStorage.getItem(openKey()));
+    return v && typeof v.id === 'string' ? v : null;
+  } catch { return null; }
 }
 
 /**
