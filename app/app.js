@@ -30,6 +30,7 @@ import {
 } from '../src/index.js';
 import { HERO_ART, HERO_VIEW } from './hero-art.js';
 import { startTour, stopTour, tourSeen, markTourSeen, HOME_STEPS, EDITOR_STEPS, NEWS_STEPS, NEWS_KEY } from './tour.js';
+import { WHATS_NEW, latestFeature, hasUnseenFeatures, markFeaturesSeen } from './whats-new.js';
 // 브라우저가 녹화한 WebM 에는 길이가 적혀 있지 않다. 영상 내려받기에 "길이 적어 넣기"를 쓴다.
 import { fixWebmBlob } from './webm.js';
 // 영상 장면을 카메라로 찍을 때 쓰는 카메라(찍기 · 멈추기 · 앞뒤 카메라 바꾸기).
@@ -316,6 +317,30 @@ function tourButton(where, O = null) {
   }, el('span', { class: 'cv-tour-q', 'aria-hidden': 'true', text: '?' }), home ? el('span', { text: '사용법 보기' }) : null);
   return btn;
 }
+// "새 기능" 단추(첫 화면): 이 기기에서 아직 보지 않은 새 기능이 있으면 점을 찍는다.
+function newsButton() {
+  const btn = el('button', {
+    class: `btn btn-ghost cv-news-btn${hasUnseenFeatures() ? ' unseen' : ''}`, type: 'button', dataset: { whatsNew: '' }, title: '온바탕에 새로 생긴 기능 보기',
+    onClick: () => { btn.classList.remove('unseen'); openWhatsNew(); },
+  }, el('span', { class: 'cv-news-dot', 'aria-hidden': 'true' }), el('span', { text: '새 기능' }));
+  return btn;
+}
+// 새로 생긴 기능: 기능마다 무엇인지 · 언제 쓰는지 · 어떻게 하는지(whats-new.js).
+function openWhatsNew() {
+  markFeaturesSeen();
+  const newest = latestFeature();
+  const box = el('section', { class: 'cv-news-box', tabindex: '-1', 'aria-labelledby': 'cv-news-title', onKeydown: escCloses },
+    el('h2', { id: 'cv-news-title', text: '온바탕에 새로 생긴 기능' }),
+    el('p', { class: 'cv-down-note', text: '무엇인지 · 언제 쓰는지 · 어떻게 하는지 차례로 적었어요. 꾸미는 화면의 ? 단추로 사용법 안내도 볼 수 있어요.' }),
+    el('div', { class: 'cv-news-list' }, ...WHATS_NEW.map((f) => el('article', { class: 'cv-news-item', dataset: { feature: f.id } },
+      el('h3', {}, el('span', { text: f.name }), f.since === newest ? el('small', { class: 'cv-news-new', text: '새로' }) : null),
+      el('p', { class: 'cv-news-what', text: f.what }),
+      el('p', { class: 'cv-news-when' }, el('b', { text: '이럴 때 · ' }), f.when),
+      el('ol', { class: 'cv-news-how' }, ...f.how.map((t) => el('li', { text: t })))))),
+    el('div', { class: 'row cv-news-foot' }, el('button', { class: 'btn btn-primary', type: 'button', onClick: closeModal }, '닫기')));
+  openModal(box, { wide: true });
+  requestAnimationFrame(() => box.focus({ preventScroll: true }));
+}
 // 꾸미는 화면의 안내: 단계마다 옆 칸에 그 도구를 펼친다(접혀 있으면 편다).
 function editorTour(O, { news = false } = {}) {
   startTour({
@@ -405,7 +430,7 @@ function render() {
       el('p', { class: 'cv-hero-lead' }, '글·도형·사진으로 나답게 만들어요.', el('br'), '작은 카드부터 포스터, 발표 자료까지.'),
       el('ul', { class: 'cv-feats', 'aria-label': '만들 수 있는 것' }, ...FEATS.map(([pic, text, tone]) => el('li', { class: `cv-feat ${tone}` },
         el('span', { class: 'cv-feat-icon', 'aria-hidden': 'true' }, ic(pic)), el('span', { text })))),
-      el('div', { class: 'cv-hero-go' }, start, tourButton('home'),
+      el('div', { class: 'cv-hero-go' }, start, tourButton('home'), newsButton(),
         importAction && !importAction.hideHome ? el('button', { class: 'btn cv-import-btn', type: 'button', disabled: loading, onClick: async (event) => {
           const button = event.currentTarget; button.disabled = true;
           try { await importAction.open(); } catch (error) { console.warn(error); toast('가져오기 화면을 열지 못했어요. 다시 시도해주세요.'); }
@@ -1008,6 +1033,7 @@ function slideMenuGroups(O, { strip = false } = {}) {
     strip ? [] : [
       { icon: 'swap', label: '찾아 바꾸기', run: () => openFindReplace(O) },
       { icon: 'check', label: '단축키 보기', hint: '?', run: () => openShortcuts() },
+      { icon: 'check', label: '새 기능 보기', run: () => openWhatsNew() },
     ],
     [
       { icon: 'plus', label: '새 장 더하기', run: press(add), disabled: off(add) },

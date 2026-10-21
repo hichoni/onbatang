@@ -216,10 +216,12 @@ export function createEditor({
   const linkKnob = el('span', { class: 'fe-h fe-link-knob', dataset: { h: 'bend' }, hidden: true });
   const overlay = el('div', { class: 'fe-overlay' }, othersBox, manyBox, guideV, guideH, selBox, linkKnob, groupBox, marquee, sceneFlag);
   const cropLayer = el('div', {class:'fe-crop-layer',hidden:true});
+  // 잇기 안내(꾸미기 칸의 "연결선" · 한 조각을 고른 뒤 "선 잇기"): 지금 누를 조각과 그만두기 단추.
+  const linkHint = el('div', { class: 'fe-link-hint', role: 'status', hidden: true });
   const stage = el('div', {
     class: 'fe-stage', tabindex: '0', role: 'group',
     'aria-label': '꾸미기 판. 조각을 누르면 고르고, 끌면 옮겨요. 화살표 키로도 옮길 수 있어요.',
-  }, cardEl, overlay, cropLayer);
+  }, cardEl, overlay, cropLayer, linkHint);
   const bar = el('div', { class: 'fe-bar', role: 'toolbar', 'aria-label': '고른 조각의 도구' });
   const popBox = el('div', { class: 'fe-pop', hidden: true });
   const toolbar = el('div', { class: 'fe-tools' }, bar, popBox);
@@ -857,6 +859,7 @@ export function createEditor({
 
   // 목록이 통째로 바뀌는 일(넣기·삭제·순서·복제·템플릿)을 한 뒤에 부른다.
   function listChanged(nextSel, nextMany = []) {
+    stopLinking();
     if (card.id) card.items = card.items.map(it => it.id ? it : { ...it, id: newId() });
     // 잇던 조각을 지웠으면 그 연결선도 뺀다(고른 번호도 그만큼 당긴다). 남은 선은 다시 계산한다.
     if (card.items.some((it) => it.t === 'link')) {
@@ -972,19 +975,51 @@ export function createEditor({
   function linkMany() {
     const pick = many.filter((i) => items()[i].t !== 'link');
     if (pick.length !== 2) { notify('연결선은 조각 두 개를 골라야 이을 수 있어요(Shift 를 누른 채 누르기).', 3500); return; }
+    // 여럿 골라 이을 때는 위(같으면 왼쪽)에 있는 조각에서 시작한다.
+    const [a, b] = pick.slice().sort((p, q) => items()[p].y - items()[q].y || items()[p].x - items()[q].x);
+    linkPair(a, b);
+  }
+  // 조각 i 에서 조각 j 로(화살표가 j 를 가리키게) 연결선을 놓고, 놓은 선을 고른다.
+  function linkPair(i, j) {
     if (items().length >= settings().maxItems) { notify(`카드 한 장에는 조각을 ${settings().maxItems}개까지 놓을 수 있어요.`); return; }
     endEdit();
     stopDrag();
     remember();
-    const list = items().map((it, i) => (pick.includes(i) && !it.id ? { ...it, id: newId() } : it));
-    const [a, b] = pick.map((i) => list[i]).sort((p, q) => p.y - q.y || p.x - q.x);
+    const list = items().map((it, k) => ((k === i || k === j) && !it.id ? { ...it, id: newId() } : it));
+    const a = list[i], b = list[j];
     if (list.some((it) => it.t === 'link' && ((it.from === a.id && it.to === b.id) || (it.from === b.id && it.to === a.id)))) { notify('이미 이어져 있어요.', 2500); past.pop(); return; }
     const link = cleanItem({ t: 'link', id: newId(), from: a.id, to: b.id, head: 'end', color: '#1d2433', line: LINK_LINE.base });
-    const at = Math.min(...pick);
+    const at = Math.min(i, j);
     card.items = [...list.slice(0, at), link, ...list.slice(at)];
     listChanged(at);
-    notify('연결선으로 이었어요. 두 조각 중 하나를 옮기면 선이 따라와요. 선을 누르면 색·굵기·화살표를 바꿔요.', 4000);
+    notify('연결선으로 이었어요. 조각을 옮기면 선이 따라와요. 선을 누르면 위 막대의 "화살표"에서 곧게·둥글게·꺾어서와 붙는 곳을 바꿔요.', 5000);
     focusStage();
+  }
+  // 잇기: 화살표가 시작할 조각과 닿을 조각을 차례로 누른다. from: 이미 고른 조각에서 시작하면 그 번호.
+  let linking = null;                                // { from: 시작 조각의 번호 | null } · 잇는 중이 아니면 null
+  function startLinking(from = -1) {
+    if (items().filter((it) => it.t !== 'link').length < 2) { notify('먼저 이을 조각(도형·글·사진)을 두 개 넣어 주세요. 그다음 차례로 누르면 화살표로 이어져요.', 4500); return; }
+    endEdit();
+    stopDrag();
+    if (pop) toggle(pop);
+    linking = { from: from >= 0 && items()[from] && items()[from].t !== 'link' ? from : null };
+    if (linking.from == null) select(-1);
+    paintLinking();
+    focusStage();
+  }
+  function stopLinking(said = false) {
+    if (!linking) return;
+    linking = null;
+    paintLinking();
+    if (said) notify('잇기를 그만뒀어요.', 2000);
+  }
+  function paintLinking() {
+    stage.classList.toggle('fe-linking', !!linking);
+    linkHint.hidden = !linking;
+    if (!linking) return;
+    linkHint.replaceChildren(
+      el('b', { text: linking.from == null ? '① 화살표가 시작할 조각을 누르세요' : '② 화살표가 닿을 조각을 누르세요' }),
+      el('button', { class: 'fe-link-hint-x', type: 'button', onClick: () => { stopLinking(true); focusStage(); } }, '그만두기 (Esc)'));
   }
   // 고른 것들을 한 그룹으로 묶는다 · 그룹을 푼다.
   function groupMany() {
@@ -1561,6 +1596,19 @@ export function createEditor({
   stage.addEventListener('pointerdown', (e) => {
     if (e.button > 0 || !card || drag) return;      // 끄는 중에 다른 손가락이 닿으면 모른 척한다
     if(cropJob){e.preventDefault();applyCrop();return;}
+    // 잇는 중: 조각을 누르면 시작 → 닿을 조각 차례로 고르고, 빈 곳을 누르면 그만둔다.
+    if (linking) {
+      if (e.target.closest?.('.fe-link-hint')) return;
+      e.preventDefault();
+      const top = e.target.closest?.('.fi') ? itemAt(e.clientX, e.clientY, !!e.pointerType && e.pointerType !== 'mouse') : -1;
+      if (top < 0 || items()[top].t === 'link') { stopLinking(true); return; }
+      if (linking.from == null) { linking.from = top; select(top); paintLinking(); return; }
+      if (top === linking.from) return;
+      const from = linking.from;
+      stopLinking();
+      linkPair(from, top);
+      return;
+    }
     if (e.target.closest?.('.fe-empty-go')) return;  // 빈 장의 빠른 시작 단추는 그냥 누른다(고르기 · 끌기를 시작하지 않는다)
     if (editing >= 0 && nodes[editing]?.contains(e.target)) return;   // 글을 고치는 중에는 글 안을 눌러 자리를 옮길 수 있게 둔다
     endEdit();
@@ -1798,6 +1846,7 @@ export function createEditor({
     // 글쇠의 자리(e.code)로 견준다. 한글 입력 상태에서는 e.key 가 'ㅋ' 처럼 와서 Ctrl+Z 를 놓친다.
     const key = e.code;
     const mod = e.ctrlKey || e.metaKey;
+    if (linking && e.key === 'Escape') { e.preventDefault(); stopLinking(true); return; }
     if(!mod&&!e.altKey&&!e.shiftKey&&!e.isComposing&&key==='KeyI'){const target=colorTarget();if(target){e.preventDefault();sampleColor(target.value,target.apply);}return;}
     if (mod && key === 'KeyZ') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
     if (mod && key === 'KeyY') { e.preventDefault(); redo(); return; }
@@ -2425,6 +2474,8 @@ export function createEditor({
         pick('layers', '위치', 'pos', { title: '겹치는 순서와 페이지 정렬' })),
       el('span', { class: 'fe-sep' }),
       group('작업',
+        // 한 조각을 고르면: 이 조각에서 다른 조각으로 화살표 잇기(누른 뒤 닿을 조각을 누른다)
+        it.t !== 'link' && items().filter((x) => x.t !== 'link').length >= 2 ? tb(lab('right', '선 잇기'), () => startLinking(sel), { title: '이 조각에서 다른 조각으로 화살표를 이어요: 누른 뒤 이을 조각을 눌러요', name: '선 잇기', cls: 'linking' }) : null,
         tb(icon('duplicate'), copy, { title: '복제: 똑같은 것을 하나 더 (Ctrl+D)', name: '복제', cls: 'icon dup' }),
         tb(icon('lock'), () => change({ lock: true }, { keepPop: false }), { title: '잠금: 실수로 움직이지 않게 해요', name: '잠금', cls: 'icon lock' })),
       el('span', { class: 'fe-sep' }),
@@ -3133,7 +3184,13 @@ export function createEditor({
       ];
     }
     if (tab === 'element') {
+      // 연결선: 두 조각을 화살표로 잇는 선(순서도 · 마인드맵 · 관계도). 누르면 이을 조각을 차례로 고른다.
+      const linkArt = '<svg viewBox="0 0 120 52" aria-hidden="true" focusable="false"><rect x="3" y="4" width="34" height="24" rx="7" fill="#3d4bc0"/><circle cx="101" cy="34" r="15" fill="#ffc93c"/><path d="M38 16H62Q70 16 70 24V30Q70 34 78 34H80" fill="none" stroke="#1d2433" stroke-width="2.6" stroke-linecap="round"/><path d="M85 34l-7-4.5v9z" fill="#1d2433"/></svg>';
       return [
+        el('div', { class: 'fe-head', text: '잇기' }),
+        el('button', { class: 'fe-link-start', type: 'button', dataset: { startLink: '' }, onClick: () => startLinking(sel) },
+          el('span', { class: 'fe-link-start-art', html: linkArt }),
+          el('span', { class: 'fe-link-start-text' }, el('b', { text: '연결선' }), el('small', { text: '두 조각을 화살표로 이어요. 조각을 옮기면 선이 따라와요 (순서도 · 마인드맵)' }))),
         el('div', { class: 'fe-head', text: '그림' }),
         artPicker((p) => add(p.emoji ? newEmoji(p.emoji) : newArt(p.art, artColorable(p.art) ? { color: backgroundOf(card.bg).ink } : {}))),
         ...shapePicker((shape) => add(newShape(shape, visibleColor(shape)))),
@@ -3616,6 +3673,7 @@ export function createEditor({
 
   /** 꾸밀 디자인을 바꾼다(다른 카드·다른 쪽으로 넘어갈 때). 고르기와 되돌리기 기록은 비워진다. */
   function setDesign(next) {
+    stopLinking();
     sampling?.controller.abort();sampling=null;
     card = next && typeof next === 'object' ? next : { bg: undefined, items: [] };
     card.bg = cleanBg(card.bg);

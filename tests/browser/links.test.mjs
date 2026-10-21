@@ -10,7 +10,7 @@ const root = resolve(fileURLToPath(new URL('../../', import.meta.url)));
 const options = {skip: !process.env.MINICAN_PLAYWRIGHT_PATH, timeout: 120000};
 const html = `<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/src/editor.css"><link rel="stylesheet" href="/app/app.css"><body class="mc-app"><main id="app"></main><script type="module">
 import {startMinican} from '/app/app.js';import {newRecord} from '/app/designs.js';import {putDesign,getDesign,setStorageName} from '/app/store.js';
-setStorageName('links-fixture');try{localStorage.setItem('onbatang-tour-seen-v1:editor','1');localStorage.setItem('onbatang-tour-seen-v1:news-0.44','1');}catch{}
+setStorageName('links-fixture');try{localStorage.setItem('onbatang-tour-seen-v1:editor','1');localStorage.setItem('onbatang-tour-seen-v1:news-0.45','1');}catch{}
 const seed=newRecord('16:9');seed.name='연결선 검수';
 seed.slides=[{id:'plink00001',bg:'#ffffff',items:[
  {id:'ebox000001',t:'shape',shape:'round',x:25,y:40,w:18,h:22,color:'#3d4bc0'},
@@ -322,5 +322,40 @@ test('dragging the middle handle of a curved or elbow connector reshapes it, sav
   await page.mouse.up();
   await saved(page, r => { const l = r.slides[0].items.find(it => it.t === 'link'); return l?.turn > 0 && l.turn < .5; });
   assert.ok((await knob.boundingBox()).x < e0.x - 25, 'the turn moved left');
+  assert.deepEqual(external, []);
+});
+
+test('the 꾸미기 panel and a single selected piece both start joining: pick the start, then the end; Esc or an empty spot stops', options, async t => {
+  const {page, external} = await setup(t);
+  const shapes = page.locator('.cv-canvas .fe-card .fi-shape');
+  const hint = page.locator('.cv-canvas .fe-link-hint');
+  // From the panel: a card with a picture explains it, then two picks make the line (from the first to the second).
+  await page.locator('.fe-tab[data-tab="element"]').click();
+  const start = page.locator('[data-start-link]');
+  assert.match(await start.textContent(), /연결선두 조각을 화살표로 이어요/);
+  await start.click();
+  assert.match(await hint.textContent(), /① 화살표가 시작할 조각/);
+  await page.keyboard.press('Escape');
+  assert.equal(await hint.isVisible(), false, 'Esc stops');
+  await start.click();
+  await shapes.nth(1).click();
+  assert.match(await hint.textContent(), /② 화살표가 닿을 조각/);
+  await shapes.nth(0).click();
+  await saved(page, r => { const [a, b] = r.slides[0].items.filter(it => it.t === 'shape'); const l = r.slides[0].items.find(it => it.t === 'link'); return l?.from === b.id && l.to === a.id; });
+  assert.equal(await hint.isVisible(), false);
+  assert.ok(await page.locator('.cv-canvas .fe-card .fi-link.sel').count() === 1, 'the new line is selected');
+  // From a single selected piece: "선 잇기" in the toolbar, then the piece to reach. An empty spot cancels.
+  await page.keyboard.press('Control+z');
+  await saved(page, r => !r.slides[0].items.some(it => it.t === 'link'));
+  await shapes.nth(0).click();
+  await page.locator('.fe-bar button').filter({hasText: '선 잇기'}).click();
+  assert.match(await hint.textContent(), /② 화살표가 닿을 조각/);
+  const card = await page.locator('.cv-canvas .fe-card').boundingBox();
+  await page.mouse.click(card.x + card.width - 6, card.y + card.height - 6);
+  assert.equal(await hint.isVisible(), false, 'an empty spot stops');
+  await shapes.nth(0).click();
+  await page.locator('.fe-bar button').filter({hasText: '선 잇기'}).click();
+  await shapes.nth(1).click();
+  await saved(page, r => { const [a, b] = r.slides[0].items.filter(it => it.t === 'shape'); const l = r.slides[0].items.find(it => it.t === 'link'); return l?.from === a.id && l.to === b.id; });
   assert.deepEqual(external, []);
 });

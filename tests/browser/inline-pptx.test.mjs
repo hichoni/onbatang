@@ -39,7 +39,7 @@ async function setup(t,{generic=false,missingFont=false,touch=false}={}){
  const origin='http://127.0.0.1:'+server.address().port,{chromium}=await import(pathToFileURL(process.env.MINICAN_PLAYWRIGHT_PATH).href),browser=await chromium.launch({channel:process.env.MINICAN_BROWSER||'msedge',headless:true});t.after(()=>browser.close());
  const context=await browser.newContext({viewport:touch?{width:390,height:844}:{width:1440,height:1000},isMobile:touch,hasTouch:touch,reducedMotion:'reduce',acceptDownloads:true,serviceWorkers:'allow'});
  await context.addInitScript(({missingFont})=>{
-  try{const api=navigator.serviceWorker;if(api)api.register=async()=>undefined;localStorage.setItem('onbatang-tour-seen-v1:editor','1');localStorage.setItem('onbatang-tour-seen-v1:news-0.44','1');}catch{}
+  try{const api=navigator.serviceWorker;if(api)api.register=async()=>undefined;localStorage.setItem('onbatang-tour-seen-v1:editor','1');localStorage.setItem('onbatang-tour-seen-v1:news-0.45','1');}catch{}
   if(self!==top&&missingFont){document.fonts.load=()=>Promise.reject(new DOMException('Synthetic missing font','NetworkError'));}
   if(self===top){window.previewFallbacks=[];addEventListener('message',event=>{if(event.origin==='null'&&event.data?.type==='result')for(const warning of event.data.result?.warnings||[])if(warning.code==='FONT_FALLBACK')window.previewFallbacks.push(warning.pageNumber);});}
  },{missingFont});

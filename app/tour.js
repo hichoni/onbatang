@@ -15,10 +15,10 @@ export const HOME_STEPS = [
 ];
 
 // 꾸미는 화면의 안내와 새 기능 안내가 함께 쓰는 단계들
-const LINK_STEP = { target: '.fe-stage', title: '연결선으로 잇기', text: '두 조각을 Shift로 함께 고르고 위 막대의 "연결선"을 누르면 화살표로 이어요. 선을 누르면 곧게·둥글게·꺾어서와 붙는 곳(↑→↓←)을 골라요.', tip: '선 가운데의 동그란 손잡이를 끌면 휘는 정도·꺾이는 자리가 바뀌어요' };
+const LINK_STEP = { target: '.cv-side', view: 'element', title: '연결선으로 잇기', text: '"꾸미기" 칸 맨 위의 "연결선"을 누르고, 화살표가 시작할 조각과 닿을 조각을 차례로 눌러요. 순서도·마인드맵을 그릴 때 좋아요.', tip: '선을 누르면 곧게·둥글게·꺾어서와 붙는 곳(↑→↓←)을 고르고, 가운데 손잡이로 휘어요' };
 const SHOW_STEP = { target: '.cv-show-btn', title: '발표하기', text: '화면 가득 한 장씩 보여 줘요. 스페이스 바나 → 로 넘기고 Esc 로 끝내요. G 전체 보기 · C 내 얼굴 카메라 · A 자동 넘기기 · R 리허설(장마다 시간 재기).', tip: '발표 중 ? 를 누르면 글쇠 목록이 나와요' };
 const DOWN_STEP = { target: '.cv-down-btn', title: '내려받기', text: 'PNG·JPG 그림, PDF(노트·유인물), PPTX, 영상, GIF, HTML 수업으로 내려받아요. 저장할 장과 옵션을 확인한 뒤 내려받기를 눌러요.', tip: '영상과 GIF에도 이어 움직이기가 그대로 나와요' };
-const SAVE_STEP = { target: '.cv-status', title: '저절로 저장돼요', text: '고칠 때마다 이 기기(이 브라우저)에 저장되고, 새로 고쳐도 꾸미던 그림·장이 다시 열려요. 다른 기기에는 없으니 다 만든 그림은 내려받아 두세요.', tip: '사용법은 ? 단추로 언제든 다시 볼 수 있어요' };
+const SAVE_STEP = { target: '.cv-status', title: '저절로 저장돼요', text: '고칠 때마다 이 기기(이 브라우저)에 저장되고, 새로 고쳐도 꾸미던 그림·장이 다시 열려요. 다른 기기에는 없으니 다 만든 그림은 내려받아 두세요.', tip: '새 기능은 첫 화면의 "새 기능"에서 자세히 봐요 · 사용법은 ? 단추로 다시 봐요' };
 
 /** 꾸미는 화면의 안내. view: 그 단계에서 옆 칸에 펼칠 도구(편집기의 칸 이름) */
 export const EDITOR_STEPS = [
@@ -40,7 +40,7 @@ export const EDITOR_STEPS = [
  * 새로 생긴 기능의 안내. 꾸미는 화면의 안내를 이미 본 기기에서, 새 기능이 들어온 뒤 처음 꾸미는 화면을 열 때 한 번 보여 준다
  * (처음 온 기기는 위의 안내에 같은 내용이 들어 있으니 이것을 따로 보여 주지 않는다). 새 기능을 더하면 NEWS_KEY 를 바꾼다.
  */
-export const NEWS_KEY = 'news-0.44';
+export const NEWS_KEY = 'news-0.45';
 export const NEWS_STEPS = [
   LINK_STEP,
   { target: '.cv-side', view: 'motion', optional: true, title: '이어 움직이기 · 강조', text: '장 넘기기 효과에서 "이어 움직이기"를 고르면 앞 장과 같은 조각이 자리·크기·색을 이어 부드럽게 옮겨 가요. 누를 때 강조로 조각을 한 번 움직여요.', tip: '앞 장을 복제한 뒤 조각을 옮기면 쉬워요' },
