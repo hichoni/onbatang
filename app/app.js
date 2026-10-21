@@ -623,15 +623,6 @@ function openDesign(record, isNew) {
     el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' }),
     name, O.status, ...(material ? [material] : []), ...(lesson?[lesson]:[]), ...(accountLibrary?[accountLibrary]:[]), el('span', { class: 'cv-bar-gap' }), shapes, el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' }), tourButton('editor', O), show, down);
   const shell = editorShell(O, bar);
-  // 꾸미는 화면 어디를 우클릭해도(그림 둘레 · 옆 칸 · 도구 막대 · 노트 머리 …) 브라우저 메뉴 대신 장 메뉴를 띄운다.
-  // 카드와 슬라이드 목록은 자기 메뉴를 먼저 띄운다(defaultPrevented). 글을 쓰는 칸은 브라우저 메뉴(붙여넣기 · 맞춤법)를 그대로 둔다.
-  // PPT 가져오기 · 활동 설정처럼 다른 화면이 편집 영역을 덮고 있을 때도 그 화면의 것이라 건드리지 않는다.
-  shell.addEventListener('contextmenu', (e) => {
-    if (e.defaultPrevented || O.inlineImport || O.closed || O.editor.stage.contains(e.target)) return;
-    if (e.target.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"]), a[href], iframe, .cv-activity-config')) return;
-    e.preventDefault();
-    O.editor.menuAt(e.clientX, e.clientY);
-  });
   markRatio(O, shapes);
   setView('edit');
   app.replaceChildren(shell);
@@ -947,6 +938,20 @@ function refreshThumb(O) {
   tile.setAttribute('aria-label', slideLabel(O.at, design));
 }
 /** 다른 장으로 간다. 지금 장은 편집기에서 꺼내 두고, 그 장을 편집기에 끼운다(실행 취소 기록은 장마다 따로라 비워진다). */
+// 꾸미는 화면에서 우클릭: 카드와 슬라이드 목록은 자기 메뉴를 먼저 띄운다(defaultPrevented).
+// 그 밖의 곳(그림 둘레 · 옆 칸 · 도구 막대 · 노트 머리, 그리고 꾸미는 화면이 다 채우지 못한 페이지 바탕)은 브라우저 메뉴 대신 장 메뉴를 띄운다.
+// 글을 쓰는 칸은 브라우저 메뉴(붙여넣기 · 맞춤법)를 그대로 둔다. 창(모달) · 발표 화면 · PPT 가져오기 · 활동 설정은 그 화면의 것이라 건드리지 않는다.
+function onPageMenu(e) {
+  const O = S.open;
+  if (!O || O.closed || O.inlineImport || e.defaultPrevented || !O.editor || !O.shell) return;
+  const t = e.target instanceof Element ? e.target : null;
+  if (!t || O.editor.stage.contains(t) || document.body.classList.contains('modal-open')) return;
+  const page = t === document.documentElement || t === document.body || t === app;
+  if (!page && !O.shell.contains(t)) return;
+  if (t.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), a[href], iframe, .cv-activity-config')) return;
+  e.preventDefault();
+  O.editor.menuAt(e.clientX, e.clientY);
+}
 // 장(슬라이드) 메뉴: 카드의 빈 곳 · 그 둘레 · 슬라이드 목록에서 우클릭할 때 함께 쓴다.
 // 옮기기 · 복제 · 지우기는 슬라이드 띠의 단추를 그대로 눌러서, 전체 자료(여러 파트)에서도 같은 저장 규칙을 따른다.
 function slideMenuGroups(O, { strip = false } = {}) {
@@ -2315,6 +2320,7 @@ export function startMinican({ root = document.getElementById('app'), fonts = []
   useFonts(fonts, titleFont);
   setupApp();
   window.addEventListener('pagehide', flush);
+  document.addEventListener('contextmenu', onPageMenu);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
   S.phase = 'boot';
   return refresh();
