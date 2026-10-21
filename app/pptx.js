@@ -72,8 +72,13 @@ function itemBox(item, size, textHeight) {
 function nativeLink(item, id, size) {
   const toEmu = ([x, y]) => [x * size.width / 100, y * size.height / 100];
   const [[x1, y1], [x2, y2]] = linkEnds(item, settings().aspect).map(toEmu);
-  const head = item.head === 'both' ? '<a:headEnd type="triangle"/>' : '', tail = item.head !== 'none' ? '<a:tailEnd type="triangle"/>' : '';
-  const ln = `<a:ln w="${Math.max(1, Math.round(item.line / 100 * size.width))}" cap="${item.dash ? 'flat' : 'rnd'}">${solid(item.color, item.op)}${item.dash ? '<a:prstDash val="dash"/>' : ''}${head}${tail}</a:ln>`;
+  // 머리 모양 → PowerPoint 의 선 끝 모양(막대는 PowerPoint 에 없어 머리 없이). 빈 동그라미는 동그라미로.
+  const ENDS = { arrow: 'triangle', open: 'arrow', dot: 'oval', ring: 'oval', diamond: 'diamond' };
+  const endType = (shape) => ENDS[shape || 'arrow'] || '';
+  const atStart = item.head === 'both' || item.head === 'start' ? endType(item.startShape) : '', atEnd = item.head === 'end' || item.head === 'both' ? endType(item.endShape) : '';
+  const head = atStart ? `<a:headEnd type="${atStart}"/>` : '', tail = atEnd ? `<a:tailEnd type="${atEnd}"/>` : '';
+  const dashVal = item.dash === 'dot' ? 'sysDot' : item.dash === 'dashdot' ? 'dashDot' : item.dash ? 'dash' : '';
+  const ln = `<a:ln w="${Math.max(1, Math.round(item.line / 100 * size.width))}" cap="${item.dash === true ? 'flat' : 'rnd'}">${solid(item.color, item.op)}${dashVal ? `<a:prstDash val="${dashVal}"/>` : ''}${head}${tail}</a:ln>`;
   const corners = linkCorners(item, settings().aspect);
   if (corners) {
     // 꺾인 선: 곧은 마디 셋으로 된 열린 도형(채우기 없음). 화살표 머리는 선(ln)에 붙는다.
@@ -81,7 +86,7 @@ function nativeLink(item, id, size) {
     const left = Math.min(...all.map((p) => p[0])), top = Math.min(...all.map((p) => p[1]));
     const w = Math.max(1, Math.round(Math.max(...all.map((p) => p[0])) - left)), h = Math.max(1, Math.round(Math.max(...all.map((p) => p[1])) - top));
     const pt = ([x, y]) => `<a:pt x="${Math.round(x - left)}" y="${Math.round(y - top)}"/>`;
-    return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${xml(item.id || `연결선 ${id}`)}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${Math.round(left)}" y="${Math.round(top)}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm><a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="0" t="0" r="r" b="b"/><a:pathLst><a:path w="${w}" h="${h}" fill="none"><a:moveTo>${pt(all[0])}</a:moveTo><a:lnTo>${pt(m1)}</a:lnTo><a:lnTo>${pt(m2)}</a:lnTo><a:lnTo>${pt(all[3])}</a:lnTo></a:path></a:pathLst></a:custGeom><a:noFill/>${ln.replace(/(<\/a:solidFill>(?:<a:prstDash val="dash"\/>)?)/, '$1<a:round/>')}</p:spPr></p:sp>`;
+    return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${xml(item.id || `연결선 ${id}`)}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${Math.round(left)}" y="${Math.round(top)}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm><a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="0" t="0" r="r" b="b"/><a:pathLst><a:path w="${w}" h="${h}" fill="none"><a:moveTo>${pt(all[0])}</a:moveTo><a:lnTo>${pt(m1)}</a:lnTo><a:lnTo>${pt(m2)}</a:lnTo><a:lnTo>${pt(all[3])}</a:lnTo></a:path></a:pathLst></a:custGeom><a:noFill/>${ln.replace(/(<\/a:solidFill>(?:<a:prstDash val="[A-Za-z]+"\/>)?)/, '$1<a:round/>')}</p:spPr></p:sp>`;
   }
   const control = linkControl(item, settings().aspect);
   if (control) {

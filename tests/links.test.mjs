@@ -237,3 +237,43 @@ test('curved and elbow connectors have one middle handle: dragging it sets the b
   assert.equal(keep({elbow: -1, turn: .2}).turn, .2);
   assert.equal(Object.hasOwn(keep({curve: 1, turn: .2}), 'turn'), false);
 });
+
+test('connector heads come in shapes per end, lines in dash styles; old drawings keep their look; PPTX gets matching line ends', async () => {
+  const {LINK_SHAPES} = await import('../src/links.js');
+  const a = box('kboxaaaaa1', 20, 50), b = box('kboxaaaaa2', 80, 50);
+  const lay = (patch) => linkGeometry(a, b, {aspect: 1});
+  const draw = (patch) => linkSvg({...lay(), color: '#1d2433', line: .5, head: 'end', ...patch});
+  // Each shape draws its own element at the end.
+  assert.match(draw({endShape: 'open'}), /<polyline class="fi-link-head"[^>]*fill="none"/);
+  assert.match(draw({endShape: 'dot'}), /<circle class="fi-link-head"[^>]*fill="#1d2433"/);
+  assert.match(draw({endShape: 'ring'}), /<circle class="fi-link-head"[^>]*fill="none" stroke="#1d2433"/);
+  assert.equal((draw({endShape: 'diamond'}).match(/<polygon class="fi-link-head" points="([^"]+)"/)[1].split(' ')).length, 4);
+  assert.match(draw({endShape: 'bar'}), /<line class="fi-link-head"/);
+  assert.equal((draw({}).match(/<polygon class="fi-link-head" points="([^"]+)"/)[1].split(' ')).length, 3, 'no shape: the usual arrow');
+  // Only the start, with its own shape.
+  const startOnly = draw({head: 'start', startShape: 'dot'});
+  assert.equal((startOnly.match(/class="fi-link-head"/g) || []).length, 1);
+  assert.match(startOnly, /<circle class="fi-link-head"/);
+  // Dash styles.
+  assert.match(draw({dash: true}), /stroke-linecap="butt" stroke-dasharray="1.5 1"/);
+  assert.match(draw({dash: 'dot'}), /stroke-linecap="round" stroke-dasharray="0.01 1.1"/);
+  assert.match(draw({dash: 'dashdot'}), /stroke-dasharray="2 1 0.01 1"/);
+  // Cleaning: valid shapes kept (arrow is the default and is not written), bad ones dropped, old drawings unchanged.
+  configure({aspect: 1});
+  const keep = (patch) => cleanDesign({id: 'ppage00001', bg: '#fff', items: [a, b, link({from: 'kboxaaaaa1', to: 'kboxaaaaa2', ...patch})]}).items.find(it => it.t === 'link');
+  const k = keep({head: 'start', startShape: 'diamond', endShape: 'arrow', dash: 'dot'});
+  assert.deepEqual([k.head, k.startShape, Object.hasOwn(k, 'endShape'), k.dash], ['start', 'diamond', false, 'dot']);
+  const bad = keep({startShape: 'star', dash: 'wavy'});
+  assert.equal(Object.hasOwn(bad, 'startShape') || Object.hasOwn(bad, 'dash'), false);
+  assert.deepEqual([keep({head: 'both', dash: true}).head, keep({head: 'both', dash: true}).dash], ['both', true], 'old dashed both-ends line');
+  assert.deepEqual(Object.keys(styleOf(k).values).sort(), ['color', 'dash', 'head', 'line', 'op', 'startShape']);
+  assert.deepEqual(LINK_SHAPES, ['arrow', 'open', 'dot', 'ring', 'diamond', 'bar']);
+  // PPTX: shapes and dashes map to PowerPoint line ends and dash presets.
+  const slide = cleanDesign({id: 'ppage00001', bg: '#fff', items: [a, b, link({from: 'kboxaaaaa1', to: 'kboxaaaaa2', head: 'both', startShape: 'dot', endShape: 'open', dash: 'dashdot'})]});
+  const {bytes} = await createPptx({slides: [slide], size: {width: 9144000, height: 9144000, unit: 'emu'}});
+  const xml = new TextDecoder().decode(unzipSync(bytes)['ppt/slides/slide1.xml']);
+  assert.match(xml, /cap="rnd">.*?<a:prstDash val="dashDot"\/><a:headEnd type="oval"\/><a:tailEnd type="arrow"\/>/);
+  const bar = cleanDesign({id: 'ppage00001', bg: '#fff', items: [a, b, link({from: 'kboxaaaaa1', to: 'kboxaaaaa2', endShape: 'bar', dash: 'dot'})]});
+  const xml2 = new TextDecoder().decode(unzipSync((await createPptx({slides: [bar], size: {width: 9144000, height: 9144000, unit: 'emu'}})).bytes)['ppt/slides/slide1.xml']);
+  assert.match(xml2, /<a:prstDash val="sysDot"\/><\/a:ln>/, 'a bar end has no PowerPoint equivalent: no head');
+});

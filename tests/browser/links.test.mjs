@@ -80,7 +80,7 @@ test('two selected pieces join with a connector that follows them, takes styles,
   assert.equal(await page.locator('.fe-sel').isHidden(), true);
   // Style: thicker, dashed, both heads, reversed.
   await page.locator('.fe-bar button').filter({hasText: '화살표'}).click();
-  await page.locator('[data-head="both"]').click();
+  await page.locator('[data-start-head="arrow"]').click();
   await page.locator('[data-dash="on"]').click();
   await page.locator('[data-flip-link="1"]').click();
   await saved(page, r => { const l = r.slides[0].items.find(it => it.t === 'link'); return l.head === 'both' && l.dash === true && l.from === 'ebox000002' && l.to === 'ebox000001'; });
@@ -357,5 +357,50 @@ test('the 꾸미기 panel and a single selected piece both start joining: pick t
   await page.locator('.fe-bar button').filter({hasText: '선 잇기'}).click();
   await shapes.nth(1).click();
   await saved(page, r => { const [a, b] = r.slides[0].items.filter(it => it.t === 'shape'); const l = r.slides[0].items.find(it => it.t === 'link'); return l?.from === a.id && l.to === b.id; });
+  assert.deepEqual(external, []);
+});
+
+test('a connector can be dressed up: one-tap looks, a head shape per end and dash styles, drawn on the card and in the PNG', options, async t => {
+  const {page, external} = await setup(t);
+  const shapes = page.locator('.cv-canvas .fe-card .fi-shape');
+  await shapes.nth(0).click();
+  await shapes.nth(1).click({modifiers: ['Shift']});
+  await page.locator('.fe-bar button').filter({hasText: '연결선'}).click();
+  await page.locator('.cv-canvas .fe-card .fi-link').waitFor();
+  const [p1, p2] = await ends(page);
+  await page.mouse.click((p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2);
+  await page.locator('.fe-bar button').filter({hasText: '화살표'}).click();
+  const link = r => r.slides[0].items.find(it => it.t === 'link');
+  assert.equal(await page.locator('[data-link-preset="plain"]').getAttribute('aria-pressed'), 'true', 'a new line is the plain arrow');
+  // One tap: dots on both ends.
+  await page.locator('[data-link-preset="beads"]').click();
+  await saved(page, r => { const l = link(r); return l?.head === 'both' && l.startShape === 'dot' && l.endShape === 'dot'; });
+  assert.equal(await page.locator('.cv-canvas .fe-card .fi-link circle.fi-link-head').count(), 2);
+  assert.equal(await page.locator('[data-link-preset="beads"]').getAttribute('aria-pressed'), 'true');
+  // Per end: no head at the start, a diamond at the end.
+  await page.locator('[data-start-head="none"]').click();
+  await page.locator('[data-end-head="diamond"]').click();
+  await saved(page, r => { const l = link(r); return l?.head === 'end' && l.endShape === 'diamond'; });
+  assert.equal(await page.locator('.cv-canvas .fe-card .fi-link .fi-link-head').count(), 1);
+  // Dash styles.
+  await page.locator('[data-dash="dot"]').click();
+  await saved(page, r => link(r)?.dash === 'dot');
+  await page.locator('[data-dash="dashdot"]').click();
+  await saved(page, r => link(r)?.dash === 'dashdot');
+  await page.locator('[data-dash="off"]').click();
+  await saved(page, r => !('dash' in link(r)));
+  // The exported picture inks the diamond at the end.
+  const ink = await page.evaluate(async () => {
+    const {designToCanvas, cleanDesign} = await import('/src/index.js');
+    const {linkEnds} = await import('/src/links.js');
+    const slide = cleanDesign((await window.readSaved()).slides[0], {keepSpaces: true});
+    const l = slide.items.find(it => it.t === 'link'), [[x1, y1], [x2, y2]] = linkEnds(l, 16 / 9);
+    const made = await designToCanvas(slide, {width: 800, aspect: 16 / 9}), ctx = made.canvas.getContext('2d');
+    // A little back from the tip, inside the diamond.
+    const u = [x2 - x1, (y2 - y1) / (16 / 9)], len = Math.hypot(...u), back = [x2 - u[0] / len * 0.9, y2 - u[1] / len * 0.9 * (16 / 9)];
+    const [r, g, b] = ctx.getImageData(Math.round(back[0] * 8), Math.round(back[1] * 4.5), 1, 1).data;
+    return (r + g + b) / 3;
+  });
+  assert.ok(ink < 120, `diamond inked ${ink}`);
   assert.deepEqual(external, []);
 });
