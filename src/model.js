@@ -18,7 +18,7 @@ import { metadata, newId, fail, validatePageInput, isSlideItem, itemTextLimit, p
 export { cleanAlt, ALT_LIMIT };
 import { cleanActivity } from './activity.js';
 import { cleanCrop } from './crop.js';
-import { LINK_HEADS, LINK_LINE, LINK_SIDES, layoutLinks } from './links.js';
+import { LINK_HEADS, LINK_LINE, LINK_SIDES, LINK_BEND, CURVE_BEND, layoutLinks } from './links.js';
 
 export { SHAPE_GROUPS };
 
@@ -343,6 +343,9 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
       ...(LINK_SIDES.includes(it.fromSide) ? { fromSide: it.fromSide } : {}),
       ...(LINK_SIDES.includes(it.toSide) ? { toSide: it.toSide } : {}),
     };
+    // 손잡이로 고친 곡선의 깊이 · 꺾이는 자리(그 모양일 때만, 처음 값이면 적지 않는다)
+    if (out.curve && Number.isFinite(it.bend)) { const b = num(it.bend, LINK_BEND.min, LINK_BEND.max, CURVE_BEND, 1000); if (b !== CURVE_BEND) out.bend = b; }
+    if (out.elbow && Number.isFinite(it.turn)) { const v = num(it.turn, 0, 1, 0.5, 1000); if (v !== 0.5) out.turn = v; }
     // 계산해 둔 자리는 그대로 받아 두었다가(그릴 때 바로 쓰게) cleanItems 에서 새로 맞춘다.
     if (Array.isArray(it.pts) && [4, 6, 8].includes(it.pts.length) && it.pts.every(Number.isFinite) && [it.w, it.h, it.vh].every((v) => Number.isFinite(v) && v > 0)) Object.assign(out, { w: it.w, h: it.h, vh: it.vh, pts: [...it.pts] });
     else Object.assign(out, { w: 1, h: 1, vh: 1, pts: [0, 0, 0, 0] });

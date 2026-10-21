@@ -63,7 +63,7 @@ async function setup(t,{width,height,pixel=false}){
  // Disable process isolation only for this test; the product sandbox/CSP stays enabled.
  const browser=await chromium.launch({channel:process.env.MINICAN_BROWSER||'msedge',headless:true,args:['--disable-features=IsolateOrigins,site-per-process','--disable-site-isolation-trials']});t.after(()=>browser.close());
  const context=await browser.newContext({viewport:{width,height},hasTouch:width<700,isMobile:width<700,reducedMotion:'reduce',acceptDownloads:true});
- await context.addInitScript(()=>{try{localStorage.setItem('onbatang-tour-seen-v1:editor','1');if(navigator.serviceWorker)navigator.serviceWorker.register=async()=>undefined;}catch{}});
+ await context.addInitScript(()=>{try{localStorage.setItem('onbatang-tour-seen-v1:editor','1');localStorage.setItem('onbatang-tour-seen-v1:news-0.44','1');if(navigator.serviceWorker)navigator.serviceWorker.register=async()=>undefined;}catch{}});
  await context.route('**/*',route=>{const url=new URL(route.request().url());if(['data:','blob:','about:'].includes(url.protocol))return route.continue();if(url.origin!==origin){external.push(url.origin);return route.abort('blockedbyclient');}requests.push(url.pathname);return route.continue();});
  const page=await context.newPage();page.setDefaultTimeout(45000);page.on('pageerror',error=>errors.push(error.message));
  return {page,entry:origin+'/gai-test.html',errors,external,requests};

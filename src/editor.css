@@ -360,6 +360,10 @@
 .fe-poshead ~ .fe-poshead { margin-top: 6px; }
 /* 연결선의 붙는 곳: 시작 · 끝 줄 앞의 작은 이름 */
 .fe-side-lbl { flex: none; min-width: 2em; align-self: center; font-size: .8rem; font-weight: 700; color: var(--fe-primary-dark); }
+/* 곡선 · 꺾인 선의 가운데 손잡이: 동그란 점(크기 손잡이와 같은 결) */
+.fe-h.fe-link-knob { position: absolute; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; background: #fff; border: 2px solid var(--fe-primary); box-shadow: 0 1px 4px rgba(0, 0, 0, .25); cursor: grab; touch-action: none; pointer-events: auto; z-index: 3; }
+.fe-h.fe-link-knob:active { cursor: grabbing; }
+@media (pointer: coarse) { .fe-h.fe-link-knob { width: 26px; height: 26px; margin: -13px 0 0 -13px; } }
 .fe-row.fe-side-row { flex-wrap: nowrap; gap: 4px; }
 .fe-side-row > .fe-chip { flex: none; white-space: nowrap; padding-left: 10px; padding-right: 10px; }
 .fe-side-row > .fe-chip.fe-side-chip { width: 32px; min-width: 0; padding: 0; justify-content: center; font-size: 1rem; line-height: 1; }

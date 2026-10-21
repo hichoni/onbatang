@@ -4,7 +4,9 @@
 // 요소에 적는 값: t 'link' · from · to(잇는 두 조각의 이름표) · head('end' 끝에 화살표 · 'both' 양쪽 · 'none' 없음) ·
 //                 color · line(굵기, 카드 너비의 %) · dash(점선) · curve(곡선: 1 은 가는 쪽에서 보아 왼쪽으로, -1 은 오른쪽으로 휜다. 없으면 직선) ·
 //                 elbow(꺾인 선: 1 은 가로 → 세로 → 가로, -1 은 세로 → 가로 → 세로로 직각으로 꺾어 잇는다. curve 와 함께 쓰지 않는다) ·
-//                 fromSide · toSide(선이 붙는 곳: 'top' · 'right' · 'bottom' · 'left' 면 그 조각의 그 옆 가운데에 붙는다. 없으면 알아서)
+//                 fromSide · toSide(선이 붙는 곳: 'top' · 'right' · 'bottom' · 'left' 면 그 조각의 그 옆 가운데에 붙는다. 없으면 알아서) ·
+//                 bend(곡선이 휘는 깊이: 두 끝 사이 거리에 대한 비율 0.05~0.9, 없으면 CURVE_BEND) ·
+//                 turn(꺾인 선이 가운데 마디에서 꺾이는 자리: 시작 0 ~ 끝 1, 없으면 한가운데 0.5)
 // 계산해서 붙이는 값: x · y · w · h(선을 감싸는 네모. 다른 요소와 같은 단위: x·w 는 카드 너비의 %, y·h 는 카드 높이의 %) ·
 //                    pts([x1, y1, x2, y2]: 네모 안에서 선의 두 끝. 곡선이면 [.., cx, cy] 로 휘는 점(2차 베지어의 조절점)까지,
 //                        꺾인 선이면 [.., ax, ay, bx, by] 로 꺾이는 두 점까지. 카드 너비의 % 단위) ·
@@ -53,6 +55,9 @@ const exitOf = (box, dx, dy) => (box.round && box.hw > 0 && box.hh > 0
  */
 /** 곡선이 휘는 깊이: 두 조각 가운데 사이 거리에 대한 비율(조절점이 이만큼 옆으로 간다). */
 export const CURVE_BEND = 0.3;
+export const LINK_BEND = Object.freeze({ min: 0.05, max: 0.9 });
+const bendOf = (v) => (Number.isFinite(v) ? Math.min(LINK_BEND.max, Math.max(LINK_BEND.min, v)) : CURVE_BEND);
+const turnOf = (v) => (Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0.5);
 // 2차 베지어 곡선(p1 · c · p2)이 지나는 가장 바깥의 x · y(네모를 곡선에 꼭 맞게 잡는다).
 function curveBounds(p1, c, p2) {
   const xs = [p1[0], p2[0]], ys = [p1[1], p2[1]];
@@ -65,14 +70,14 @@ function curveBounds(p1, c, p2) {
   return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
 }
 // 꺾인 선: 가로 먼저(1)면 두 조각의 마주 보는 옆(왼쪽·오른쪽 가운데)에서 나와 가운데 세로줄에서 꺾고, 세로 먼저(-1)면 위·아래에서 나와 가운데 가로줄에서 꺾는다.
-function elbowGeometry(A, B, line, elbow, swapped = false) {
+function elbowGeometry(A, B, line, elbow, swapped = false, turn = 0.5) {
   const across = elbow > 0 ? 0 : 1, along = 1 - across;                 // across: 먼저 가는 축(0 = 가로, 1 = 세로)
   const ca = [A.cx, A.cy], cb = [B.cx, B.cy], half = (box) => (across === 0 ? box.hw : box.hh);
   const dir = Math.sign(cb[across] - ca[across]) || 1, gap = GAP + line;
   const p1 = [...ca], p2 = [...cb];
   p1[across] = ca[across] + dir * (half(A) + gap);
   p2[across] = cb[across] - dir * (half(B) + gap);
-  const mid = (p1[across] + p2[across]) / 2;
+  const mid = p1[across] + (p2[across] - p1[across]) * turn;
   const m1 = [0, 0], m2 = [0, 0];
   m1[across] = mid; m1[along] = p1[along];
   m2[across] = mid; m2[along] = p2[along];
@@ -81,19 +86,19 @@ function elbowGeometry(A, B, line, elbow, swapped = false) {
   // 먼저 가는 축으로 두 조각이 겹쳐서 가운데에서 꺾을 틈이 없으면, 한 번만 꺾는 ㄱ자로 잇는다:
   // 먼저 가는 축으로 B 의 가운데 줄까지 가서 꺾고, B 의 옆으로 들어간다(꺾이는 두 점이 한 점이 된다).
   const dirB = Math.sign(cb[along] - ca[along]) || 1, halfB = along === 0 ? B.hw : B.hh;
-  const turn = [0, 0];
-  turn[across] = cb[across]; turn[along] = ca[along];
+  const corner = [0, 0];
+  corner[across] = cb[across]; corner[along] = ca[along];
   const enter = [...cb];
   enter[along] = cb[along] - dirB * (halfB + gap);
-  if (Math.abs(cb[across] - ca[across]) > half(A) + gap * 2 && (enter[along] - turn[along]) * dirB > gap) {
-    return { p1, p2: enter, m1: turn, m2: [...turn] };
+  if (Math.abs(cb[across] - ca[across]) > half(A) + gap * 2 && (enter[along] - corner[along]) * dirB > gap) {
+    return { p1, p2: enter, m1: corner, m2: [...corner] };
   }
   // ㄱ자도 안 되면(나란히 놓인 두 조각) 다른 축 먼저 꺾는다. 그것도 안 되면(서로 겹친 조각) 처음 모양 그대로.
-  return swapped ? null : elbowGeometry(A, B, line, -elbow, true) || zigzag;
+  return swapped ? null : elbowGeometry(A, B, line, -elbow, true, turn) || zigzag;
 }
 // 붙는 곳을 고른 꺾인 선: 고른 옆은 그 옆의 바깥 방향으로 나가고(고르지 않은 끝은 상대 쪽을 향해 elbow 의 축으로), 두 끝의 축이
 // 같으면 ㄹ자(마주 볼 때) · ㄷ자(같은 쪽을 볼 때, 둘보다 바깥에서 돌아온다), 다르면 ㄱ자로 한 번 꺾는다.
-function sidedElbow(A, B, line, elbow, fromSide, toSide) {
+function sidedElbow(A, B, line, elbow, fromSide, toSide, turn = 0.5) {
   const gap = GAP + line, ca = [A.cx, A.cy], cb = [B.cx, B.cy];
   const a1 = fromSide ? axisOf(fromSide) : elbow > 0 ? 0 : 1;
   const a2 = toSide ? axisOf(toSide) : fromSide ? a1 : elbow > 0 ? 0 : 1;
@@ -105,23 +110,24 @@ function sidedElbow(A, B, line, elbow, fromSide, toSide) {
   if (toSide) { p2 = sidePoint(B, toSide, gap); n2 = NORMAL[toSide][a2]; }
   else { n2 = Math.sign(p1[a2] - cb[a2]) || 1; p2 = [...cb]; p2[a2] = cb[a2] + n2 * (halfOf(B, a2) + gap); }
   if (a1 !== a2) {
-    const turn = [0, 0];
-    turn[a1] = p2[a1]; turn[a2] = p1[a2];
-    return { p1, p2, m1: turn, m2: [...turn] };
+    const corner = [0, 0];
+    corner[a1] = p2[a1]; corner[a2] = p1[a2];
+    return { p1, p2, m1: corner, m2: [...corner] };
   }
   const other = 1 - a1;
-  const mid = n1 === n2 ? (n1 > 0 ? Math.max(p1[a1], p2[a1]) : Math.min(p1[a1], p2[a1])) : (p1[a1] + p2[a1]) / 2;
+  const mid = n1 === n2 ? (n1 > 0 ? Math.max(p1[a1], p2[a1]) : Math.min(p1[a1], p2[a1])) : p1[a1] + (p2[a1] - p1[a1]) * turn;
   const m1 = [0, 0], m2 = [0, 0];
   m1[a1] = mid; m1[other] = p1[other];
   m2[a1] = mid; m2[other] = p2[other];
   return { p1, p2, m1, m2 };
 }
-export function linkGeometry(a, b, { line = LINK_LINE.base, aspect = 1, curve = 0, elbow = 0, fromSide, toSide } = {}) {
+export function linkGeometry(a, b, { line = LINK_LINE.base, aspect = 1, curve = 0, elbow = 0, fromSide, toSide, bend, turn } = {}) {
   const A = boxOfItem(a, aspect), B = boxOfItem(b, aspect);
   fromSide = LINK_SIDES.includes(fromSide) ? fromSide : null;
   toSide = LINK_SIDES.includes(toSide) ? toSide : null;
   if (elbow) {
-    const { p1, p2, m1, m2 } = fromSide || toSide ? sidedElbow(A, B, line, elbow, fromSide, toSide) : elbowGeometry(A, B, line, elbow);
+    const t = turnOf(turn);
+    const { p1, p2, m1, m2 } = fromSide || toSide ? sidedElbow(A, B, line, elbow, fromSide, toSide, t) : elbowGeometry(A, B, line, elbow, false, t);
     const pad = Math.max(1.5, line * 3 + 1);
     const xs = [p1[0], p2[0], m1[0], m2[0]], ys = [p1[1], p2[1], m1[1], m2[1]];
     const left = Math.min(...xs) - pad, top = Math.min(...ys) - pad, bw = Math.max(...xs) - Math.min(...xs) + pad * 2, bh = Math.max(...ys) - Math.min(...ys) + pad * 2;
@@ -133,9 +139,10 @@ export function linkGeometry(a, b, { line = LINK_LINE.base, aspect = 1, curve = 
   const PA = fromSide ? sidePoint(A, fromSide, gap) : null, PB = toSide ? sidePoint(B, toSide, gap) : null;
   const ca = PA || [A.cx, A.cy], cb = PB || [B.cx, B.cy];
   const dx = cb[0] - ca[0], dy = cb[1] - ca[1], len = Math.hypot(dx, dy);
-  const bend = curve > 0 ? 1 : curve < 0 ? -1 : 0;
+  const side = curve > 0 ? 1 : curve < 0 ? -1 : 0;
   // 곡선: 두 가운데(붙인 끝은 그 점)의 한가운데에서 옆(가는 쪽의 왼쪽이 +)으로 비킨 점을 조절점으로 삼는다. 선은 그 점을 향해 조각을 떠나고 들어온다.
-  const c0 = bend && len > 0.01 ? [(ca[0] + cb[0]) / 2 + (dy / len) * len * CURVE_BEND * bend, (ca[1] + cb[1]) / 2 - (dx / len) * len * CURVE_BEND * bend] : null;
+  const depth = bendOf(bend) * side;
+  const c0 = side && len > 0.01 ? [(ca[0] + cb[0]) / 2 + dy * depth, (ca[1] + cb[1]) / 2 - dx * depth] : null;
   let p1 = [...ca], p2 = [...cb];
   if (len > 0.01 && (PA || PB)) {
     // 한쪽만 붙였으면 다른 쪽은 붙인 점(곡선이면 조절점)을 향해 테두리를 떠난다.
@@ -181,7 +188,7 @@ export function layoutLinks(items, aspect = 1) {
     if (it?.t !== 'link') return [it];
     const a = byId.get(it.from), b = byId.get(it.to);
     if (!a || !b || a === b) return [];
-    return [{ ...it, rot: 0, ...linkGeometry(a, b, { line: it.line, aspect, curve: it.curve, elbow: it.elbow, fromSide: it.fromSide, toSide: it.toSide }) }];
+    return [{ ...it, rot: 0, ...linkGeometry(a, b, linkOptions(it, aspect)) }];
   });
 }
 
@@ -201,6 +208,65 @@ export function linkCorners(link, aspect = 1) {
 export function linkControl(link, aspect = 1) {
   if (link.pts?.length !== 6) return null;
   return [link.x - link.w / 2 + link.pts[4], (link.y / aspect - link.vh / 2 + link.pts[5]) * aspect];
+}
+
+const linkOptions = (it, aspect) => ({ line: it.line, aspect, curve: it.curve, elbow: it.elbow, fromSide: it.fromSide, toSide: it.toSide, bend: it.bend, turn: it.turn });
+// 선의 상자 안 좌표 → 카드 위의 자리(x 는 카드 너비의 %, y 는 카드 높이의 %)
+const onCard = (link, aspect, x, y) => [link.x - link.w / 2 + x, (link.y / aspect - link.vh / 2 + y) * aspect];
+
+/**
+ * 고른 선의 손잡이: 곡선은 곡선의 한가운데(끌면 휘는 깊이와 쪽이 바뀐다), 꺾인 선은 가운데 마디의 한가운데(끌면 꺾이는 자리가 옮겨 간다).
+ * 돌려주는 것: { kind: 'bend' | 'turn', at: [x, y] }(카드 위의 자리) · 손잡이가 없는 선(곧은 선 · 한 번만 꺾는 선 · 바깥으로 돌아오는 선)은 null.
+ */
+export function linkHandle(link, aspect = 1) {
+  const p = link?.pts;
+  if (p?.length === 6) {
+    const x = 0.25 * p[0] + 0.5 * p[4] + 0.25 * p[2], y = 0.25 * p[1] + 0.5 * p[5] + 0.25 * p[3];
+    return { kind: 'bend', at: onCard(link, aspect, x, y) };
+  }
+  if (p?.length !== 8 || Math.hypot(p[4] - p[6], p[5] - p[7]) < 1e-6) return null;
+  // 같은 쪽을 보는 두 옆을 고른 선(ㄷ자)은 꺾이는 자리가 두 조각의 바깥으로 정해진다.
+  if (LINK_SIDES.includes(link.fromSide) && link.fromSide === link.toSide) return null;
+  return { kind: 'turn', at: onCard(link, aspect, (p[4] + p[6]) / 2, (p[5] + p[7]) / 2) };
+}
+
+/**
+ * 손잡이를 카드 위의 자리 point 로 끌었을 때 그 선에 적을 값. a · b: 잇는 두 조각.
+ * 곡선: 곡선의 한가운데가 그 자리를 지나도록 휘는 쪽(curve)과 깊이(bend)를 찾는다. 꺾인 선: 꺾이는 자리(turn)를 두 끝 사이의 비율로.
+ * 돌려주는 것: 바꿀 값들(그 선에 손잡이가 없으면 null).
+ */
+export function dragLinkHandle(link, a, b, point, aspect = 1) {
+  const handle = linkHandle(link, aspect);
+  if (!handle || !a || !b) return null;
+  const px = point[0], py = point[1] / aspect;
+  if (handle.kind === 'turn') {
+    const p = link.pts;
+    const axis = Math.abs(p[4] - p[6]) < 1e-6 ? 0 : 1;          // 가운데 마디가 세로면 꺾이는 자리는 가로로 옮겨 간다
+    const [s, e] = [onCard(link, aspect, p[0], p[1]), onCard(link, aspect, p[2], p[3])].map(([x, y]) => [x, y / aspect]);
+    const span = e[axis] - s[axis];
+    if (Math.abs(span) < 1e-6) return null;
+    return { turn: r3(turnOf(((axis ? py : px) - s[axis]) / span)) };
+  }
+  // 곡선: 두 끝(붙인 끝은 그 점)을 잇는 줄에서 옆으로 얼마나 비켰는지(가는 쪽의 왼쪽이 +)를 재고, 곡선의 한가운데가 그만큼 비키는 깊이를 반으로 나눠 찾는다.
+  const offsetOf = (geo) => {
+    const h = linkHandle(geo, aspect).at, at = [h[0], h[1] / aspect];
+    return (at[0] - mid[0]) * nx + (at[1] - mid[1]) * ny;
+  };
+  const opts = linkOptions(link, aspect);
+  const straight = linkGeometry(a, b, { ...opts, curve: 0, elbow: 0 });
+  const [[sx, sy], [ex, ey]] = linkEnds(straight, aspect).map(([x, y]) => [x, y / aspect]);
+  const len = Math.hypot(ex - sx, ey - sy);
+  if (len < 0.01) return null;
+  const nx = (ey - sy) / len, ny = -(ex - sx) / len, mid = [(sx + ex) / 2, (sy + ey) / 2];
+  const want = (px - mid[0]) * nx + (py - mid[1]) * ny;
+  const curve = want >= 0 ? 1 : -1;
+  const reach = (depth) => curve * offsetOf(linkGeometry(a, b, { ...opts, elbow: 0, curve, bend: depth }));
+  let lo = LINK_BEND.min, hi = LINK_BEND.max;
+  const goal = Math.abs(want);
+  if (reach(lo) >= goal) return { curve, bend: lo };
+  if (reach(hi) <= goal) return { curve, bend: hi };
+  for (let k = 0; k < 24; k++) { const m = (lo + hi) / 2; if (reach(m) < goal) lo = m; else hi = m; }
+  return { curve, bend: r3((lo + hi) / 2) };
 }
 
 /** 다른 조각을 복제·붙여넣기했을 때: 원래 이름표 → 새 이름표 로 잇는 곳을 바꾼다(둘 다 함께 옮긴 선만). */

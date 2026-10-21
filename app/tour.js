@@ -9,10 +9,16 @@ const SEEN = 'onbatang-tour-seen-v1:';
 
 /** 첫 화면의 안내 */
 export const HOME_STEPS = [
-  { target: '.cv-cta', title: '새 디자인을 시작해요', text: '빈 장에서 시작해요. 카드·포스터·발표 자료를 만들 수 있고, 모양(정사각형·세로·가로·길게)은 꾸미면서 바꿔요.', tip: '만든 그림은 저절로 저장돼요' },
+  { target: '.cv-cta', title: '새 디자인을 시작해요', text: '빈 장에서 시작해요. 카드·포스터·발표 자료를 만들 수 있고, 모양(정사각형·세로·가로·길게)은 꾸미면서 바꿔요.', tip: '만든 그림은 이 기기에 저절로 저장되고, 새로 고쳐도 그대로예요' },
   { target: '.cv-starts', title: '틀로 빠르게', text: '마음에 드는 표지를 누르면 바로 꾸미는 화면이 열려요. 주제 틀과 기본 짜임 중에서 골라요.', tip: '꾸미는 중에도 틀 칸에서 장을 더할 수 있어요' },
   { target: '.cv-mine', title: '내 그림', text: '만든 그림이 여기에 모여요. 눌러서 이어 꾸미고, 필요 없는 그림은 지워요.', tip: '그림은 최근에 고친 차례로 보여요' },
 ];
+
+// 꾸미는 화면의 안내와 새 기능 안내가 함께 쓰는 단계들
+const LINK_STEP = { target: '.fe-stage', title: '연결선으로 잇기', text: '두 조각을 Shift로 함께 고르고 위 막대의 "연결선"을 누르면 화살표로 이어요. 선을 누르면 곧게·둥글게·꺾어서와 붙는 곳(↑→↓←)을 골라요.', tip: '선 가운데의 동그란 손잡이를 끌면 휘는 정도·꺾이는 자리가 바뀌어요' };
+const SHOW_STEP = { target: '.cv-show-btn', title: '발표하기', text: '화면 가득 한 장씩 보여 줘요. 스페이스 바나 → 로 넘기고 Esc 로 끝내요. G 전체 보기 · C 내 얼굴 카메라 · A 자동 넘기기 · R 리허설(장마다 시간 재기).', tip: '발표 중 ? 를 누르면 글쇠 목록이 나와요' };
+const DOWN_STEP = { target: '.cv-down-btn', title: '내려받기', text: 'PNG·JPG 그림, PDF(노트·유인물), PPTX, 영상, GIF, HTML 수업으로 내려받아요. 저장할 장과 옵션을 확인한 뒤 내려받기를 눌러요.', tip: '영상과 GIF에도 이어 움직이기가 그대로 나와요' };
+const SAVE_STEP = { target: '.cv-status', title: '저절로 저장돼요', text: '고칠 때마다 이 기기(이 브라우저)에 저장되고, 새로 고쳐도 꾸미던 그림·장이 다시 열려요. 다른 기기에는 없으니 다 만든 그림은 내려받아 두세요.', tip: '사용법은 ? 단추로 언제든 다시 볼 수 있어요' };
 
 /** 꾸미는 화면의 안내. view: 그 단계에서 옆 칸에 펼칠 도구(편집기의 칸 이름) */
 export const EDITOR_STEPS = [
@@ -21,12 +27,27 @@ export const EDITOR_STEPS = [
   { target: '.cv-side', view: 'element', title: '꾸미기: 도형과 그림 1,000개', text: '도형, 선, 컬러 그림, 선 아이콘, 픽셀 그림, 사람 그림을 넣어요. "동물", "날씨"처럼 낱말로 찾을 수 있어요.', tip: '선 아이콘과 픽셀은 색도 바꿀 수 있어요' },
   { target: '.cv-side', view: 'upload', title: '내 자료: 사진과 유튜브', text: '내 사진을 올리고, 유튜브 주소를 붙여 넣으면 영상이 카드에 들어가요. 영상은 발표할 때 스페이스 바로 틀고 멈춰요.', tip: '꾸미기 판에서 Ctrl+V 로 유튜브 주소를 붙여 넣어도 돼요' },
   { target: '.fe-stage', title: '카드에서 바로 꾸며요', text: '모서리를 끌면 반대편은 그대로 두고 크기를 바꿔요. Shift는 비율 유지, Ctrl은 중심 기준이에요. 방향키로 1px, Shift+방향키로 10px 옮겨요.', tip: 'Shift 누르기로 여럿 고르기 · Ctrl+D 복제 · Ctrl+Z 실행 취소' },
-  { target: '.cv-side', view: 'motion', optional: true, title: '움직임', text: '발표할 때 조각이 나타나는 효과와 장이 넘어가는 효과를 골라요. "누를 때"로 정하면 하나씩 나타나요.', tip: '"모든 장에 똑같이"로 한 번에 맞추기' },
-  { target: '.cv-strip', title: '여러 장 만들기', text: '"새 장"으로 장을 더하고, 끌어서 순서를 바꿔요. 장을 누르면 그 장을 꾸며요.', tip: '장을 복제해서 비슷한 장을 빠르게' },
+  LINK_STEP,
+  { target: '.cv-side', view: 'motion', optional: true, title: '움직임', text: '조각이 나타나는 효과, 장이 넘어가는 효과, 누를 때 강조(두근두근·흔들기 등)를 골라요. "이어 움직이기"는 같은 조각을 새 자리로 부드럽게 옮겨요.', tip: '"모든 장에 똑같이"로 한 번에 맞추기' },
+  { target: '.cv-strip', title: '여러 장 만들기', text: '"새 장"으로 장을 더하고, 끌어서 순서를 바꿔요. 장을 오른쪽 클릭(길게 누르기)하면 복제 · 발표에서 숨기기 · 여기서 주제 시작이 있어요.', tip: '빈 곳을 오른쪽 클릭하면 찾아 바꾸기도 있어요' },
   { target: '.cv-shapes', title: '모양 바꾸기', text: '정사각형·세로·가로·길게 중에서 골라요. 놓아 둔 것들은 찌그러지지 않게 맞춰 줘요.' },
-  { target: '.cv-show-btn', title: '발표하기', text: '화면 가득 한 장씩 보여 줘요. 스페이스 바나 → 로 넘기고, 유튜브 영상은 스페이스 바로 틀고 멈춰요. Esc 로 끝내요.', tip: '영상 장면은 K 로 멈추기·다시 틀기' },
-  { target: '.cv-down-btn', title: '내려받기', text: 'PNG·JPG 그림, PPTX, 영상을 고를 수 있어요. 저장할 장과 옵션을 확인한 뒤 아래 내려받기 단추를 눌러요.', tip: 'PPTX는 편집형과 이미지형을 고를 수 있어요' },
-  { target: '.cv-status', title: '저절로 저장돼요', text: '고칠 때마다 저장돼요. 여기에서 저장 상태를 확인할 수 있어요.', tip: '사용법은 ? 단추로 언제든 다시 볼 수 있어요' },
+  SHOW_STEP,
+  DOWN_STEP,
+  SAVE_STEP,
+];
+
+/**
+ * 새로 생긴 기능의 안내. 꾸미는 화면의 안내를 이미 본 기기에서, 새 기능이 들어온 뒤 처음 꾸미는 화면을 열 때 한 번 보여 준다
+ * (처음 온 기기는 위의 안내에 같은 내용이 들어 있으니 이것을 따로 보여 주지 않는다). 새 기능을 더하면 NEWS_KEY 를 바꾼다.
+ */
+export const NEWS_KEY = 'news-0.44';
+export const NEWS_STEPS = [
+  LINK_STEP,
+  { target: '.cv-side', view: 'motion', optional: true, title: '이어 움직이기 · 강조', text: '장 넘기기 효과에서 "이어 움직이기"를 고르면 앞 장과 같은 조각이 자리·크기·색을 이어 부드럽게 옮겨 가요. 누를 때 강조로 조각을 한 번 움직여요.', tip: '앞 장을 복제한 뒤 조각을 옮기면 쉬워요' },
+  { target: '.cv-strip', title: '장 숨기기 · 주제', text: '장을 오른쪽 클릭(길게 누르기)해서 발표에서 숨기거나, 여기서 주제를 시작해요. 주제는 발표 중 전체 보기(G)에서 묶여 확대돼요.', tip: '빈 곳 오른쪽 클릭: 찾아 바꾸기' },
+  SHOW_STEP,
+  DOWN_STEP,
+  SAVE_STEP,
 ];
 
 const hourglass = '<svg class="onba-tour-glass" viewBox="0 0 24 28" aria-hidden="true"><path class="sand-top" d="M5 5h14l-7 8z"/><path class="sand-bottom" d="m12 17 7 6H5z"/><path class="sand-stream" d="M12 12v7"/><path class="frame" d="M3 2h18M3 26h18M5 2v5c0 3 7 5 7 7S5 18 5 21v5M19 2v5c0 3-7 5-7 7s7 4 7 7v5"/></svg>';

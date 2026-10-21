@@ -42,7 +42,7 @@ async function setup(t, {motion = 'no-preference'} = {}) {
   const origin = `http://127.0.0.1:${server.address().port}`, external = [];
   const context = await browser.newContext({reducedMotion: motion, viewport: {width: 1280, height: 800}, permissions: ['camera']});
   await context.route('**/*', route => /^https?:/.test(route.request().url()) && !route.request().url().startsWith(origin + '/') ? (external.push(route.request().url()), route.abort()) : route.continue());
-  await context.addInitScript(() => { try { localStorage.setItem('onbatang-tour-seen-v1:editor', '1'); } catch {} });
+  await context.addInitScript(() => { try { localStorage.setItem('onbatang-tour-seen-v1:editor', '1'); localStorage.setItem('onbatang-tour-seen-v1:news-0.44', '1'); } catch {} });
   const page = await context.newPage();
   await page.goto(origin + '/fixture.html');
   await page.waitForFunction(() => window.ready);
