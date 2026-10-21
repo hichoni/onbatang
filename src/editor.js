@@ -22,7 +22,7 @@ import { fontReady } from './fonts.js';
 import { TOLERANCE, colorAlpha, prepareAlpha, finishCutout, resizeMask, plainBorder } from './cutout.js';
 import { anchorResizedItem, resizeItemFromHandle } from './resize.js';
 import {cleanPalettes,updatePalettes} from './palettes.js';
-import {FULL_CROP, cleanCrop, coverCrop, cropImage} from './crop.js';
+import {FULL_CROP, cleanCrop, coverCrop, cropImage, panCrop} from './crop.js';
 
 const HISTORY = 40;
 // 옆 메뉴의 칸: [이름, 아이콘(icons.js), 보이는 이름, 한 줄 설명]
@@ -211,10 +211,11 @@ export function createEditor({
   const groupBox = el('div', { class: 'fe-groupbox', hidden: true }, groupHandle('nw'), groupHandle('ne'), groupHandle('sw'), groupHandle('se'));
   const marquee = el('div', { class: 'fe-marquee', hidden: true });
   const overlay = el('div', { class: 'fe-overlay' }, othersBox, manyBox, guideV, guideH, selBox, groupBox, marquee, sceneFlag);
+  const cropLayer = el('div', {class:'fe-crop-layer',hidden:true});
   const stage = el('div', {
     class: 'fe-stage', tabindex: '0', role: 'group',
     'aria-label': '꾸미기 판. 조각을 누르면 고르고, 끌면 옮겨요. 화살표 키로도 옮길 수 있어요.',
-  }, cardEl, overlay);
+  }, cardEl, overlay, cropLayer);
   const bar = el('div', { class: 'fe-bar', role: 'toolbar', 'aria-label': '고른 조각의 도구' });
   const popBox = el('div', { class: 'fe-pop', hidden: true });
   const toolbar = el('div', { class: 'fe-tools' }, bar, popBox);
@@ -322,6 +323,7 @@ export function createEditor({
 
   // ---------- 카드(꾸미기 판) ----------
   function renderStage() {
+    dismissCrop();
     editing = -1;
     paintCard(cardEl, card.bg);
     nodes = items().map(itemView);
@@ -609,6 +611,7 @@ export function createEditor({
 
   // 고른 것 둘레의 테두리와 손잡이를 그 자리·크기에 맞춘다.
   function syncSel() {
+    if(cropJob && (pop!=='crop'||cur()?.id!==cropJob.item.id||cur()?.url!==cropJob.item.url))dismissCrop();
     nodes.forEach((n, i) => n.classList.toggle('sel', i === sel || many.includes(i)));
     const it = cur();
     const node = nodes[sel];
@@ -616,7 +619,7 @@ export function createEditor({
     drawMany();
     const id = it?.id || '';
     if (onSelect && id !== lastSelId) { lastSelId = id; onSelect(id); }
-    selBox.hidden = !it || !node;
+    selBox.hidden = !it || !node || !!cropJob;
     if (selBox.hidden) return;
     selBox.style.left = `${it.x}%`;
     selBox.style.top = `${it.y}%`;
@@ -1358,6 +1361,7 @@ export function createEditor({
   // ---------- 끌기·크기·돌리기 ----------
   stage.addEventListener('pointerdown', (e) => {
     if (e.button > 0 || !card || drag) return;      // 끄는 중에 다른 손가락이 닿으면 모른 척한다
+    if(cropJob){e.preventDefault();applyCrop();return;}
     if (e.target.closest?.('.fe-empty-go')) return;  // 빈 장의 빠른 시작 단추는 그냥 누른다(고르기 · 끌기를 시작하지 않는다)
     if (editing >= 0 && nodes[editing]?.contains(e.target)) return;   // 글을 고치는 중에는 글 안을 눌러 자리를 옮길 수 있게 둔다
     endEdit();
@@ -1543,7 +1547,9 @@ export function createEditor({
       return;
     }
     // 이미 고른 텍스트를 손가락으로 한 번 더 누르면 글을 고친다(마우스는 두 번 누르기).
-    if (again && mode === 'move' && e.type === 'pointerup' && e.pointerType && e.pointerType !== 'mouse') startEdit();
+    if (again && mode === 'move' && e.type === 'pointerup' && e.pointerType && e.pointerType !== 'mouse') {
+      if(cur()?.t==='image')openCrop();else startEdit();
+    }
   };
   stage.addEventListener('pointerup', end);
   stage.addEventListener('pointercancel', end);
@@ -1551,16 +1557,19 @@ export function createEditor({
   // 고른 텍스트를 두 번 누르면 글을 고친다. 끌기 때문에 포인터를 잡아 두어서 이 사건은 꾸미기 판에서 일어난 것으로 온다.
   // 그래서 누른 곳이 고른 글상자 안인지를 자리로 견준다.
   stage.addEventListener('dblclick', (e) => {
+    if(cropJob)return;
     // 그룹(여럿 고른 것) 안의 글을 두 번 누르면 그 글 하나를 골라 고친다.
     if (many.length) {
       const at = itemAt(e.clientX, e.clientY);
-      if (at >= 0 && many.includes(at)) { select(at); if (items()[at].t === 'text') startEdit(); }
+      if (at >= 0 && many.includes(at)) { select(at); if (items()[at].t === 'text') startEdit();else if(items()[at].t==='image')openCrop(); }
       return;
     }
     const it = cur();
     const box = nodes[sel]?.getBoundingClientRect();
-    if (!it || it.t !== 'text' || !box) return;
-    if (e.clientX >= box.left && e.clientX <= box.right && e.clientY >= box.top && e.clientY <= box.bottom) startEdit();
+    if (!it || !['text','image'].includes(it.t) || !box) return;
+    if (e.clientX >= box.left && e.clientX <= box.right && e.clientY >= box.top && e.clientY <= box.bottom) {
+      if(it.t==='image')openCrop();else startEdit();
+    }
   });
 
   // 옆 칸의 단추에 초점이 있을 때에도 실행 취소 · 다시 실행은 듣는다(효과를 고른 바로 뒤에 Ctrl+Z 를 누르는 일이 많다).
@@ -1575,6 +1584,7 @@ export function createEditor({
 
   stage.addEventListener('keydown', (e) => {
     if (cam) return;                                // 카메라로 찍는 중에는 꾸미기 판의 글쇠를 듣지 않는다
+    if(cropJob){cropKey(e);return;}
     if (editing >= 0) {
       if (e.key === 'Escape') { e.preventDefault(); endEdit(); focusStage(); }
       return;                                       // 글을 고치는 중에는 글자판이 글로 간다
@@ -1629,11 +1639,12 @@ export function createEditor({
     } else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); remove(); }
     else if (e.key === 'Escape') select(-1);
     else if (e.key === 'Enter' && it.t === 'text') { e.preventDefault(); startEdit(true); }
+    else if (e.key === 'Enter' && it.t === 'image') { e.preventDefault(); openCrop(); }
     else if (mod && key === 'KeyB' && it.t === 'text') { e.preventDefault(); change({ bold: !it.bold }); }
   });
 
   // 카드 크기가 바뀌면(창 크기·화면 돌리기) 테두리를 다시 맞춘다.
-  const watcher = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { if (card) { syncSel(); tidySeps(); } }) : null;
+  const watcher = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { if (card) { syncSel(); drawCrop(); tidySeps(); } }) : null;
   watcher?.observe(stage);
   watcher?.observe(bar);
   // 글씨체 파일을 다 받으면 글상자 크기가 달라지므로 테두리를 다시 맞춘다.
@@ -1892,8 +1903,7 @@ export function createEditor({
     class: `fe-tb${on ? ' on' : ''}${cls ? ` ${cls}` : ''}`, type: 'button', title: title || name || null, 'aria-label': name || null, disabled,
     'aria-pressed': on == null ? null : String(!!on), onClick,
   }, label, /\bhas-pop\b/.test(cls) && !/\bicon\b/.test(cls) ? icon('chev', 'fe-chev') : null);
-  const toggle = (name) => { pop = pop === name ? null : name; if (pop !== 'cut') cut = null; if(pop!=='crop')cropJob=null; renderBar(); keepKeys(); };
-  popBox.addEventListener('keydown',e=>{if(pop==='crop'&&e.key==='Escape'){e.preventDefault();e.stopPropagation();toggle('crop');focusStage();}});
+  const toggle = (name) => { dismissCrop();pop = pop === name ? null : name; if (pop !== 'cut') cut = null; renderBar(); keepKeys(); };
   const popBtn = (label, name, opts = {}) => tb(label, () => toggle(name), { ...opts, on: pop === name, cls: 'has-pop' });
   // 아이콘 + 이름 단추의 속. 이름(.fe-lbl)은 좁은 도구 막대에서 감춰지므로, 단추에는 늘 name(aria-label)을 함께 준다.
   const lab = (pic, text) => [icon(pic), el('span', { class: 'fe-lbl', text })];
@@ -2061,6 +2071,7 @@ export function createEditor({
     });
   }
   function drawBar() {
+    if(cropJob){drawCropBar();return;}
     const it = cur();
     const always = [
       tb(icon('undo'), undo, { title: '실행 취소 (Ctrl+Z)', name: '실행 취소', disabled: !past.length, cls: 'icon undo' }),
@@ -2178,7 +2189,7 @@ export function createEditor({
         tb(lab('screen', '유튜브에서 보기'), () => window.open(ytWatch(it.yt, it.start || 0), '_blank', 'noopener'), { title: '새 탭에서 이 영상을 열어요', name: '유튜브에서 보기', cls: 'yt-open' }));
     } else {
       own.push(
-        tb(lab('crop', '자르기'), openCrop, {on:pop==='crop',title:'사진에서 쓸 부분을 골라요',name:'이미지 자르기',cls:'has-pop crop'}),
+        tb(lab('crop', '자르기'), openCrop, {title:'사진 위에서 바로 잘라요 · 사진을 두 번 눌러도 열려요',name:'이미지 자르기',cls:'crop'}),
         tb(lab('eraser', '배경 제거'), () => (pop === 'cut' ? toggle('cut') : openCut()), { on: pop === 'cut', title: '사진의 배경을 투명하게 지워요', name: '배경 제거', cls: 'has-pop cut' }),
         pick('mask', '모양', 'mask', { title: '사진의 테두리 모양(동그라미 · 둥근 네모 …)' }),
         tb(lab('cover', '배경으로'), toBackground, { title: '카드에 꽉 차게 키워 맨 뒤에 깔아요', name: '배경으로 깔기', cls: 'cover' }));
@@ -2290,8 +2301,7 @@ export function createEditor({
       body = [el('div', { class: 'fe-row' }, ...MASKS.map((m) => el('button', {
         class: `fe-chip${it.mask === m.id ? ' on' : ''}`, type: 'button', 'aria-pressed': String(it.mask === m.id), onClick: () => change({ mask: m.id }),
       }, m.name)))];
-    } else if (pop === 'crop' && it.t === 'image') body = cropBody();
-    else if (pop === 'cut' && it.t === 'image' && cut) body = cutBody();
+    } else if (pop === 'cut' && it.t === 'image' && cut) body = cutBody();
     popBox.hidden = !body;
     popBox.replaceChildren(...(body ? [
       el('button', { class: 'fe-pop-close', type: 'button', 'aria-label': '닫기', title: '닫기 (Esc)', onClick: () => toggle(pop) }, icon('close')),
@@ -2299,73 +2309,123 @@ export function createEditor({
   }
 
   async function openCrop() {
-    if(pop==='crop'){toggle('crop');return;}
+    if(cropJob)return;
     const it=cur();if(it?.t!=='image'||it.lock)return;
-    endEdit();stopDrag();cut=null;
-    const job=cropJob={item:structuredClone(it),state:'loading'};pop='crop';renderBar();
+    endEdit();stopDrag();stopPress();stopPreview();closeMenu();cut=null;
+    const job=cropJob={item:structuredClone(it),state:'loading',aspect:settings().aspect};pop='crop';syncSel();renderBar();
     try {
       const image=new Image();image.src=it.url;await image.decode();
       if(cropJob!==job||pop!=='crop'||cur()?.url!==it.url||cur()?.id!==it.id)return;
-      job.aspect=image.naturalWidth/image.naturalHeight;
-      job.base=it.crop||coverCrop(job.aspect,it.w/(it.h/settings().aspect));
-      job.rect={...job.base};job.state='ready';renderBar();
-    } catch {if(cropJob===job){job.state='error';renderBar();}}
+      job.sourceAspect=image.naturalWidth/image.naturalHeight;
+      job.base=it.crop||coverCrop(job.sourceAspect,it.w/(it.h/job.aspect));
+      job.full=cropImage(job.item,FULL_CROP,{base:job.base,aspect:job.aspect});
+      job.rect={...job.base};job.state='ready';mountCrop();renderBar();focusStage();
+    } catch {if(cropJob===job){cancelCrop();notify('사진을 읽지 못했어요. 사진을 다시 확인해주세요.');}}
   }
-  function cropBody() {
+  function dismissCrop() {
+    const job=cropJob;cropJob=null;job?.stop?.();
+    cropLayer.hidden=true;cropLayer.replaceChildren();stage.classList.remove('fe-cropping');
+    nodes.forEach(node=>node.classList.remove('fe-crop-hidden'));
+    if(pop==='crop')pop=null;
+  }
+  function cancelCrop(){dismissCrop();syncSel();renderBar();focusStage();}
+  function applyCrop() {
     const job=cropJob;
-    if(!job||job.state==='loading')return [el('p',{class:'fe-note',text:'사진을 여는 중이에요…'})];
-    if(job.state==='error')return [el('p',{class:'fe-note',text:'사진을 읽지 못했어요. 사진을 다시 확인해주세요.'})];
-    const view=el('div',{class:'fe-crop-view','data-image-crop':''});view.style.setProperty('--fe-crop-ratio',String(job.aspect));
-    const image=el('img',{src:job.item.url,alt:'자르기 전 원본 사진',draggable:'false'});
-    const rect=el('div',{class:'fe-crop-rect',tabindex:'0','aria-label':'자를 영역 이동 · 방향키로 이동'});
-    const fields=el('div',{class:'fe-crop-fields'}),inputs={};
-    const note=el('p',{class:'fe-note',role:'status'});
-    const draw=()=>{
-      const c=job.rect;Object.assign(rect.style,{left:`${c.x*100}%`,top:`${c.y*100}%`,width:`${c.w*100}%`,height:`${c.h*100}%`});
-      for(const [k,input]of Object.entries(inputs))if(document.activeElement!==input)input.value=String(Math.round(c[k]*1000)/10);
-      note.textContent=`원본의 가로 ${Math.round(c.w*100)}% · 세로 ${Math.round(c.h*100)}%를 사용해요.`;
-    };
-    for(const [k,label]of [['x','왼쪽'],['y','위쪽'],['w','가로'],['h','세로']]){
-      const input=inputs[k]=el('input',{type:'number',min:'0',max:'100',step:'0.1','aria-label':`자르기 ${label} (%)`});
-      input.onchange=()=>{const c={...job.rect,[k]:Number(input.value)/100};try{cleanCrop(c);job.rect=c;draw();}catch{input.value=String(Math.round(job.rect[k]*1000)/10);note.textContent='영역이 사진 안에 있도록 1% 이상으로 정해주세요.';}};
-      fields.append(el('label',{},`${label} (%)`,input));
-    }
-    for(const corner of ['nw','ne','sw','se'])rect.append(el('button',{type:'button',class:'fe-crop-handle',dataset:{corner},'aria-label':({nw:'왼쪽 위',ne:'오른쪽 위',sw:'왼쪽 아래',se:'오른쪽 아래'})[corner]+' 자르기 손잡이'}));
-    rect.onpointerdown=e=>{
-      e.preventDefault();const corner=e.target.closest('[data-corner]')?.dataset.corner,start={...job.rect},bounds=view.getBoundingClientRect(),x=e.clientX,y=e.clientY;
-      rect.setPointerCapture(e.pointerId);rect.focus({preventScroll:true});
-      rect.onpointermove=ev=>{
-        const dx=(ev.clientX-x)/bounds.width,dy=(ev.clientY-y)/bounds.height;
-        if(!corner)job.rect={...start,x:Math.max(0,Math.min(1-start.w,start.x+dx)),y:Math.max(0,Math.min(1-start.h,start.y+dy))};
-        else {
-          let l=start.x,t=start.y,r=l+start.w,b=t+start.h;
-          if(corner.includes('w'))l=Math.max(0,Math.min(r-.01,l+dx));else r=Math.min(1,Math.max(l+.01,r+dx));
-          if(corner.includes('n'))t=Math.max(0,Math.min(b-.01,t+dy));else b=Math.min(1,Math.max(t+.01,b+dy));
-          job.rect={x:l,y:t,w:r-l,h:b-t};
-        }draw();
-      };
-      const end=()=>{rect.onpointermove=null;rect.onpointerup=null;rect.onpointercancel=null;};rect.onpointerup=end;rect.onpointercancel=end;
-    };
-    rect.onkeydown=e=>{
-      if(e.key==='Escape'){e.preventDefault();toggle('crop');focusStage();return;}
-      if(e.key==='Enter'){e.preventDefault();apply();return;}
-      const directions={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]},d=directions[e.key];if(!d)return;
-      e.preventDefault();const c=job.rect,step=e.shiftKey?.05:.005;
-      job.rect={...c,x:Math.max(0,Math.min(1-c.w,c.x+d[0]*step)),y:Math.max(0,Math.min(1-c.h,c.y+d[1]*step))};draw();
-    };
-    function apply(){
-      if(cur()?.url!==job.item.url||cur()?.id!==job.item.id||JSON.stringify(cur())!==JSON.stringify(job.item)){notify('사진이 바뀌었어요. 다시 자르기를 열어주세요.');return;}
-      const next=cropImage(job.item,job.rect,{base:job.base,aspect:settings().aspect}),clean=cleanItem(next,{keepSpaces:true});
-      if(Math.abs(clean.w-next.w)>.11||Math.abs(clean.h-next.h)>.11){note.textContent='자를 영역이 너무 작거나 커요. 손잡이로 영역을 조절해주세요.';return;}
-      if(JSON.stringify(job.rect)!==JSON.stringify(job.base))change(next,{keepPop:false});else toggle('crop');
-      cropJob=null;focusStage();
-    }
-    view.append(image,rect);draw();
-    const choose=(label,value)=>pbtn(label,()=>{job.rect=value();draw();});
-    return [el('b',{text:'이미지 자르기'}),el('p',{class:'fe-note',text:'모서리를 끌어 쓸 부분을 고르세요. 안쪽을 끌면 영역이 움직여요. 원본 사진은 남아 있어요.'}),
-      el('div',{class:'fe-crop-layout'},view,el('div',{},fields,note,el('div',{class:'fe-row'},choose('원본 전체',()=>({...FULL_CROP})),...[[1,'정사각형'],[4/3,'4:3'],[16/9,'16:9']].map(([ratio,label])=>choose(label,()=>coverCrop(job.aspect,ratio)))),
-        el('div',{class:'fe-row'},pbtn('취소',()=>toggle('crop')),el('button',{class:'fe-btn primary',type:'button',onClick:apply,'data-crop-apply':''},'자르기 적용'))))];
+    if(!job||job.state!=='ready')return;
+    if(JSON.stringify(cur())!==JSON.stringify(job.item)){cancelCrop();notify('사진이 바뀌었어요. 다시 자르기를 열어주세요.');return;}
+    const next=cropImage(job.full,job.rect,{base:FULL_CROP,aspect:job.aspect}),clean=cleanItem(next,{keepSpaces:true});
+    if(!clean||['w','h','x','y'].some(k=>Math.abs(clean[k]-next[k])>.11)){notify('자를 영역이 너무 작거나 커요. 손잡이로 영역을 조절해주세요.');return;}
+    const changed=['x','y','w','h'].some(k=>Math.abs(next[k]-job.item[k])>.00001)||JSON.stringify(cleanCrop(job.rect))!==JSON.stringify(cleanCrop(job.base));
+    dismissCrop();
+    if(changed)change(next,{keepPop:false});else{syncSel();renderBar();}
+    focusStage();
   }
+  function drawCropBar() {
+    const job=cropJob,ready=job.state==='ready';
+    const choose=(value)=>{
+      if(!ready)return;
+      if(!value)job.rect={...FULL_CROP};
+      else{
+        const c=job.rect,ratio=Number(value)/(job.full.w/(job.full.h/job.aspect));
+        const w=Math.min(c.w,c.h*ratio),h=w/ratio;
+        job.rect={x:c.x+(c.w-w)/2,y:c.y+(c.h-h)/2,w,h};
+      }
+      drawCrop();
+    };
+    bar.replaceChildren(el('b',{class:'fe-crop-title'},icon('crop'),'사진 자르기'),
+      el('span',{class:'fe-hint',text:ready?'손잡이로 자르기 · 안쪽을 끌어 사진 이동':'사진을 여는 중이에요…'}),
+      pbtn('원본 전체',()=>choose(''),{disabled:!ready}),
+      el('select',{'aria-label':'자르기 비율',disabled:!ready,onChange:e=>{choose(e.target.value);e.target.value='';}},
+        ...[['','비율 선택'],['1','정사각형'],[String(4/3),'4:3'],[String(16/9),'16:9']].map(([value,text])=>el('option',{value,text}))),
+      pbtn('취소',cancelCrop,{'aria-label':'자르기 취소'}),
+      el('button',{class:'fe-btn primary',type:'button',disabled:!ready,onClick:applyCrop,'data-crop-apply':'',title:'Enter 또는 사진 바깥을 눌러도 적용돼요'},'자르기 적용'));
+    popBox.hidden=true;popBox.replaceChildren();
+  }
+  function mountCrop() {
+    const job=cropJob;
+    const image=()=>el('img',{src:job.item.url,alt:'',draggable:'false'});
+    job.source=el('div',{class:'fe-crop-source','data-image-crop':'',role:'group','aria-label':'사진 위에서 자르기'});
+    job.visible=image();job.rectNode=el('div',{class:'fe-crop-rect'},el('div',{class:'fe-crop-window'},job.visible,el('div',{class:'fe-crop-grid','aria-hidden':'true'})));
+    const names={nw:'왼쪽 위',n:'위쪽',ne:'오른쪽 위',e:'오른쪽',se:'오른쪽 아래',s:'아래쪽',sw:'왼쪽 아래',w:'왼쪽'};
+    for(const [corner,name]of Object.entries(names))job.rectNode.append(el('button',{type:'button',class:'fe-crop-handle',dataset:{corner},'aria-label':name+' 자르기 손잡이'}));
+    job.source.append(el('div',{class:'fe-crop-ghost'},image()),job.rectNode);
+    job.source.onpointerdown=startCropDrag;
+    job.source.ondblclick=e=>{e.preventDefault();e.stopPropagation();applyCrop();};
+    cropLayer.replaceChildren(job.source);cropLayer.hidden=false;stage.classList.add('fe-cropping');nodes[sel].classList.add('fe-crop-hidden');
+    drawCrop();
+  }
+  function drawCrop() {
+    const job=cropJob;if(job?.state!=='ready'||!job.source)return;
+    const f=job.full,c=job.rect;
+    Object.assign(job.source.style,{left:`${f.x}%`,top:`${f.y}%`,width:`${f.w}%`,height:`${f.h}%`,transform:`translate(-50%,-50%) rotate(${f.rot}deg) scale(${f.fx?-1:1},${f.fy?-1:1})`});
+    Object.assign(job.rectNode.style,{left:`${c.x*100}%`,top:`${c.y*100}%`,width:`${c.w*100}%`,height:`${c.h*100}%`});
+    Object.assign(job.visible.style,{left:`${-c.x/c.w*100}%`,top:`${-c.y/c.h*100}%`,width:`${100/c.w}%`,height:`${100/c.h}%`});
+  }
+  function startCropDrag(e) {
+    if(e.button>0)return;
+    e.preventDefault();e.stopPropagation();
+    const job=cropJob;if(job?.state!=='ready'||job.stop)return;
+    const corner=e.target.closest('[data-corner]')?.dataset.corner,start={...job.rect},full={...job.full},bounds=stage.getBoundingClientRect(),x=e.clientX,y=e.clientY;
+    const angle=full.rot*Math.PI/180,cos=Math.cos(angle),sin=Math.sin(angle),width=bounds.width*full.w/100,height=bounds.height*full.h/100;
+    focusStage();job.source.setPointerCapture(e.pointerId);
+    const move=ev=>{
+      if(ev.pointerId!==e.pointerId)return;
+      const px=ev.clientX-x,py=ev.clientY-y,dx=(px*cos+py*sin)/width*(full.fx?-1:1),dy=(-px*sin+py*cos)/height*(full.fy?-1:1);
+      if(!corner)Object.assign(job,panCrop(full,start,dx,dy,{aspect:job.aspect}));
+      else{
+        let l=start.x,t=start.y,r=l+start.w,b=t+start.h;
+        if(corner.includes('w'))l=Math.max(0,Math.min(r-.01,l+dx));
+        if(corner.includes('e'))r=Math.min(1,Math.max(l+.01,r+dx));
+        if(corner.includes('n'))t=Math.max(0,Math.min(b-.01,t+dy));
+        if(corner.includes('s'))b=Math.min(1,Math.max(t+.01,b+dy));
+        job.rect={x:l,y:t,w:r-l,h:b-t};
+      }
+      drawCrop();
+    };
+    const done=ev=>{if(ev.pointerId!==e.pointerId)return;if(ev.type==='pointercancel'){job.rect=start;job.full=full;drawCrop();}job.stop();};
+    job.stop=()=>{
+      job.source.removeEventListener('pointermove',move);job.source.removeEventListener('pointerup',done);job.source.removeEventListener('pointercancel',done);job.source.removeEventListener('lostpointercapture',done);
+      job.stop=null;try{job.source.releasePointerCapture(e.pointerId);}catch{}
+    };
+    job.source.addEventListener('pointermove',move);job.source.addEventListener('pointerup',done);job.source.addEventListener('pointercancel',done);job.source.addEventListener('lostpointercapture',done);
+  }
+  function cropKey(e) {
+    if(e.key==='Escape'){e.preventDefault();e.stopPropagation();cancelCrop();return;}
+    if(e.key==='Enter'){e.preventDefault();e.stopPropagation();applyCrop();return;}
+    const job=cropJob,d=({ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]})[e.key];
+    if(job?.state==='ready'&&d){
+      e.preventDefault();const step=e.shiftKey?10:1,bounds=stage.getBoundingClientRect(),angle=job.full.rot*Math.PI/180;
+      const px=d[0]*step,py=d[1]*step;
+      const dx=(px*Math.cos(angle)+py*Math.sin(angle))/(bounds.width*job.full.w/100)*(job.full.fx?-1:1),dy=(-px*Math.sin(angle)+py*Math.cos(angle))/(bounds.height*job.full.h/100)*(job.full.fy?-1:1);
+      Object.assign(job,panCrop(job.full,job.rect,dx,dy,{aspect:job.aspect}));drawCrop();
+    }
+  }
+  toolbar.addEventListener('keydown',e=>{if(cropJob&&e.key==='Escape')cropKey(e);});
+  const onCropOutside=e=>{
+    if(e.button>0||cropJob?.state!=='ready'||cropLayer.contains(e.target)||toolbar.contains(e.target))return;
+    applyCrop();
+  };
+  document.addEventListener('pointerdown',onCropOutside,true);
 
   function cutBody() {
     if (cut.state === 'loading') return [el('p', { class: 'fe-note', text: '사진을 읽는 중이에요…' })];
@@ -3176,7 +3236,7 @@ export function createEditor({
   // ---------- 함께 꾸밀 때: 다른 사람이 바꾼 것 끼워 넣기 ----------
   // 지금 끼워 넣어도 되는지: 끄는 중 · 레이어를 끄는 중 · 메뉴가 열린 중에는 기다린다(손 밑의 것이 바뀌지 않게).
   // 글을 고치는 중에는 기다리지 않는다(오래 걸린다): 고치는 글상자만 그대로 두고 끼워 넣는다(merge).
-  const idle = () => !!card && !drag && !sorting && !menu && !press;
+  const idle = () => !!card && !drag && !sorting && !menu && !press && !cropJob;
   // 되돌리기 기록에도 다른 사람이 바꾼 것을 끼워 넣는다. 그래서 실행 취소는 내가 한 것만 되돌리고, 친구가 바꾼 것은 그대로 둔다.
   // patch: { items: Map(이름표 → 새 요소 또는 null(지워졌다)), added: Set(다른 사람이 새로 넣은 이름표), order: [지금 이름표 차례], bg?, pa?, tr? }
   // 다른 사람이 새로 넣은 것만 예전 기록에도 끼워 넣는다(내가 넣고 친구가 고친 것은, 내가 넣기 전 기록에 생기지 않게).
@@ -3352,6 +3412,8 @@ export function createEditor({
     forget: () => { past = []; future = []; if (card) renderBar(); },
     /** 편집기를 치운다(열린 메뉴와 지켜보던 것들을 정리한다). 화면 조각은 프로젝트가 떼어 낸다. */
     destroy: () => {
+      dismissCrop();
+      document.removeEventListener('pointerdown',onCropOutside,true);
       sampling?.controller.abort();sampling=null;
       closeMenu();
       stopPress();
