@@ -149,7 +149,9 @@ test('편집기 자체에는 인증·서버 API가 없고 가이X 연결 주소�
     const networkSource = f === 'pptx.js' ? src.replace("fetch(item.url, {signal, method: 'GET', credentials: 'omit', referrerPolicy: 'no-referrer'})", 'readExistingPhoto()') : src;
     assert.doesNotMatch(networkSource, /\bfetch\(|XMLHttpRequest|WebSocket|sendBeacon|EventSource/, f);
     const addresses = f === 'pptx.js' ? src.replaceAll(/http:\/\/schemas\.openxmlformats\.org\/(?:drawingml\/2006\/main|presentationml\/2006\/main|officeDocument\/2006\/(?:relationships|extended-properties)|package\/2006\/(?:relationships(?:\/metadata\/core-properties)?|content-types|metadata\/core-properties))/g, '').replaceAll('http://purl.org/dc/elements/1.1/', '').replaceAll('http://schemas.microsoft.com/office/powerpoint/2010/main', '') : src;
-    const allowed = f === 'gai-provider.js' ? addresses.replaceAll('https://gai-lab.netlify.app/onbatang-gai-connect.html', '') : addresses;
+    // 링크 미리보기 태그(og:* · twitter:*)는 공용 온바탕의 주소를 절대 주소로 적어야 미리보기가 그림을 읽는다(앱이 보내는 요청이 아니다).
+    const previews = f === 'index.html' ? addresses.replace(/<meta (?:property="og:(?:url|image)"|name="twitter:image") content="https:\/\/onbatang\.web\.app\/[^"]*" \/>/g, '') : addresses;
+    const allowed = f === 'gai-provider.js' ? previews.replaceAll('https://gai-lab.netlify.app/onbatang-gai-connect.html', '') : previews;
     assert.doesNotMatch(allowed.replaceAll('http://www.w3.org/2000/svg', ''), /https?:\/\//, `${f}: 바깥 주소`);
     assert.doesNotMatch(src, /firebase|firestore|tinkerlab|틴커랩|signInWithPassword|access_token|service_role/i, f);
     for (const [, from] of src.matchAll(/from '([^']+)'/g)) assert.match(from, /^\.\/(?:pptx-import\/)?[\w-]+\.js$|^\.\.\/src\/[\w-]+\.js$/, `${f}: ${from}`);
