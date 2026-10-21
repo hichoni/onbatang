@@ -364,6 +364,19 @@
 .fe-h.fe-link-knob { position: absolute; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; background: #fff; border: 2px solid var(--fe-primary); box-shadow: 0 1px 4px rgba(0, 0, 0, .25); cursor: grab; touch-action: none; pointer-events: auto; z-index: 3; }
 .fe-h.fe-link-knob:active { cursor: grabbing; }
 @media (pointer: coarse) { .fe-h.fe-link-knob { width: 26px; height: 26px; margin: -13px 0 0 -13px; } }
+/* 잇기: 꾸미기 칸의 "연결선" 카드와 잇는 동안의 안내 띠 */
+.fe-link-start { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; border: 1.5px solid var(--fe-line, #dde5e1); border-radius: 12px; background: #fff; color: var(--fe-text); text-align: left; font: inherit; cursor: pointer; }
+.fe-link-start:hover { border-color: var(--fe-primary); background: var(--fe-soft); }
+.fe-link-start-art svg { display: block; width: 84px; height: auto; }
+.fe-link-start-text { display: grid; gap: 2px; min-width: 0; }
+.fe-link-start-text b { font-size: .95rem; }
+.fe-link-start-text small { color: var(--fe-muted); font-size: .8rem; line-height: 1.4; }
+.fe-stage.fe-linking { cursor: crosshair; }
+.fe-stage.fe-linking .fi:not(.fi-link) { cursor: pointer; }
+.fe-link-hint { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 30; display: flex; align-items: center; gap: 10px; max-width: calc(100% - 20px); padding: 8px 8px 8px 14px; border-radius: 999px; background: #24322d; color: #fff; font-size: .9rem; box-shadow: 0 4px 14px rgba(0, 0, 0, .2); pointer-events: auto; }
+.fe-link-hint b { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fe-link-hint-x { flex: none; border: 1px solid #ffffff66; border-radius: 999px; background: transparent; color: #fff; font: inherit; font-size: .82rem; padding: 4px 10px; cursor: pointer; }
+.fe-link-hint-x:hover { background: #ffffff1f; }
 .fe-row.fe-side-row { flex-wrap: nowrap; gap: 4px; }
 .fe-side-row > .fe-chip { flex: none; white-space: nowrap; padding-left: 10px; padding-right: 10px; }
 .fe-side-row > .fe-chip.fe-side-chip { width: 32px; min-width: 0; padding: 0; justify-content: center; font-size: 1rem; line-height: 1; }

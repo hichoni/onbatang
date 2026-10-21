@@ -38,7 +38,11 @@ test('the first screen opens behind a branded splash, and the bare root address 
   assert.match(html, /<style>[\s\S]*\.onba-splash\{position:fixed;inset:0/);
   assert.equal((html.match(/<ul class="onba-splash-tips"[\s\S]*?<\/ul>/)[0].match(/<li>/g) || []).length, 5);
   // It lifts after the app (home list or the reopened drawing) and fonts are ready, even if starting fails.
-  assert.match(html, /resume: true,\s*\}\)\.then\(\(\) => Promise\.race\(\[document\.fonts\?\.ready,[\s\S]*\.finally\(\(\) => requestAnimationFrame\(lift\)\)/);
+  assert.match(html, /resume: true,\s*\}\)\.then\(\(\) => Promise\.race\(\[Promise\.all\(\[sheets\(\), uiFont, document\.fonts\?\.ready\]\),[\s\S]*\.finally\(\(\) => requestAnimationFrame\(lift\)\)/);
+  // Every stylesheet the first screen needs is in the head (none injected later), and the UI font starts downloading at once.
+  assert.match(html, /<link rel="stylesheet" href="\.\/pptx-import\/style\.css\?v=[^"]+" \/>/);
+  assert.match(html, /<link rel="preload" href="\.\/brand\/noto-sans-kr\.woff2" as="font" type="font\/woff2" crossorigin \/>/);
+  assert.match(readFileSync(new URL('../app/app.css', import.meta.url), 'utf8'), /#app\.cv-standalone-shell \{ max-width: none; margin: 0; padding: 0; \}/);
   const root = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   assert.match(root, /<script>location\.replace\('app\/' \+ location\.search \+ location\.hash\);<\/script>/);
   assert.doesNotMatch(root, />온바탕 열기</, 'no bare link flashes in the corner');

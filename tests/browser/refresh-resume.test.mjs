@@ -10,7 +10,7 @@ import {resolve, extname, sep} from 'node:path';
 const root = resolve(fileURLToPath(new URL('../../', import.meta.url)));
 const options = {skip: !process.env.MINICAN_PLAYWRIGHT_PATH, timeout: 120000};
 
-async function setup(t, {seen = ['home', 'editor', 'news-0.44']} = {}) {
+async function setup(t, {seen = ['home', 'editor', 'news-0.45']} = {}) {
   const server = createServer(async (req, res) => {
     try {
       const path = new URL(req.url, 'http://localhost').pathname;
@@ -83,10 +83,16 @@ test('a refresh right after typing keeps the edit and reopens the same drawing o
 test('the opening splash shows the slogan and lifts only after the first screen is drawn', options, async t => {
   const {page, origin} = await setup(t);
   await page.route('**/app/app.js', async route => { await new Promise(r => setTimeout(r, 600)); await route.continue(); });
+  // A late stylesheet used to widen the first screen after the splash had lifted (it showed a narrower box first).
+  await page.route('**/app/pptx-import/style.css*', async route => { await new Promise(r => setTimeout(r, 1500)); await route.continue(); });
   await page.goto(origin + '/app/', {waitUntil: 'domcontentloaded'});
   const early = await page.evaluate(() => ({splash: !!document.getElementById('onba-splash'), slogan: document.querySelector('.onba-splash-slogan')?.textContent, tips: document.querySelectorAll('.onba-splash-tips li').length}));
   assert.deepEqual(early, {splash: true, slogan: '생각을 바로, 작품으로.', tips: 5});
   await splashGone(page);
+  const atLift = await page.evaluate(() => ({width: document.querySelector('.cv-hero').getBoundingClientRect().width, font: document.fonts.check("16px 'Onbatang UI'")}));
+  assert.equal(atLift.font, true, 'the UI font was ready before the splash lifted');
+  await page.waitForTimeout(1200);
+  assert.equal(await page.evaluate(() => document.querySelector('.cv-hero').getBoundingClientRect().width), atLift.width, 'the first screen keeps its size after the splash');
   assert.ok(await page.locator('.cv-hero').isVisible());
   assert.ok(await page.locator('.cv-mine h2').isVisible(), 'the list finished loading before the splash lifted');
   assert.equal(await page.locator('.cv-mine [data-onbatang-loading]').count(), 0);
@@ -108,4 +114,25 @@ test('a device that already saw the guide gets the new-features guide once when 
   await page.locator('.cv-canvas .fe-stage').waitFor();
   await page.waitForTimeout(1200);
   assert.equal(await page.locator('.onba-tour').count(), 0, 'shown only once');
+});
+
+test('the home screen has a "새 기능" button that explains each new feature in plain words, with a dot until it is seen', options, async t => {
+  const {page, origin} = await setup(t);
+  await page.goto(origin + '/app/');
+  await splashGone(page);
+  const btn = page.locator('[data-whats-new]');
+  assert.match(await btn.getAttribute('class'), /\bunseen\b/);
+  await btn.click();
+  const box = page.locator('.cv-news-box');
+  await box.waitFor();
+  assert.equal(await box.locator('h2').textContent(), '온바탕에 새로 생긴 기능');
+  const link = box.locator('[data-feature="link"]');
+  assert.match(await link.textContent(), /두 조각을 잇는 화살표 선이에요[\s\S]*이럴 때[\s\S]*순서도/);
+  assert.ok(await link.locator('.cv-news-how li').count() >= 3);
+  assert.ok(await box.locator('.cv-news-item').count() >= 6);
+  await page.keyboard.press('Escape');
+  await box.waitFor({state: 'detached'});
+  await page.reload();
+  await splashGone(page);
+  assert.doesNotMatch(await page.locator('[data-whats-new]').getAttribute('class'), /\bunseen\b/, 'no dot once seen');
 });

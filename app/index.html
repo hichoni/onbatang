@@ -24,9 +24,12 @@
   <meta name="application-name" content="온바탕">
   <link rel="icon" type="image/svg+xml" href="./brand/app-icon.svg?v=b1">
   <link rel="apple-touch-icon" href="./brand/app-icon-192.png?v=b1">
-  <link rel="stylesheet" href="../src/editor.css?v=0.44.0" />
-  <link rel="stylesheet" href="./app.css?v=0.44.0" />
-  <link rel="stylesheet" href="./brand.css?v=0.44.0" />
+  <link rel="stylesheet" href="../src/editor.css?v=0.45.0" />
+  <link rel="stylesheet" href="./app.css?v=0.45.0" />
+  <link rel="stylesheet" href="./brand.css?v=0.45.0" />
+  <!-- 가져오기 칸의 짜임도 처음부터 받는다(나중에 끼워 넣으면 그동안 첫 화면이 좁게 보였다가 넓어진다). 화면 글꼴은 미리 받기 시작한다. -->
+  <link rel="stylesheet" href="./pptx-import/style.css?v=0.45.0" />
+  <link rel="preload" href="./brand/noto-sans-kr.woff2" as="font" type="font/woff2" crossorigin />
   <!-- 첫 화면이 다 그려지기 전까지 덮는 여는 화면. 바깥 CSS 를 받기 전에도 바로 제 모습이 나오게 여기에 둔다. -->
   <style>
     .onba-splash{position:fixed;inset:0;z-index:5000;display:grid;place-content:center;justify-items:center;gap:18px;padding:24px;background:radial-gradient(ellipse at 100% 0,#f9edd8 0,transparent 55%),radial-gradient(ellipse at 0 100%,#e8f3ed 0,transparent 55%),#f5f5ef;color:#24322d;font-family:system-ui,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;letter-spacing:-.025em;text-align:center;transition:opacity .35s ease,visibility .35s}
@@ -65,15 +68,19 @@
     import { startOnbatang } from './standalone.js';
     import { ONBATANG_FONTS, ONBATANG_TITLE_FONT } from './fonts.js';
 
-    // 여는 화면은 첫 화면(또는 새로 고치기 전에 꾸미던 그림)이 다 그려지고 글꼴까지 받은 뒤에 걷는다(작게 떴다가 커지는 모습이 보이지 않게).
+    // 여는 화면은 첫 화면(또는 새로 고치기 전에 꾸미던 그림)이 다 그려지고, 모든 짜임(CSS)과 화면 글꼴까지 받은 뒤에 걷는다
+    // (작게 떴다가 커지거나 글자 모양이 바뀌는 모습이 보이지 않게). 아주 느린 망에서는 6초 뒤에 그대로 걷는다.
     const splash = document.getElementById('onba-splash');
     const lift = () => { splash.classList.add('is-done'); setTimeout(() => splash.remove(), 400); };
+    const uiFont = document.fonts?.load ? document.fonts.load("16px 'Onbatang UI'").catch(() => {}) : Promise.resolve();
+    const sheets = () => Promise.all([...document.querySelectorAll('link[rel=stylesheet]')].map((link) => link.sheet ? null
+      : new Promise((done) => { link.addEventListener('load', done, { once: true }); link.addEventListener('error', done, { once: true }); })));
     startOnbatang({
       fonts: ONBATANG_FONTS,
       titleFont: ONBATANG_TITLE_FONT,
       storage: 'minican',
       resume: true,
-    }).then(() => Promise.race([document.fonts?.ready, new Promise((done) => setTimeout(done, 1500))]))
+    }).then(() => Promise.race([Promise.all([sheets(), uiFont, document.fonts?.ready]), new Promise((done) => setTimeout(done, 6000))]))
       .catch((error) => console.error(error))
       .finally(() => requestAnimationFrame(lift));
   </script>
