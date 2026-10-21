@@ -18,6 +18,7 @@ import {openLessonResults} from './lesson-results-ui.js';
 import {cleanGaiActivity,gaiAppCover,gaiAppResult} from '../src/gai-app.js';
 import {mountGaiApp} from './gai-app.js';
 import {createShowTools} from './show-tools.js';
+import {ONBATANG_VERSION} from './version.js';
 import {createGaiMaker,gaiLessonContext} from './gai-maker.js';
 import {
   createEditor, designView, designToBlob, configure, settings, reshapeItems, layoutList, layoutItems, icon, cleanDesign, hasMotion, playDesign, playTransition,
@@ -446,7 +447,9 @@ function render() {
     } }, '원본 내려받기')));
 
   app.replaceChildren(hero, el('div', { class: 'cv-home' }, templates, mine,
-    el('p', { class: 'cv-note', text: `${sync ? '그림은 이 기기에 먼저 저장한 뒤 내 계정에도 저장돼요. 바탕에 깐 영상만 이 기기에 남아요.' : '그림은 이 기기(이 브라우저)에만 저장돼요(서버로 올라가지 않아요). 다른 기기에서는 보이지 않으니, 다 만든 그림은 내려받아 두세요.'} 그림의 모양(정사각형·세로·가로·길게)은 꾸미는 화면에서 언제든 바꿀 수 있어요.` })));
+    el('p', { class: 'cv-note', text: `${sync ? '그림은 이 기기에 먼저 저장한 뒤 내 계정에도 저장돼요. 바탕에 깐 영상만 이 기기에 남아요.' : '그림은 이 기기(이 브라우저)에만 저장돼요(서버로 올라가지 않아요). 다른 기기에서는 보이지 않으니, 다 만든 그림은 내려받아 두세요.'} 그림의 모양(정사각형·세로·가로·길게)은 꾸미는 화면에서 언제든 바꿀 수 있어요.` }),
+    // 지금 쓰는 온바탕의 버전: 맨 아래에 작고 옅게(새 배포가 들어왔는지 알 수 있게).
+    el('p', { class: 'cv-version', dataset: { onbatangVersion: ONBATANG_VERSION }, text: `온바탕 v${ONBATANG_VERSION}` })));
   homeRail = mountStartRail(track, previous, next);
   if (focusedLayout) track.querySelector(`[data-layout="${CSS.escape(focusedLayout)}"]`)?.focus({ preventScroll: true });
   else if (focusedSelector) templates.querySelector(focusedSelector)?.focus({ preventScroll: true });
