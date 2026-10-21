@@ -2,7 +2,8 @@
 // 그래서 한쪽 조각을 옮기거나 키우면 선이 따라온다. DOM 을 모르는 순수 함수라, 저장(model) · 편집기 · 그리기 · PPTX 가 모두 같은 값을 쓴다.
 //
 // 요소에 적는 값: t 'link' · from · to(잇는 두 조각의 이름표) · head('end' 끝에 화살표 · 'both' 양쪽 · 'none' 없음) ·
-//                 color · line(굵기, 카드 너비의 %) · dash(점선) · curve(곡선: 1 은 가는 쪽에서 보아 왼쪽으로, -1 은 오른쪽으로 휜다. 없으면 직선) ·
+//                 color · line(굵기, 카드 너비의 %) · dash(true 긴 점선 · 'dot' 동글 점 · 'dashdot' 긴 점과 점) · head('start' 처음에만도 된다) ·
+//                 startShape · endShape(머리 모양: LINK_SHAPES, 없으면 뾰족 화살표) · curve(곡선: 1 은 가는 쪽에서 보아 왼쪽으로, -1 은 오른쪽으로 휜다. 없으면 직선) ·
 //                 elbow(꺾인 선: 1 은 가로 → 세로 → 가로, -1 은 세로 → 가로 → 세로로 직각으로 꺾어 잇는다. curve 와 함께 쓰지 않는다) ·
 //                 fromSide · toSide(선이 붙는 곳: 'top' · 'right' · 'bottom' · 'left' 면 그 조각의 그 옆 가운데에 붙는다. 없으면 알아서) ·
 //                 bend(곡선이 휘는 깊이: 두 끝 사이 거리에 대한 비율 0.05~0.9, 없으면 CURVE_BEND) ·
@@ -13,7 +14,11 @@
 //                    vh(네모의 높이를 카드 너비의 % 로 잰 값)
 // 거리는 모두 "카드 너비의 %" 한 가지로 잰다(세로는 카드 비율로 바꿔서). 그래서 가로세로가 다른 카드에서도 각도와 굵기가 그대로다.
 
-export const LINK_HEADS = ['end', 'both', 'none'];
+export const LINK_HEADS = ['end', 'both', 'none', 'start'];
+/** 화살표 머리의 모양: 뾰족 · 열린(V) · 동그라미 · 빈 동그라미 · 마름모 · 막대. 'arrow' 가 처음 모양(적지 않는다). */
+export const LINK_SHAPES = ['arrow', 'open', 'dot', 'ring', 'diamond', 'bar'];
+/** 선의 모양: 실선(없음) · true(긴 점선) · 'dot'(동글동글 점) · 'dashdot'(긴 점과 점) */
+export const LINK_DASHES = [true, 'dot', 'dashdot'];
 export const LINK_SIDES = ['top', 'right', 'bottom', 'left'];
 // 옆마다 바깥을 향하는 방향과 그 옆이 놓인 축(0 = 가로로 나간다, 1 = 세로로 나간다)
 const NORMAL = { top: [0, -1], right: [1, 0], bottom: [0, 1], left: [-1, 0] };
@@ -283,16 +288,42 @@ export function linkSvg(link) {
   const [ex, ey] = curved ? unit(qx, qy, x2, y2) : bent && Math.hypot(x2 - rx, y2 - ry) > 1e-6 ? unit(rx, ry, x2, y2) : unit(x1, y1, x2, y2);
   const [sx, sy] = curved ? unit(qx, qy, x1, y1) : bent && Math.hypot(x1 - qx, y1 - qy) > 1e-6 ? unit(qx, qy, x1, y1) : unit(x2, y2, x1, y1);
   const size = Math.max(1.4, line * 3.2), half = size * 0.55;
-  const head = (tx, ty, ux, uy) => {
-    const bx = tx - ux * size, by = ty - uy * size;
-    return `<polygon class="fi-link-head" points="${r3(tx)},${r3(ty)} ${r3(bx - uy * half)},${r3(by + ux * half)} ${r3(bx + uy * half)},${r3(by - ux * half)}" fill="${link.color}"/>`;
+  // 머리: 끝점(tx, ty)에서 선이 들어오는 방향(ux, uy)으로. 모양마다 선을 얼마나 덜 그릴지(cut)도 정한다(머리 안으로 선이 비치지 않게).
+  const pt = (x, y) => `${r3(x)},${r3(y)}`;
+  const head = (shape, tx, ty, ux, uy) => {
+    const px = -uy, py = ux, back = (k) => [tx - ux * size * k, ty - uy * size * k];
+    if (shape === 'open') {
+      const [bx, by] = back(0.9);
+      return `<polyline class="fi-link-head" points="${pt(bx + px * half, by + py * half)} ${pt(tx, ty)} ${pt(bx - px * half, by - py * half)}" fill="none" stroke="${link.color}" stroke-width="${r3(line)}" stroke-linecap="round" stroke-linejoin="round"/>`;
+    }
+    if (shape === 'dot' || shape === 'ring') {
+      const r = shape === 'ring' ? Math.max(1.1, size * 0.42, line * 1.6) : Math.max(0.7, size * 0.36), [cx, cy] = [tx - ux * r, ty - uy * r];
+      return shape === 'dot'
+        ? `<circle class="fi-link-head" cx="${r3(cx)}" cy="${r3(cy)}" r="${r3(r)}" fill="${link.color}"/>`
+        : `<circle class="fi-link-head" cx="${r3(cx)}" cy="${r3(cy)}" r="${r3(Math.max(0.3, r - line / 2))}" fill="none" stroke="${link.color}" stroke-width="${r3(line)}"/>`;
+    }
+    if (shape === 'diamond') {
+      const [mx, my] = back(0.6), [bx, by] = back(1.2), w = half * 0.8;
+      return `<polygon class="fi-link-head" points="${pt(tx, ty)} ${pt(mx + px * w, my + py * w)} ${pt(bx, by)} ${pt(mx - px * w, my - py * w)}" fill="${link.color}"/>`;
+    }
+    if (shape === 'bar') {
+      const [bx, by] = back(0.05);
+      return `<line class="fi-link-head" x1="${r3(bx + px * half * 1.1)}" y1="${r3(by + py * half * 1.1)}" x2="${r3(bx - px * half * 1.1)}" y2="${r3(by - py * half * 1.1)}" stroke="${link.color}" stroke-width="${r3(line * 1.2)}" stroke-linecap="round"/>`;
+    }
+    const [bx, by] = back(1);
+    return `<polygon class="fi-link-head" points="${pt(tx, ty)} ${pt(bx - uy * half, by + ux * half)} ${pt(bx + uy * half, by - ux * half)}" fill="${link.color}"/>`;
   };
-  const end = link.head !== 'none', start = link.head === 'both';
+  const cutOf = (shape) => (shape === 'ring' ? 2 * Math.max(1.1, size * 0.42, line * 1.6) : size * ({ arrow: 0.8, open: 0.1, dot: 0.6, diamond: 1.15, bar: 0 }[shape] ?? 0.8));
+  const shapeOf = (v) => (LINK_SHAPES.includes(v) ? v : 'arrow');
+  const startShape = shapeOf(link.startShape), endShape = shapeOf(link.endShape);
+  const end = link.head === 'end' || link.head === 'both' || link.head === undefined, start = link.head === 'both' || link.head === 'start';
   // 머리가 있는 끝은 선을 머리의 밑변까지만 그린다(뾰족한 끝이 굵은 선에 묻히지 않게).
-  const a = start ? [x1 + sx * size * 0.8, y1 + sy * size * 0.8] : [x1, y1];
-  const b = end ? [x2 - ex * size * 0.8, y2 - ey * size * 0.8] : [x2, y2];
-  const dash = link.dash ? ` stroke-dasharray="${r3(line * 3)} ${r3(line * 2)}"` : '';
-  const paint = `stroke="${link.color}" stroke-width="${r3(line)}" stroke-linecap="${link.dash ? 'butt' : 'round'}"${dash}`;
+  const a = start ? [x1 + sx * cutOf(startShape), y1 + sy * cutOf(startShape)] : [x1, y1];
+  const b = end ? [x2 - ex * cutOf(endShape), y2 - ey * cutOf(endShape)] : [x2, y2];
+  // 점선: 긴 점선은 끝을 자르고, 동글 점은 길이 없는 점을 둥근 끝으로 찍고, 긴 점과 점은 둘을 번갈아.
+  const dashes = link.dash === 'dot' ? [0.01, line * 2.2] : link.dash === 'dashdot' ? [line * 4, line * 2, 0.01, line * 2] : link.dash ? [line * 3, line * 2] : null;
+  const dash = dashes ? ` stroke-dasharray="${dashes.map(r3).join(' ')}"` : '';
+  const paint = `stroke="${link.color}" stroke-width="${r3(line)}" stroke-linecap="${link.dash === true ? 'butt' : 'round'}"${dash}`;
   const hit = r3(Math.max(3, line * 3));
   // 꺾인 선: 꺾이는 곳을 조금 둥글게(굵기에 맞춰, 마디의 절반을 넘지 않게) 돌린다.
   // 꺾이는 두 점이 한 점이면(ㄱ자) 한 번만 꺾는다.
@@ -319,5 +350,5 @@ export function linkSvg(link) {
     : `<line class="fi-link-hit" x1="${r3(x1)}" y1="${r3(y1)}" x2="${r3(x2)}" y2="${r3(y2)}" stroke-width="${hit}"/>`
       + `<line class="fi-link-line" x1="${r3(a[0])}" y1="${r3(a[1])}" x2="${r3(b[0])}" y2="${r3(b[1])}" ${paint}/>`;
   return `<svg viewBox="0 0 ${link.w} ${link.vh}" preserveAspectRatio="none" aria-hidden="true">${body}`
-    + `${end ? head(x2, y2, ex, ey) : ''}${start ? head(x1, y1, sx, sy) : ''}</svg>`;
+    + `${end ? head(endShape, x2, y2, ex, ey) : ''}${start ? head(startShape, x1, y1, sx, sy) : ''}</svg>`;
 }

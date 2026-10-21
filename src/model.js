@@ -18,7 +18,7 @@ import { metadata, newId, fail, validatePageInput, isSlideItem, itemTextLimit, p
 export { cleanAlt, ALT_LIMIT };
 import { cleanActivity } from './activity.js';
 import { cleanCrop } from './crop.js';
-import { LINK_HEADS, LINK_LINE, LINK_SIDES, LINK_BEND, CURVE_BEND, layoutLinks } from './links.js';
+import { LINK_HEADS, LINK_LINE, LINK_SIDES, LINK_BEND, LINK_SHAPES, CURVE_BEND, layoutLinks } from './links.js';
 
 export { SHAPE_GROUPS };
 
@@ -336,7 +336,11 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
       head: LINK_HEADS.includes(it.head) ? it.head : 'end',
       color: cleanColor(it.color, '#1d2433'),
       line: Math.round(num(it.line, LINK_LINE.min, LINK_LINE.max, LINK_LINE.base) * 100) / 100,
-      ...(it.dash === true ? { dash: true } : {}),
+      // 점선: true(긴 점선) · 'dot'(동글 점) · 'dashdot'(긴 점과 점)
+      ...(it.dash === true || it.dash === 'dot' || it.dash === 'dashdot' ? { dash: it.dash } : {}),
+      // 머리 모양(처음 모양인 뾰족 화살표면 적지 않는다)
+      ...(LINK_SHAPES.includes(it.startShape) && it.startShape !== 'arrow' ? { startShape: it.startShape } : {}),
+      ...(LINK_SHAPES.includes(it.endShape) && it.endShape !== 'arrow' ? { endShape: it.endShape } : {}),
       // 곡선과 꺾인 선은 둘 중 하나(둘 다 적혀 있으면 꺾인 선)
       ...((it.elbow === 1 || it.elbow === -1) ? { elbow: it.elbow } : it.curve === 1 || it.curve === -1 ? { curve: it.curve } : {}),
       // 붙는 곳(없으면 알아서). 꾸밈이 아니라 잇는 자리라 스타일 복사에는 넣지 않는다.
@@ -823,7 +827,7 @@ const STYLE_KEYS = {
   emoji: ['op'],
   image: ['mask', 'op'],
   yt: ['op'],
-  link: ['color', 'line', 'head', 'dash', 'curve', 'elbow', 'op'],
+  link: ['color', 'line', 'head', 'startShape', 'endShape', 'dash', 'curve', 'elbow', 'op'],
 };
 /** 요소의 꾸밈 값 { t, values } (스타일을 옮길 수 없는 것이면 null). */
 export function styleOf(item) {

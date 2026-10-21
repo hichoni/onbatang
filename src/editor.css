@@ -377,6 +377,20 @@
 .fe-link-hint b { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fe-link-hint-x { flex: none; border: 1px solid #ffffff66; border-radius: 999px; background: transparent; color: #fff; font: inherit; font-size: .82rem; padding: 4px 10px; cursor: pointer; }
 .fe-link-hint-x:hover { background: #ffffff1f; }
+/* 선 꾸미기: 모양 모음 · 머리 모양 · 선 모양 단추 안의 작은 선 그림(실제 그리기와 같은 linkSvg) */
+.fe-link-sample { display: inline-block; vertical-align: middle; color: var(--fe-text); }
+.fe-link-sample svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.fe-link-sample .fi-link-hit { display: none; }
+.fe-link-preset { display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 8px 8px 6px; }
+.fe-link-preset .fe-link-sample { width: 100%; height: 14px; }
+.fe-link-preset span:last-child { font-size: .8rem; text-align: center; }
+.fe-link-preset.on { outline: 2px solid var(--fe-primary); outline-offset: -2px; }
+.fe-row.fe-head-row { flex-wrap: nowrap; gap: 3px; }
+.fe-head-row > .fe-chip.fe-shape-chip { flex: none; width: 28px; min-width: 0; min-height: 32px; padding: 0 4px; }
+.fe-shape-chip .fe-link-sample { width: 100%; height: 14px; }
+.fe-chip.on .fe-link-sample { color: inherit; }
+.fe-dash-chip { display: inline-flex; align-items: center; gap: 6px; padding-left: 10px; padding-right: 12px; }
+.fe-dash-chip .fe-link-sample { width: 30px; height: 10px; }
 .fe-row.fe-side-row { flex-wrap: nowrap; gap: 4px; }
 .fe-side-row > .fe-chip { flex: none; white-space: nowrap; padding-left: 10px; padding-right: 10px; }
 .fe-side-row > .fe-chip.fe-side-chip { width: 32px; min-width: 0; padding: 0; justify-content: center; font-size: 1rem; line-height: 1; }

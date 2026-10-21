@@ -15,7 +15,7 @@ import { ENTERS, COMBOS, TRANSITIONS, EMPHASES, STILL, planMotion, playEnter, pl
 import { searchStickers } from './stickers.js';
 import { ART_PACKS, artSvg, artColorable, artReady, loadArt, searchArt } from './art.js';
 import { designView, itemView, placeItem, paintCard, shapeThumb } from './render.js';
-import { layoutLinks, relink, LINK_LINE, linkHandle, dragLinkHandle } from './links.js';
+import { layoutLinks, relink, LINK_LINE, LINK_SHAPES, linkSvg, linkHandle, dragLinkHandle } from './links.js';
 import { sceneView, scenePlayer, keepScene, probeVideo, ACCEPT_VIDEOS } from './scene.js';
 import { icon } from './icons.js';
 import { parseYouTube, ytStart, ytTime, ytWatch } from './youtube.js';
@@ -2447,7 +2447,7 @@ export function createEditor({
       ink.style.background = it.color;
       own.push(tb([icon('palette'), el('span', { class: 'fe-lbl', text: '색' }), ink], () => toggle('color'), { title: '선 색', name: '선 색', on: pop === 'color', cls: 'has-pop color' }),
         pick('thick', '굵기', 'lthick', { title: '선의 굵기' }),
-        pick('right', '화살표', 'arrow', { title: '화살표 · 곧게/둥글게/꺾어서 · 점선 · 방향' }));
+        pick('right', '화살표', 'arrow', { title: '선 꾸미기: 모양 모음 · 화살표 머리 · 점선 · 곧게/둥글게/꺾어서 · 붙는 곳' }));
     } else if (it.t === 'yt') {
       // 유튜브 영상: 발표할 때 누르면 그 자리에서 틀어진다. 시작 시각을 정하고, 유튜브에서 미리 볼 수 있다.
       own.push(
@@ -2530,12 +2530,45 @@ export function createEditor({
       body = [slider('굵기', Math.round(it.line / LINK_LINE.step), { min: Math.round(LINK_LINE.min / LINK_LINE.step), max: Math.round(LINK_LINE.max / LINK_LINE.step), step: 1 }, (c, v) => ({ ...c, line: Math.round(v * LINK_LINE.step * 100) / 100 }))];
     } else if (pop === 'arrow' && it.t === 'link') {
       const chip = (label, on, patch, data) => el('button', { class: `fe-chip${on ? ' on' : ''}`, type: 'button', 'aria-pressed': String(on), dataset: data, onClick: () => change(patch) }, label);
+      // 고르는 단추마다 그 모양을 실제로 그린 작은 선(같은 linkSvg)을 보여 준다. 머리는 왼쪽(시작) 또는 오른쪽(끝)에.
+      const sample = (patch, { w = 40, atStart = false } = {}) => el('span', { class: 'fe-link-sample', 'aria-hidden': 'true', html: linkSvg({
+        w, vh: 10, line: 1.1, color: 'currentColor', head: 'end', pts: atStart ? [w - 3, 5, 4, 5] : [3, 5, w - 4, 5], ...patch }) });
+      const startOn = it.head === 'both' || it.head === 'start', endOn = it.head === 'end' || it.head === 'both';
+      const SHAPE_NAMES = { arrow: '뾰족 화살표', open: '열린 화살표', dot: '동그라미', ring: '빈 동그라미', diamond: '마름모', bar: '막대' };
+      const headRow = (side) => {
+        const isStart = side === 'start', on = isStart ? startOn : endOn, other = isStart ? endOn : startOn, key = isStart ? 'startShape' : 'endShape';
+        const headWith = (has) => (isStart ? (has ? (other ? 'both' : 'start') : (other ? 'end' : 'none')) : (has ? (other ? 'both' : 'end') : (other ? 'start' : 'none')));
+        const label = isStart ? '시작' : '끝';
+        const button = (shape) => {
+          const pressed = shape === 'none' ? !on : on && (it[key] || 'arrow') === shape;
+          const patch = shape === 'none' ? { head: headWith(false) } : { head: headWith(true), [key]: shape === 'arrow' ? undefined : shape };
+          const b = el('button', { class: `fe-chip fe-shape-chip${pressed ? ' on' : ''}`, type: 'button', 'aria-pressed': String(pressed), dataset: { [isStart ? 'startHead' : 'endHead']: shape },
+            title: `${label}: ${shape === 'none' ? '머리 없음' : SHAPE_NAMES[shape]}`, 'aria-label': `${label} ${shape === 'none' ? '머리 없음' : SHAPE_NAMES[shape]}`, onClick: () => change(patch) },
+            sample(shape === 'none' ? { head: 'none', line: 1.4 } : { endShape: shape, line: 1.4 }, { w: 18, atStart: isStart }));
+          return b;
+        };
+        return el('div', { class: 'fe-row fe-head-row', role: 'group', 'aria-label': `${label} 머리 모양` }, el('span', { class: 'fe-side-lbl', text: label }), ...['none', ...LINK_SHAPES].map(button));
+      };
+      // 모양 모음: 한 번 눌러 머리 · 점선 · 굵기를 함께 바꾼다(색 · 선의 길 · 붙는 곳은 그대로).
+      const PRESETS = [
+        ['plain', '기본 화살표', { head: 'end', startShape: undefined, endShape: undefined, dash: undefined, line: LINK_LINE.base }],
+        ['dashed', '점선 화살표', { head: 'end', startShape: undefined, endShape: undefined, dash: true, line: LINK_LINE.base }],
+        ['dotted', '동글 점선', { head: 'end', startShape: undefined, endShape: 'open', dash: 'dot', line: 0.6 }],
+        ['both', '양쪽 화살표', { head: 'both', startShape: undefined, endShape: undefined, dash: undefined, line: LINK_LINE.base }],
+        ['beads', '점 잇기', { head: 'both', startShape: 'dot', endShape: 'dot', dash: undefined, line: LINK_LINE.base }],
+        ['bold', '굵은 화살표', { head: 'end', startShape: undefined, endShape: undefined, dash: undefined, line: 1.2 }],
+        ['flow', '흐름선', { head: 'end', startShape: undefined, endShape: 'open', dash: 'dashdot', line: 0.5 }],
+        ['relate', '관계선', { head: 'both', startShape: 'ring', endShape: 'diamond', dash: undefined, line: LINK_LINE.base }],
+      ];
+      const same = (patch) => Object.entries(patch).every(([k, v]) => (k === 'line' ? Math.abs((it.line || 0) - v) < 1e-6 : (it[k] ?? undefined) === v));
+      const presetBtn = ([id, name, patch]) => el('button', { class: `fe-btn fe-link-preset${same(patch) ? ' on' : ''}`, type: 'button', 'aria-pressed': String(same(patch)), dataset: { linkPreset: id }, onClick: () => change(patch) },
+        sample({ ...patch, line: Math.max(0.8, patch.line * 1.6) }, { w: 48 }), el('span', { text: name }));
       body = [
-        el('div', { class: 'fe-poshead', text: '화살표' }),
-        el('div', { class: 'fe-row' },
-          chip('끝에', it.head === 'end', { head: 'end' }, { head: 'end' }),
-          chip('양쪽', it.head === 'both', { head: 'both' }, { head: 'both' }),
-          chip('없음', it.head === 'none', { head: 'none' }, { head: 'none' })),
+        el('div', { class: 'fe-poshead', text: '모양 모음' }),
+        el('div', { class: 'fe-grid two fe-link-presets' }, ...PRESETS.map(presetBtn)),
+        el('div', { class: 'fe-poshead', text: '화살표 머리' }),
+        headRow('start'),
+        headRow('end'),
         el('div', { class: 'fe-poshead', text: '선의 길' }),
         el('div', { class: 'fe-row' },
           chip('곧게', !it.curve && !it.elbow, { curve: undefined, elbow: undefined }, { curve: 'off' }),
@@ -2560,8 +2593,12 @@ export function createEditor({
           }))),
         el('div', { class: 'fe-poshead', text: '선 모양' }),
         el('div', { class: 'fe-row' },
-          chip('실선', !it.dash, { dash: undefined }, { dash: 'off' }),
-          chip('점선', !!it.dash, { dash: true }, { dash: 'on' }),
+          ...[[undefined, '실선', 'off'], [true, '긴 점선', 'on'], ['dot', '동글 점', 'dot'], ['dashdot', '점과 선', 'dashdot']].map(([dash, name, data]) => {
+            const pressed = (it.dash ?? undefined) === dash;
+            return el('button', { class: `fe-chip fe-dash-chip${pressed ? ' on' : ''}`, type: 'button', 'aria-pressed': String(pressed), dataset: { dash: data }, title: name, onClick: () => change({ dash }) },
+              sample({ head: 'none', dash, line: 1.1 }, { w: 34 }), el('span', { text: name }));
+          })),
+        el('div', { class: 'fe-row' },
           el('button', { class: 'fe-chip', type: 'button', dataset: { flipLink: '1' }, onClick: () => change({ from: it.to, to: it.from, fromSide: it.toSide, toSide: it.fromSide }) }, '방향 바꾸기')),
         el('p', { class: 'fe-note', text: '두 조각 중 하나를 옮기거나 키우면 선이 따라와요. 조각을 지우면 선도 함께 없어져요.' }),
       ];
