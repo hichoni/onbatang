@@ -53,3 +53,69 @@ export function bindFilmstrip(list,{reorder,busy=()=>false}={}){
   });
   return {stop,destroy(){stop();controller.abort();}};
 }
+
+// Device-only workspace preferences. Folding/resizing never changes a drawing,
+// selected page, undo history or the native horizontal slide rail.
+export function bindSlideTray(strip,{key,sizeKey,navigation=()=>({}),step=()=>{}}={}){
+  const compact=window.matchMedia('(min-width:900px) and (min-height:520px) and (max-height:740px)');
+  const controller=new AbortController(),on=(node,type,fn,options={})=>node.addEventListener(type,fn,{...options,signal:controller.signal});
+  let choice=null,height=92,drag=null;
+  try{const value=localStorage.getItem(key);if(value==='closed'||value==='open')choice=value==='closed';height=Math.max(64,Math.min(152,Number(localStorage.getItem(sizeKey))||92));}catch{}
+  const closed=()=>choice??compact.matches;
+  const save=()=>{try{localStorage.setItem(key,closed()?'closed':'open');localStorage.setItem(sizeKey,String(height));}catch{}};
+  function refresh(){
+    const collapsed=closed(),body=strip.querySelector('.cv-tray-body'),toggle=strip.querySelector('.cv-tray-toggle'),grip=strip.querySelector('.cv-tray-grip');
+    const wasClosed=strip.classList.contains('cv-tray-collapsed');
+    if(collapsed&&body?.contains(document.activeElement))toggle?.focus({preventScroll:true});
+    strip.classList.toggle('cv-tray-collapsed',collapsed);strip.style.setProperty('--cv-thumb-height',`${height}px`);
+    if(body)body.hidden=collapsed;
+    if(wasClosed&&!collapsed){
+      const list=strip.querySelector('.cv-slide-list'),selected=list?.querySelector('.cv-slide.on');
+      if(selected){const box=list.getBoundingClientRect(),r=selected.getBoundingClientRect();list.scrollLeft+=r.left<box.left+8?r.left-box.left-8:r.right>box.right-8?r.right-box.right+8:0;}
+    }
+    if(toggle){toggle.setAttribute('aria-expanded',String(!collapsed));toggle.setAttribute('aria-label',`슬라이드 목록 ${collapsed?'펼치기':'접기'}`);toggle.querySelector('span').textContent=collapsed?'목록 펼치기':'목록 접기';}
+    if(grip){grip.setAttribute('aria-valuenow',String(collapsed?0:height));grip.setAttribute('aria-valuetext',collapsed?'접힘':`미리보기 높이 ${height}px`);}
+    const size=strip.querySelector('.cv-strip-size input');if(size)size.value=String(height);
+    const state=navigation();for(const button of strip.querySelectorAll('[data-tray-step]'))button.disabled=Number(button.dataset.trayStep)<0?!state.previous:!state.next;
+  }
+  const fold=value=>{choice=value;refresh();save();};
+  on(strip,'click',event=>{
+    if(event.target.closest('.cv-tray-toggle'))fold(!closed());
+    const button=event.target.closest('[data-tray-step]');if(button&&!button.disabled)step(Number(button.dataset.trayStep));
+  });
+  on(strip,'input',event=>{if(event.target.matches('.cv-strip-size input')){height=Number(event.target.value);refresh();save();}});
+  on(strip,'keydown',event=>{
+    if(!event.target.closest('.cv-tray-grip'))return;
+    if(!['ArrowUp','ArrowDown','Home','End','Enter',' '].includes(event.key))return;
+    event.preventDefault();event.stopPropagation();
+    if(event.key==='Home')choice=true;
+    else if(['Enter',' '].includes(event.key))choice=!closed();
+    else if(event.key==='End'){choice=false;height=152;}
+    else if(event.key==='ArrowUp'){height=closed()?64:Math.min(152,height+8);choice=false;}
+    else if(height<=64)choice=true;else height-=8;
+    refresh();save();
+  });
+  const finish=(cancel=false)=>{
+    if(!drag)return;const before=drag;drag=null;
+    strip.classList.remove('is-resizing');
+    if(cancel){choice=before.choice;height=before.height;}
+    else if(!before.moved)choice=!before.closed;
+    refresh();if(!cancel)save();
+    try{strip.releasePointerCapture(before.id);}catch{}
+  };
+  on(strip,'pointerdown',event=>{
+    if(event.button>0||drag||!event.target.closest('.cv-tray-grip'))return;
+    event.preventDefault();drag={id:event.pointerId,y:event.clientY,height,choice,closed:closed(),moved:false};
+    strip.querySelector('.cv-tray-grip').focus({preventScroll:true});strip.setPointerCapture(event.pointerId);
+  });
+  on(strip,'pointermove',event=>{
+    if(!drag||event.pointerId!==drag.id)return;
+    const dy=drag.y-event.clientY;if(!drag.moved&&Math.abs(dy)<6)return;
+    drag.moved=true;strip.classList.add('is-resizing');
+    const wanted=(drag.closed?0:drag.height)+dy;choice=wanted<40;
+    if(!choice)height=Math.max(64,Math.min(152,wanted));refresh();
+  });
+  for(const type of ['pointerup','pointercancel','lostpointercapture'])on(strip,type,event=>{if(drag&&event.pointerId===drag.id)finish(type==='pointercancel'||type==='lostpointercapture');});
+  on(window,'blur',()=>finish(true));on(compact,'change',refresh);
+  return {refresh,destroy(){finish(true);controller.abort();}};
+}
