@@ -61,6 +61,28 @@ test('the gray area around the card and slide thumbnails open the slide menu ins
   await rightClick(page, (canvas.x + card.x) / 2, card.y + card.height / 2);
   const around = await menuItems(page);
   for (const name of ['붙여넣기', '실행 취소', '바탕색 바꾸기', '틀 고르기', '발표자 노트 적기', '새 장 더하기', '이 장 복제', '이 장부터 발표', '이 장 지우기']) assert.ok(around.includes(name), name);
+  await page.keyboard.press('Escape');
+  // Every other blank spot of the editor screen gives the same slide menu: side panel, tool bar, top bar.
+  for (const selector of ['.cv-side', '.cv-tools', '.cv-bar']) {
+    const spot = await page.evaluate(sel => {
+      const box = document.querySelector(sel).getBoundingClientRect();
+      for (let y = box.bottom - 4; y > box.top; y -= 6) for (let x = box.right - 4; x > box.left; x -= 6) {
+        const n = document.elementFromPoint(x, y);
+        if (n && n.closest(sel) && !n.closest('button, input, textarea, select, a, [contenteditable], .fe-tb, .fe-layout, .cv-shape')) return [x, y];
+      }
+      return null;
+    }, selector);
+    assert.ok(spot, `blank spot in ${selector}`);
+    await rightClick(page, spot[0], spot[1]);
+    assert.ok((await menuItems(page)).includes('새 장 더하기'), selector);
+    await page.keyboard.press('Escape');
+  }
+  // Text fields keep the browser menu (paste, spelling).
+  const name = await page.locator('.cv-name').boundingBox();
+  await page.mouse.click(name.x + 5, name.y + name.height / 2, {button: 'right'});
+  assert.equal(await page.locator('.fe-menu').count(), 0);
+  await page.keyboard.press('Escape');
+  await rightClick(page, (canvas.x + card.x) / 2, card.y + card.height / 2);
   await choose(page, '발표자 노트 적기');
   assert.equal(await page.locator('.fe-notes').getAttribute('open'), '');
   assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('fe-notes-input')), true);
