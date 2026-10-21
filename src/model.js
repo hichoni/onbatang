@@ -14,7 +14,8 @@ import { SHAPE_ASSETS, SHAPE_GROUPS, shapeAsset } from './shapes.js';
 import { isArtId, artColorable, artAspect, artPack, artName } from './art.js';
 import { isYouTubeId, ytStart, ytTime } from './youtube.js';
 import { ENTER_IDS, COMBO_IDS, TRANSITION_IDS, STILL } from './motion.js';
-import { metadata, newId, fail, validatePageInput, isSlideItem, itemTextLimit, pageLimits, slideNotes } from './document.js';
+import { metadata, newId, fail, validatePageInput, isSlideItem, itemTextLimit, pageLimits, slideNotes, slideHidden, cleanAlt, ALT_LIMIT } from './document.js';
+export { cleanAlt, ALT_LIMIT };
 import { cleanActivity } from './activity.js';
 import { cleanCrop } from './crop.js';
 
@@ -266,9 +267,13 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
       t: 'text', ...base, w: measure(base,it.w, widthMin(base), 100, 80), text,
       size: measure(base,it.size, textMin(base), TEXT_SIZE.max, 7),
       ...(typeof it.hangingPunct === 'boolean' ? {hangingPunct:it.hangingPunct} : {}),
+      // 줄 간격(글자 크기의 배수). 가져온 PPT 의 값도, 도구 막대의 줄 간격 단계도 이것이다. 정하지 않으면 기본(1.3).
+      ...(given(it.lh) ? {lh:measure(base,it.lh,0.5,4,1.25)} : {}),
+      // 글 테두리(stroke: 색) · 그림자(shadow): 사진 위 제목이 잘 읽히게. 정했을 때만 적는다.
+      ...(it.stroke ? {stroke: cleanColor(it.stroke, '#ffffff')} : {}),
+      ...(it.shadow === true ? {shadow: true} : {}),
       ...(pptxItem(base) ? {
         ...(given(it.h) ? {h:measure(base,it.h,0.01,140,10),valign:['top','middle','bottom'].includes(it.valign)?it.valign:'top'} : {}),
-        ...(given(it.lh) ? {lh:measure(base,it.lh,0.5,4,1.25)} : {}),
         ...(it.nowrap===true ? {nowrap:true} : {}),
         ...(LOCAL_TYPEFACES.includes(it.typeface) ? {typeface:it.typeface} : {}),
       } : {}),
@@ -327,10 +332,15 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
     return {
       t: 'image', ...base, ...flip, w: measure(base,it.w, photoMin(base), photoMax().w, 50), h: measure(base,it.h, photoMin(base), photoMax().h, 50),
       mask: maskIds.includes(it.mask) ? it.mask : 'none', ...img, ...(crop ? {crop} : {}),
+      // 그림 설명(대체 텍스트): 화면 읽기 프로그램과 PPTX 의 설명 칸에 쓴다.
+      ...(cleanAlt(it.alt) ? {alt: cleanAlt(it.alt)} : {}),
     };
   }
   return null;
 }
+
+/** 도구 막대의 줄 간격 단계(글자 크기의 배수). */
+export const LINE_SPACINGS = [1, 1.15, 1.3, 1.5, 2];
 
 /** 요소들을 정리한다. 한도(기본 24개, 사진 3장)까지만 남긴다. */
 export function cleanItems(items, opts) {
@@ -355,7 +365,7 @@ export function cleanItems(items, opts) {
 export function cleanDesign(design, opts) {
   const d = design && typeof design === 'object' ? design : {};
   const options = d.id ? { ...opts, strict: true, keepSpaces: true } : opts;
-  return { ...metadata(d, { identity: true }), bg: cleanBg(d.bg), items: cleanItems(d.items, options), ...designMotion(d), ...designVideo(d), ...slideNotes(d), ...(d.activity === undefined ? {} : {activity:cleanActivity(d.activity)}) };
+  return { ...metadata(d, { identity: true }), bg: cleanBg(d.bg), items: cleanItems(d.items, options), ...designMotion(d), ...designVideo(d), ...slideNotes(d), ...slideHidden(d), ...(d.activity === undefined ? {} : {activity:cleanActivity(d.activity)}) };
 }
 /**
  * 디자인의 움직임: pa(요소들의 조합 효과) · tr(이 장이 넘어올 때의 전환 효과). 정해 둔 것만 담아 돌려준다(없으면 빈 객체).
@@ -779,7 +789,7 @@ export function clampShift(items, dx, dy) {
 // 캔바의 "스타일 복사", 파워포인트의 "서식 복사"처럼 꾸밈 값만 옮긴다(글·자리·크기·사진은 그대로).
 // 종류마다 옮길 수 있는 값이 다르다. 둘 다 가진 값만 옮긴다(예: 글 → 도형이면 색과 투명도만).
 const STYLE_KEYS = {
-  text: ['color', 'font', 'typeface', 'size', 'bold', 'italic', 'under', 'align', 'valign', 'lh', 'bgc', 'op'],
+  text: ['color', 'font', 'typeface', 'size', 'bold', 'italic', 'under', 'align', 'valign', 'lh', 'bgc', 'stroke', 'shadow', 'op'],
   shape: ['color', 'line', 'lc', 'hollow', 'r', 'op'],
   art: ['color', 'op'],
   emoji: ['op'],

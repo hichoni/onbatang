@@ -14,6 +14,15 @@ export function cleanNotes(value) {
 }
 /** 장에 노트가 있으면 { notes }, 없으면 {} (장을 새로 짜 맞추는 곳마다 함께 펼쳐 넣는다). */
 export const slideNotes = slide => { const notes = cleanNotes(slide?.notes); return notes ? { notes } : {}; };
+/** 발표할 때 건너뛰는(숨긴) 장이면 { hidden: true }, 아니면 {} (그 장은 지우지 않고 편집·저장·PPTX 에는 남는다). */
+export const slideHidden = slide => (slide?.hidden === true ? { hidden: true } : {});
+/** 그림 설명(대체 텍스트)의 한도와 정리: 한 줄 글로(조종 문자·줄바꿈은 빈칸으로, 앞뒤 빈칸은 뺀다). 비면 ''. */
+export const ALT_LIMIT = 300;
+export function cleanAlt(value) {
+  if (typeof value !== 'string') return '';
+  const text = value.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return Array.from(text).slice(0, ALT_LIMIT).join('');
+}
 export const isSlideItem = item => item?.layout === 'slide' || item?.source?.kind === 'pptx';
 export const itemTextLimit = (item, ordinary = DOCUMENT_LIMITS.text) => isSlideItem(item) ? Math.max(ordinary, SLIDE_LIMITS.text) : ordinary;
 export function pageLimits(page, ordinary = DOCUMENT_LIMITS) {
