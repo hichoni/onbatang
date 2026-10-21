@@ -224,3 +224,46 @@ test('a connector can bend at right angles from its toolbar, switch which way it
   assert.equal(out.right, true);
   assert.deepEqual(external, []);
 });
+
+test('each end of a connector can stick to a chosen side of its piece, stays there when the piece moves, and flips with the direction', options, async t => {
+  const {page, external} = await setup(t);
+  const shapes = page.locator('.cv-canvas .fe-card .fi-shape');
+  await shapes.nth(0).click();
+  await shapes.nth(1).click({modifiers: ['Shift']});
+  await page.locator('.fe-bar button').filter({hasText: '연결선'}).click();
+  await page.locator('.cv-canvas .fe-card .fi-link').waitFor();
+  const [p1, p2] = await ends(page);
+  await page.mouse.click((p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2);
+  await page.locator('.fe-bar button').filter({hasText: '화살표'}).click();
+  assert.equal(await page.locator('[data-from-side="auto"]').getAttribute('aria-pressed'), 'true');
+  await page.locator('[data-from-side="bottom"]').click();
+  await page.locator('[data-to-side="top"]').click();
+  await saved(page, r => { const l = r.slides[0].items.find(it => it.t === 'link'); return l?.fromSide === 'bottom' && l.toSide === 'top'; });
+  // The ends sit at the middle of the chosen sides (in card units: x % of width, y % of height).
+  const sides = () => page.evaluate(async () => {
+    const {cleanDesign} = await import('/src/index.js');
+    const {linkEnds} = await import('/src/links.js');
+    const slide = cleanDesign((await window.readSaved()).slides[0], {keepSpaces: true});
+    const [a, b] = slide.items.filter(it => it.t === 'shape'), link = slide.items.find(it => it.t === 'link');
+    return {a, b, ends: linkEnds(link, 16 / 9)};
+  });
+  let s = await sides();
+  assert.ok(Math.abs(s.ends[0][0] - s.a.x) < .01 && s.ends[0][1] > s.a.y + s.a.h / 2, `start under A ${JSON.stringify(s.ends[0])}`);
+  assert.ok(Math.abs(s.ends[1][0] - s.b.x) < .01 && s.ends[1][1] < s.b.y - s.b.h / 2, `end over B ${JSON.stringify(s.ends[1])}`);
+  // Moving a piece keeps the chosen side.
+  await page.keyboard.press('Escape');
+  await shapes.nth(0).click();
+  for (let i = 0; i < 5; i++) await page.keyboard.press('Shift+ArrowRight');
+  await saved(page, r => r.slides[0].items.find(it => it.t === 'shape').x !== s.a.x);
+  s = await sides();
+  assert.ok(Math.abs(s.ends[0][0] - s.a.x) < .01 && s.ends[0][1] > s.a.y + s.a.h / 2, 'still under the moved piece');
+  // Flipping the direction swaps the pieces and their sides together.
+  const [q1, q2] = await ends(page);
+  await page.mouse.click((q1[0] + q2[0]) / 2, (q1[1] + q2[1]) / 2);
+  await page.locator('.fe-bar button').filter({hasText: '화살표'}).click();
+  await page.locator('[data-flip-link="1"]').click();
+  await saved(page, r => { const l = r.slides[0].items.find(it => it.t === 'link'); return l?.fromSide === 'top' && l.toSide === 'bottom'; });
+  await page.locator('[data-to-side="auto"]').click();
+  await saved(page, r => { const l = r.slides[0].items.find(it => it.t === 'link'); return l?.fromSide === 'top' && !('toSide' in l); });
+  assert.deepEqual(external, []);
+});

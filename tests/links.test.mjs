@@ -166,3 +166,36 @@ test('elbow connectors leave from the facing sides, turn at right angles in the 
   assert.match(xml, /<a:path w="\d+" h="\d+" fill="none"><a:moveTo><a:pt[^>]*\/><\/a:moveTo><a:lnTo><a:pt[^>]*\/><\/a:lnTo><a:lnTo><a:pt[^>]*\/><\/a:lnTo><a:lnTo><a:pt[^>]*\/><\/a:lnTo><\/a:path>/);
   assert.match(xml, /<\/a:solidFill><a:round\/><a:tailEnd type="triangle"\/>/);
 });
+
+test('connector ends can stick to a chosen side: straight, curved and elbow routes, saved apart from style', async () => {
+  const {linkCorners} = await import('../src/links.js');
+  const a = box('sboxaaaaa1', 20, 30), b = box('sboxaaaaa2', 80, 70);
+  // Straight: bottom of A to top of B, each at the middle of that side.
+  const [[x1, y1], [x2, y2]] = linkEnds(linkGeometry(a, b, {aspect: 1, fromSide: 'bottom', toSide: 'top'}), 1);
+  assert.ok(Math.abs(x1 - 20) < .01 && y1 > 40 && y1 < 42 && Math.abs(x2 - 80) < .01 && y2 < 60 && y2 > 58, JSON.stringify([x1, y1, x2, y2]));
+  // Only one end chosen: the other end leaves its piece toward that point.
+  const [[ox1, oy1]] = linkEnds(linkGeometry(a, b, {aspect: 1, toSide: 'left'}), 1);
+  assert.ok(ox1 > 30 && oy1 > 30, 'A leaves toward the left side of B');
+  // Unchosen sides keep the old route exactly.
+  assert.deepEqual(linkGeometry(a, b, {aspect: 1, fromSide: 'nowhere'}), linkGeometry(a, b, {aspect: 1}));
+  // Elbow, both right: out past both pieces and back (ㄷ).
+  const u = linkGeometry(a, b, {aspect: 1, elbow: 1, fromSide: 'right', toSide: 'right'}), [u1, u2] = linkCorners(u, 1), [[ux1], [ux2]] = linkEnds(u, 1);
+  assert.ok(Math.abs(u1[0] - u2[0]) < .01 && u1[0] >= Math.max(ux1, ux2) - .01, JSON.stringify([u1, u2]));
+  // Elbow, bottom to left: one turn (ㄱ) under A at B's middle height.
+  const l = linkGeometry(a, b, {aspect: 1, elbow: 1, fromSide: 'bottom', toSide: 'left'}), [k1, k2] = linkCorners(l, 1);
+  assert.ok(Math.abs(k1[0] - 20) < .01 && Math.abs(k1[1] - 70) < .01 && Math.hypot(k1[0] - k2[0], k1[1] - k2[1]) < .01, JSON.stringify([k1, k2]));
+  // Elbow, right to left (facing): the usual middle turn.
+  const z = linkCorners(linkGeometry(a, b, {aspect: 1, elbow: 1, fromSide: 'right', toSide: 'left'}), 1);
+  assert.ok(Math.abs(z[0][0] - 50) < .01 && Math.abs(z[1][0] - 50) < .01);
+  // Curve from the top of A starts at that point.
+  const [[cx1, cy1]] = linkEnds(linkGeometry(a, b, {aspect: 1, curve: 1, fromSide: 'top'}), 1);
+  assert.ok(Math.abs(cx1 - 20) < .01 && cy1 < 20);
+  // Saved and laid out through cleaning; bad sides drop; style copy leaves sides alone.
+  configure({aspect: 1});
+  const clean = cleanDesign({id: 'ppage00001', bg: '#fff', items: [a, b, link({from: 'sboxaaaaa1', to: 'sboxaaaaa2', fromSide: 'bottom', toSide: 'diagonal'})]});
+  const saved = clean.items.find(it => it.t === 'link');
+  assert.equal(saved.fromSide, 'bottom');
+  assert.equal(Object.hasOwn(saved, 'toSide'), false);
+  assert.ok(Math.abs(linkEnds(saved, 1)[0][0] - 20) < .01);
+  assert.equal(Object.hasOwn(styleOf(saved).values, 'fromSide'), false);
+});
