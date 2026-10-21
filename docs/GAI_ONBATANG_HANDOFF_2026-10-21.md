@@ -2,14 +2,16 @@
 
 ## 최신 작업 · 전체 PPT 계정 백업·새 기기 복구와 이미지 자르기
 
-**가이랩 v0.78.0 / 공통 온바탕 v0.33.0 구현·로컬 검증을 완료했고 PR 미리보기로 제출했다. 운영 main 배포는 아직 하지 않았다.** 아래 v0.77.0의 운영 완료 기록과 구분한다. [가이랩 PR #103](https://github.com/hichoni/g-ai-lab/pull/103), [공통 PR #11](https://github.com/hichoni/onbatang/pull/11).
+**공통 온바탕 v0.33.0은 main 병합과 공용 Firebase 배포를 완료했다. 가이랩 v0.78.0의 전체 PPT 계정 백업·새 기기 복구는 PR 미리보기 상태이며 가이랩 운영 main에는 아직 배포하지 않았다.** 아래 v0.77.0의 운영 완료 기록과 구분한다. [가이랩 PR #103](https://github.com/hichoni/g-ai-lab/pull/103), [공통 PR #11](https://github.com/hichoni/onbatang/pull/11).
+
+- **공용 배포 완료:** 사용자 요청으로 공통 PR #11을 병합했다. 배포 원본 main commit은 **571f4e2a7b1363cf5ed82ff8122873e3aa033b63**, [공용 온바탕](https://onbatang.web.app/)의 version.json은 **v0.33.0 / 같은 sourceCommit / sourceFiles 168**이다. git archive로 만든 공개 파일 **171개 전체 SHA256**을 실제 HTTP 응답과 비교해 모두 일치했다. 공용 화면에서 직접 확인용 사진의 가운데 영역(왼쪽 25%·가로 50%)을 자르고 적용→저장→전체 새로고침→재열기 후 같은 좌표를 확인했다. 이 기록의 후속 문서 commit은 배포 제품 코드를 바꾸지 않는다. 가이랩 PR #103은 병합하지 않았다.
 
 - **전체 자료에 저장 → 계정에 전체 PPT 백업**, 새 기기의 **내 계정 수업 → 내 계정 PPT · 새 기기 복구**를 연결했다. 모든 파트·전체 순서·원본 PPT bytes·사진·앱·가져온 학생 결과·기존 고정 버전과 연결 기록을 보존한다. 같은 백업 재시도/응답 유실, 무결성 검사, 소유권, quota, 다른 고정본/초안 보호를 구현했다. [상세 계약과 검증](https://github.com/hichoni/g-ai-lab/blob/codex/ppt-backup-image-crop/docs/onbatang-whole-ppt-backup-2026-10-21.md).
 - 공통 사진 **자르기**에 손잡이/영역 끌기·수치·원본 전체·정사각형/4:3/16:9·취소·undo/redo를 추가했다. 원본 URL·자산·ID를 유지하며 crop 좌표를 저장·복제·재열기·공통 renderer와 PPTX srcRect에 반영한다. 공통 제품 commit **b5c0e0fcffe42109cdb70d7ffbd90ad2a8365117**, 공식 sync **168 Git blob**. 문서 전용 후속 commit 때문에 vendor를 다시 복사하지 않는다.
 - **공통 전체 단위 207/207·실제 Edge 3/3**, npm ci 후 번들/가져오기 12/12. **가이랩 전체 단위 625/625·build**, 자료/학생 결과/백업 브라우저 11/11·후속 전체 백업 UI 1/1. 겹치는 검사는 합산하지 않는다. 실제 기존 migration SQL/RPC/RLS와 두 독립 browser context/IndexedDB로 백업 버튼→계정 목록→복구→재편집→고정 저장→새로고침을 확인했다. 이는 운영 실계정/물리 기기 검수와 다르다.
 - **SQL·운영 DB 스키마·Auth·RLS·bucket·workflow 추가 변경 없음.** 기존 비공개 자산/소유권 API와 revision 읽기를 사용한다. 기존 36 migration을 재실행하지 않는다. 별도 유료 QA·추가 AI·운영 DB 쓰기는 없다. 기존 draft #76/#1과 사용자의 사적 자료를 보존한다.
 - 파일당 50MB/전체 백업 1회 256MB, 연결 고정 버전 10,000개 한도. **별도 영상 장면·임시/외부 이미지 주소가 있는 자료는 첫 원격 쓰기 전에 안내하고 중단한다.** 원본 PPT bytes 자체는 보존한다. 영상 계정 백업·사진 교체 시 위치/크기 유지·전체 슬라이드 글 찾기/바꾸기·백업 관리 UI는 [누락 점검](https://github.com/hichoni/g-ai-lab/blob/codex/ppt-backup-image-crop/docs/onbatang-feature-audit-2026-10-21.md)에 후속으로 명시했다.
-- 남은 검수: 이번 기능의 실제 운영 계정 백업 생성, 물리 새 기기/모바일/태블릿, 35명, 이번 자르기 출력의 PowerPoint 데스크톱 재열기. 배포 성공은 PR의 정확한 HEAD/Netlify 상태/실제 화면 버전을 확인한 뒤 보고한다. 운영 main 병합과 공용 Firebase 배포는 이번 PR 준비와 구분한다.
+- 남은 검수: 이번 기능의 실제 운영 계정 백업 생성, 물리 새 기기/모바일/태블릿, 35명, 이번 자르기 출력의 PowerPoint 데스크톱 재열기. 가이랩의 배포 성공은 PR의 정확한 HEAD/Netlify 상태/실제 화면 버전을 확인한 뒤 보고한다. 가이랩 운영 main 배포와 완료된 공용 Firebase 배포를 구분한다.
 
 
 - **미리보기 검수 완료:** 가이랩 PR #103의 검증 HEAD `0c6c549c563ef2dd7fbac76c408518a4a0d8bae4`에서 Netlify SUCCESS, 실제 화면 **테스트 v0.78.0 / 0c6c549c**, 공통 manifest v0.33.0/b5c0e0f/168파일을 확인했다. 공통 핵심 15·호스트 핵심 8파일의 HTTP SHA256이 Git blob과 같다. 이후 문서 전용 commit은 이 제품 코드를 바꾸지 않는다. [미리보기](https://deploy-preview-103--gai-lab.netlify.app/#/onbatang).
