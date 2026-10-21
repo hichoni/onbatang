@@ -9,7 +9,7 @@ import { onbatangLoading,deferredOnbatangLoading } from './loading.js';
 import {bindFilmstrip,bindSlideTray} from './filmstrip.js';
 import {orderPages,movePage} from './page-order.js';
 import {createLocalPalettes} from './palettes.js';
-import {newId,slideNotes} from '../src/document.js';
+import {newId,slideNotes,shownTopics,cleanTopic,TOPIC_LIMIT} from '../src/document.js';
 import {newPixelActivity,pixelArtCover,pixelArtResult} from '../src/pixel-art.js';
 import {mountPixelArt,createPixelArtSetup,pixelArtImage} from './pixel-art.js';
 import {createHtmlLesson} from './html-lesson.js';
@@ -738,7 +738,7 @@ function slideView(design, aspect, sceneEdge = 640) {
 }
 // 띠의 작은 그림에 붙이는 이름: 몇 번째 장인지 + 영상 장면 · 움직임이 있는지.
 function slideLabel(i, design) {
-  const marks = [design.hidden ? '발표에서 숨김' : '', hasVideo(design) ? '영상 있음' : '', hasMotion(design) ? '움직임 있음' : ''].filter(Boolean);
+  const marks = [design.topic ? `주제 ${design.topic}` : '', design.hidden ? '발표에서 숨김' : '', hasVideo(design) ? '영상 있음' : '', hasMotion(design) ? '움직임 있음' : ''].filter(Boolean);
   return `${i + 1}번째 장${marks.length ? ` (${marks.join(' · ')})` : ''}`;
 }
 function renderStrip(O) {
@@ -770,7 +770,8 @@ function renderStrip(O) {
     }, el('span', { class: 'cv-slide-no', text: String(i + 1) }), el('span', { class: 'cv-slide-view', 'aria-hidden': 'true' }, slideView(design, aspect)),
     el('span', { class: 'cv-slide-vd', 'aria-hidden': 'true' }, ic('video')),
     el('span', { class: 'cv-slide-fx', 'aria-hidden': 'true' }, ic('motion')),
-    el('span', { class: 'cv-slide-skip', 'aria-hidden': 'true', text: '숨김' }));
+    el('span', { class: 'cv-slide-skip', 'aria-hidden': 'true', text: '숨김' }),
+    design.topic ? el('span', { class: 'cv-slide-topic', 'aria-hidden': 'true', text: design.topic }) : null);
   });
   const tool = (icon, label, title, onClick, disabled = false) => el('button', { class: 'cv-slide-tool', type: 'button', title, 'aria-label': title, disabled, onClick }, ...face(icon, label));
   const del = tool('trash', '지우기', '이 장 지우기', () => {
@@ -888,7 +889,8 @@ function renderMaterialNavigation(O,left=0) {
    },el('span',{class:'cv-slide-no'}),el('span',{class:'cv-slide-view','aria-hidden':'true'}));}
    node.materialValue=value;node.classList.toggle('on',index===at);node.setAttribute('aria-pressed',String(index===at));node.classList.toggle('skip',!!value.page.hidden);
    if(!node.querySelector('.cv-slide-skip'))node.append(el('span',{class:'cv-slide-skip','aria-hidden':'true',text:'숨김'}));
-   node.setAttribute('aria-label',`전체 자료 ${index+1}쪽${value.page.source?.pageNumber?` · 원본 ${value.page.source.pageNumber}쪽`:''}${value.page.hidden?' · 발표에서 숨김':''}`);
+   node.querySelector('.cv-slide-topic')?.remove();if(value.page.topic)node.append(el('span',{class:'cv-slide-topic','aria-hidden':'true',text:value.page.topic}));
+   node.setAttribute('aria-label',`전체 자료 ${index+1}쪽${value.page.source?.pageNumber?` · 원본 ${value.page.source.pageNumber}쪽`:''}${value.page.topic?` · 주제 ${value.page.topic}`:''}${value.page.hidden?' · 발표에서 숨김':''}`);
    Object.assign(node.dataset,{materialPage:String(index),documentId:value.record.id});
    if(value.record.id===O.record.id)node.dataset.slide=String(value.index);else delete node.dataset.slide;
    node.querySelector('.cv-slide-no').textContent=String(index+1);
@@ -991,6 +993,8 @@ function slideMenuGroups(O, { strip = false } = {}) {
     ],
     [
       { icon: 'play', label: '이 장부터 발표', run: () => present(O) },
+      // 주제(구역): 이 장부터 새 주제. 발표의 전체 보기(G)가 주제로 묶이고, PPTX 에는 PowerPoint 의 구역으로 들어간다.
+      { icon: 'template', label: O.editor.getDesign().topic ? '주제 이름 고치기' : '여기서 주제 시작', run: () => openTopic(O) },
       // 숨긴 장: 지우지 않고 발표 · HTML 수업 · PDF 에서만 건너뛴다(정답 장, 예비 앱 장 등). PPTX 에는 숨긴 슬라이드로 들어간다.
       O.editor.getDesign().hidden
         ? { icon: 'screen', label: '숨기기 풀기', run: () => setSlideHidden(O, false) }
@@ -1067,6 +1071,30 @@ function openFindReplace(O) {
     el('div', { class: 'cv-find-actions' }, el('button', { class: 'btn btn-ghost', type: 'button', onClick: closeModal }, '닫기'), all)), { onClose: () => O.editor.refresh() });
   update();
   requestAnimationFrame(() => find.focus());
+}
+// 주제 이름 붙이기: 이 장부터 새 주제가 시작된다(비우면 주제를 없앤다).
+function openTopic(O) {
+  if (O.closed || videoBusy(O) || O.inlineImport) return;
+  const now = O.editor.getDesign().topic || '';
+  const input = el('input', { class: 'cv-find-input', type: 'text', 'aria-label': '주제 이름', placeholder: '예: 1. 생각 열기', maxlength: String(TOPIC_LIMIT), value: now });
+  const save = () => {
+    const topic = cleanTopic(input.value);
+    closeModal();
+    if (topic === now) return;
+    O.editor.patchSlide({ topic });
+    renderStrip(O);
+    toast(topic ? `이 장부터 「${topic}」 주제예요. 발표의 전체 보기(G)에서 주제별로 모여요.` : '이 장의 주제를 없앴어요.', 3500);
+  };
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); save(); } });
+  openModal(el('section', { class: 'cv-find-box', 'aria-labelledby': 'cv-topic-title', onKeydown: escCloses },
+    el('h2', { id: 'cv-topic-title', text: now ? '주제 이름 고치기' : '여기서 주제 시작' }),
+    el('p', { class: 'cv-down-note', text: '이 장부터 다음 주제 앞까지가 한 주제예요(파워포인트의 구역과 같아요). 발표 중 G 를 누르면 주제별로 모여 보이고, 주제 이름을 누르면 그 주제로 확대해 들어가요.' }),
+    el('label', { class: 'cv-find-row' }, el('span', { text: '이름' }), input),
+    el('div', { class: 'cv-find-actions' },
+      now ? el('button', { class: 'btn btn-ghost', type: 'button', onClick: () => { input.value = ''; save(); } }, '주제 없애기') : null,
+      el('button', { class: 'btn btn-ghost', type: 'button', onClick: closeModal }, '닫기'),
+      el('button', { class: 'btn btn-primary', type: 'button', onClick: save }, '저장'))));
+  requestAnimationFrame(() => { input.focus(); input.select(); });
 }
 function setSlideHidden(O, hidden) {
   if (O.closed || videoBusy(O)) return;
@@ -1352,6 +1380,7 @@ async function present(O) {
     markFilm();
   };
   // 틀던 전환을 바로 끝내고 나가던 장을 뗀다.
+  const shownDesigns = new WeakMap();   // 발표 화면에 그린 카드 → 그 장의 디자인(이어 움직이기가 짝을 찾는다)
   const settle = () => {
     turning?.finish();
     turning = null;
@@ -1367,6 +1396,7 @@ async function present(O) {
     overlay.style.setProperty('--cv-show-ratio',String(ar));
     const view = slideView(design, ar, 1920);
     view.style.setProperty('--fe-card-radius', '0');
+    shownDesigns.set(view, design);
     const old = stage.firstElementChild;
     count.textContent = `${i + 1} / ${slides.length}`;
     if(design.activity){
@@ -1403,7 +1433,8 @@ async function present(O) {
     }
     stage.append(view);
     // 다음 장으로: 그 장의 전환 효과. 앞 장으로: 방금 보던 장이 들어올 때의 전환을 거꾸로.
-    const turn = playTransition(old, view, dir > 0 ? design.tr : slides[i + 1]?.tr, dir);
+    // 이어 움직이기는 두 장의 같은 요소를 짝지어야 하므로 두 장의 디자인을 함께 넘긴다.
+    const turn = playTransition(old, view, dir > 0 ? design.tr : slides[i + 1]?.tr, dir, { from: shownDesigns.get(old), to: design });
     startFilm(view, design, turn.ms);
     if (turn.ms) {
       turning = turn;
@@ -1461,7 +1492,8 @@ async function present(O) {
     if (document.fullscreenElement === overlay) { overlay.dataset.full = '1'; return; }
     if (document.fullscreenElement || overlay.dataset.full !== '1') return;
     overlay.dataset.full = '0';
-    if (!tools?.presenting()) close();
+    // 발표자 화면 창을 열거나 카메라 허락을 묻는 동안 브라우저가 전체 화면을 풀 수 있다: 그때는 창 안에서 이어 간다(F 로 다시 켠다).
+    if (!tools?.presenting() && !tools?.camera()) close();
   };
   function close() {
     if(savingActivity)return;
@@ -1490,6 +1522,8 @@ async function present(O) {
     thumb: (k) => slideView(slides[k], aspectOf(entries[k].record), 480),
     preview: (k) => slideView(slides[k], aspectOf(entries[k].record), 960),
     notes: (k) => slides[k]?.notes || '',
+    // 주제: 숨긴 장에서 시작한 주제는 그다음 보이는 장으로 넘긴다.
+    topic: (k) => shownTopics(lessonPages(O).map((v) => v.page)).get(entries[k]?.page.id) || '',
     label: (k) => (slides[k]?.activity ? '활동' : entries[k]?.page.source?.kind === 'result' ? '결과' : ''),
     title: O.record.name, notify: toast, keyClass: 'cv-show-key',
   });
@@ -2223,7 +2257,7 @@ async function makeHtmlLesson(O,{notes=false}={}){
   try{
     await persistEditorAction(O);if(O.materialLoadingPromise)await O.materialLoadingPromise;
     // 숨긴 장은 발표용 HTML 수업에 넣지 않는다.
-    const entries=lessonPages(O).filter(v=>!v.page.hidden),pages=[];
+    const every=lessonPages(O),entries=every.filter(v=>!v.page.hidden),pages=[],topics=shownTopics(every.map(v=>v.page));
     if(!entries.length)throw Error('모든 장을 숨겨서 담을 장이 없어요.');
     for(const [index,value]of entries.entries()){
       if(abort.signal.aborted)return;
@@ -2233,7 +2267,7 @@ async function makeHtmlLesson(O,{notes=false}={}){
       const {blob}=await designToBlob(value.page,{width,aspect,type:'image/png'});
       const image=await new Promise((yes,no)=>{const reader=new FileReader();reader.onload=()=>yes(reader.result);reader.onerror=no;reader.readAsDataURL(blob);});
       const activity=value.page.activity;
-      pages.push({id:value.page.id,image,aspect,...(notes?slideNotes(value.page):{}),...(value.page.source?.kind==='result'?{result:true}:{}),...(activity?{activity,binding:{documentId:value.record.id,pageId:value.page.id,activityId:activity.id,kind:activity.kind,definitionHash:await activityDefinitionHash(activity)}}:{})});
+      pages.push({id:value.page.id,image,aspect,...(notes?slideNotes(value.page):{}),...(topics.get(value.page.id)?{topic:topics.get(value.page.id)}:{}),...(value.page.source?.kind==='result'?{result:true}:{}),...(activity?{activity,binding:{documentId:value.record.id,pageId:value.page.id,activityId:activity.id,kind:activity.kind,definitionHash:await activityDefinitionHash(activity)}}:{})});
     }
     if(abort.signal.aborted)return;
     const html=createHtmlLesson({title:O.materialDeck?.title||O.record.name,pages,target:lessonTarget(O)});

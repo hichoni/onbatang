@@ -3,7 +3,7 @@
 // 계산과 규칙은 model.js·cutout.js(순수 함수)에 있고, 여기는 화면과 손가락·마우스·키보드만 다룬다.
 // 저장소는 모른다: 사진을 어디에 올릴지는 uploadImage 로, 무엇이 바뀌었는지는 onChange 로 프로젝트가 정한다.
 import { el, toast } from './dom.js';
-import { newId, cleanNotes, NOTES_LIMIT } from './document.js';
+import { newId, cleanNotes, NOTES_LIMIT, cleanTopic } from './document.js';
 import {
   COLORS, SHAPES, SHAPE_GROUPS, MASKS, OPACITY, TEXT_PRESETS, settings, configure, reshapeItems, backgroundOf, fontList, fontFamilyOf, layoutList, textLimit, clip,
   cleanBg, cleanItems, cleanDesign, emptyDesign, cleanItem, cleanImg, moveLayer, newPresetText, newEmoji, newShape, newArt, newYouTube, newPhoto, moveItem, rotateItem,
@@ -11,7 +11,7 @@ import {
   designVideo, cleanVideo, trimVideo, videoSeconds, videoTime, VIDEO_FITS, MIN_VIDEO, rebaseItems, alignBoxes, distributeBoxes, clampShift, scaleItems, regroup, newGroupId,
   styleOf, applyStyle, LINE_SPACINGS, ALT_LIMIT,
 } from './model.js';
-import { ENTERS, COMBOS, TRANSITIONS, STILL, planMotion, playEnter, playDesign, playTransition } from './motion.js';
+import { ENTERS, COMBOS, TRANSITIONS, STILL, planMotion, playEnter, playDesign, playTransition, morphs } from './motion.js';
 import { searchStickers } from './stickers.js';
 import { ART_PACKS, artSvg, artColorable, artReady, loadArt, searchArt } from './art.js';
 import { designView, itemView, placeItem, paintCard, shapeThumb } from './render.js';
@@ -2771,6 +2771,9 @@ export function createEditor({
     },
     old: { bg: '#cfd6f3', items: [] },
     next: { bg: '#3d4bc0', items: [{ t: 'shape', shape: 'circle', x: 50, y: 50, w: 26, h: 37, color: '#ffffff' }] },
+    // 이어 움직이기: 같은 동그라미가 왼쪽 위에서 오른쪽 아래로 커지며 옮겨 간다.
+    moveOld: { bg: '#cfd6f3', items: [{ id: 'edemomove1', t: 'shape', shape: 'circle', x: 28, y: 32, w: 18, h: 26, color: '#3d4bc0' }] },
+    moveNext: { bg: '#eef1fb', items: [{ id: 'edemomove1', t: 'shape', shape: 'circle', x: 68, y: 58, w: 34, h: 48, color: '#ffc93c' }] },
   };
   const DEMO_RATIO = 1.42;
   const demoCard = (design) => {
@@ -2793,6 +2796,11 @@ export function createEditor({
       const c = demoCard(design);
       view.append(c);
       play = () => playDesign(c, design);
+    } else if (kind === 'tr' && morphs(id)) {
+      const from = cleanDesign(DEMO.moveOld), to = cleanDesign(DEMO.moveNext);
+      const [a, b] = [demoCard(from), demoCard(to)];
+      view.append(a, b);
+      play = () => playTransition(a, b, id, 1, { from, to });
     } else if (kind === 'tr') {
       const [a, b] = [demoCard(DEMO.old), demoCard(DEMO.next)];
       view.append(a, b);
@@ -2934,6 +2942,7 @@ export function createEditor({
         el('div', { class: 'fe-motions', role: 'group', 'aria-label': '전환 효과', dataset: { group: 'tr' } },
           motionTile({ group: 'tr', name: '없음', on: !here.tr, kind: 'none', onPick: () => setTransition('') }),
           ...TRANSITIONS.map((t) => motionTile({ group: 'tr', name: t.name, on: here.tr === t.id, kind: 'tr', id: t.id, onPick: () => setTransition(t.id) }))),
+        morphs(here.tr) ? el('p', { class: 'fe-note', text: '앞 장과 같은 조각(장을 복제해 만든 조각, 또는 글·그림이 같은 조각)이 발표할 때 제자리로 옮겨 가요. 앞 장을 복제한 뒤 조각을 옮기거나 키워 보세요. 여기와 영상에서는 서서히 바뀌어요.' }) : null,
       ]);
       // "모든 장에 똑같이"는 다른 장에 정해 둔 것을 덮어쓰고 되돌릴 수 없어서, 한 번 더 눌러야 한다.
       const ALL = '모든 장에 똑같이';
@@ -3551,6 +3560,7 @@ export function createEditor({
     patchSlide: (patch) => {
       if (!card || !patch || typeof patch !== 'object') return;
       if ('hidden' in patch) { if (patch.hidden === true) card.hidden = true; else delete card.hidden; }
+      if ('topic' in patch) { const topic = cleanTopic(patch.topic); if (topic) card.topic = topic; else delete card.topic; }
       onChange();
     },
     /** 카드 밖(그림 둘레의 빈 곳)을 우클릭했을 때: 고르기를 풀고 카드의 빈 곳 메뉴(붙여넣기 · 되돌리기 · slideMenu)를 띄운다. */

@@ -1,7 +1,7 @@
 import {inflateSync,zlibSync} from 'fflate';
 import {DOMParser} from '@xmldom/xmldom';
 import {crc32} from '../zip.js';
-import {cleanSize,DOCUMENT_LIMITS,SLIDE_LIMITS,legacyId,cleanNotes,slideNotes,cleanAlt} from '../../src/document.js';
+import {cleanSize,DOCUMENT_LIMITS,SLIDE_LIMITS,legacyId,cleanNotes,slideNotes,cleanAlt,cleanTopic} from '../../src/document.js';
 import {importConvertedDocument} from '../import-document.js';
 import {bulletChar,autoNumber} from './bullets.js';
 
@@ -15,6 +15,7 @@ export class PptxConversionError extends Error {
 const fail=(code,message,details)=>{throw new PptxConversionError(code,message,details);};
 const children=node=>Array.from(node?.childNodes||[]).filter(n=>n.nodeType===1);
 const direct=(node,name,ns=NS.a)=>children(node).find(n=>n.localName===name&&n.namespaceURI===ns);
+const P14='http://schemas.microsoft.com/office/powerpoint/2010/main';
 const all=(node,name,ns=NS.a)=>Array.from(node?.getElementsByTagNameNS(ns,name)||[]);
 const attr=(node,key)=>node?.getAttribute(key)||'';
 const relationId=node=>node?.getAttributeNS(NS.r,'id')||'';
@@ -575,6 +576,10 @@ async function readPptx(file,options={}){
     if(!retain||Array.isArray(selected)&&!selected.includes(i+1))delete page.slide;
     pages.push(page);
   }
+  // PowerPoint 의 구역(p14:sectionLst) → 주제: 구역의 첫 장에 구역 이름을 주제로 붙인다.
+  const sectionOf=new Map();
+  for(const section of all(root,'section',P14)){const name=cleanTopic(attr(section,'name')),first=all(section,'sldId',P14)[0];if(name&&first)sectionOf.set(attr(first,'id'),name);}
+  slideIds.forEach((node,i)=>{const topic=sectionOf.get(attr(node,'id'));if(topic&&pages[i].slide)pages[i].slide.topic=topic;});
   const warnings=[warning('EDITABLE_APPROXIMATION','지원하는 요소만 편집 가능한 형태로 옮깁니다. 원본 PPT 화면 렌더와 글꼴·테마의 동일 재현은 지원하지 않아요.')];
   progress(options,'complete',pages.length,pages.length);
   return {pageCount:pages.length,pages,source,originalSize:size,warnings,converter:{name:'onbatang-ooxml-browser',version:PPTX_CONVERTER_VERSION,fonts:[...fonts].sort()}};
