@@ -30,8 +30,11 @@ export function bindFilmstrip(list,{reorder,busy=()=>false}={}){
     on(grip,'pointerdown',event=>{
       if(event.button>0||!start(node,event.clientX))return;
       event.preventDefault();event.stopPropagation();grip.setPointerCapture(event.pointerId);
-      const move=e=>{if(e.pointerId===event.pointerId)mark(e.clientX);};
-      const end=e=>{if(e.pointerId!==event.pointerId)return;cleanup();if(e.type==='pointercancel')stop();else finish();};
+      // Browsers may enlarge a touch hit onto this grip. A tap still selects
+      // its slide; only an intentional movement sorts it.
+      let moved=false;
+      const move=e=>{if(e.pointerId!==event.pointerId)return;if(Math.hypot(e.clientX-event.clientX,e.clientY-event.clientY)>=6)moved=true;if(moved)mark(e.clientX);};
+      const end=e=>{if(e.pointerId!==event.pointerId)return;cleanup();if(e.type==='pointercancel')stop();else if(moved)finish();else{stop();node.click();}};
       const cleanup=()=>{grip.removeEventListener('pointermove',move);grip.removeEventListener('pointerup',end);grip.removeEventListener('pointercancel',end);};
       on(grip,'pointermove',move);on(grip,'pointerup',end);on(grip,'pointercancel',end);
     });
