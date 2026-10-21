@@ -279,6 +279,39 @@ export function matchItems(before, after) {
 // 짝이 된 두 요소의 내용이나 꾸밈이 다른지(글 · 그림 · 색 …). 다르면 옮겨 가는 동안 앞 것은 사라지고 새것이 나타난다(겹쳐 보이지 않게).
 const LOOK_KEYS = ['text', 'url', 'ch', 'art', 'yt', 'shape', 'color', 'bgc', 'mask', 'crop', 'font', 'typeface', 'bold', 'italic', 'under', 'align', 'stroke', 'shadow', 'line', 'lc', 'hollow', 'head', 'dash', 'op'];
 export const looksChanged = (a, b) => LOOK_KEYS.some((k) => JSON.stringify(a?.[k]) !== JSON.stringify(b?.[k]));
+// 내용(무엇을 그렸는지)만 견준다: 이것이 다르면 영상에서 앞 것과 새것 두 갈래로 그려 녹듯이 바꾼다. 꾸밈(색 · 크기 · 둥글기 …)은 이어 간다.
+const CONTENT_KEYS = ['text', 'url', 'ch', 'art', 'yt', 'shape', 'mask', 'crop'];
+export const contentChanged = (a, b) => CONTENT_KEYS.some((k) => JSON.stringify(a?.[k]) !== JSON.stringify(b?.[k]));
+const NUM_KEYS = ['x', 'y', 'w', 'h', 'size', 'op', 'r', 'lh'];
+const COLOR_KEYS = ['color', 'lc', 'bgc', 'stroke'];
+const hex = (v) => (typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v) ? [1, 3, 5].map((i) => parseInt(v.slice(i, i + 2), 16)) : null);
+const mixColor = (a, b, t) => { const [p, q] = [hex(a), hex(b)]; if (!p || !q) return t < 0.5 ? a : b; return `#${p.map((v, i) => Math.round(v + (q[i] - v) * t).toString(16).padStart(2, '0')).join('')}`; };
+/**
+ * 이어 움직이기의 중간 모습: 앞 장의 요소 a 에서 이 장의 요소 b 로 t(0~1)만큼 간 요소(영상이 이것을 그려 옮겨 간다).
+ * 수(자리 · 크기 · 글자 크기 · 둥글기 · 투명도 · 테두리 굵기)와 색은 사이 값으로, 각도는 가까운 쪽으로 돈다. 켜고 끄는 값(굵게 · 속 비움 …)은 가운데에서 바뀐다.
+ * 한쪽에만 테두리가 있으면 굵기 0 에서 자라난다. content: 'a' 면 내용(글 · 그림)은 a 의 것, 아니면 b 의 것(내용이 다를 때 두 갈래로 그린다).
+ */
+export function tweenItem(a, b, t, { content = 'b' } = {}) {
+  const q = Math.min(1, Math.max(0, t));
+  const out = { ...(q < 0.5 ? a : b) };
+  const own = content === 'a' ? a : b;
+  for (const k of CONTENT_KEYS) { if (own[k] === undefined) delete out[k]; else out[k] = own[k]; }
+  out.t = own.t;
+  for (const k of NUM_KEYS) if (Number.isFinite(a[k]) && Number.isFinite(b[k])) out[k] = a[k] + (b[k] - a[k]) * q;
+  const turn = ((((Number(b.rot) || 0) - (Number(a.rot) || 0)) % 360) + 540) % 360 - 180;
+  out.rot = ((((Number(a.rot) || 0) + turn * q + 180) % 360) + 360) % 360 - 180;
+  const la = Number(a.line) || 0, lb = Number(b.line) || 0;
+  if (la || lb) {
+    out.line = la + (lb - la) * q;
+    out.lc = mixColor(a.lc || b.lc, b.lc || a.lc, q);
+    if (!out.line) delete out.line;
+  }
+  for (const k of COLOR_KEYS) if (k !== 'lc' && (a[k] || b[k])) out[k] = a[k] && b[k] ? mixColor(a[k], b[k], q) : q < 0.5 ? a[k] : b[k];
+  if (a.t === 'link' && b.t === 'link' && a.pts?.length === b.pts?.length) for (const k of ['vh']) out[k] = a[k] + (b[k] - a[k]) * q;
+  if (a.t === 'link' && b.t === 'link' && a.pts?.length === b.pts?.length) out.pts = a.pts.map((v, i) => v + (b.pts[i] - v) * q);
+  for (const k of ['id', 'origin', 'an', 'aw', 'em', 'g']) delete out[k];
+  return out;
+}
 /** 그 전환이 두 장을 이어 움직이는 것인지. */
 export const morphs = (id) => !!TRANSITION_DEFS[id]?.morph;
 
@@ -492,20 +525,35 @@ export function playTransition(old, next, id, dir = 1, { from = null, to = null 
   return { ms: f.ms, finish: end, done };
 }
 
-// 옮겨 가는 요소는 transform 하나로만 움직인다(FLIP: 앞 장의 자리·크기·각도에서 제자리로). 자리·크기를 left·width 로 바꾸면
-// 프레임마다 화면을 다시 짜야 해서 끊기지만, transform·opacity 는 그래픽 장치가 맡아 매끄럽다. 글은 옮기는 동안만 크기가 늘고 줄며, 끝나면 제 글자로 또렷하다.
-// 두 장은 같은 크기로 겹쳐 있으므로 화면에서 잰 가운데 점의 차이를 그대로 옮긴 거리로 쓴다(돌린 요소도 가운데 점은 그대로다).
+// 옮겨 가는 요소: 자리와 각도는 transform 으로(앞 장의 가운데 → 제자리), 모습은 하나하나 실제 값으로 이어 간다.
+// 크기를 transform 의 확대로 바꾸면 둥근 모서리 · 테두리 굵기 · 글자 모양이 늘어나 보이다가 끝에서 뚝 바뀌므로,
+// 너비 · 높이 · 모서리 둥글기 · 테두리(굵기 · 색) · 채우기 · 글자 크기 · 글 테두리와 그림자 · 투명도를 앞 장의 값에서 이 장의 값으로 함께 바꾼다.
+// 두 장은 같은 크기로 겹쳐 있으므로 화면에서 잰 값(px)을 그대로 이어 붙일 수 있다(돌린 요소도 가운데 점은 그대로다).
+// SVG 도형의 테두리는 CSS 변수(--fe-edge · --fe-edge-color)로 그리므로 editor.css 에서 그 변수를 @property 로 알려 두어 이어지게 한다.
+const MORPH_PROPS = [
+  'width', 'height', 'fontSize', 'lineHeight', 'letterSpacing',
+  'borderTopLeftRadius', 'borderTopRightRadius', 'borderBottomRightRadius', 'borderBottomLeftRadius',
+  'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth',
+  'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor',
+  'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
+  'color', 'backgroundColor', 'boxShadow', 'textShadow', 'opacity',
+];
+const MORPH_VARS = ['--fe-edge', '--fe-edge-color'];
 const centerOf = (node) => { const r = node.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
-const morphTransform = (dx, dy, item, sx, sy) => `translate(${round(dx)}px, ${round(dy)}px) translate(-50%, -50%) rotate(${round(Number(item?.rot) || 0)}deg) scale(${round((item?.fx ? -1 : 1) * sx)}, ${round((item?.fy ? -1 : 1) * sy)})`;
-function morphFrames(oldNode, newNode, oldItem, newItem) {
+const morphTransform = (dx, dy, item) => `translate(${round(dx)}px, ${round(dy)}px) translate(-50%, -50%) rotate(${round(Number(item?.rot) || 0)}deg) scale(${item?.fx ? -1 : 1}, ${item?.fy ? -1 : 1})`;
+/** 앞 장의 요소(oldNode)에서 이 장의 요소(newNode)로 이어 가는 키프레임 [처음, 끝](newNode 에 건다). */
+export function morphFrames(oldNode, newNode, oldItem, newItem) {
   const [ox, oy] = centerOf(oldNode), [nx, ny] = centerOf(newNode);
-  const sx = newNode.offsetWidth ? oldNode.offsetWidth / newNode.offsetWidth : 1;
-  const sy = newNode.offsetHeight ? oldNode.offsetHeight / newNode.offsetHeight : 1;
   const a = getComputedStyle(oldNode), b = getComputedStyle(newNode);
-  const start = { transform: morphTransform(ox - nx, oy - ny, oldItem, sx, sy), opacity: a.opacity };
-  const end = { transform: morphTransform(0, 0, newItem, 1, 1), opacity: b.opacity };
-  if (a.color !== b.color) { start.color = a.color; end.color = b.color; }
-  if (a.backgroundColor !== b.backgroundColor) { start.backgroundColor = a.backgroundColor; end.backgroundColor = b.backgroundColor; }
+  const start = { transform: morphTransform(ox - nx, oy - ny, oldItem) }, end = { transform: morphTransform(0, 0, newItem) };
+  for (const k of MORPH_PROPS) if (a[k] !== b[k]) { start[k] = a[k]; end[k] = b[k]; }
+  for (const k of MORPH_VARS) {
+    const [va, vb] = [a.getPropertyValue(k).trim(), b.getPropertyValue(k).trim()];
+    if (va !== vb && va && vb) { start[k] = va; end[k] = vb; }
+  }
+  // 한쪽에만 테두리가 있으면 테두리 모양은 처음부터 끝까지 있는 쪽의 것으로 둔다(굵기가 0 에서 자라나게).
+  const style = a.borderTopStyle !== 'none' ? a.borderTopStyle : b.borderTopStyle;
+  if (style !== 'none' && a.borderTopStyle !== b.borderTopStyle) { start.borderStyle = style; end.borderStyle = style; }
   return [start, end];
 }
 // 움직이는 동안만 그래픽 장치에 미리 올려 둔다(첫 프레임이 늦지 않게). 끝나면 걷는다.

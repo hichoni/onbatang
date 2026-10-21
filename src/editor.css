@@ -50,6 +50,10 @@
 .fi-link svg { display: block; width: 100%; height: 100%; overflow: visible; }
 .fi-link .fi-link-hit { stroke: transparent; fill: none; pointer-events: stroke; cursor: pointer; }
 .fi-link.sel .fi-link-line, .fi-link.sel .fi-link-head { filter: drop-shadow(0 0 .35cqw rgba(61, 75, 192, .95)); }
+/* 이어 움직이기가 SVG 도형의 테두리도 이어 바꿀 수 있게, 테두리를 그리는 변수의 종류를 알려 둔다(알리지 않은 변수는 중간 값 없이 뚝 바뀐다).
+   테두리는 .edged 일 때만 쓰므로 처음 값(0 · 투명)은 보이지 않는다. */
+@property --fe-edge { syntax: '<length>'; inherits: true; initial-value: 0px; }
+@property --fe-edge-color { syntax: '<color>'; inherits: true; initial-value: transparent; }
 /* 이어 움직이기(motion.js 의 playMorph): 도는 동안 카드는 비쳐 보이고, 이 장의 바탕은 따로 깐 판으로 서서히 나타난다. */
 .fe-card.fe-morphing { background: transparent; }
 .fe-morph-back { position: absolute; inset: 0; background: var(--fe-bg, #fffdf5); pointer-events: none; }

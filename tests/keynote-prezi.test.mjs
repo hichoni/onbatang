@@ -121,3 +121,27 @@ test('video plan: 이어 움직이기 pairs get their own cells on both slides a
   // Without the transition there are no pairs.
   assert.equal(filmPlan([a, {...b, tr: 'fade'}]).slides[1].turn.pairs, undefined);
 });
+
+test('tweenItem: every look between two slides is a real in-between value', async () => {
+  const {tweenItem, contentChanged} = await import('../src/motion.js');
+  const a = {id: 'eround0001', t: 'shape', shape: 'round', x: 20, y: 30, w: 10, h: 10, rot: 170, op: 100, r: 10, color: '#000000'};
+  const b = {...a, id: 'eround0002', x: 80, y: 70, w: 30, h: 20, rot: -170, op: 50, r: 90, color: '#ffffff', line: 2, lc: '#ff0000', hollow: true};
+  const h = tweenItem(a, b, .5);
+  assert.deepEqual([h.x, h.y, h.w, h.h, h.op, h.r], [50, 50, 20, 15, 75, 50]);
+  assert.equal(h.color, '#808080');
+  assert.equal(Math.abs(h.rot), 180, 'rotates the short way (170 → 180 → -170)');
+  assert.equal(h.line, 1, 'a border grows from nothing');
+  assert.equal(h.lc, '#ff0000');
+  assert.equal(h.hollow, true, 'switches halfway');
+  assert.equal(tweenItem(a, b, .25).hollow, undefined);
+  assert.equal(Object.hasOwn(h, 'id'), false);
+  assert.equal(tweenItem(a, b, 0).x, 20);
+  assert.equal(tweenItem(a, b, 1).x, 80);
+  // Content: a text whose words change is drawn in two tracks; style-only changes are one track.
+  const s = {t: 'text', text: '처음', x: 10, y: 10, w: 20, size: 4, color: '#123456', align: 'c'};
+  assert.equal(contentChanged(s, {...s, size: 8, color: '#ff0000'}), false);
+  assert.equal(contentChanged(s, {...s, text: '다음'}), true);
+  assert.equal(tweenItem(s, {...s, text: '다음', size: 8}, .2, {content: 'a'}).text, '처음');
+  assert.equal(tweenItem(s, {...s, text: '다음', size: 8}, .2).text, '다음');
+  assert.equal(tweenItem(s, {...s, text: '다음', size: 8}, .5).size, 6);
+});
