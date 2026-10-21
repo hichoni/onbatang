@@ -120,3 +120,49 @@ test('curved connectors bend to the chosen side, fit their bulge in the box and 
   assert.match(xml, /<p:sp><p:nvSpPr><p:cNvPr id="\d+" name="elink00001"\/>.*?<a:path w="\d+" h="\d+" fill="none"><a:moveTo><a:pt x="\d+" y="\d+"\/><\/a:moveTo><a:quadBezTo><a:pt x="\d+" y="\d+"\/><a:pt x="\d+" y="\d+"\/><\/a:quadBezTo><\/a:path>.*?<a:noFill\/><a:ln w="\d+" cap="rnd">.*?<a:tailEnd type="triangle"\/><\/a:ln>/);
   assert.equal((xml.match(/<p:cxnSp>/g) || []).length, 1, 'the straight one is still a connector');
 });
+
+test('elbow connectors leave from the facing sides, turn at right angles in the middle, and export as three straight runs', async () => {
+  const {linkCorners} = await import('../src/links.js');
+  const a = box('eboxaaaaa1', 20, 30), b = box('eboxaaaaa2', 80, 70);
+  // Across first: out of the right side of A, down the middle, into the left side of B.
+  const h = linkGeometry(a, b, {aspect: 1, elbow: 1});
+  assert.equal(h.pts.length, 8);
+  const [[x1, y1], [x2, y2]] = linkEnds(h, 1), [m1, m2] = linkCorners(h, 1);
+  assert.ok(Math.abs(y1 - 30) < .01 && x1 > 30 && x1 < 32, `start ${x1},${y1}`);
+  assert.ok(Math.abs(y2 - 70) < .01 && x2 < 70 && x2 > 68, `end ${x2},${y2}`);
+  assert.ok(Math.abs(m1[0] - 50) < .01 && Math.abs(m1[1] - 30) < .01 && Math.abs(m2[0] - 50) < .01 && Math.abs(m2[1] - 70) < .01, JSON.stringify([m1, m2]));
+  // Down first: out of the bottom of A, across the middle, into the top of B.
+  const v = linkGeometry(a, b, {aspect: 1, elbow: -1});
+  const [[vx1, vy1], [vx2, vy2]] = linkEnds(v, 1), [n1, n2] = linkCorners(v, 1);
+  assert.ok(Math.abs(vx1 - 20) < .01 && vy1 > 40 && Math.abs(vx2 - 80) < .01 && vy2 < 60);
+  assert.ok(Math.abs(n1[1] - 50) < .01 && Math.abs(n2[1] - 50) < .01 && Math.abs(n1[0] - 20) < .01 && Math.abs(n2[0] - 80) < .01);
+  // Overlapping rows, so no room to turn down the middle: one turn (ㄱ), down to B's middle and into its left side.
+  const c = box('eboxaaaaa3', 80, 48), l1 = linkGeometry(a, c, {aspect: 1, elbow: -1});
+  const [[lx1, ly1], [lx2, ly2]] = linkEnds(l1, 1), [k1, k2] = linkCorners(l1, 1);
+  assert.ok(Math.abs(lx1 - 20) < .01 && ly1 > 40 && Math.abs(ly2 - 48) < .01 && lx2 < 70, `L ends ${lx1},${ly1} ${lx2},${ly2}`);
+  assert.ok(Math.abs(k1[0] - 20) < .01 && Math.abs(k1[1] - 48) < .01 && Math.hypot(k1[0] - k2[0], k1[1] - k2[1]) < .01, JSON.stringify([k1, k2]));
+  const lsvg = linkSvg({...l1, color: '#1d2433', line: .5, head: 'end'});
+  assert.equal((lsvg.match(/class="fi-link-line" d="[^"]*"/)[0].match(/Q/g) || []).length, 1, 'one rounded turn');
+  const ltip = lsvg.match(/points="([^"]+)"/)[1].split(' ').map(p => p.split(',').map(Number));
+  assert.ok(ltip[0][0] > ltip[1][0] && Math.abs(ltip[1][0] - ltip[2][0]) < .01, 'L head points right');
+  // Side by side, so going down first cannot reach B at all: it turns across first instead.
+  const side = linkGeometry(a, box('eboxaaaaa4', 80, 34), {aspect: 1, elbow: -1}), [s1, s2] = linkCorners(side, 1);
+  assert.ok(Math.abs(s1[0] - 50) < .01 && Math.abs(s2[0] - 50) < .01 && Math.abs(s1[1] - 30) < .01 && Math.abs(s2[1] - 34) < .01, JSON.stringify([s1, s2]));
+  // SVG: one rounded-corner path, the end head pointing right (into B from its left side).
+  const svg = linkSvg({...h, color: '#1d2433', line: .5, head: 'end'});
+  assert.match(svg, /<path class="fi-link-line" d="M[^"]*Q[^"]*Q[^"]*"/);
+  const tip = svg.match(/points="([^"]+)"/)[1].split(' ').map(p => p.split(',').map(Number));
+  assert.ok(tip[0][0] > tip[1][0] && Math.abs(tip[1][0] - tip[2][0]) < .01, 'head points right');
+  // Cleaning keeps elbow over curve and the style copy carries it.
+  configure({aspect: 1});
+  const clean = cleanDesign({id: 'ppage00001', bg: '#fff', items: [a, b, link({elbow: -1, curve: 1})]});
+  const l = clean.items.find(it => it.t === 'link');
+  assert.equal(l.elbow, -1);
+  assert.equal(Object.hasOwn(l, 'curve'), false);
+  assert.equal(l.pts.length, 8);
+  assert.equal(styleOf(l).values.elbow, -1);
+  const {bytes} = await createPptx({slides: [clean], size: {width: 9144000, height: 9144000, unit: 'emu'}});
+  const xml = new TextDecoder().decode(unzipSync(bytes)['ppt/slides/slide1.xml']);
+  assert.match(xml, /<a:path w="\d+" h="\d+" fill="none"><a:moveTo><a:pt[^>]*\/><\/a:moveTo><a:lnTo><a:pt[^>]*\/><\/a:lnTo><a:lnTo><a:pt[^>]*\/><\/a:lnTo><a:lnTo><a:pt[^>]*\/><\/a:lnTo><\/a:path>/);
+  assert.match(xml, /<\/a:solidFill><a:round\/><a:tailEnd type="triangle"\/>/);
+});

@@ -2382,7 +2382,7 @@ export function createEditor({
       ink.style.background = it.color;
       own.push(tb([icon('palette'), el('span', { class: 'fe-lbl', text: '색' }), ink], () => toggle('color'), { title: '선 색', name: '선 색', on: pop === 'color', cls: 'has-pop color' }),
         pick('thick', '굵기', 'lthick', { title: '선의 굵기' }),
-        pick('right', '화살표', 'arrow', { title: '화살표 · 곧게/둥글게 · 점선 · 방향' }));
+        pick('right', '화살표', 'arrow', { title: '화살표 · 곧게/둥글게/꺾어서 · 점선 · 방향' }));
     } else if (it.t === 'yt') {
       // 유튜브 영상: 발표할 때 누르면 그 자리에서 틀어진다. 시작 시각을 정하고, 유튜브에서 미리 볼 수 있다.
       own.push(
@@ -2471,9 +2471,12 @@ export function createEditor({
           chip('없음', it.head === 'none', { head: 'none' }, { head: 'none' })),
         el('div', { class: 'fe-poshead', text: '선의 길' }),
         el('div', { class: 'fe-row' },
-          chip('곧게', !it.curve, { curve: undefined }, { curve: 'off' }),
-          chip('둥글게', !!it.curve, { curve: it.curve || 1 }, { curve: 'on' }),
-          it.curve ? el('button', { class: 'fe-chip', type: 'button', dataset: { bendLink: '1' }, onClick: () => change({ curve: -it.curve }) }, '반대로 휘기') : null),
+          chip('곧게', !it.curve && !it.elbow, { curve: undefined, elbow: undefined }, { curve: 'off' }),
+          chip('둥글게', !!it.curve, { curve: it.curve || 1, elbow: undefined }, { curve: 'on' }),
+          // 꺾어서: 두 조각이 옆으로 더 떨어져 있으면 가로 먼저, 위아래로 더 떨어져 있으면 세로 먼저 꺾는다.
+          chip('꺾어서', !!it.elbow, { elbow: it.elbow || (it.w >= it.vh ? 1 : -1), curve: undefined }, { elbow: 'on' }),
+          it.curve ? el('button', { class: 'fe-chip', type: 'button', dataset: { bendLink: '1' }, onClick: () => change({ curve: -it.curve }) }, '반대로 휘기') : null,
+          it.elbow ? el('button', { class: 'fe-chip', type: 'button', dataset: { turnLink: '1' }, onClick: () => change({ elbow: -it.elbow }) }, it.elbow > 0 ? '세로 먼저 꺾기' : '가로 먼저 꺾기') : null),
         el('div', { class: 'fe-poshead', text: '선 모양' }),
         el('div', { class: 'fe-row' },
           chip('실선', !it.dash, { dash: undefined }, { dash: 'off' }),

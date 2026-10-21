@@ -337,10 +337,11 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
       color: cleanColor(it.color, '#1d2433'),
       line: Math.round(num(it.line, LINK_LINE.min, LINK_LINE.max, LINK_LINE.base) * 100) / 100,
       ...(it.dash === true ? { dash: true } : {}),
-      ...(it.curve === 1 || it.curve === -1 ? { curve: it.curve } : {}),
+      // 곡선과 꺾인 선은 둘 중 하나(둘 다 적혀 있으면 꺾인 선)
+      ...((it.elbow === 1 || it.elbow === -1) ? { elbow: it.elbow } : it.curve === 1 || it.curve === -1 ? { curve: it.curve } : {}),
     };
     // 계산해 둔 자리는 그대로 받아 두었다가(그릴 때 바로 쓰게) cleanItems 에서 새로 맞춘다.
-    if (Array.isArray(it.pts) && (it.pts.length === 4 || it.pts.length === 6) && it.pts.every(Number.isFinite) && [it.w, it.h, it.vh].every((v) => Number.isFinite(v) && v > 0)) Object.assign(out, { w: it.w, h: it.h, vh: it.vh, pts: [...it.pts] });
+    if (Array.isArray(it.pts) && [4, 6, 8].includes(it.pts.length) && it.pts.every(Number.isFinite) && [it.w, it.h, it.vh].every((v) => Number.isFinite(v) && v > 0)) Object.assign(out, { w: it.w, h: it.h, vh: it.vh, pts: [...it.pts] });
     else Object.assign(out, { w: 1, h: 1, vh: 1, pts: [0, 0, 0, 0] });
     return out;
   }
@@ -816,7 +817,7 @@ const STYLE_KEYS = {
   emoji: ['op'],
   image: ['mask', 'op'],
   yt: ['op'],
-  link: ['color', 'line', 'head', 'dash', 'curve', 'op'],
+  link: ['color', 'line', 'head', 'dash', 'curve', 'elbow', 'op'],
 };
 /** 요소의 꾸밈 값 { t, values } (스타일을 옮길 수 없는 것이면 null). */
 export function styleOf(item) {
