@@ -5,7 +5,7 @@ import {cleanDesign, settings, fontList, backgroundOf, hangsPunctuation} from '.
 import {designToBlob, designSheet} from '../src/export.js';
 import {itemView, paintCard} from '../src/render.js';
 import {sceneFrame} from '../src/scene.js';
-import {linkEnds, linkControl} from '../src/links.js';
+import {linkEnds, linkControl, linkCorners} from '../src/links.js';
 
 export const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 export const PPTX_MAX_SLIDES = 200;
@@ -74,6 +74,15 @@ function nativeLink(item, id, size) {
   const [[x1, y1], [x2, y2]] = linkEnds(item, settings().aspect).map(toEmu);
   const head = item.head === 'both' ? '<a:headEnd type="triangle"/>' : '', tail = item.head !== 'none' ? '<a:tailEnd type="triangle"/>' : '';
   const ln = `<a:ln w="${Math.max(1, Math.round(item.line / 100 * size.width))}" cap="${item.dash ? 'flat' : 'rnd'}">${solid(item.color, item.op)}${item.dash ? '<a:prstDash val="dash"/>' : ''}${head}${tail}</a:ln>`;
+  const corners = linkCorners(item, settings().aspect);
+  if (corners) {
+    // 꺾인 선: 곧은 마디 셋으로 된 열린 도형(채우기 없음). 화살표 머리는 선(ln)에 붙는다.
+    const [m1, m2] = corners.map(toEmu), all = [[x1, y1], m1, m2, [x2, y2]];
+    const left = Math.min(...all.map((p) => p[0])), top = Math.min(...all.map((p) => p[1]));
+    const w = Math.max(1, Math.round(Math.max(...all.map((p) => p[0])) - left)), h = Math.max(1, Math.round(Math.max(...all.map((p) => p[1])) - top));
+    const pt = ([x, y]) => `<a:pt x="${Math.round(x - left)}" y="${Math.round(y - top)}"/>`;
+    return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${xml(item.id || `연결선 ${id}`)}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${Math.round(left)}" y="${Math.round(top)}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm><a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="0" t="0" r="r" b="b"/><a:pathLst><a:path w="${w}" h="${h}" fill="none"><a:moveTo>${pt(all[0])}</a:moveTo><a:lnTo>${pt(m1)}</a:lnTo><a:lnTo>${pt(m2)}</a:lnTo><a:lnTo>${pt(all[3])}</a:lnTo></a:path></a:pathLst></a:custGeom><a:noFill/>${ln.replace(/(<\/a:solidFill>(?:<a:prstDash val="dash"\/>)?)/, '$1<a:round/>')}</p:spPr></p:sp>`;
+  }
   const control = linkControl(item, settings().aspect);
   if (control) {
     // 곡선: 2차 베지어 하나로 된 열린 도형(채우기 없음). 화살표 머리는 선(ln)에 붙어 그대로 고칠 수 있다.

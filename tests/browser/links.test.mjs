@@ -185,3 +185,42 @@ test('a connector turns into a curve from its toolbar, flips its bend, and the P
   assert.ok(out.straight > 200, `straight midpoint ${out.straight}`);
   assert.deepEqual(external, []);
 });
+
+test('a connector can bend at right angles from its toolbar, switch which way it turns first, and the PNG draws the corner', options, async t => {
+  const {page, external} = await setup(t);
+  const shapes = page.locator('.cv-canvas .fe-card .fi-shape');
+  await shapes.nth(0).click();
+  await shapes.nth(1).click({modifiers: ['Shift']});
+  await page.locator('.fe-bar button').filter({hasText: '연결선'}).click();
+  await page.locator('.cv-canvas .fe-card .fi-link').waitFor();
+  const [p1, p2] = await ends(page);
+  await page.mouse.click((p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2);
+  await page.locator('.fe-bar button').filter({hasText: '화살표'}).click();
+  await page.locator('[data-elbow="on"]').click();
+  // The boxes are farther apart sideways than up-down: across first.
+  await saved(page, r => r.slides[0].items.find(it => it.t === 'link')?.elbow === 1);
+  assert.equal(await page.locator('[data-turn-link="1"]').textContent(), '세로 먼저 꺾기');
+  await page.locator('[data-turn-link="1"]').click();
+  await saved(page, r => r.slides[0].items.find(it => it.t === 'link')?.elbow === -1);
+  await page.locator('[data-curve="on"]').click();
+  await saved(page, r => { const l = r.slides[0].items.find(it => it.t === 'link'); return l?.curve === 1 && !l.elbow; });
+  await page.locator('[data-elbow="on"]').click();
+  await saved(page, r => { const l = r.slides[0].items.find(it => it.t === 'link'); return l?.elbow && !l.curve; });
+  // The corner points are inked in the exported picture; the straight midpoint is not.
+  const out = await page.evaluate(async () => {
+    const {designToCanvas, cleanDesign} = await import('/src/index.js');
+    const {linkEnds, linkCorners} = await import('/src/links.js');
+    const slide = cleanDesign((await window.readSaved()).slides[0], {keepSpaces: true});
+    const link = slide.items.find(it => it.t === 'link');
+    const [[x1, y1], [x2, y2]] = linkEnds(link, 16 / 9), [m1, m2] = linkCorners(link, 16 / 9);
+    const made = await designToCanvas(slide, {width: 800, aspect: 16 / 9}), ctx = made.canvas.getContext('2d');
+    const dark = ([x, y]) => { let best = 255; for (let dx = -3; dx <= 3; dx++) for (let dy = -3; dy <= 3; dy++) { const [r, g, b] = ctx.getImageData(Math.round(x * 8) + dx, Math.round(y * 4.5) + dy, 1, 1).data; best = Math.min(best, Math.max(r, g, b)); } return best; };
+    const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    const quarter = [x1 + (x2 - x1) * .25, y1 + (y2 - y1) * .25];          // on the straight line but off every elbow leg
+    return {legs: [dark(mid([x1, y1], m1)), dark(mid(m1, m2)), dark(mid(m2, [x2, y2]))], straight: dark(quarter), right: Math.abs(m1[0] - x1) < 1e-6 || Math.abs(m1[1] - y1) < 1e-6};
+  });
+  assert.ok(out.legs.every(v => v < 120), `legs ${out.legs}`);
+  assert.ok(out.straight > 200, `straight quarter point ${out.straight}`);
+  assert.equal(out.right, true);
+  assert.deepEqual(external, []);
+});
