@@ -6,13 +6,14 @@ import {mountPptxApp} from './pptx-import/app.js';
 import {toast} from './ui.js';
 import {getDesign,putDesign,replaceDesignIfUnchanged} from './store.js';
 import {migrateRecord} from './designs.js';
+import {ONBATANG_VERSION} from './version.js';
 
 export async function startOnbatang({root=document.getElementById('app'),fonts=ONBATANG_FONTS,titleFont=ONBATANG_TITLE_FONT,storage='minican',onView,onMaterialSaved,materialActions=[],fontServices,styles=true,...options}={}){
  if(!root)throw Error('onbatang root');
  if(isMinicanStarted())throw Error('minican already started');
  // Existing visitors may still have the previous CSS cached for an hour.
  // A release key fetches the matching editor layout without reloading a drawing.
- if(styles)for(const href of [new URL('../src/editor.css?v=0.31.0',import.meta.url).href,new URL('./app.css?v=0.31.0',import.meta.url).href,new URL('./brand.css?v=0.31.0',import.meta.url).href,new URL('./pptx-import/style.css?v=0.31.0',import.meta.url).href]){
+ if(styles)for(const href of ['../src/editor.css','./app.css','./brand.css','./pptx-import/style.css'].map(path=>new URL(`${path}?v=${ONBATANG_VERSION}`,import.meta.url).href)){
   if(![...document.querySelectorAll('link[rel=stylesheet]')].some(link=>link.href===href)){const link=document.createElement('link');link.rel='stylesheet';link.href=href;document.head.append(link);}
  }
  const editor=document.createElement('div'),workspace=document.createElement('section');workspace.className='op-root';workspace.hidden=true;root.classList.add('cv-standalone-shell');root.replaceChildren(editor,workspace);

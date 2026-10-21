@@ -9,6 +9,7 @@ import {
   cleanBg, cleanItems, cleanDesign, emptyDesign, cleanItem, cleanImg, moveLayer, newPresetText, newEmoji, newShape, newArt, newYouTube, newPhoto, moveItem, rotateItem,
   designMotion, reorder, duplicateItem, pasteItem, itemLabel, sizeOf, resizeTo, sizeRange, alignItem, coverItem, layoutItems, EDGE, canEdge, canRound, cornerOf, THICK, isLine, thickOf, thicken,
   designVideo, cleanVideo, trimVideo, videoSeconds, videoTime, VIDEO_FITS, MIN_VIDEO, rebaseItems, alignBoxes, distributeBoxes, clampShift, scaleItems, regroup, newGroupId,
+  styleOf, applyStyle,
 } from './model.js';
 import { ENTERS, COMBOS, TRANSITIONS, STILL, planMotion, playEnter, playDesign, playTransition } from './motion.js';
 import { searchStickers } from './stickers.js';
@@ -88,7 +89,7 @@ export function createEditor({
   uploads = null, usedElsewhere = null, onRemoveUpload = null, onMotionAll = null, canPaste = () => true,
   documentImport = null, colorPalettes = null,
   saveVideo = null, createCamera = null, videoLimits = null, videoNote = '', videoHint = '',
-  onSelect = null, lockedBy = null,
+  onSelect = null, lockedBy = null, slideMenu = null,
 } = {}) {
   let card = null;            // 지금 꾸미는 디자인(card.items 를 새 목록으로, card.bg 를 새 값으로 바꿔 끼운다)
   let palettes;try{palettes=cleanPalettes(colorPalettes?.read());}catch{palettes=cleanPalettes();}
@@ -222,6 +223,9 @@ export function createEditor({
   const panel = el('div', { class: 'fe-panel' });
   const fileInput = el('input', { type: 'file', accept: ACCEPT_IMAGES, hidden: true, onChange: onPhotoPicked });
   const videoInput = el('input', { type: 'file', accept: ACCEPT_VIDEOS, hidden: true, onChange: onVideoPicked });
+  const replaceInput = el('input', { type: 'file', accept: ACCEPT_IMAGES, hidden: true, onChange: onReplacePicked });
+  let replaceFor = null;      // 사진 바꾸기로 고른 사진(이름표, 없으면 번호)
+  let styleClip = null;       // 스타일 복사로 담아 둔 꾸밈 값(styleOf)
   const camBox = el('div', { class: 'fe-cam', role: 'group', 'aria-label': '카메라로 찍기', tabindex: '-1' });
   // 발표자 노트: 그 장을 발표할 때 발표자만 보는 글. 그림에는 나오지 않는다. 프로젝트가 notes 조각을 놓을 자리를 정한다.
   const notesInput = el('textarea', {
@@ -1044,20 +1048,17 @@ export function createEditor({
     }
     const it = cur();
     const rect = stage.getBoundingClientRect();
-    const at = { x: (x - rect.left) / rect.width * 100, y: (y - rect.top) / rect.height * 100 };
-    const openedAt = performance.now();
+    // 붙여넣을 자리: 카드 안을 눌렀으면 그 자리, 카드 밖이면 정해 둔 자리(null).
+    const inside = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+    const at = inside ? { x: (x - rect.left) / rect.width * 100, y: (y - rect.top) / rect.height * 100 } : null;
     // 한 줄: 아이콘 · 이름 · 단축키. 못 쓰는 일은 흐리게 두고(자리가 바뀌지 않게), 지우기처럼 되돌려야 하는 일은 맨 아래에 따로 둔다.
-    const row = (pic, label, hint, fn, { disabled = false, danger = false } = {}) => el('button', {
-      class: `fe-mi${danger ? ' danger' : ''}`, type: 'button', role: 'menuitem', disabled,
-      onClick: () => {
-        // 길게 눌러 연 직후 손가락을 떼면서 눌리는 것은 모른 척한다(메뉴가 손가락 바로 밑에 뜨므로).
-        if (touch && performance.now() - openedAt < 350) return;
-        closeMenu();
-        fn();
-      },
-    }, icon(pic), el('span', { class: 'fe-mi-name', text: label }), hint ? el('kbd', { text: hint }) : null);
-    const sep = () => el('div', { class: 'fe-msep', role: 'separator' });
+    const row = (pic, label, hint, run, { disabled = false, danger = false } = {}) => ({ icon: pic, label, hint, run, disabled, danger });
     const last = items().length - 1;
+    // 스타일 복사 · 붙여넣기(캔바의 스타일 복사, 파워포인트의 서식 복사): 꾸밈 값만 옮긴다.
+    const styleRows = (one) => [
+      ...(one ? [row('copy', '스타일 복사', '', () => { styleClip = styleOf(one); notify('스타일을 담았어요. 다른 요소를 우클릭해 "스타일 붙여넣기"를 눌러요.'); })] : []),
+      row('fill', '스타일 붙여넣기', '', pasteStyle, { disabled: !styleClip }),
+    ];
     // 묶음: 글 고치기 → 복사·붙여넣기 → 겹치는 순서 → 뒤집기 → 잠금 → 삭제. 묶음 사이에 구분선을 둔다(빈 묶음은 건너뛴다).
     let groups;
     if (many.length) {
@@ -1068,6 +1069,7 @@ export function createEditor({
           row('paste', '붙여넣기', 'Ctrl+V', () => clipPaste(), { disabled: !clipboard }),
           row('duplicate', '복제', 'Ctrl+D', copyMany),
         ],
+        styleRows(null),
         [
           row('toFront', '맨 앞으로', '', () => orderMany('top')),
           row('toBack', '맨 뒤로', '', () => orderMany('bottom')),
@@ -1085,6 +1087,8 @@ export function createEditor({
       groups = [
         [row('paste', '붙여넣기', 'Ctrl+V', () => clipPaste(at), { disabled: !clipboard })],
         [row('undo', '실행 취소', 'Ctrl+Z', undo, { disabled: !past.length }), row('redo', '다시 실행', 'Ctrl+Y / Ctrl+Shift+Z', redo, { disabled: !future.length })],
+        // 장(슬라이드)에 하는 일: 새 장 · 복제 · 바탕 · 발표 … 프로젝트가 정한다(slideMenu).
+        ...hostRows(slideMenu),
       ];
     } else if (it.lock) {
       groups = [[row('unlock', '잠금 해제', '', () => change({ lock: false })), row('copy', '복사', 'Ctrl+C', () => { clipCopy(); focusStage(); })]];
@@ -1097,6 +1101,14 @@ export function createEditor({
           row('paste', '붙여넣기', 'Ctrl+V', () => clipPaste(), { disabled: !clipboard }),
           row('duplicate', '복제', 'Ctrl+D', copy),
         ],
+        styleRows(it),
+        // 사진: 그 자리에서 자르기 · 같은 자리와 크기로 다른 사진으로 바꾸기 · 바탕으로 깔기
+        it.t === 'image' ? [
+          row('crop', '자르기', '', openCrop),
+          row('swap', '사진 바꾸기', '', replacePhoto, { disabled: busy }),
+          row('cover', '바탕으로 깔기', '', toBackground),
+        ] : [],
+        [row('align', '페이지 가운데로', '', centerOnPage)],
         [
           row('toFront', '맨 앞으로', '', () => order('top', { keepOpen: false }), { disabled: sel === last }),
           row('forward', '앞으로', '', () => order('up', { keepOpen: false }), { disabled: sel === last }),
@@ -1112,8 +1124,31 @@ export function createEditor({
         [row('trash', '삭제', 'Delete', remove, { danger: true })],
       ];
     }
-    const rows = groups.filter((g) => g.length).flatMap((g, i) => (i ? [sep(), ...g] : g));
-    const node = el('div', { class: `fe-menu${touch ? ' touch' : ''}`, role: 'menu', 'aria-label': many.length ? `고른 ${many.length}개 메뉴` : it ? `${itemLabel(it)} 메뉴` : '카드 메뉴' }, ...rows);
+    showMenu(x, y, groups, { touch, label: many.length ? `고른 ${many.length}개 메뉴` : it ? `${itemLabel(it)} 메뉴` : '카드 메뉴' });
+  }
+  // 프로젝트가 주는 메뉴 줄: [[{ icon, label, hint?, run, disabled?, danger? }, …], …]. 잘못된 것은 건너뛴다.
+  function hostRows(source) {
+    let groups = [];
+    try { groups = typeof source === 'function' ? source() : source; } catch (ex) { console.error(ex); return []; }
+    return (Array.isArray(groups) ? groups : []).map((g) => (Array.isArray(g) ? g : []).filter((r) => r && typeof r.label === 'string' && typeof r.run === 'function'));
+  }
+  /** 메뉴를 (x, y) 에 띄운다. groups: 줄 묶음(묶음 사이에 구분선). 줄: { icon, label, hint, run, disabled, danger } */
+  function showMenu(x, y, groups, { touch = false, label = '메뉴' } = {}) {
+    closeMenu();
+    const openedAt = performance.now();
+    const button = (r) => el('button', {
+      class: `fe-mi${r.danger ? ' danger' : ''}`, type: 'button', role: 'menuitem', disabled: !!r.disabled,
+      onClick: () => {
+        // 길게 눌러 연 직후 손가락을 떼면서 눌리는 것은 모른 척한다(메뉴가 손가락 바로 밑에 뜨므로).
+        if (touch && performance.now() - openedAt < 350) return;
+        closeMenu();
+        try { r.run(); } catch (ex) { console.error(ex); notify('그 일을 하지 못했어요. 다시 해 봐요.'); }
+      },
+    }, icon(r.icon || 'check'), el('span', { class: 'fe-mi-name', text: r.label }), r.hint ? el('kbd', { text: r.hint }) : null);
+    const sep = () => el('div', { class: 'fe-msep', role: 'separator' });
+    const rows = groups.filter((g) => g.length).flatMap((g, i) => (i ? [sep(), ...g.map(button)] : g.map(button)));
+    if (!rows.length) return;
+    const node = el('div', { class: `fe-menu${touch ? ' touch' : ''}`, role: 'menu', 'aria-label': label }, ...rows);
     document.body.append(node);
     // 화면 밖으로 나가지 않게 자리를 맞춘다.
     const w = node.offsetWidth;
@@ -1224,6 +1259,80 @@ export function createEditor({
     renderUi();
     onChange();
     keepKeys();                        // 다시 그려 누른 칸이 사라져도 Ctrl+Z 가 듣게
+  }
+
+  // 담아 둔 스타일을 고른 것(여럿이면 모두)에 입힌다. 잠긴 것은 건너뛴다. 한 번에 되돌린다.
+  function pasteStyle() {
+    if (!styleClip) return;
+    const idx = chosen().filter((i) => !items()[i].lock);
+    if (!idx.length) return;
+    endEdit();
+    stopDrag();
+    const list = items().slice();
+    let changed = 0;
+    for (const i of idx) {
+      const next = cleanItem(applyStyle(list[i], styleClip), { keepSpaces: true });
+      if (next && JSON.stringify(next) !== JSON.stringify(list[i])) { list[i] = next; changed++; }
+    }
+    if (!changed) { notify('이 요소에는 담아 둔 스타일에서 옮길 것이 없어요.'); return; }
+    remember();
+    card.items = list;
+    listChanged(sel, many);
+    focusStage();
+  }
+  // 사진 바꾸기: 고른 사진의 자리·크기·기울기·뒤집기·모양은 그대로 두고, 새 사진을 그 틀에 꽉 차게(가운데를 잘라) 넣는다.
+  function replacePhoto() {
+    const it = cur();
+    if (!it || it.t !== 'image' || it.lock || busy) return;
+    replaceFor = it.id || sel;
+    replaceInput.click();
+  }
+  async function onReplacePicked() {
+    const file = replaceInput.files?.[0];
+    replaceInput.value = '';
+    const key = replaceFor, target = card;
+    replaceFor = null;
+    if (!file || !card || busy) return;
+    busy = true;
+    try {
+      const made = await shrinkImage(file, { max: settings().photoEdge, alpha: true });
+      const img = await store(made);
+      if (card !== target) return;
+      const i = typeof key === 'string' ? items().findIndex((k) => k.id === key) : key;
+      const old = items()[i];
+      if (!old || old.t !== 'image' || old.lock) return;
+      // 틀의 화면 비율(가로 ÷ 세로)과 새 사진의 비율로 가운데를 잘라 꽉 채운다. 원래 사진의 출처 표시는 새 사진에 남기지 않는다.
+      const { url, path, crop, source, assetRefs, origin, ...rest } = old;
+      const frame = old.w / old.h * settings().aspect, picture = 1 / (made.ratio || 1);
+      const next = cleanItem({ ...rest, url: img.url, ...(img.path ? { path: img.path } : {}), ...(cleanCrop(coverCrop(picture, frame)) ? { crop: cleanCrop(coverCrop(picture, frame)) } : {}) }, { keepSpaces: true });
+      if (!next) throw new Error('replace');
+      if (libraryOn() && !library.some(sameUrl(img.url))) library.push(img.path ? { url: img.url, path: img.path } : { url: img.url });
+      endEdit();
+      stopDrag();
+      sel = i;
+      many = [];
+      remember();
+      put(next, { rebuild: true });
+      renderUi();
+      onChange();
+      focusStage();
+    } catch (ex) {
+      console.error(ex);
+      notify('사진을 바꾸지 못했어요. PNG나 JPG 그림 파일인지 확인하고 다시 해 봐요.', 4000);
+    } finally {
+      busy = false;
+      if (tab === 'upload') renderPanel();
+    }
+  }
+  // 페이지 가운데로: 가로·세로 모두 가운데(한 번에 되돌린다).
+  function centerOnPage() {
+    const it = cur();
+    if (!it || it.lock) return;
+    const node = nodes[sel];
+    const rect = stage.getBoundingClientRect();
+    const hw = node ? node.offsetWidth / (rect.width || 1) * 50 : 0, hh = node ? node.offsetHeight / (rect.height || 1) * 50 : 0;
+    const to = alignItem(alignItem(it, 'center', hw, hh), 'middle', hw, hh);
+    change({ x: to.x, y: to.y });
   }
 
   // 사진을 카드에 꽉 차게 키워 맨 뒤에 깐다.
@@ -2586,7 +2695,7 @@ export function createEditor({
     const body = el('div', { class: 'fe-tabbody', role: 'tabpanel', 'aria-label': title },
       el('div', { class: 'fe-panel-head' }, el('b', { class: 'fe-panel-title', text: title }), el('span', { class: 'fe-panel-desc', text: desc })),
       ...tabBody().filter(Boolean));
-    panel.replaceChildren(tabs, body, fileInput, videoInput);
+    panel.replaceChildren(tabs, body, fileInput, videoInput, replaceInput);
     tabs.scrollLeft = priorTabsLeft;
     shownTab = tab;
     if (keep) body.scrollTop = keep;
@@ -3402,6 +3511,10 @@ export function createEditor({
     stage, toolbar, panel, mount, setDesign,
     /** 발표자 노트 칸(접고 펴는 칸). 프로젝트가 그림 아래 등 원하는 자리에 놓는다. 놓지 않으면 노트는 그대로 저장만 된다. */
     notes,
+    /** 카드 밖(그림 둘레의 빈 곳)을 우클릭했을 때: 고르기를 풀고 카드의 빈 곳 메뉴(붙여넣기 · 되돌리기 · slideMenu)를 띄운다. */
+    menuAt: (x, y) => { if (!card) return; select(-1); openMenu(x, y, { keep: true }); },
+    /** 프로젝트가 만든 메뉴를 편집기와 같은 모양으로 띄운다(슬라이드 목록 등). groups: [[{ icon, label, hint?, run, disabled?, danger? }]] */
+    showMenu: (x, y, groups, { label = '메뉴' } = {}) => showMenu(x, y, hostRows(groups), { label }),
     /** Host navigation can restore an existing tool without knowing its DOM selectors. */
     openTab: id => { if (card && tabsHere().some(([name]) => name === id)) openTab(id); },
     /** 함께 꾸밀 때: 다른 사람이 바꾼 것을 끼워 넣는다 merge(design, patch) · 지금 끼워 넣어도 되는지 idle() */
