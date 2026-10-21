@@ -623,6 +623,15 @@ function openDesign(record, isNew) {
     el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' }),
     name, O.status, ...(material ? [material] : []), ...(lesson?[lesson]:[]), ...(accountLibrary?[accountLibrary]:[]), el('span', { class: 'cv-bar-gap' }), shapes, el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' }), tourButton('editor', O), show, down);
   const shell = editorShell(O, bar);
+  // 꾸미는 화면 어디를 우클릭해도(그림 둘레 · 옆 칸 · 도구 막대 · 노트 머리 …) 브라우저 메뉴 대신 장 메뉴를 띄운다.
+  // 카드와 슬라이드 목록은 자기 메뉴를 먼저 띄운다(defaultPrevented). 글을 쓰는 칸은 브라우저 메뉴(붙여넣기 · 맞춤법)를 그대로 둔다.
+  // PPT 가져오기 · 활동 설정처럼 다른 화면이 편집 영역을 덮고 있을 때도 그 화면의 것이라 건드리지 않는다.
+  shell.addEventListener('contextmenu', (e) => {
+    if (e.defaultPrevented || O.inlineImport || O.closed || O.editor.stage.contains(e.target)) return;
+    if (e.target.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"]), a[href], iframe, .cv-activity-config')) return;
+    e.preventDefault();
+    O.editor.menuAt(e.clientX, e.clientY);
+  });
   markRatio(O, shapes);
   setView('edit');
   app.replaceChildren(shell);
@@ -690,13 +699,7 @@ function editorShell(O, bar) {
     if (i !== O.at) return;
     O.editor.showMenu(e.clientX, e.clientY, slideMenuGroups(O, { strip: true }), { label: `${i + 1}번째 장 메뉴` });
   });
-  // 그림 둘레의 빈 곳을 우클릭해도 브라우저 메뉴 대신 카드의 빈 곳과 같은 메뉴를 띄운다.
   const canvasBox = el('div', { class: 'cv-canvas' }, O.editor.stage);
-  canvasBox.addEventListener('contextmenu', (e) => {
-    if (O.editor.stage.contains(e.target) || e.target.closest?.('.cv-activity-config, input, textarea, select, [contenteditable="true"]') || O.inlineImport) return;
-    e.preventDefault();
-    O.editor.menuAt(e.clientX, e.clientY);
-  });
   const work = el('section', { class: 'cv-work', 'aria-label': '그림' },
     el('div', { class: 'cv-tools' }, O.editor.toolbar),
     canvasBox,
