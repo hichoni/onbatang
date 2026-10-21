@@ -29,7 +29,7 @@ import {
   fontFamilyOf, fontList, textLimit, planMotion,
 } from '../src/index.js';
 import { HERO_ART, HERO_VIEW } from './hero-art.js';
-import { startTour, stopTour, tourSeen, markTourSeen, HOME_STEPS, EDITOR_STEPS } from './tour.js';
+import { startTour, stopTour, tourSeen, markTourSeen, HOME_STEPS, EDITOR_STEPS, NEWS_STEPS, NEWS_KEY } from './tour.js';
 // 브라우저가 녹화한 WebM 에는 길이가 적혀 있지 않다. 영상 내려받기에 "길이 적어 넣기"를 쓴다.
 import { fixWebmBlob } from './webm.js';
 // 영상 장면을 카메라로 찍을 때 쓰는 카메라(찍기 · 멈추기 · 앞뒤 카메라 바꾸기).
@@ -317,9 +317,10 @@ function tourButton(where, O = null) {
   return btn;
 }
 // 꾸미는 화면의 안내: 단계마다 옆 칸에 그 도구를 펼친다(접혀 있으면 편다).
-function editorTour(O) {
+function editorTour(O, { news = false } = {}) {
   startTour({
-    steps: EDITOR_STEPS,
+    steps: news ? NEWS_STEPS : EDITOR_STEPS,
+    ...(news ? { title: '온바탕 새 기능' } : {}),
     show: (view) => {
       if (O.closed) return;
       const tab = O.editor.panel.querySelector(`.fe-tab[data-tab="${view}"]`);
@@ -659,9 +660,14 @@ function openDesign(record, isNew) {
   renderStrip(O);
   O.materialLoadingPromise=loadMaterialNavigation(O);
   // 처음 꾸미는 화면을 열면 사용법 안내를 한 번 보여 준다(이 기기에서 한 번). 언제든 ? 단추로 다시 본다.
+  // 안내를 이미 본 기기에는 새 기능이 들어온 뒤 처음 열 때 새 기능 안내를 한 번 보여 준다(처음 온 기기의 안내에는 이미 들어 있다).
   if (!tourSeen('editor')) {
     markTourSeen('editor');
+    markTourSeen(NEWS_KEY);
     setTimeout(() => { if (!O.closed && app.dataset.view === 'edit') editorTour(O); }, 700);
+  } else if (!tourSeen(NEWS_KEY)) {
+    markTourSeen(NEWS_KEY);
+    setTimeout(() => { if (!O.closed && app.dataset.view === 'edit') editorTour(O, { news: true }); }, 700);
   }
   window.scrollTo({ top: 0 });
 }

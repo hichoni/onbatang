@@ -16,7 +16,7 @@
   },
   "previewScriptSha256": "CxniqZwjYsO/QbCuMDojvI1zrz++0iuiCbcDE2aeeqY=",
   "sources": {
-    "app/designs.js": "e99a019ddca8aab1fba7cc9740ef46d94e1863adc41b7c2ac9756c3d29eae671",
+    "app/designs.js": "76cd0fcac85c7ddcad30c4c228be04276fcaffad121b282f86a5bfb80c6af07a",
     "app/import-document.js": "c44c87c8bc22e18725e705a8887c79c14bd14bada41084ce33e71d6badd128e6",
     "app/pptx-import/bullets.js": "7f19b7f374bf31645195ad97c24569e1840c6517af46cd8782d245f70a32634b",
     "app/pptx-import/converter.js": "07c9234c391b1f697c6ebe58d6ff083ac9dbad69b8be66c1d1e12db15a269aa5",
@@ -25,12 +25,12 @@
     "app/pptx-import/preview-punctuation.js": "8ff4f855942dde60b6302e775e5a06b58b411e34b015c129088157533934c90e",
     "app/pptx-import/worker.js": "d4e9ac47e75357e6fdcf5d38d703c337651c2c3720fde01f3bbfa071ad1823c0",
     "app/zip.js": "345e936f955665a859d7fa86d9c1b9f4846d75a944c1df0f3d0c7d477152c026",
-    "package-lock.json": "5b72c52ba6c38ac7bcfd3e6f92f032f24229f056cb2b4549e6b0cc98a4c33428",
+    "package-lock.json": "4a9717931f1ff5c6169ac8c75f4e9b2ba92bc159a5eb5ab36f342b5ce1f62dd0",
     "src/activity.js": "776e63454bf361306c78c91d39ccd11a1aece40f63d99e64b3756cfd2ee39a8e",
     "src/crop.js": "ec9159574565f560476ede8f5292609ab74eae42d130fe0bf59a1ad8844ac1fb",
     "src/document.js": "2e1f0df13c0bd521a0f9d2209e5bfed5d8863267621528edee014dcf62848f48",
     "src/gai-app.js": "b475f79811d851731cc5b65ab312b0b4b64274e7661b6a5b79e71b6e5d072073",
-    "src/links.js": "428023a0df1c4250ea9493015ef4c552d097c90ee5f89215a3a704f1966077c2",
+    "src/links.js": "082d6e7b847e7fef431b42a328130558ff43e558c8a82fbee42780d1d70beec3",
     "src/pixel-art.js": "533a61b81f49c6bbf8e33b65681d5db76853a2a37c7d9d089f6c00c0c0ec0089",
     "tools/build-pptx-import.mjs": "54e7e3e87ecf933018338d5d77ecb8eec7318ce8fd95ff1c0c3096ecadcb0b5b"
   },
@@ -88,8 +88,8 @@
       "sha256": "a681e9d183c72b4af4856935893805eb48c08f0f5a3f260203db7444c20fb98a"
     },
     "pptx-worker.js": {
-      "bytes": 150973,
-      "sha256": "e70f0e538f229a83728e65459cc19bb65f2b955a8efe8e57ada804a9477802f7"
+      "bytes": 151026,
+      "sha256": "06d6f4e5d22e4df98f5ba422aa9392d955066fee22f32776fb7bd196abc72c50"
     },
     "preview-frame.html": {
       "bytes": 1243897,

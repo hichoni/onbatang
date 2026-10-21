@@ -366,7 +366,7 @@ async function setup(t,{base='',viewport={width:1440,height:1000},touch=false}={
  // without a try/catch in opaque sandbox frames. Keep registration blocked
  // without manufacturing a SecurityError in the real PPT preview iframe.
  const context=await browser.newContext({viewport,isMobile:touch,hasTouch:touch,reducedMotion:'reduce',serviceWorkers:'allow',acceptDownloads:true});
- await context.addInitScript(()=>{try{const api=navigator.serviceWorker;if(api)api.register=async()=>undefined;localStorage.setItem('onbatang-tour-seen-v1:editor','1');}catch{}});
+ await context.addInitScript(()=>{try{const api=navigator.serviceWorker;if(api)api.register=async()=>undefined;localStorage.setItem('onbatang-tour-seen-v1:editor','1');localStorage.setItem('onbatang-tour-seen-v1:news-0.44','1');}catch{}});
  context.on('serviceworker',()=>serviceWorkers++);
  await context.route('**/*',route=>{
   const url=new URL(route.request().url());

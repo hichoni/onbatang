@@ -87,7 +87,7 @@ test('actual Edge exports editable objects and visible image slides without miss
     store.setStorageName(base?'gailab-minican':'minican');
     const record=newRecord('16:9');record.name='자체 제작 PPTX 내려받기';
     record.slides=[1,2].map(number=>({id:`pdownload00${number}`,bg:'paper',items:[{id:`edownload00${number}`,t:'text',text:`Native page ${number}`,x:50,y:50,w:70,size:5}]}));
-    await store.putDesign(record);(await import(base+'/app/tour.js')).markTourSeen('editor');return record.id;
+    await store.putDesign(record);{const tour=await import(base+'/app/tour.js');tour.markTourSeen('editor');tour.markTourSeen(tour.NEWS_KEY);}return record.id;
   },base);
   await browserPage.goto(origin+(hosted?'/minican-app.html':'/app/index.html'));
   await browserPage.getByRole('button',{name:'자체 제작 PPTX 내려받기 열기',exact:true}).click();await browserPage.locator('.cv-name').waitFor();

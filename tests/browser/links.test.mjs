@@ -10,7 +10,7 @@ const root = resolve(fileURLToPath(new URL('../../', import.meta.url)));
 const options = {skip: !process.env.MINICAN_PLAYWRIGHT_PATH, timeout: 120000};
 const html = `<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/src/editor.css"><link rel="stylesheet" href="/app/app.css"><body class="mc-app"><main id="app"></main><script type="module">
 import {startMinican} from '/app/app.js';import {newRecord} from '/app/designs.js';import {putDesign,getDesign,setStorageName} from '/app/store.js';
-setStorageName('links-fixture');try{localStorage.setItem('onbatang-tour-seen-v1:editor','1');}catch{}
+setStorageName('links-fixture');try{localStorage.setItem('onbatang-tour-seen-v1:editor','1');localStorage.setItem('onbatang-tour-seen-v1:news-0.44','1');}catch{}
 const seed=newRecord('16:9');seed.name='연결선 검수';
 seed.slides=[{id:'plink00001',bg:'#ffffff',items:[
  {id:'ebox000001',t:'shape',shape:'round',x:25,y:40,w:18,h:22,color:'#3d4bc0'},
@@ -265,5 +265,62 @@ test('each end of a connector can stick to a chosen side of its piece, stays the
   await saved(page, r => { const l = r.slides[0].items.find(it => it.t === 'link'); return l?.fromSide === 'top' && l.toSide === 'bottom'; });
   await page.locator('[data-to-side="auto"]').click();
   await saved(page, r => { const l = r.slides[0].items.find(it => it.t === 'link'); return l?.fromSide === 'top' && !('toSide' in l); });
+  assert.deepEqual(external, []);
+});
+
+test('dragging the middle handle of a curved or elbow connector reshapes it, saves it and can be undone or reset', options, async t => {
+  const {page, external} = await setup(t);
+  const shapes = page.locator('.cv-canvas .fe-card .fi-shape');
+  await shapes.nth(0).click();
+  await shapes.nth(1).click({modifiers: ['Shift']});
+  await page.locator('.fe-bar button').filter({hasText: '연결선'}).click();
+  await page.locator('.cv-canvas .fe-card .fi-link').waitFor();
+  const [p1, p2] = await ends(page);
+  await page.mouse.click((p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2);
+  const knob = page.locator('.cv-canvas .fe-link-knob');
+  assert.equal(await knob.isVisible(), false, 'a straight line has no handle');
+  await page.locator('.fe-bar button').filter({hasText: '화살표'}).click();
+  await page.locator('[data-curve="on"]').click();
+  await saved(page, r => r.slides[0].items.find(it => it.t === 'link')?.curve === 1);
+  await knob.waitFor();
+  assert.equal(await knob.getAttribute('data-kind'), 'bend');
+  // Drag the handle well away from the line: the curve deepens and the handle follows.
+  const before = await knob.boundingBox(), [bx, by] = [before.x + before.width / 2, before.y + before.height / 2];
+  const dir = [p2[1] - p1[1], -(p2[0] - p1[0])], len = Math.hypot(...dir), far = [bx + dir[0] / len * 60, by + dir[1] / len * 60];
+  await page.mouse.move(bx, by);
+  await page.mouse.down();
+  await page.mouse.move((bx + far[0]) / 2, (by + far[1]) / 2, {steps: 4});
+  await page.mouse.move(far[0], far[1], {steps: 4});
+  await page.mouse.up();
+  await saved(page, r => { const l = r.slides[0].items.find(it => it.t === 'link'); return l?.bend > .3; });
+  const after = await knob.boundingBox();
+  assert.ok(Math.hypot(after.x - before.x, after.y - before.y) > 30, 'the handle moved with the curve');
+  // The toolbar offers going back to the first shape; undo also works.
+  const arrowPop = async () => { if (!await page.locator('[data-curve="on"]').isVisible()) await page.locator('.fe-bar button').filter({hasText: '화살표'}).click(); };
+  await arrowPop();
+  await page.locator('[data-reset-link-shape="1"]').click();
+  await saved(page, r => { const l = r.slides[0].items.find(it => it.t === 'link'); return l?.curve === 1 && !('bend' in l); });
+  await page.keyboard.press('Control+z');
+  await saved(page, r => r.slides[0].items.find(it => it.t === 'link')?.bend > .3);
+  // Pick the line again by clicking a point on the drawn curve.
+  const onLine = await page.evaluate(() => {
+    const path = document.querySelector('.cv-canvas .fe-card .fi-link .fi-link-line'), m = path.getScreenCTM(), p = path.getPointAtLength(path.getTotalLength() / 2);
+    const q = new DOMPoint(p.x, p.y).matrixTransform(m);
+    return [q.x, q.y];
+  });
+  await page.mouse.click(onLine[0], onLine[1]);
+  await knob.waitFor();
+  // Elbow: the handle is on the middle run and moves where it turns.
+  await arrowPop();
+  await page.locator('[data-elbow="on"]').click();
+  await saved(page, r => r.slides[0].items.find(it => it.t === 'link')?.elbow === 1);
+  await page.waitForFunction(() => document.querySelector('.cv-canvas .fe-link-knob')?.dataset.kind === 'turn');
+  const e0 = await knob.boundingBox(), [ex, ey] = [e0.x + e0.width / 2, e0.y + e0.height / 2];
+  await page.mouse.move(ex, ey);
+  await page.mouse.down();
+  await page.mouse.move(ex - 40, ey, {steps: 5});
+  await page.mouse.up();
+  await saved(page, r => { const l = r.slides[0].items.find(it => it.t === 'link'); return l?.turn > 0 && l.turn < .5; });
+  assert.ok((await knob.boundingBox()).x < e0.x - 25, 'the turn moved left');
   assert.deepEqual(external, []);
 });

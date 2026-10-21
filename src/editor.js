@@ -15,7 +15,7 @@ import { ENTERS, COMBOS, TRANSITIONS, EMPHASES, STILL, planMotion, playEnter, pl
 import { searchStickers } from './stickers.js';
 import { ART_PACKS, artSvg, artColorable, artReady, loadArt, searchArt } from './art.js';
 import { designView, itemView, placeItem, paintCard, shapeThumb } from './render.js';
-import { layoutLinks, relink, LINK_LINE } from './links.js';
+import { layoutLinks, relink, LINK_LINE, linkHandle, dragLinkHandle } from './links.js';
 import { sceneView, scenePlayer, keepScene, probeVideo, ACCEPT_VIDEOS } from './scene.js';
 import { icon } from './icons.js';
 import { parseYouTube, ytStart, ytTime, ytWatch } from './youtube.js';
@@ -212,7 +212,9 @@ export function createEditor({
   const groupHandle = (corner) => el('span', { class: `fe-h fe-scale ${corner}`, dataset: { h: 'gscale', corner }, title: '함께 크기 바꾸기 · 모양 비율 유지 · Ctrl: 가운데 기준' });
   const groupBox = el('div', { class: 'fe-groupbox', hidden: true }, groupHandle('nw'), groupHandle('ne'), groupHandle('sw'), groupHandle('se'));
   const marquee = el('div', { class: 'fe-marquee', hidden: true });
-  const overlay = el('div', { class: 'fe-overlay' }, othersBox, manyBox, guideV, guideH, selBox, groupBox, marquee, sceneFlag);
+  // 고른 곡선 · 꺾인 선의 손잡이: 끌면 휘는 깊이와 쪽(곡선) · 꺾이는 자리(꺾인 선)가 바뀐다(links.js 의 linkHandle · dragLinkHandle).
+  const linkKnob = el('span', { class: 'fe-h fe-link-knob', dataset: { h: 'bend' }, hidden: true });
+  const overlay = el('div', { class: 'fe-overlay' }, othersBox, manyBox, guideV, guideH, selBox, linkKnob, groupBox, marquee, sceneFlag);
   const cropLayer = el('div', {class:'fe-crop-layer',hidden:true});
   const stage = el('div', {
     class: 'fe-stage', tabindex: '0', role: 'group',
@@ -662,7 +664,15 @@ export function createEditor({
     drawMany();
     const id = it?.id || '';
     if (onSelect && id !== lastSelId) { lastSelId = id; onSelect(id); }
-    // 연결선은 손잡이가 없다(잇는 조각을 옮기면 따라온다). 고른 선은 빛나는 것으로 보인다(editor.css).
+    // 연결선은 크기 손잡이가 없다(잇는 조각을 옮기면 따라온다). 고른 선은 빛나는 것으로 보이고, 곡선 · 꺾인 선은 가운데 손잡이 하나를 둔다.
+    const knob = it?.t === 'link' && node && !it.lock && !cropJob && !many.length ? linkHandle(it, settings().aspect) : null;
+    linkKnob.hidden = !knob;
+    if (knob) {
+      linkKnob.style.left = `${knob.at[0]}%`;
+      linkKnob.style.top = `${knob.at[1]}%`;
+      linkKnob.dataset.kind = knob.kind;
+      linkKnob.title = knob.kind === 'bend' ? '끌어서 휘는 정도 · 쪽 바꾸기' : '끌어서 꺾이는 자리 옮기기';
+    }
     selBox.hidden = !it || !node || !!cropJob || it.t === 'link';
     if (selBox.hidden) return;
     selBox.style.left = `${it.x}%`;
@@ -1632,7 +1642,7 @@ export function createEditor({
     focusStage();
     const it = cur();
     if (!it) return;
-    if (it.t === 'link') return;                     // 연결선은 끌어 옮기지 않는다(잇는 조각을 옮긴다)
+    if (it.t === 'link' && mode !== 'bend') return;  // 연결선은 끌어 옮기지 않는다(잇는 조각을 옮긴다). 가운데 손잡이만 끈다.
     try { stage.setPointerCapture(e.pointerId); } catch { /* 잡지 못해도 계속한다 */ }
     const rect = stage.getBoundingClientRect();
     const cx = rect.left + rect.width * it.x / 100;
@@ -1696,6 +1706,12 @@ export function createEditor({
       remember();
     }
     let next = from;
+    if (mode === 'bend') {
+      const byId = (id) => items().find((x) => x.id === id);
+      const patch = dragLinkHandle(from, byId(from.from), byId(from.to), [(e.clientX - rect.left) / rect.width * 100, (e.clientY - rect.top) / rect.height * 100], settings().aspect);
+      if (patch) put({ ...from, ...patch });
+      return;
+    }
     if (mode === 'move') {
       const moved = moveItem(from,
         from.x + (e.clientX - drag.px) / rect.width * 100,
@@ -2476,7 +2492,10 @@ export function createEditor({
           // 꺾어서: 두 조각이 옆으로 더 떨어져 있으면 가로 먼저, 위아래로 더 떨어져 있으면 세로 먼저 꺾는다.
           chip('꺾어서', !!it.elbow, { elbow: it.elbow || (it.w >= it.vh ? 1 : -1), curve: undefined }, { elbow: 'on' }),
           it.curve ? el('button', { class: 'fe-chip', type: 'button', dataset: { bendLink: '1' }, onClick: () => change({ curve: -it.curve }) }, '반대로 휘기') : null,
-          it.elbow ? el('button', { class: 'fe-chip', type: 'button', dataset: { turnLink: '1' }, onClick: () => change({ elbow: -it.elbow }) }, it.elbow > 0 ? '세로 먼저 꺾기' : '가로 먼저 꺾기') : null),
+          it.elbow ? el('button', { class: 'fe-chip', type: 'button', dataset: { turnLink: '1' }, onClick: () => change({ elbow: -it.elbow }) }, it.elbow > 0 ? '세로 먼저 꺾기' : '가로 먼저 꺾기') : null,
+          // 손잡이로 고친 깊이 · 꺾이는 자리를 처음 모양으로
+          (it.curve && Number.isFinite(it.bend)) || (it.elbow && Number.isFinite(it.turn)) ? el('button', { class: 'fe-chip', type: 'button', dataset: { resetLinkShape: '1' }, onClick: () => change({ bend: undefined, turn: undefined }) }, '처음 모양으로') : null),
+        it.curve || it.elbow ? el('p', { class: 'fe-note', text: it.curve ? '선 가운데의 동그란 손잡이를 끌면 휘는 정도와 쪽이 바뀌어요.' : '가운데 마디의 동그란 손잡이를 끌면 꺾이는 자리가 옮겨 가요.' }) : null,
         // 붙는 곳: 시작 조각 · 끝 조각마다 그 옆 가운데에 붙인다(자동이면 서로를 향하는 쪽).
         el('div', { class: 'fe-poshead', text: '붙는 곳' }),
         ...[['fromSide', '시작'], ['toSide', '끝']].map(([key, label]) => el('div', { class: 'fe-row fe-side-row', role: 'group', 'aria-label': `${label} 붙는 곳` },

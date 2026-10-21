@@ -10,7 +10,7 @@ import {resolve, extname, sep} from 'node:path';
 const root = resolve(fileURLToPath(new URL('../../', import.meta.url)));
 const options = {skip: !process.env.MINICAN_PLAYWRIGHT_PATH, timeout: 120000};
 
-async function setup(t) {
+async function setup(t, {seen = ['home', 'editor', 'news-0.44']} = {}) {
   const server = createServer(async (req, res) => {
     try {
       const path = new URL(req.url, 'http://localhost').pathname;
@@ -28,7 +28,7 @@ async function setup(t) {
   const origin = `http://127.0.0.1:${server.address().port}`;
   const context = await browser.newContext({reducedMotion: 'reduce', viewport: {width: 1280, height: 800}});
   await context.route('**/*', route => route.request().url().startsWith(origin + '/') ? route.continue() : route.abort());
-  await context.addInitScript(() => { try { for (const k of ['home', 'editor']) localStorage.setItem('onbatang-tour-seen-v1:' + k, '1'); } catch {} });
+  await context.addInitScript((keys) => { try { for (const k of keys) if (!localStorage.getItem('onbatang-tour-seen-v1:' + k)) localStorage.setItem('onbatang-tour-seen-v1:' + k, '1'); } catch {} }, seen);
   const page = await context.newPage();
   return {page, origin};
 }
@@ -90,4 +90,22 @@ test('the opening splash shows the slogan and lifts only after the first screen 
   assert.ok(await page.locator('.cv-hero').isVisible());
   assert.ok(await page.locator('.cv-mine h2').isVisible(), 'the list finished loading before the splash lifted');
   assert.equal(await page.locator('.cv-mine [data-onbatang-loading]').count(), 0);
+});
+
+test('a device that already saw the guide gets the new-features guide once when it next opens a drawing', options, async t => {
+  const {page, origin} = await setup(t, {seen: ['home', 'editor']});
+  await page.goto(origin + '/app/');
+  await splashGone(page);
+  await page.locator('.cv-start').first().click();
+  const card = page.locator('.onba-tour');
+  await card.waitFor();
+  assert.match(await card.locator('.onba-tour-top span').textContent(), /^온바탕 새 기능 · 1 \/ \d+$/);
+  assert.equal(await card.locator('h3').textContent(), '연결선으로 잇기');
+  await card.locator('.onba-tour-x').click();
+  await page.locator('.cv-back').click();
+  await page.waitForFunction(() => !document.body.classList.contains('cv-editing'));
+  await page.locator('.cv-start').nth(1).click();
+  await page.locator('.cv-canvas .fe-stage').waitFor();
+  await page.waitForTimeout(1200);
+  assert.equal(await page.locator('.onba-tour').count(), 0, 'shown only once');
 });

@@ -27,7 +27,7 @@ for(const width of [1440,390])test(`${gai?'Gai':'common'} HTML result return pre
  const {chromium}=await import(pathToFileURL(process.env.MINICAN_PLAYWRIGHT_PATH).href),browser=await chromium.launch({channel:'msedge',headless:true});t.after(()=>browser.close());
  const context=await browser.newContext({viewport:{width,height:900},acceptDownloads:true,reducedMotion:'reduce'}),origin=`http://127.0.0.1:${server.address().port}`,external=[],errors=[];
  await context.route('**/*',route=>{if(route.request().url().startsWith(origin+'/')||/^(data|blob):/.test(route.request().url()))return route.continue();external.push(route.request().url());return route.abort();});
- await context.routeWebSocket('**/*',s=>s.close());await context.addInitScript(()=>{try{localStorage.setItem('onbatang-tour-seen-v1:editor','1');}catch{}});
+ await context.routeWebSocket('**/*',s=>s.close());await context.addInitScript(()=>{try{localStorage.setItem('onbatang-tour-seen-v1:editor','1');localStorage.setItem('onbatang-tour-seen-v1:news-0.44','1');}catch{}});
  const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));await page.goto(origin+(gai?'/minican-app.html':'/authoring-fixture.html'));
  await page.locator('.cv-hero .cv-new-btn').click();assert.equal(await page.locator('[data-add-gai-app]').count(),gai?1:0);await page.getByRole('tab',{name:'내 자료',exact:true}).click();await page.getByRole('tab',{name:'PPT',exact:true}).click();await page.getByRole('button',{name:'내 PPT 올리기',exact:true}).click();
  await page.locator('[data-inline-import]').getByLabel('PPTX 파일 선택',{exact:true}).setInputFiles(resolve(commonRoot,'tools/fixtures/pptx/self-authored-4x3.pptx'));

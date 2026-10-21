@@ -199,3 +199,41 @@ test('connector ends can stick to a chosen side: straight, curved and elbow rout
   assert.ok(Math.abs(linkEnds(saved, 1)[0][0] - 20) < .01);
   assert.equal(Object.hasOwn(styleOf(saved).values, 'fromSide'), false);
 });
+
+test('curved and elbow connectors have one middle handle: dragging it sets the bend depth and side, or where the line turns', async () => {
+  const {linkHandle, dragLinkHandle, layoutLinks, LINK_BEND} = await import('../src/links.js');
+  const a = box('hboxaaaaa1', 20, 30), b = box('hboxaaaaa2', 80, 70);
+  const lay = patch => layoutLinks([a, b, link({from: 'hboxaaaaa1', to: 'hboxaaaaa2', line: .5, ...patch})], 1)[2];
+  assert.equal(linkHandle(lay({}), 1), null, 'a straight line has no handle');
+  // Curve: the handle sits on the curve's middle; dragging further out deepens it, across the line flips the side.
+  const c = lay({curve: 1}), h = linkHandle(c, 1);
+  assert.equal(h.kind, 'bend');
+  const deeper = dragLinkHandle(c, a, b, [h.at[0] + 6, h.at[1] - 6], 1);
+  assert.equal(deeper.curve, 1);
+  assert.ok(deeper.bend > .3 && deeper.bend <= LINK_BEND.max, JSON.stringify(deeper));
+  const moved = linkHandle(lay({curve: 1, bend: deeper.bend}), 1).at;
+  assert.ok(Math.hypot(moved[0] - h.at[0], moved[1] - h.at[1]) > 5, 'the handle followed the drag');
+  const flipped = dragLinkHandle(c, a, b, [62, 72], 1);
+  assert.equal(flipped.curve, -1);
+  assert.ok(dragLinkHandle(c, a, b, [50, 50], 1).bend === LINK_BEND.min, 'on the straight line: the shallowest bend');
+  // Elbow: the handle is on the middle run; dragging it moves the turn between the two ends.
+  const e = lay({elbow: 1}), eh = linkHandle(e, 1);
+  assert.equal(eh.kind, 'turn');
+  assert.ok(Math.abs(eh.at[0] - 50) < .01);
+  const t = dragLinkHandle(e, a, b, [40, 10], 1);
+  assert.ok(t.turn > .2 && t.turn < .3, JSON.stringify(t));
+  assert.ok(Math.abs(linkHandle(lay({elbow: 1, turn: t.turn}), 1).at[0] - 40) < .05);
+  assert.equal(dragLinkHandle(e, a, b, [-50, 10], 1).turn, 0, 'kept between the two ends');
+  // One-turn (ㄱ) and same-side (ㄷ) elbows have no middle handle.
+  assert.equal(linkHandle(lay({elbow: 1, fromSide: 'bottom', toSide: 'left'}), 1), null);
+  assert.equal(linkHandle(lay({elbow: 1, fromSide: 'right', toSide: 'right'}), 1), null);
+  // Saved only with its own shape, clamped, and dropped when it is the default.
+  configure({aspect: 1});
+  const keep = (patch) => cleanDesign({id: 'ppage00001', bg: '#fff', items: [a, b, link({from: 'hboxaaaaa1', to: 'hboxaaaaa2', ...patch})]}).items.find(it => it.t === 'link');
+  assert.equal(keep({curve: 1, bend: .55}).bend, .55);
+  assert.equal(keep({curve: 1, bend: 5}).bend, LINK_BEND.max);
+  assert.equal(Object.hasOwn(keep({curve: 1, bend: .3}), 'bend'), false);
+  assert.equal(Object.hasOwn(keep({bend: .55}), 'bend'), false, 'a straight line keeps no bend');
+  assert.equal(keep({elbow: -1, turn: .2}).turn, .2);
+  assert.equal(Object.hasOwn(keep({curve: 1, turn: .2}), 'turn'), false);
+});

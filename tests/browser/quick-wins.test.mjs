@@ -44,7 +44,7 @@ async function setup(t) {
   await context.route('**/*', route => /^https?:/.test(route.request().url()) && !route.request().url().startsWith(origin + '/') ? (external.push(route.request().url()), route.abort()) : route.continue());
   // The print iframe's print() would open a system dialog: record what it would print instead.
   await context.addInitScript(() => {
-    try { localStorage.setItem('onbatang-tour-seen-v1:editor', '1'); } catch {}
+    try { localStorage.setItem('onbatang-tour-seen-v1:editor', '1'); localStorage.setItem('onbatang-tour-seen-v1:news-0.44', '1'); } catch {}
     new MutationObserver(list => { for (const m of list) for (const n of m.addedNodes) if (n.classList?.contains('cv-print-frame')) {
       n.contentWindow.print = () => {
         const doc = n.contentDocument;

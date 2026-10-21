@@ -34,7 +34,7 @@ async function setup(t,{viewport={width:1440,height:1000},touch=false}={}){
  const {chromium}=await import(pathToFileURL(process.env.MINICAN_PLAYWRIGHT_PATH).href);
  const browser=await chromium.launch({channel:process.env.MINICAN_BROWSER||'msedge',headless:true});t.after(()=>browser.close());
  const context=await browser.newContext({viewport,isMobile:touch,hasTouch:touch,reducedMotion:'reduce',acceptDownloads:true});
- await context.addInitScript(()=>{try{localStorage.setItem('onbatang-tour-seen-v1:editor','1');const sw=navigator.serviceWorker;if(sw)sw.register=async()=>undefined;}catch{}});
+ await context.addInitScript(()=>{try{localStorage.setItem('onbatang-tour-seen-v1:editor','1');localStorage.setItem('onbatang-tour-seen-v1:news-0.44','1');const sw=navigator.serviceWorker;if(sw)sw.register=async()=>undefined;}catch{}});
  await context.route('**/*',route=>{const url=new URL(route.request().url());if(['data:','blob:','about:'].includes(url.protocol))return route.continue();if(url.origin!==origin){external.push(url.origin);return route.abort('blockedbyclient');}requests.push(url.pathname);return route.continue();});
  const page=await context.newPage();page.setDefaultTimeout(45000);
  page.on('pageerror',error=>errors.push(error.message));page.on('worker',worker=>workers.push(worker.url()));
