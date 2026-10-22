@@ -15,7 +15,7 @@ import { ENTERS, COMBOS, TRANSITIONS, EMPHASES, STILL, planMotion, playEnter, pl
 import { searchStickers } from './stickers.js';
 import { ART_PACKS, artSvg, artColorable, artReady, loadArt, searchArt } from './art.js';
 import { designView, itemView, placeItem, paintCard, shapeThumb } from './render.js';
-import { layoutLinks, relink, LINK_LINE, LINK_SHAPES, LINK_LABEL_MAX, linkSvg, linkHandle, dragLinkHandle, linkLabelSize, linkLabelT } from './links.js';
+import { layoutLinks, relink, LINK_LINE, LINK_SHAPES, LINK_LABEL_MAX, linkSvg, linkHandle, dragLinkHandle, linkLabelSize, linkLabelT, linkEnds, endSpot, pieceNear, boxOfItem } from './links.js';
 import { sceneView, scenePlayer, keepScene, probeVideo, ACCEPT_VIDEOS } from './scene.js';
 import { icon } from './icons.js';
 import { parseYouTube, ytStart, ytTime, ytWatch } from './youtube.js';
@@ -214,7 +214,12 @@ export function createEditor({
   const marquee = el('div', { class: 'fe-marquee', hidden: true });
   // 고른 곡선 · 꺾인 선의 손잡이: 끌면 휘는 깊이와 쪽(곡선) · 꺾이는 자리(꺾인 선)가 바뀐다(links.js 의 linkHandle · dragLinkHandle).
   const linkKnob = el('span', { class: 'fe-h fe-link-knob', dataset: { h: 'bend' }, hidden: true });
-  const overlay = el('div', { class: 'fe-overlay' }, othersBox, manyBox, guideV, guideH, selBox, linkKnob, groupBox, marquee, sceneFlag);
+  // 고른 연결선의 두 끝 손잡이: 끌어서 다른 조각에 놓으면 그 조각으로 다시 잇고, 놓은 자리의 옆 · 자리에 붙는다(가운데 언저리면 알아서).
+  const endKnob = (end) => el('span', { class: 'fe-h fe-link-end', dataset: { h: 'lend', corner: end }, hidden: true, title: end === 'from' ? '시작 끝: 끌어서 다른 조각 · 다른 자리에 잇기' : '닿는 끝: 끌어서 다른 조각 · 다른 자리에 잇기' });
+  const linkEndKnobs = [endKnob('from'), endKnob('to')];
+  // 끝을 끄는 동안 놓일 조각의 테두리
+  const linkTarget = el('div', { class: 'fe-link-target', hidden: true, 'aria-hidden': 'true' });
+  const overlay = el('div', { class: 'fe-overlay' }, othersBox, manyBox, guideV, guideH, selBox, linkTarget, linkKnob, ...linkEndKnobs, groupBox, marquee, sceneFlag);
   const cropLayer = el('div', {class:'fe-crop-layer',hidden:true});
   // 잇기 안내(꾸미기 칸의 "연결선" · 한 조각을 고른 뒤 "선 잇기"): 지금 누를 조각과 그만두기 단추.
   const linkHint = el('div', { class: 'fe-link-hint', role: 'status', hidden: true });
@@ -347,6 +352,7 @@ export function createEditor({
     guideV.hidden = true;
     guideH.hidden = true;
     marquee.hidden = true;
+    linkTarget.hidden = true;
   }
 
   // ---------- 카드(꾸미기 판) ----------
@@ -678,6 +684,11 @@ export function createEditor({
       linkKnob.dataset.kind = knob.kind;
       linkKnob.title = knob.kind === 'bend' ? '끌어서 휘는 정도 · 쪽 바꾸기' : '끌어서 꺾이는 자리 옮기기';
     }
+    const endsAt = it?.t === 'link' && node && !it.lock && !cropJob && !many.length && it.pts ? linkEnds(it, settings().aspect) : null;
+    linkEndKnobs.forEach((k, n) => {
+      k.hidden = !endsAt;
+      if (endsAt) { k.style.left = `${endsAt[n][0]}%`; k.style.top = `${endsAt[n][1]}%`; }
+    });
     selBox.hidden = !it || !node || !!cropJob || it.t === 'link';
     if (selBox.hidden) return;
     selBox.style.left = `${it.x}%`;
@@ -995,7 +1006,7 @@ export function createEditor({
     const at = Math.min(i, j);
     card.items = [...list.slice(0, at), link, ...list.slice(at)];
     listChanged(at);
-    notify('연결선으로 이었어요. 조각을 옮기면 선이 따라와요. 선을 누르면 위 막대의 "화살표"에서 곧게·둥글게·꺾어서와 붙는 곳을 바꿔요.', 5000);
+    notify('연결선으로 이었어요. 조각을 옮기면 선이 따라와요. 선을 누르면 위 막대의 "화살표"에서 곧게·둥글게·꺾어서를 바꾸고, 선 끝의 파란 점을 끌어 다른 조각 · 다른 자리에 이어요.', 5500);
     focusStage();
   }
   // 잇기: 화살표가 시작할 조각과 닿을 조각을 차례로 누른다. from: 이미 고른 조각에서 시작하면 그 번호.
@@ -1690,12 +1701,58 @@ export function createEditor({
     try { stage.setPointerCapture(e.pointerId); } catch { /* 잡지 못해도 계속한다 */ }
     drag = { mode: 'group', id: e.pointerId, rect: stage.getBoundingClientRect(), px: e.clientX, py: e.clientY, idx: many.slice(), from: many.map((i) => items()[i]), moved: false, tap };
   }
+  // 연결선의 끝을 끄는 중: 놓일 조각과 그 위의 붙는 곳을 찾아 선을 미리 그린다(잇는 다른 끝의 조각 · 빈 곳이면 처음 모양).
+  function dragLinkEnd(e) {
+    const { rect, from, corner: end } = drag, aspect = settings().aspect;
+    const point = [(e.clientX - rect.left) / rect.width * 100, (e.clientY - rect.top) / rect.height * 100];
+    if (!drag.ided) {
+      // 이름표가 없는 조각도 이을 수 있게 미리 붙여 둔다(보이는 것은 그대로).
+      drag.ided = true;
+      if (items().some((x) => x.t !== 'link' && !x.id)) card.items = items().map((x) => (x.t !== 'link' && !x.id ? { ...x, id: newId() } : x));
+    }
+    const list = items(), other = end === 'from' ? from.to : from.from;
+    const i = pieceNear(list, point, aspect);
+    const piece = i >= 0 && list[i].id !== other ? list[i] : null;
+    const sideKey = end === 'from' ? 'fromSide' : 'toSide', posKey = end === 'from' ? 'fromPos' : 'toPos';
+    let next = from;
+    if (piece) {
+      const { side, pos } = endSpot(piece, point, aspect);
+      next = { ...from, [end]: piece.id, [sideKey]: side, [posKey]: side && pos !== 0.5 ? pos : undefined };
+      const b = boxOfItem(piece, aspect);
+      Object.assign(linkTarget.style, { left: `${b.cx - b.hw}%`, top: `${(b.cy - b.hh) * aspect}%`, width: `${b.hw * 2}%`, height: `${b.hh * 2 * aspect}%` });
+    }
+    linkTarget.hidden = !piece;
+    drag.next = piece ? next : null;
+    const now = items()[sel];
+    if (now[end] !== next[end] || now[sideKey] !== next[sideKey] || now[posKey] !== next[posKey]) put(next, { rebuild: true });   // 선 그림을 새로 그려야 처음 모양으로 돌아와도 맞다
+  }
+  // 끝을 놓았다: 조각 위면 그대로 저장하고, 빈 곳 · 이미 이어진 두 조각 · 바뀐 것 없음이면 처음으로 되돌린다.
+  function dropLinkEnd() {
+    const { from, next, moved, corner: end } = drag;
+    stopDrag();
+    linkTarget.hidden = true;
+    if (!moved) { renderUi(); return; }
+    const a = next?.from, b = next?.to;
+    const twin = next && next[end] !== from[end] && items().some((x, k) => k !== sel && x.t === 'link' && ((x.from === a && x.to === b) || (x.from === b && x.to === a)));
+    const same = !next || twin || ['from', 'to', 'fromSide', 'toSide', 'fromPos', 'toPos'].every((k) => next[k] === from[k]);
+    if (same) {
+      put(from, { rebuild: true });
+      past.pop();                                   // 바뀐 것이 없으니 되돌리기 기록도 남기지 않는다
+      markHistory();
+      renderUi();
+      if (twin) notify('그 두 조각은 이미 이어져 있어요.', 2500);
+      else if (!next) notify('선의 끝은 조각 위에 놓아야 이어져요.', 2500);
+      return;
+    }
+    renderUi();
+    onChange();
+  }
   function start(mode, e, corner) {
     e.preventDefault();
     focusStage();
     const it = cur();
     if (!it) return;
-    if (it.t === 'link' && mode !== 'bend' && mode !== 'label') return;  // 연결선은 끌어 옮기지 않는다(잇는 조각을 옮긴다). 가운데 손잡이와 선 위의 글만 끈다.
+    if (it.t === 'link' && mode !== 'bend' && mode !== 'label' && mode !== 'lend') return;  // 연결선은 끌어 옮기지 않는다(잇는 조각을 옮긴다). 가운데 손잡이 · 두 끝 · 선 위의 글만 끈다.
     try { stage.setPointerCapture(e.pointerId); } catch { /* 잡지 못해도 계속한다 */ }
     const rect = stage.getBoundingClientRect();
     const cx = rect.left + rect.width * it.x / 100;
@@ -1765,6 +1822,7 @@ export function createEditor({
       if (labelAt !== (items()[sel].labelAt ?? 0.5)) put({ ...from, labelAt }, { rebuild: true });   // 선의 길은 그대로라 다시 그려야 글이 따라온다
       return;
     }
+    if (mode === 'lend') { dragLinkEnd(e); return; }
     if (mode === 'bend') {
       const byId = (id) => items().find((x) => x.id === id);
       const patch = dragLinkHandle(from, byId(from.from), byId(from.to), [(e.clientX - rect.left) / rect.width * 100, (e.clientY - rect.top) / rect.height * 100 - drag.knobShift], settings().aspect);
@@ -1802,6 +1860,7 @@ export function createEditor({
     const { moved, tap, again, mode } = drag;
     // select(-1) 이 끌기를 멈추므로, 잡아 둔 drag 를 지운 뒤에 고른다.
     if (mode === 'marquee') { stopDrag(); renderUi(); return; }
+    if (mode === 'lend') { dropLinkEnd(); return; }
     stopDrag();
     if (moved) { renderUi(); onChange(); return; }
     if (tap != null) { select(tap); return; }
