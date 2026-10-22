@@ -5,6 +5,7 @@
 //   - 요소  an: 나타나는 효과(ENTERS 의 id). 'none' 이면 조합 효과가 있어도 가만히 있는다.
 //           aw: true 면 "누를 때" 나타난다(발표하다가 한 번 누를 때마다 하나씩).
 //           em: 강조 효과(EMPHASES 의 id). 이미 보이는 요소가 누를 때 한 번 움직이고 제자리로 돌아온다(키노트의 동작 강조).
+//           lp: 계속 움직이기(IDLES 의 id). 다 나온 요소가 그 장에 머무는 동안 숨 쉬듯 되풀이해 움직인다(모션그래픽의 '살아 있는' 느낌).
 //   - 디자인 pa: 조합 효과(COMBOS 의 id) · tr: 이 장이 넘어올 때의 전환 효과(TRANSITIONS 의 id).
 //
 // 움직임은 Web Animations(element.animate)로 틀고, 끝나면 흔적이 남지 않는다(요소의 스타일을 건드리지 않는다).
@@ -36,7 +37,24 @@ const ENTER_DEFS = {
   stomp: { name: '쿵 찍기', ms: 520, ease: 'linear', frames: [{ o: 0, k: 1.8, ease: 'ease-in' }, { at: 0.55, k: 1, o: 1, ease: 'ease-out' }, { at: 0.75, k: 0.94, ease: 'ease-in-out' }, {}] },
   drift: { name: '둥실', ms: 1100, ease: 'ease-out', frames: [{ o: 0, x: -5 }, { at: 0.5, o: 1 }, {}] },
   flicker: { name: '깜빡이며', ms: 800, ease: 'linear', frames: [{ o: 0 }, { at: 0.12, o: 1 }, { at: 0.24, o: 0.15 }, { at: 0.4, o: 1 }, { at: 0.54, o: 0.3 }, { at: 0.7, o: 1 }, { at: 0.82, o: 0.6 }, {}] },
+  // 모션그래픽처럼: 멀리서 휙 날아와 살짝 지나쳤다가 제자리에 선다(튀는 빠르기가 한 번에 느껴지도록 거리와 각도를 함께 준다).
+  swoop: { name: '휙 날아오기', ms: 700, ease: 'linear', frames: [{ o: 0, x: -22, y: 4, r: -10, k: 0.85, ease: 'cubic-bezier(.2, .7, .3, 1)' }, { at: 0.72, x: 1.2, y: -0.3, r: 0.8, k: 1.03, o: 1, ease: 'ease-in-out' }, {}] },
 };
+// 계속 움직이기: 다 나온 요소가 장에 머무는 동안 되풀이해 움직인다(모션그래픽의 '살아 있는' 느낌). 처음과 끝이 제 모습이라 이어 틀어도 끊기지 않는다.
+// 요소마다 시작하는 때를 조금씩 다르게 두어(idlePhase) 함께 박자를 맞추지 않게 한다. 세기는 작게: 글을 읽는 데 거슬리지 않을 만큼.
+const IDLE_DEFS = {
+  float: { name: '둥실둥실', ms: 3400, ease: 'ease-in-out', frames: [{}, { at: 0.5, y: -1.4 }, {}] },
+  breathe: { name: '숨쉬기', ms: 3000, ease: 'ease-in-out', frames: [{}, { at: 0.5, k: 1.045 }, {}] },
+  sway: { name: '살랑살랑', ms: 3200, ease: 'ease-in-out', frames: [{}, { at: 0.25, r: -2.5 }, { at: 0.75, r: 2.5 }, {}] },
+  bob: { name: '콩콩', ms: 1300, ease: 'linear', frames: [{ ease: 'ease-out' }, { at: 0.3, y: -1.6, ease: 'ease-in' }, { at: 0.6, y: 0, ease: 'ease-out' }, { at: 0.75, y: -0.5, ease: 'ease-in' }, { at: 0.9, y: 0 }, {}] },
+  beat: { name: '두근두근', ms: 1800, ease: 'linear', frames: [{ ease: 'ease-out' }, { at: 0.15, k: 1.08, ease: 'ease-in' }, { at: 0.3, k: 1, ease: 'ease-out' }, { at: 0.45, k: 1.08, ease: 'ease-in' }, { at: 0.6, k: 1 }, {}] },
+  spin: { name: '빙글빙글', ms: 6000, ease: 'linear', frames: [{}, { r: 360 }] },
+  blink: { name: '반짝반짝', ms: 2400, ease: 'ease-in-out', frames: [{}, { at: 0.5, o: 0.45 }, {}] },
+  drift: { name: '떠다니기', ms: 5200, ease: 'ease-in-out', frames: [{}, { at: 0.25, x: 1.6, y: -1 }, { at: 0.5, x: 0, y: -1.8 }, { at: 0.75, x: -1.6, y: -1 }, {}] },
+};
+/** 계속 움직이기 효과들 [{ id, name }]. */
+export const IDLES = Object.entries(IDLE_DEFS).map(([id, d]) => ({ id, name: d.name }));
+export const IDLE_IDS = IDLES.map((e) => e.id);
 // 강조 효과: 나타난 뒤에 누르면 한 번 움직이고 제 모습으로 돌아온다. 처음과 끝이 늘 제 모습이다(frames 의 꼴은 ENTER_DEFS 와 같다).
 const EMPH_DEFS = {
   pulse: { name: '두근두근', ms: 760, ease: 'ease-in-out', frames: [{}, { at: 0.25, k: 1.12 }, { at: 0.5, k: 1 }, { at: 0.75, k: 1.12 }, {}] },
@@ -70,6 +88,8 @@ const COMBO_DEFS = {
   stomp: { name: '쿵쿵 찍기', hint: '도장처럼 쿵 찍혀요', gap: 150, pick: quiet('stomp') },
   drift: { name: '둥실 떠오기', hint: '양쪽에서 천천히 와요', gap: 120, swing: true, pick: quiet('drift') },
   neon: { name: '깜빡깜빡', hint: '글이 전등처럼 켜져요', gap: 100, pick: (role, it) => (it.t === 'text' ? 'flicker' : 'fade') },
+  // 모션그래픽: 바탕은 조용히, 글은 휙 날아와 서고, 그림·스티커는 통 튀어나온다. 간격을 바짝 붙여 한 번에 짜 맞춰지는 느낌을 낸다.
+  motion: { name: '모션그래픽', hint: '휙 날아와 착착 짜 맞춰져요', gap: 70, pick: (role, it) => (role === BACK ? 'fade' : it.t === 'text' ? 'swoop' : 'pop') },
 };
 /** 조합 효과들 [{ id, name, hint }]. */
 export const COMBOS = Object.entries(COMBO_DEFS).map(([id, d]) => ({ id, name: d.name, hint: d.hint }));
@@ -138,6 +158,22 @@ export function enterKeyframes(item, id, opts = {}) {
 export function emphasisKeyframes(item, id, opts = {}) {
   return keyframesOf(EMPH_DEFS[id], item, opts);
 }
+/** 계속 움직이기 한 바퀴의 키프레임(enterKeyframes 와 같은 꼴. 되풀이해 튼다). 모르는 효과면 null. */
+export function idleKeyframes(item, id, opts = {}) {
+  return keyframesOf(IDLE_DEFS[id], item, opts);
+}
+/** 계속 움직이기 한 바퀴의 길이(ms). 모르는 효과면 0. */
+export function idleTime(id) {
+  return IDLE_DEFS[id]?.ms || 0;
+}
+/**
+ * 요소 번호 i 의 요소가 계속 움직이기를 시작할 때 한 바퀴의 어디에서 시작할지(ms). 요소마다 다르게 흩어 놓아 모두 같은 박자로 움직이지 않게 한다.
+ * 화면(playDesign)과 영상(film.js)이 같은 값을 쓴다. 나타난 직후에 바로 이어 트는 것은 0 에서 시작한다(제 모습에서 끊김 없이).
+ */
+export function idlePhase(i, id) {
+  const ms = idleTime(id);
+  return ms ? Math.round(ms * (((Math.max(0, i | 0) * 0.618034) % 1) + 0)) : 0;
+}
 function keyframesOf(def, item, { scale = 1, mirror = false } = {}) {
   if (!def) return null;
   const full = (Number.isFinite(item?.op) ? item.op : 100) / 100;
@@ -200,13 +236,18 @@ export function planMotion(design) {
     ...rest.map((r, n) => ({ i: r.i, enter: r.enter, delay: Math.round(start + n * (Number.isFinite(gap) ? gap : 0)), mirror: !!combo?.swing && n % 2 === 1 })),
   ];
   const ms = auto.reduce((m, a) => Math.max(m, a.delay + ENTER_DEFS[a.enter].ms), 0);
-  return { auto, clicks, ms };
+  // 계속 움직이기: 나타나는 효과가 있으면 그것이 끝난 때(after)부터, 없으면 장이 열리자마자 시작한다. 누를 때 나오는 것은 나타난 뒤에(after 는 null).
+  const loops = rows.filter((r) => IDLE_DEFS[r.it.lp]).map((r) => {
+    const a = auto.find((v) => v.i === r.i);
+    return { i: r.i, loop: r.it.lp, after: r.it.aw === true ? null : a ? a.delay + ENTER_DEFS[a.enter].ms : 0 };
+  });
+  return { auto, clicks, loops, ms };
 }
 /** 그 디자인에 움직임이 하나라도 있는지(슬라이드 띠에 표시할 때 쓴다). */
 export function hasMotion(design) {
   if (!design) return false;
   if (TRANSITION_DEFS[design.tr] || COMBO_DEFS[design.pa]) return true;
-  return (Array.isArray(design.items) ? design.items : []).some((it) => it && (ENTER_DEFS[it.an] || it.aw === true || EMPH_DEFS[it.em]));
+  return (Array.isArray(design.items) ? design.items : []).some((it) => it && (ENTER_DEFS[it.an] || it.aw === true || EMPH_DEFS[it.em] || IDLE_DEFS[it.lp]));
 }
 
 // 장의 모습 하나를 화면용 키프레임으로 적는다.
@@ -309,7 +350,7 @@ export function tweenItem(a, b, t, { content = 'b' } = {}) {
   for (const k of COLOR_KEYS) if (k !== 'lc' && (a[k] || b[k])) out[k] = a[k] && b[k] ? mixColor(a[k], b[k], q) : q < 0.5 ? a[k] : b[k];
   if (a.t === 'link' && b.t === 'link' && a.pts?.length === b.pts?.length) for (const k of ['vh']) out[k] = a[k] + (b[k] - a[k]) * q;
   if (a.t === 'link' && b.t === 'link' && a.pts?.length === b.pts?.length) out.pts = a.pts.map((v, i) => v + (b.pts[i] - v) * q);
-  for (const k of ['id', 'origin', 'an', 'aw', 'em', 'g']) delete out[k];
+  for (const k of ['id', 'origin', 'an', 'aw', 'em', 'lp', 'g']) delete out[k];
   return out;
 }
 /** 그 전환이 두 장을 이어 움직이는 것인지. */
@@ -393,6 +434,16 @@ export function emphasisPose(id, ms, opts = {}) {
 export function emphasisTime(id) {
   return EMPH_DEFS[id]?.ms || 0;
 }
+/**
+ * 계속 움직이기를 시작한 지 ms 가 지났을 때의 모습(emphasisPose 와 같은 꼴. 한 바퀴가 끝나면 다시 처음부터). 모르는 효과면 null.
+ * 브라우저가 iterations: Infinity 로 틀었을 때와 같은 값이다(한 바퀴마다 빠르기가 처음부터 다시 간다).
+ */
+export function idlePose(id, ms) {
+  const def = IDLE_DEFS[id];
+  if (!def) return null;
+  const t = Number.isFinite(ms) ? ((ms % def.ms) + def.ms) % def.ms : 0;
+  return { ...poseOf(def, t), done: false };
+}
 function poseOf(def, ms, { mirror = false, scale = 1 } = {}) {
   if (!def) return null;
   const p = easeFn(def.ease || SOFT)(unit(ms / def.ms));
@@ -458,31 +509,63 @@ export function playEmphasis(node, item, id) {
 }
 
 /**
+ * 요소 하나를 계속 움직이기로 되풀이해 움직인다(멈추려면 돌려받은 Animation 을 cancel 한다. 그러면 흔적이 없다).
+ *   delay: 시작을 늦춘다 · phase: 한 바퀴의 이만큼 지난 데서 시작한다(idlePhase. 요소마다 박자를 흩어 놓을 때)
+ * 틀지 못했으면 null.
+ */
+export function playIdle(node, item, id, { delay = 0, phase = 0, scale = 1 } = {}) {
+  const k = idleKeyframes(item, id, { scale });
+  if (!k || !node || typeof node.animate !== 'function' || calm()) return null;
+  return node.animate(k.keyframes, { duration: k.ms, delay: delay - phase, easing: k.easing, iterations: Infinity });
+}
+
+/**
  * 한 장의 움직임을 튼다. card 는 그 디자인을 그린 카드(designView), design 은 그 디자인(정리된 것: 카드의 요소와 차례가 같아야 한다).
- *   delay: 시작을 늦춘다(전환 효과가 끝난 뒤에 시작할 때) · still: 참이면 움직이지 않고 다 나온 모습으로 둔다(앞 장으로 돌아갈 때)
+ *   delay: 시작을 늦춘다(전환 효과가 끝난 뒤에 시작할 때) · still: 참이면 나타나는 움직임 없이 다 나온 모습으로 둔다(앞 장으로 돌아갈 때. 계속 움직이기는 튼다)
  * 돌려주는 것(조종기): {
  *   left():   아직 누르지 않아 숨어 있는 것의 수
  *   next():   숨어 있는 것을 하나 나타나게 한다. 나타나게 했으면 true, 더 없으면 false
- *   finish(): 틀고 있는 움직임을 끝까지 넘긴다(숨어 있는 것은 그대로)
- *   reveal(): 숨어 있는 것을 모두 보이게 하고 움직임도 끝낸다
+ *   finish(): 틀고 있는 나타나기·강조를 끝까지 넘긴다(숨어 있는 것과 계속 움직이기는 그대로)
+ *   stop():   계속 움직이기를 멈춘다(장을 떠날 때. 흔적이 없다)
+ *   reveal(): 숨어 있는 것을 모두 보이게 하고 움직임을 모두 끝낸다(계속 움직이기도 멈춘다)
  * }
  */
 export function playDesign(card, design, { delay = 0, still = false } = {}) {
   const nodes = card ? [...card.children].filter((n) => n.classList.contains('fi')) : [];
   const items = Array.isArray(design?.items) ? design.items : [];
-  const plan = still ? { auto: [], clicks: [] } : planMotion(design);
+  const plan = planMotion(design);
+  if (still) { plan.auto = []; plan.clicks = []; for (const l of plan.loops) l.after = 0; }
   const running = [];
-  const keep = (a) => { if (a) { running.push(a); a.finished.catch(() => {}); } };
+  const loops = [];
+  const keep = (a) => { if (a) { running.push(a); a.finished.catch(() => {}); } return a; };
+  // 계속 움직이기: 나타난 뒤에 이어서(제 모습에서 끊김 없이 0 에서), 나타나지 않는 요소는 장이 열릴 때 제 박자(idlePhase)에서 시작한다.
+  let stopped = false;
+  const idleOf = (i) => plan.loops.find((l) => l.i === i) || null;
+  const loop = (i, { delay: wait = 0, phase = 0 } = {}) => {
+    const l = idleOf(i);
+    if (!l || stopped) return;
+    const a = playIdle(nodes[i], items[i], l.loop, { delay: wait, phase });
+    if (a) { loops.push(a); a.finished.catch(() => {}); }
+  };
+  const chain = (anim, i) => { if (anim) anim.finished.then(() => loop(i), () => {}); else loop(i); };
   // 이어 움직이기로 앞 장에서 옮겨 온 요소는 이미 화면에 있으므로 다시 나타나지 않는다(누를 때 나오는 것은 그대로 기다린다).
-  for (const a of plan.auto) if (!nodes[a.i]?.dataset.moved) keep(playEnter(nodes[a.i], items[a.i], a.enter, { delay: delay + a.delay, mirror: a.mirror }));
+  const entered = new Set();
+  for (const a of plan.auto) {
+    if (nodes[a.i]?.dataset.moved) continue;
+    entered.add(a.i);
+    chain(keep(playEnter(nodes[a.i], items[a.i], a.enter, { delay: delay + a.delay, mirror: a.mirror })), a.i);
+  }
   const waiting = plan.clicks.filter((c) => nodes[c.i]);
   for (const c of waiting) if (c.enter) nodes[c.i].style.visibility = 'hidden';
+  const clicked = new Set(waiting.filter((c) => c.enter).map((c) => c.i));
+  for (const l of plan.loops) if (nodes[l.i] && !entered.has(l.i) && !clicked.has(l.i)) loop(l.i, { delay, phase: idlePhase(l.i, l.loop) });
   const show = (c, animate) => {
     if (c.emphasis) { if (animate) keep(playEmphasis(nodes[c.i], items[c.i], c.emphasis)); return; }
     nodes[c.i].style.visibility = '';
-    if (animate) keep(playEnter(nodes[c.i], items[c.i], c.enter, { mirror: c.mirror }));
+    chain(animate ? keep(playEnter(nodes[c.i], items[c.i], c.enter, { mirror: c.mirror })) : null, c.i);
   };
   const finish = () => { for (const a of running.splice(0)) { try { a.finish(); } catch { /* 이미 끝났다 */ } } };
+  const stop = () => { stopped = true; for (const a of loops.splice(0)) { try { a.cancel(); } catch { /* 이미 걷혔다 */ } } };
   return {
     left: () => waiting.length,
     next() {
@@ -492,7 +575,9 @@ export function playDesign(card, design, { delay = 0, still = false } = {}) {
       return true;
     },
     finish,
+    stop,
     reveal() {
+      stop();
       for (const c of waiting.splice(0)) show(c, false);
       finish();
     },

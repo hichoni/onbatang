@@ -1655,6 +1655,7 @@ async function present(O) {
   const draw = (dir = 0) => {
     pixel?.destroy();pixel=null;
     settle();
+    parts?.stop();             // 떠나는 장의 "계속 움직이기"를 멈춘다(흔적이 없다)
     tools?.changed();
     const design = slides[i];
     const ar=aspectOf(entries[i].record);
@@ -1769,6 +1770,7 @@ async function present(O) {
     try { audience?.close?.(); } catch (error) { console.warn(error); } audience = null;
     tools?.destroy();tools=null;
     settle();
+    parts?.stop();parts=null;
     clearTimeout(filmTimer);
     clearTimeout(tubeTimer);
     film = null;

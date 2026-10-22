@@ -13,7 +13,7 @@
 import { SHAPE_ASSETS, SHAPE_GROUPS, shapeAsset } from './shapes.js';
 import { isArtId, artColorable, artAspect, artPack, artName } from './art.js';
 import { isYouTubeId, ytStart, ytTime } from './youtube.js';
-import { ENTER_IDS, COMBO_IDS, TRANSITION_IDS, EMPHASIS_IDS, STILL } from './motion.js';
+import { ENTER_IDS, COMBO_IDS, TRANSITION_IDS, EMPHASIS_IDS, IDLE_IDS, STILL } from './motion.js';
 import { metadata, newId, fail, validatePageInput, isSlideItem, itemTextLimit, pageLimits, slideNotes, slideHidden, slideTopic, slideDur, cleanAlt, ALT_LIMIT } from './document.js';
 export { cleanAlt, ALT_LIMIT };
 import { cleanActivity } from './activity.js';
@@ -261,6 +261,7 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
   if (ENTER_IDS.includes(it.an) || it.an === STILL) base.an = it.an;
   if (it.aw === true) base.aw = true;
   if (EMPHASIS_IDS.includes(it.em)) base.em = it.em;          // 강조 효과: 누를 때 한 번 움직인다
+  if (IDLE_IDS.includes(it.lp)) base.lp = it.lp;              // 계속 움직이기: 다 나온 뒤 장에 머무는 동안 되풀이해 움직인다
   const flip = { fx: it.fx === true, fy: it.fy === true };                 // 좌우·상하 뒤집기
   if (it.t === 'text') {
     const text = clip(keepSpaces ? String(it.text ?? '') : lines(it.text), textLimit(it));
