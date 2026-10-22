@@ -1,5 +1,11 @@
 # 온바탕 — 생각을 펼치는 따뜻한 디자인 공간
 
+## v0.62.0 · 발표의 휴대폰 리모컨 자리(showRemote) (2026-10-22)
+
+- `startMinican({ showRemote: { open({ state(), command(cmd), root }) → { update(state), show?(), close() } } })`: 발표 막대에 **휴대폰 리모컨** 단추가 생깁니다(호스트가 연결 · QR 을 맡음). 장이 바뀔 때마다 `update({ at, total, title, page, next, notes })`(지금 · 다음 장의 맨 위 글, 발표자 노트), 발표를 끝내면 `close()`.
+- `command({ action })`: `next` · `prev`(글쇠와 같은 길: 검은 화면이면 먼저 걷기, 움직임 · 유튜브 차례 지키기) · `go`(at) · `black` · `state`. 모르는 것은 버립니다.
+- 공용 온바탕에는 단추가 없습니다(서버 없음). 가이랩이 Supabase 실시간 채널로 씁니다(로그인한 선생님만).
+
 ## v0.61.0 · 가이X 개요에 지금 그림 참고하기 (2026-10-22)
 
 - 가이X 를 이어 준 곳(가이랩)의 "가이X에게 개요 부탁하기"에 **지금 그림의 글을 참고로 보내기**가 생겼습니다(그림에 글이 있으면 처음부터 켜짐). 켜면 `appMaker.generate({ kind: 'outline', prompt, slides, context })` 의 `context` 로 장마다 글 조각(위에서 아래 차례) · 선 위의 글 · 발표자 노트를 보냅니다. 지금 장 표시, 숨긴 장도 적고, 사진 · 영상은 보내지 않습니다.
