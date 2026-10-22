@@ -219,7 +219,14 @@ export function createEditor({
   const linkEndKnobs = [endKnob('from'), endKnob('to')];
   // 끝을 끄는 동안 놓일 조각의 테두리
   const linkTarget = el('div', { class: 'fe-link-target', hidden: true, 'aria-hidden': 'true' });
-  const overlay = el('div', { class: 'fe-overlay' }, othersBox, manyBox, guideV, guideH, selBox, linkTarget, linkKnob, ...linkEndKnobs, groupBox, marquee, sceneFlag);
+  // 이어서 하나 더: 고른 조각(또는 그룹) 둘레의 + 단추. 누르면 그쪽 옆에 똑같은 것을 하나 더 놓고 화살표로 잇는다.
+  const GROW = { right: ['오른쪽', [1, 0]], down: ['아래', [0, 1]], left: ['왼쪽', [-1, 0]], up: ['위', [0, -1]] };
+  const growBox = el('div', { class: 'fe-grow-box', hidden: true },
+    ...Object.entries(GROW).map(([dir, [name]]) => el('button', {
+      class: `fe-grow ${dir}`, type: 'button', dataset: { grow: dir }, title: `${name}에 이어서 하나 더`, 'aria-label': `${name}에 이어서 하나 더 놓고 화살표로 잇기`,
+      onClick: (e) => { e.stopPropagation(); grow(dir); },
+    }, icon('plus'))));
+  const overlay = el('div', { class: 'fe-overlay' }, othersBox, manyBox, guideV, guideH, selBox, linkTarget, linkKnob, ...linkEndKnobs, groupBox, growBox, marquee, sceneFlag);
   const cropLayer = el('div', {class:'fe-crop-layer',hidden:true});
   // 잇기 안내(꾸미기 칸의 "연결선" · 한 조각을 고른 뒤 "선 잇기"): 지금 누를 조각과 그만두기 단추.
   const linkHint = el('div', { class: 'fe-link-hint', role: 'status', hidden: true });
@@ -670,6 +677,7 @@ export function createEditor({
     const node = nodes[sel];
     drawOthers();
     drawMany();
+    drawGrow();
     const id = it?.id || '';
     if (onSelect && id !== lastSelId) { lastSelId = id; onSelect(id); }
     // 연결선은 크기 손잡이가 없다(잇는 조각을 옮기면 따라온다). 고른 선은 빛나는 것으로 보이고, 곡선 · 꺾인 선은 가운데 손잡이 하나를 둔다.
@@ -759,6 +767,74 @@ export function createEditor({
     groupBox.style.width = `${r - l}px`;
     groupBox.style.height = `${b - t}px`;
   }
+  // 이어서 하나 더를 할 조각들: 잠그지 않은 조각 하나, 또는 잠근 것이 없는 그룹 하나(연결선 · 글 고치는 중 · 자르는 중 · 잇는 중은 없음)
+  function growSet() {
+    if (cropJob || linking || editing >= 0) return null;
+    const set = many.length ? (isGroup() ? many.slice() : null) : sel >= 0 ? [sel] : null;
+    if (!set || set.some((i) => !items()[i] || !nodes[i] || items()[i].lock || items()[i].t === 'link')) return null;
+    return set;
+  }
+  function drawGrow() {
+    const set = growSet();
+    growBox.hidden = !set;
+    if (!set) return;
+    const s = stage.getBoundingClientRect();
+    let [l, t, r, b] = [Infinity, Infinity, -Infinity, -Infinity];
+    for (const i of set) { const n = nodes[i].getBoundingClientRect(); [l, t, r, b] = [Math.min(l, n.left), Math.min(t, n.top), Math.max(r, n.right), Math.max(b, n.bottom)]; }
+    // 작은 조각은 고른 테두리를 넉넉하게 두르므로(minBox) 그 손잡이와 겹치지 않게 그만큼 넓혀 둔다.
+    if (set.length === 1) {
+      const least = minBox(), [cx, cy] = [(l + r) / 2, (t + b) / 2];
+      [l, r] = [Math.min(l, cx - least / 2), Math.max(r, cx + least / 2)];
+      [t, b] = [Math.min(t, cy - least / 2), Math.max(b, cy + least / 2)];
+    }
+    Object.assign(growBox.style, { left: `${l - s.left}px`, top: `${t - s.top}px`, width: `${r - l}px`, height: `${b - t}px` });
+    growBox.classList.toggle('single', set.length === 1);          // 하나만 고르면 위쪽 가운데에 돌리기 손잡이가 있어 위 단추를 더 올린다
+  }
+  // 고른 조각(그룹)을 dir 쪽 옆에 하나 더 놓고, 고른 것에서 새것으로 연결선을 잇는다. 새것을 고르므로 잇달아 누르면 흐름도가 이어진다.
+  function grow(dir) {
+    const set = growSet();
+    if (!set) return;
+    const [dx, dy] = GROW[dir][1], aspect = settings().aspect;
+    const boxes = set.map(boxOf);
+    const span = { l: Math.min(...boxes.map((q) => q.x - q.hw)), r: Math.max(...boxes.map((q) => q.x + q.hw)), t: Math.min(...boxes.map((q) => q.y - q.hh)), b: Math.max(...boxes.map((q) => q.y + q.hh)) };
+    // 한 걸음: 그 쪽 크기 + 사이(카드 너비의 6%, 세로는 같은 길이가 되게 비율만큼). 자리가 차 있으면 한 걸음씩 더 가 본다(세 걸음까지).
+    const step = dx ? span.r - span.l + 6 : span.b - span.t + 6 * aspect;
+    const others = items().map((it, k) => (set.includes(k) || it.t === 'link' || it.lock || !nodes[k] ? null : boxOf(k))).filter((q) => q && q.hw < 45 && q.hh < 45);
+    const fits = (k) => span.l + dx * step * k >= 0 && span.r + dx * step * k <= 100 && span.t + dy * step * k >= 0 && span.b + dy * step * k <= 100;
+    const clear = (k) => !others.some((q) => q.x + q.hw > span.l + dx * step * k && q.x - q.hw < span.r + dx * step * k && q.y + q.hh > span.t + dy * step * k && q.y - q.hh < span.b + dy * step * k);
+    const k = [1, 2, 3].find((n) => fits(n) && clear(n)) ?? (fits(1) ? 1 : 0);
+    if (!k) { notify(`카드 끝이라 ${GROW[dir][0]}에는 더 놓을 자리가 없어요. 조각을 옮기거나 다른 쪽을 눌러요.`, 3500); return; }
+    // 복제(한도 · 사진 장수는 duplicateItem 이 본다) → 자리를 옮긴다.
+    let list = items();
+    const made = [];
+    for (const i of set) {
+      const dup = duplicateItem(list, list.indexOf(items()[i]));
+      if (!dup) { notify(fullNote(items()[i].t === 'image')); return; }
+      made.push({ ...dup, id: dup.id || newId(), lock: false, x: items()[i].x + dx * step * k, y: items()[i].y + dy * step * k });
+      list = [...list, dup];
+    }
+    if (list.length >= settings().maxItems) { notify(`카드 한 장에는 조각을 ${settings().maxItems}개까지 놓을 수 있어요.`); return; }
+    const copies = regroup(made);
+    // 이을 조각: 그룹이면 글이 아닌 것 가운데 가장 큰 것(흐름도의 상자), 없으면 첫째.
+    const area = (it) => (Number(it.w) || 0) * (Number(it.h) || it.w || 0);
+    const main = set.map((i) => i).sort((p, q) => (items()[p].t === 'text') - (items()[q].t === 'text') || area(items()[q]) - area(items()[p]))[0];
+    endEdit();
+    stopDrag();
+    remember();
+    const ided = items().map((it, n) => (n === main && !it.id ? { ...it, id: newId() } : it));
+    const source = ided[main], target = copies[set.indexOf(main)];
+    // 그 조각에 이미 이어진 선이 있으면 그 꾸밈(색 · 굵기 · 머리 · 선의 길 …)을 그대로 쓴다.
+    const near = ided.find((it) => it.t === 'link' && it.from === source.id) || ided.find((it) => it.t === 'link' && it.to === source.id);
+    const base = { t: 'link', id: newId(), from: source.id, to: target.id, head: 'end', color: '#1d2433', line: LINK_LINE.base };
+    const link = cleanItem(near ? applyStyle(base, styleOf(near)) : base);
+    const at = main;
+    card.items = [...ided.slice(0, at), link, ...ided.slice(at), ...copies];
+    const start = card.items.length - copies.length;
+    const added = copies.map((_, n) => start + n);
+    listChanged(added.length === 1 ? added[0] : -1, added.length > 1 ? added : []);
+    notify(copies.some((it) => it.t === 'text') ? '이어서 하나 더 놓았어요. 글은 두 번 눌러 고쳐요. + 를 또 누르면 계속 이어져요.' : '이어서 하나 더 놓았어요. + 를 또 누르면 계속 이어져요.', 3500);
+    focusStage();
+  }
   // 그 요소가 화면에 보이는 자리와 크기(돌린 것은 돌린 채로 감싸는 상자). 카드 너비·높이를 100 으로 본 값.
   function boxOf(i) {
     const s = stage.getBoundingClientRect();
@@ -772,6 +848,7 @@ export function createEditor({
   // 도구 막대는 늘, 옆 메뉴는 고른 것·목록에 따라 달라지는 칸(레이어·업로드·배경)일 때만 다시 그린다.
   // (텍스트·요소·템플릿 칸까지 다시 그리면 찾던 낱말과 넘겨 보던 자리가 사라진다)
   function renderUi() {
+    drawGrow();                                     // 묶기 · 풀기 · 글 고치기 끝 같은 바뀜에도 + 단추를 맞춘다
     renderBar();
     if (tab === 'layer' || tab === 'upload' || tab === 'bg') renderPanel();
     // 움직임 칸은 고른 요소의 것이 맨 위에 나온다: 다른 요소를 고르면 맨 위부터 보여 준다
@@ -1623,7 +1700,7 @@ export function createEditor({
       linkPair(from, top);
       return;
     }
-    if (e.target.closest?.('.fe-empty-go')) return;  // 빈 장의 빠른 시작 단추는 그냥 누른다(고르기 · 끌기를 시작하지 않는다)
+    if (e.target.closest?.('.fe-empty-go, .fe-grow')) return;   // 빈 장의 빠른 시작 · 이어서 하나 더 단추는 그냥 누른다  // 빈 장의 빠른 시작 단추는 그냥 누른다(고르기 · 끌기를 시작하지 않는다)
     if (editing >= 0 && nodes[editing]?.contains(e.target)) return;   // 글을 고치는 중에는 글 안을 눌러 자리를 옮길 수 있게 둔다
     endEdit();
     stopPreview();                                  // 미리 보던 움직임은 끝낸다(숨겨 둔 요소가 있으면 다시 보인다)

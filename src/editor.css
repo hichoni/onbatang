@@ -808,3 +808,22 @@
 /* 그림 설명 칸 */
 .fe-alt-input { box-sizing: border-box; width: 100%; min-height: 60px; resize: vertical; padding: 8px 10px; border: 1px solid var(--fe-line); border-radius: 8px; font: inherit; font-size: .9rem; line-height: 1.5; color: var(--fe-text); background: #fbfcff; }
 .fe-alt-input:focus { outline: 2px solid var(--fe-primary); outline-offset: 0; border-color: transparent; background: #fff; }
+/* 이어서 하나 더: 고른 조각 둘레의 + 단추(누르면 그쪽 옆에 똑같은 것을 하나 더 놓고 화살표로 잇는다) */
+.fe-grow-box { position: absolute; pointer-events: none; }
+.fe-grow { position: absolute; width: 22px; height: 22px; margin: -11px 0 0 -11px; padding: 0; border-radius: 50%; border: 1.5px solid var(--fe-primary); background: #fff; color: var(--fe-primary); display: grid; place-items: center; cursor: copy; pointer-events: auto; opacity: .72; box-shadow: 0 1px 3px rgba(0, 0, 0, .2); transition: opacity .12s, transform .12s; }
+.fe-grow:hover, .fe-grow:focus-visible { opacity: 1; transform: scale(1.15); background: var(--fe-primary); color: #fff; }
+.fe-grow .fe-ic { width: 13px; height: 13px; pointer-events: none; }
+.fe-grow .fe-ic svg { stroke-width: 2.8; }
+.fe-grow.right { left: calc(100% + 30px); top: 50%; }
+.fe-grow.left { left: -30px; top: 50%; }
+.fe-grow.down { left: 50%; top: calc(100% + 30px); }
+.fe-grow.up { left: 50%; top: -30px; }
+.fe-grow-box.single .fe-grow.up { top: -60px; }
+@media (pointer: coarse) {
+  .fe-grow { width: 30px; height: 30px; margin: -15px 0 0 -15px; }
+  .fe-grow.right { left: calc(100% + 40px); }
+  .fe-grow.left { left: -40px; }
+  .fe-grow.down { top: calc(100% + 40px); }
+  .fe-grow.up { top: -40px; }
+  .fe-grow-box.single .fe-grow.up { top: -80px; }
+}
