@@ -584,3 +584,62 @@ test('dragging an end of a selected connector onto another piece rejoins it ther
   await saved(page, r => link(r)?.to === 'etext00001');
   assert.deepEqual(external, []);
 });
+
+test('the + buttons around a selected piece or group put a copy beside it, joined by an arrow, and keep going from the new one', options, async t => {
+  const {page, external} = await setup(t);
+  const shapes = page.locator('.cv-canvas .fe-card .fi-shape');
+  const slide = r => r.slides[0].items;
+  const links = r => slide(r).filter(it => it.t === 'link');
+  await shapes.nth(0).click();
+  const down = page.locator('.fe-grow.down');
+  await down.waitFor();
+  if (process.env.GROW_SHOT) await page.screenshot({path: process.env.GROW_SHOT});
+  // Below the rounded box: a copy of it under it, joined from it, and the copy is picked.
+  await down.click();
+  await saved(page, r => slide(r).length === 5 && links(r).length === 1);
+  let r = await page.evaluate(() => window.readSaved());
+  const a = slide(r).find(it => it.id === 'ebox000001'), b = slide(r).find(it => it.t === 'shape' && it.id !== 'ebox000001' && it.id !== 'ebox000002');
+  assert.deepEqual([b.shape, b.color, b.w, b.h, b.x], [a.shape, a.color, a.w, a.h, a.x]);
+  assert.ok(b.y > a.y + a.h, `below ${a.y} → ${b.y}`);
+  assert.deepEqual([links(r)[0].from, links(r)[0].to], ['ebox000001', b.id]);
+  assert.equal(await page.locator('.cv-canvas .fe-card .fi.sel').count(), 1);
+  // Make that line dashed, then keep going right from the new box: the next line looks the same.
+  await page.keyboard.press('Escape');
+  const [p1, p2] = await ends(page);
+  await page.mouse.click((p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2);
+  await page.locator('.fe-bar button').filter({hasText: '화살표'}).click();
+  await page.locator('[data-dash="on"]').click();
+  await saved(page, r => links(r)[0]?.dash === true);
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  await shapes.nth(2).click();
+  await page.locator('.fe-grow.right').click();
+  await saved(page, r => links(r).length === 2);
+  r = await page.evaluate(() => window.readSaved());
+  const c = slide(r).filter(it => it.t === 'shape').at(-1), next = links(r).find(l => l.to === c.id);
+  assert.deepEqual([next.from, next.dash], [b.id, true], 'joined from the new box, same look');
+  assert.ok(c.x > b.x + b.w && Math.abs(c.y - b.y) < .01, 'to the right');
+  // Undo takes back one + (the copy and its line).
+  await page.keyboard.press('Control+z');
+  await saved(page, r => links(r).length === 1 && slide(r).length === 5);
+  // At the edge of the card there is no room: nothing is added.
+  await page.locator('.cv-canvas .fe-card .fi-text').click();
+  await page.locator('.fe-grow.up').click();
+  await new Promise(done => setTimeout(done, 500));
+  assert.equal(slide(await page.evaluate(() => window.readSaved())).length, 5);
+  // A group (the box and its copy under it) is copied whole to the right, joined from its first piece.
+  await page.keyboard.press('Escape');
+  await shapes.nth(0).click();
+  await shapes.nth(2).click({modifiers: ['Shift']});
+  await page.keyboard.press('Control+g');
+  await saved(page, r => slide(r).filter(it => it.g).length === 2);
+  await page.locator('.fe-grow.right').click();
+  await saved(page, r => slide(r).length === 8);
+  r = await page.evaluate(() => window.readSaved());
+  const groups = new Set(slide(r).filter(it => it.g).map(it => it.g));
+  assert.equal(groups.size, 2, 'the copy is its own group');
+  const copied = new Set(slide(r).filter(it => it.g && it.g !== slide(r).find(x => x.id === 'ebox000001').g).map(it => it.id));
+  assert.equal(copied.size, 2);
+  assert.ok(links(r).some(l => l.from === 'ebox000001' && copied.has(l.to)), 'joined from the box to its copy');
+  assert.deepEqual(external, []);
+});
