@@ -57,10 +57,11 @@ export function deckPage(style, a, page, kind, { n = 1, font } = {}) {
   const b = board(a), { H, wide } = b, d = decor(b);
   const k = wide ? 1 : a < 0.7 ? 1.55 : 1.4;                         // 정사각형 · 세로는 글을 크게
   const L = wide ? 6.8 : 8, ink = style.ink;
-  const body = font ? { font } : {};
-  const text = (t, { left, top, w, size, color = ink, bold = false, align = 'l', title = false, lh = LINE }) => {
+  const body = font && font !== TITLE_FONT ? { font } : {};
+  const text = (t, { left, top, w, size, color = ink, bold = false, align = 'l', title = false, lh = title ? LINE : 1.32 }) => {
     const rows = linesOf(t, size, w);
-    b.items.push({ t: 'text', text: t, x: left + w / 2, y: r1(((top + (rows * size * lh) / 2) / H) * 100), w, size: r1(size), color, bold, align, lh,
+    // 제목 글씨체(TITLE_FONT)는 이미 굵은 글씨라 굵게를 더하지 않는다(겹친 획이 메워진다).
+    b.items.push({ t: 'text', text: t, x: left + w / 2, y: r1(((top + (rows * size * lh) / 2) / H) * 100), w, size: r1(size), color, bold: bold && !(title && TITLE_FONT), align, lh,
       ...(title && TITLE_FONT ? { font: TITLE_FONT } : body) });
     return top + rows * size * lh;
   };
@@ -177,15 +178,15 @@ export function deckPage(style, a, page, kind, { n = 1, font } = {}) {
     const h = halo();
     const dot = 5.2 * k, w = (wide ? h.left - 3 : 84) - L - dot - 2.6 * k;
     let size = 3.5 * k;
-    const tall = (sz) => page.lines.reduce((sum, l) => sum + Math.max(dot, linesOf(l.text, sz, w) * sz * LINE) + 2.2 * k, 0);
+    const tall = (sz) => page.lines.reduce((sum, l) => sum + Math.max(dot, linesOf(l.text, sz, w) * sz * 1.32) + 2.2 * k, 0);
     while (size > 2.8 * k && top0 + tall(size) > H - foot) size -= 0.1 * k;
     let top = top0;
     page.lines.forEach((l, i) => {
       if (top + dot > H - foot + 1) { rest.push(l); return; }
-      const rowH = Math.max(dot, linesOf(l.text, size, w) * size * LINE);
+      const rowH = Math.max(dot, linesOf(l.text, size, w) * size * 1.32);
       b.shape('circle', { left: L, top: top + (rowH - dot) / 2, w: dot, h: dot, color: style.accent });
       text(String(i + 1), { left: L + dot / 2 - 5, top: top + rowH / 2 - (3 * k * LINE) / 2, w: 10, size: 3 * k, color: '#ffffff', bold: true, align: 'c' });
-      text(l.text, { left: L + dot + 2.6 * k, top: top + (rowH - linesOf(l.text, size, w) * size * LINE) / 2, w, size, bold: true });
+      text(l.text, { left: L + dot + 2.6 * k, top: top + (rowH - linesOf(l.text, size, w) * size * 1.32) / 2, w, size, bold: true });
       top += rowH + 2.2 * k;
     });
   } else {
@@ -196,16 +197,16 @@ export function deckPage(style, a, page, kind, { n = 1, font } = {}) {
     const width = (l) => right - L - (l.level === 2 ? 9 : 4.5) * k;
     const sub = (sz, l) => (l.level === 2 ? sz * 0.88 : sz);
     let size = 3.4 * k;
-    const tall = (sz) => page.lines.reduce((sum, l) => sum + linesOf(l.text, sub(sz, l), width(l)) * sub(sz, l) * LINE + 1.5 * k, 0);
+    const tall = (sz) => page.lines.reduce((sum, l) => sum + linesOf(l.text, sub(sz, l), width(l)) * sub(sz, l) * 1.32 + 2 * k, 0);
     while (size > 2.7 * k && top0 + tall(size) > H - foot) size -= 0.1 * k;
     let top = top0;
     for (const l of page.lines) {
-      const s = sub(size, l), rowH = linesOf(l.text, s, width(l)) * s * LINE;
+      const s = sub(size, l), rowH = linesOf(l.text, s, width(l)) * s * 1.32;
       if (top + rowH > H - foot + 1) { rest.push(l); continue; }
       const dx = l.level === 2 ? 4.5 * k : 0, dot = l.level === 2 ? 1.3 * k : 1.7 * k;
-      b.shape('circle', { left: L + dx, top: top + (s * LINE) / 2 - dot / 2, w: dot, h: dot, color: l.level === 2 ? style.bar : style.accent });
+      b.shape('circle', { left: L + dx, top: top + (s * 1.32) / 2 - dot / 2, w: dot, h: dot, color: l.level === 2 ? style.bar : style.accent });
       text(l.text, { left: L + dx + 3.6 * k, top, w: width(l), size: s, bold: l.level === 1 && size > 3 * k });
-      top += rowH + 1.5 * k;
+      top += rowH + 2 * k;
     }
   }
   return { items: b.items, rest };

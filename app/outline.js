@@ -6,6 +6,7 @@ import { newId, cleanNotes } from '../src/document.js';
 import { slideMotion } from './designs.js';
 import { deckKind, deckPage } from './outline-deck.js';
 import { THEME_STYLES } from './themes.js';
+import { TITLE_FONT } from './templates.js';
 
 const BULLET = /^([-*+•·◦▪‣])\s+/;
 const NUMBERED = /^\d{1,2}[.)]\s+/;
@@ -62,6 +63,7 @@ function heightOf(text, size, w, aspect, lh = 1.3) {
 export function outlineSlides(sections, { bg, font, like = null, room = Infinity, style = 'plain' } = {}) {
   const aspect = settings().aspect || 16 / 9;
   const theme = THEME_STYLES.find((t) => t.id === style) || null;
+  if (theme && font === TITLE_FONT) font = undefined;              // 꾸민 장의 내용 글은 제목 글씨체로 쓰지 않는다
   const { ink, accent } = inkOf(bg);
   const text = (t, extra) => cleanItem({ t: 'text', id: newId(), text: t, color: ink, ...(font ? { font } : {}), ...extra }, { keepSpaces: true });
   const limit = (t) => Array.from(t).slice(0, textLimit({ t: 'text' })).join('');
