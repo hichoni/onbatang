@@ -1087,6 +1087,34 @@ export function createEditor({
     notify('연결선으로 이었어요. 조각을 옮기면 선이 따라와요. 선을 누르면 위 막대의 "화살표"에서 곧게·둥글게·꺾어서를 바꾸고, 선 끝의 파란 점을 끌어 다른 조각 · 다른 자리에 이어요.', 5500);
     focusStage();
   }
+  // 빈 곳에 새 조각을 만들며 잇기: like 번째 조각을 하나 더(그룹에서는 빼고) point(카드 너비 · 높이 = 100) 가운데에 놓는다. 카드 밖으로 나가지 않게 맞춘다.
+  // 놓을 수 없으면(한도 · 사진 장수) 알리고 null. 돌려주는 것: { list: 이름표를 붙인 지금 목록, piece: 새 조각 }.
+  function pieceAt(like, point) {
+    const list = items().map((it, k) => (k === like && !it.id ? { ...it, id: newId() } : it));
+    if (list.length + 1 >= settings().maxItems) { notify(`카드 한 장에는 조각을 ${settings().maxItems}개까지 놓을 수 있어요.`); return null; }
+    const dup = duplicateItem(list, like);
+    if (!dup) { notify(fullNote(list[like].t === 'image')); return null; }
+    const b = nodes[like] ? boxOf(like) : { hw: 0, hh: 0 };
+    const fit = (v, half) => Math.min(100 - Math.min(half, 50), Math.max(Math.min(half, 50), v));
+    const piece = { ...regroup([{ ...dup, lock: false }])[0], id: newId(), x: fit(point[0], b.hw), y: fit(point[1], b.hh) };
+    return { list, piece };
+  }
+  // 잇는 중 ② 에서 빈 곳을 눌렀다: 시작 조각을 그 자리에 하나 더 놓고 화살표로 잇는다.
+  function linkToNew(from, point) {
+    const made = pieceAt(from, point);
+    if (!made) return;
+    endEdit();
+    stopDrag();
+    remember();
+    const { list, piece } = made, source = list[from];
+    const near = list.find((it) => it.t === 'link' && it.from === source.id) || list.find((it) => it.t === 'link' && it.to === source.id);
+    const base = { t: 'link', id: newId(), from: source.id, to: piece.id, head: 'end', color: '#1d2433', line: LINK_LINE.base };
+    const link = cleanItem(near ? applyStyle(base, styleOf(near)) : base);
+    card.items = [...list.slice(0, from), link, ...list.slice(from), piece];
+    listChanged(card.items.length - 1);
+    notify(piece.t === 'text' ? '새 조각을 놓고 이었어요. 글은 두 번 눌러 고쳐요.' : '새 조각을 놓고 이었어요.', 3000);
+    focusStage();
+  }
   // 잇기: 화살표가 시작할 조각과 닿을 조각을 차례로 누른다. from: 이미 고른 조각에서 시작하면 그 번호.
   let linking = null;                                // { from: 시작 조각의 번호 | null } · 잇는 중이 아니면 null
   function startLinking(from = -1) {
@@ -1110,7 +1138,7 @@ export function createEditor({
     linkHint.hidden = !linking;
     if (!linking) return;
     linkHint.replaceChildren(
-      el('b', { text: linking.from == null ? '① 화살표가 시작할 조각을 누르세요' : '② 화살표가 닿을 조각을 누르세요' }),
+      el('b', { text: linking.from == null ? '① 화살표가 시작할 조각을 누르세요' : '② 화살표가 닿을 조각을 누르세요 · 빈 곳을 누르면 새 조각을 놓고 이어요' }),
       el('button', { class: 'fe-link-hint-x', type: 'button', onClick: () => { stopLinking(true); focusStage(); } }, '그만두기 (Esc)'));
   }
   // 고른 것들을 한 그룹으로 묶는다 · 그룹을 푼다.
@@ -1693,6 +1721,10 @@ export function createEditor({
       if (e.target.closest?.('.fe-link-hint')) return;
       e.preventDefault();
       const top = e.target.closest?.('.fi') ? itemAt(e.clientX, e.clientY, !!e.pointerType && e.pointerType !== 'mouse') : -1;
+      if (top < 0 && linking.from != null && !e.target.closest?.('.fe-h')) {
+        const r = stage.getBoundingClientRect(), point = [(e.clientX - r.left) / r.width * 100, (e.clientY - r.top) / r.height * 100];
+        if (point.every((v) => v >= 0 && v <= 100)) { const from = linking.from; stopLinking(); linkToNew(from, point); return; }
+      }
       if (top < 0 || items()[top].t === 'link') { stopLinking(true); return; }
       if (linking.from == null) { linking.from = top; select(top); paintLinking(); return; }
       if (top === linking.from) return;
@@ -1801,17 +1833,34 @@ export function createEditor({
     }
     linkTarget.hidden = !piece;
     drag.next = piece ? next : null;
+    drag.point = i >= 0 ? null : point;        // 조각 위(이어진 다른 끝의 조각도)가 아닌 빈 곳에 놓을 때만 새 조각을 만든다
     const now = items()[sel];
     if (now[end] !== next[end] || now[sideKey] !== next[sideKey] || now[posKey] !== next[posKey]) put(next, { rebuild: true });   // 선 그림을 새로 그려야 처음 모양으로 돌아와도 맞다
   }
   // 끝을 놓았다: 조각 위면 그대로 저장하고, 빈 곳 · 이미 이어진 두 조각 · 바뀐 것 없음이면 처음으로 되돌린다.
   function dropLinkEnd() {
-    const { from, next, moved, corner: end } = drag;
+    const { from, next, moved, corner: end, point } = drag;
     stopDrag();
     linkTarget.hidden = true;
     if (!moved) { renderUi(); return; }
     const a = next?.from, b = next?.to;
     const twin = next && next[end] !== from[end] && items().some((x, k) => k !== sel && x.t === 'link' && ((x.from === a && x.to === b) || (x.from === b && x.to === a)));
+    // 빈 곳에 놓았다: 그 끝이 붙어 있던 조각을 그 자리에 하나 더 놓고 그쪽으로 잇는다(카드 밖이면 처음으로 되돌린다).
+    const like = items().findIndex((x) => x.id && x.t !== 'link' && x.id === from[end]), fallback = items().findIndex((x) => x.id && x.t !== 'link' && x.id === (end === 'from' ? from.to : from.from));
+    if (!next && point && point.every((v) => v >= 0 && v <= 100) && (like >= 0 || fallback >= 0)) {
+      put(from, { rebuild: true });
+      past.pop();
+      const made = pieceAt(like >= 0 ? like : fallback, point);
+      if (!made) { markHistory(); renderUi(); return; }
+      remember();
+      const { list, piece } = made, at = list.findIndex((x) => x === items()[sel] || (x.t === 'link' && x.id === from.id));
+      const sideKey = end === 'from' ? 'fromSide' : 'toSide', posKey = end === 'from' ? 'fromPos' : 'toPos';
+      const relinked = cleanItem({ ...list[at], [end]: piece.id, [sideKey]: undefined, [posKey]: undefined });
+      card.items = [...list.slice(0, at), relinked, ...list.slice(at + 1), piece];
+      listChanged(card.items.length - 1);
+      notify('빈 곳에 새 조각을 놓고 이었어요.', 2500);
+      return;
+    }
     const same = !next || twin || ['from', 'to', 'fromSide', 'toSide', 'fromPos', 'toPos'].every((k) => next[k] === from[k]);
     if (same) {
       put(from, { rebuild: true });
@@ -1819,7 +1868,7 @@ export function createEditor({
       markHistory();
       renderUi();
       if (twin) notify('그 두 조각은 이미 이어져 있어요.', 2500);
-      else if (!next) notify('선의 끝은 조각 위에 놓아야 이어져요.', 2500);
+      else if (!next) notify('선의 끝은 조각 위나 카드 안의 빈 곳에 놓아요.', 2500);
       return;
     }
     renderUi();
@@ -2626,7 +2675,7 @@ export function createEditor({
       el('span', { class: 'fe-sep' }),
       group('작업',
         // 한 조각을 고르면: 이 조각에서 다른 조각으로 화살표 잇기(누른 뒤 닿을 조각을 누른다)
-        it.t !== 'link' && items().filter((x) => x.t !== 'link').length >= 2 ? tb(lab('right', '선 잇기'), () => startLinking(sel), { title: '이 조각에서 다른 조각으로 화살표를 이어요: 누른 뒤 이을 조각을 눌러요', name: '선 잇기', cls: 'linking' }) : null,
+        it.t !== 'link' && items().filter((x) => x.t !== 'link').length >= 2 ? tb(lab('right', '선 잇기'), () => startLinking(sel), { title: '이 조각에서 다른 조각으로 화살표를 이어요: 누른 뒤 이을 조각(또는 새 조각을 놓을 빈 곳)을 눌러요', name: '선 잇기', cls: 'linking' }) : null,
         tb(icon('duplicate'), copy, { title: '복제: 똑같은 것을 하나 더 (Ctrl+D)', name: '복제', cls: 'icon dup' }),
         tb(icon('lock'), () => change({ lock: true }, { keepPop: false }), { title: '잠금: 실수로 움직이지 않게 해요', name: '잠금', cls: 'icon lock' })),
       el('span', { class: 'fe-sep' }),

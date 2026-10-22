@@ -25,7 +25,7 @@
     "app/pptx-import/preview-punctuation.js": "8ff4f855942dde60b6302e775e5a06b58b411e34b015c129088157533934c90e",
     "app/pptx-import/worker.js": "d4e9ac47e75357e6fdcf5d38d703c337651c2c3720fde01f3bbfa071ad1823c0",
     "app/zip.js": "345e936f955665a859d7fa86d9c1b9f4846d75a944c1df0f3d0c7d477152c026",
-    "package-lock.json": "5fe22ec83e0fb590d665a6c1d79ed8cdc1c7e645d0c4cf38e830d33314e50f75",
+    "package-lock.json": "54c75de4211758fbfe74d3ab38ae152f0b2aa79f98706b447bc9ab58154daa74",
     "src/activity.js": "776e63454bf361306c78c91d39ccd11a1aece40f63d99e64b3756cfd2ee39a8e",
     "src/crop.js": "ec9159574565f560476ede8f5292609ab74eae42d130fe0bf59a1ad8844ac1fb",
     "src/document.js": "2e1f0df13c0bd521a0f9d2209e5bfed5d8863267621528edee014dcf62848f48",
