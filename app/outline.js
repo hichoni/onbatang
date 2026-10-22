@@ -4,12 +4,17 @@
 import { BACKGROUNDS, cleanItem, newShape, settings, textLimit } from '../src/model.js';
 import { newId, cleanNotes } from '../src/document.js';
 import { slideMotion } from './designs.js';
+import { deckKind, deckPage } from './outline-deck.js';
+import { THEME_STYLES } from './themes.js';
 
 const BULLET = /^([-*+•·◦▪‣])\s+/;
 const NUMBERED = /^\d{1,2}[.)]\s+/;
 const HEADING = /^#{1,6}\s+/;
-/** 한 장에 놓는 내용 줄 수(넘치면 "제목 (이어서)" 장으로 넘긴다) */
+/** 한 장에 놓는 내용 줄 수(넘치면 "제목 (이어서)" 장으로 넘긴다). 테마로 꾸밀 때는 그림 자리를 두어 다섯 줄까지. */
 export const OUTLINE_LINES = 6;
+const DECK_LINES = 5;
+/** 고를 수 있는 모양: 테마 색 묶음들(themes.js). 'plain' 은 지금 장의 바탕 · 글자색 그대로의 글 장. */
+export const OUTLINE_STYLES = THEME_STYLES;
 
 /** 개요 글 → [{ title, lines: [{ text, level: 1 | 2 }], notes }] */
 export function parseOutline(text) {
@@ -51,10 +56,12 @@ function heightOf(text, size, w, aspect, lh = 1.3) {
 
 /**
  * 읽은 개요 → 새 장들. bg: 바탕, font: 글꼴(없으면 기본), like: 움직임(조합 · 전환 효과)을 이어받을 장, room: 만들 수 있는 장 수.
- * 돌려주는 것: { slides, cut(못 만든 장 수) }. 내용이 많은 장은 OUTLINE_LINES 줄씩 나눠 "제목 (이어서)" 장을 더 만든다.
+ * style: 테마 이름(OUTLINE_STYLES 의 id)이면 장마다 배치를 골라 그 테마로 꾸미고, 'plain' 이면 지금 바탕의 글 장.
+ * 돌려주는 것: { slides, cut(못 만든 장 수), titles(장마다의 제목) }. 내용이 많은 장은 OUTLINE_LINES 줄씩 나눠 "제목 (이어서)" 장을 더 만든다.
  */
-export function outlineSlides(sections, { bg, font, like = null, room = Infinity } = {}) {
+export function outlineSlides(sections, { bg, font, like = null, room = Infinity, style = 'plain' } = {}) {
   const aspect = settings().aspect || 16 / 9;
+  const theme = THEME_STYLES.find((t) => t.id === style) || null;
   const { ink, accent } = inkOf(bg);
   const text = (t, extra) => cleanItem({ t: 'text', id: newId(), text: t, color: ink, ...(font ? { font } : {}), ...extra }, { keepSpaces: true });
   const limit = (t) => Array.from(t).slice(0, textLimit({ t: 'text' })).join('');
@@ -93,19 +100,31 @@ export function outlineSlides(sections, { bg, font, like = null, room = Infinity
     const note = cleanNotes(notes);
     return { slide: { id: newId('p'), ...(bg === undefined ? {} : { bg }), items: items.filter(Boolean), ...(note ? { notes: note } : {}), ...slideMotion(like) }, rest };
   };
-  // 장들: 개요의 한 덩이를 OUTLINE_LINES 줄씩 나누고, 그래도 넘치는 줄은 그다음 장으로 미룬다.
+  // 테마로 꾸민 장: 내용을 보고 배치를 고른다(outline-deck.js). 도형의 높이는 너비 단위로 적혀 있어 카드 비율에 맞춘다(layoutItems 와 같다).
+  let sectionNo = 0;
+  const deck = (part, at, count) => {
+    const kind = deckKind(part, at, count);
+    if (kind === 'section') sectionNo++;
+    const { items, rest } = deckPage(theme, aspect, { title: limit(part.title), lines: part.lines.map((l) => ({ ...l, text: limit(l.text) })) }, kind, { n: sectionNo, font });
+    const made = items.map((it) => cleanItem({ ...it, id: newId(), ...(it.t === 'shape' ? { h: it.h * aspect } : {}) }, { keepSpaces: true })).filter(Boolean);
+    const note = cleanNotes(part.notes);
+    return { slide: { id: newId('p'), bg: theme.bg, items: made, ...(note ? { notes: note } : {}), ...slideMotion(like) }, rest: rest.map(({ text: t, level }) => ({ text: t, level })) };
+  };
+  // 장들: 개요의 한 덩이를 정한 줄 수씩 나누고, 그래도 넘치는 줄은 그다음 장으로 미룬다.
+  const per = theme ? DECK_LINES : OUTLINE_LINES;
   const queue = [];
   for (const s of sections) {
-    for (let k = 0; k < Math.max(1, s.lines.length); k += OUTLINE_LINES) {
-      queue.push({ title: k && s.title ? `${s.title} (이어서)` : s.title, base: s.title, lines: s.lines.slice(k, k + OUTLINE_LINES), notes: k ? '' : s.notes });
+    for (let k = 0; k < Math.max(1, s.lines.length); k += per) {
+      queue.push({ title: k && s.title ? `${s.title} (이어서)` : s.title, base: s.title, lines: s.lines.slice(k, k + per), notes: k ? '' : s.notes });
     }
   }
-  const made = [];
+  const made = [], titles = [];
   let cut = 0;
   for (let k = 0; k < queue.length; k++) {
     if (made.length >= room) { cut++; continue; }
-    const { slide, rest } = page(queue[k]);
+    const { slide, rest } = theme ? deck(queue[k], k, queue.length) : page(queue[k]);
     made.push(slide);
+    titles.push(queue[k].title);
     if (rest.length) {
       const next = queue[k + 1];
       // 다음 덩이가 같은 장의 "(이어서)" 이면 그 앞에 붙이고, 아니면 "(이어서)" 장을 하나 끼운다.
@@ -113,7 +132,7 @@ export function outlineSlides(sections, { bg, font, like = null, room = Infinity
       else queue.splice(k + 1, 0, { title: queue[k].base ? `${queue[k].base} (이어서)` : '', base: queue[k].base, lines: rest, notes: '' });
     }
   }
-  return { slides: made, cut };
+  return { slides: made, cut, titles };
 }
 
 /**

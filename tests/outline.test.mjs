@@ -64,3 +64,37 @@ test('an outline written by 가이X is taken from its code block, without number
   assert.equal(outlineFromAnswer('### 제목\n  내용'), '제목\n  내용', 'no code block: the whole answer');
   assert.equal(outlineFromAnswer(null), '');
 });
+
+test('themed outline slides pick a layout per slide and stay inside the card for every look and shape', async () => {
+  const {deckKind, pictureFor} = await import('../app/outline-deck.js');
+  const {OUTLINE_STYLES} = await import('../app/outline.js');
+  const line = (text, level = 1) => ({text, level});
+  assert.equal(deckKind({title: '식물의 한살이', lines: [line('소개')]}, 0, 5), 'cover');
+  assert.equal(deckKind({title: '2부', lines: []}, 2, 5), 'section');
+  assert.equal(deckKind({title: '왜 꽃이 필까요?', lines: [line('벌')]}, 2, 5), 'question');
+  assert.equal(deckKind({title: '필요한 것', lines: [line('물'), line('햇빛'), line('흙')]}, 2, 5), 'cards');
+  assert.equal(deckKind({title: '차례', lines: [line('씨앗에서 싹이 터요, 그리고 오래 기다려요'), line('잎과 줄기가 자라요')]}, 2, 5), 'steps');
+  assert.equal(deckKind({title: '기록', lines: [line('날짜'), line('같은 시각', 2)]}, 2, 5), 'bullets');
+  assert.equal(deckKind({title: '정리', lines: [line('한살이가 있어요')]}, 4, 5), 'closing');
+  // Pictures follow words; a one-letter word only as a word ("실험해" is not the sun).
+  assert.deepEqual(['씨앗을 심어요', '실험해 보기', '해가 떠요', '물을 줘요', '물건 정리', '인터넷 예절'].map(pictureFor), ['sprout', 'magnifier', 'sun', 'drop', 'checkcard', 'laptop']);
+  assert.equal(OUTLINE_STYLES.length, 9);
+  const outline = '식물의 한살이\n  씨앗에서 열매까지\n필요한 것\n  물\n  햇빛\n  흙\n자라는 차례\n  씨앗에서 싹이 터요\n  잎과 줄기가 자라요\n  꽃이 피어요 열매를 맺어요 아주 길게 써 볼게요 넘치는지\n기록\n  - 날짜와 날씨\n    - 같은 시각\n  - 키와 잎 수\n  - 그림\n  - 달라진 점\n  - 느낀 점\n  - 더 알고 싶은 것\n2부\n왜 꽃이 필까요?\n  벌과 나비\n정리\n  한살이가 있어요';
+  for (const aspect of [16 / 9, 4 / 3, 1, 9 / 16]) {
+    configure({aspect, maxItems: 40});
+    for (const {id, bg} of OUTLINE_STYLES) {
+      const {slides, titles} = outlineSlides(parseOutline(outline), {style: id});
+      assert.equal(slides.length, titles.length);
+      assert.ok(titles.includes('기록 (이어서)'), `${id} ${aspect}: long list goes on`);
+      for (const s of slides) {
+        assert.equal(s.bg, bg);
+        assert.equal(cleanDesign(s).items.length, s.items.length, `${id} ${aspect}: nothing dropped`);
+        for (const it of s.items) {
+          assert.ok(it.id && it.x >= 0 && it.x <= 100 && it.y >= 0 && it.y <= 100, `${id} ${aspect} ${it.t} ${it.text || it.shape} at ${it.x},${it.y}`);
+          if (it.t === 'text') assert.ok(it.y + 0 < 97 && it.size >= 2.5, `${id} ${aspect} text "${it.text}" ${it.y} ${it.size}`);
+        }
+      }
+    }
+  }
+  configure({aspect: 16 / 9});
+});

@@ -21,7 +21,7 @@ import {createShowTools} from './show-tools.js';
 import {PRINT_LAYOUTS,printHtml} from './print.js';
 import {encodeGif,GIF_LIMITS} from './gif.js';
 import {findText,replaceText} from './find-replace.js';
-import {parseOutline,outlineSlides,outlineFromAnswer,OUTLINE_LINES} from './outline.js';
+import {parseOutline,outlineSlides,outlineFromAnswer,OUTLINE_STYLES} from './outline.js';
 import {ONBATANG_VERSION} from './version.js';
 import {createGaiMaker,gaiLessonContext} from './gai-maker.js';
 import {
@@ -1134,26 +1134,38 @@ function openOutline(O) {
   if (O.closed || videoBusy(O) || O.inlineImport) return;
   const input = el('textarea', { class: 'cv-outline-input', rows: '11', 'aria-label': '개요', spellcheck: 'false', placeholder: `예)\n${OUTLINE_SAMPLE}` });
   const result = el('p', { class: 'cv-down-note', role: 'status', 'aria-live': 'polite' });
-  const list = el('ol', { class: 'cv-outline-list' });
+  const list = el('div', { class: 'cv-outline-thumbs' });
   const blank = (d) => !d.items.length && !d.video && !d.activity && !d.notes;
+  // 장 모양: 테마 색 묶음(장마다 배치를 골라 꾸민다) 또는 "글만"(지금 바탕의 글 장). 고른 것은 이 기기에 기억한다.
+  const STYLE_KEY = 'onbatang-outline-style-v1', known = (v) => v === 'plain' || OUTLINE_STYLES.some((t) => t.id === v);
+  let style = (() => { try { const v = localStorage.getItem(STYLE_KEY); if (known(v)) return v; } catch { /* 기억하지 못해도 괜찮다 */ }
+    const bg = O.editor.getDesign().bg; return OUTLINE_STYLES.find((t) => t.bg === bg)?.id || OUTLINE_STYLES[0].id; })();
+  const styleChip = ({ id, name, bg, accent }) => el('button', { class: 'cv-outline-style', type: 'button', dataset: { outlineStyle: id }, 'aria-pressed': String(style === id), title: id === 'plain' ? '지금 장의 바탕색 그대로, 글만 놓아요' : `${name}: 장마다 배치를 골라 그림과 함께 꾸며요`,
+    onClick: () => { style = id; try { localStorage.setItem(STYLE_KEY, id); } catch { /* 괜찮다 */ } for (const b of styles.children) b.setAttribute('aria-pressed', String(b.dataset.outlineStyle === id)); update(); } },
+  el('span', { class: 'cv-outline-swatch', 'aria-hidden': 'true', style: `background:${bg};box-shadow:inset 0 0 0 4px ${bg},inset 0 0 0 10px ${accent}` }), el('span', { text: name }));
+  const styles = el('div', { class: 'cv-outline-styles', role: 'group', 'aria-label': '장 모양' },
+    ...OUTLINE_STYLES.map((t) => styleChip({ id: t.id, name: t.swatch, bg: t.bg, accent: t.accent })),
+    styleChip({ id: 'plain', name: '글만', bg: '#ffffff', accent: '#9aa3b5' }));
   const plan = () => {
     O.slides[O.at] = O.editor.getDesign();
     const here = O.slides[O.at], empty = blank(here);
     const room = MAX_SLIDES - O.slides.length + (empty ? 1 : 0);
     const font = here.items.find((it) => it.t === 'text' && it.font)?.font;
-    return { empty, ...outlineSlides(parseOutline(input.value), { bg: here.bg, font: font === 'gothic' ? undefined : font, like: here, room }) };
+    return { empty, ...outlineSlides(parseOutline(input.value), { bg: here.bg, font: font === 'gothic' ? undefined : font, like: here, room, style }) };
   };
-  const update = () => {
-    const { slides, cut, empty } = plan();
+  // 미리 보기: 만들어질 장의 작은 그림과 제목(글을 치는 동안에는 잠깐 기다렸다 그린다)
+  let thumbTimer = 0;
+  const thumbs = (slides, titles) => list.replaceChildren(...slides.map((d, i) => el('figure', { class: 'cv-outline-thumb' },
+    slideView(d, aspectOf(O.record), 320), el('figcaption', {}, el('b', { text: titles[i] || '(제목 없음)' })))));
+  const update = (now = true) => {
+    const { slides, cut, empty, titles } = plan();
     make.disabled = !slides.length;
     make.textContent = slides.length ? `${slides.length}장 만들기` : '장 만들기';
-    list.replaceChildren(...slides.map((d) => {
-      const words = d.items.filter((it) => it.t === 'text');
-      return el('li', {}, el('b', { text: words[0]?.text || '(제목 없음)' }), el('span', { text: words.length > 1 ? ` · 내용 ${words.length - 1}줄` : ' · 제목만' }));
-    }));
+    clearTimeout(thumbTimer);
+    if (now) thumbs(slides, titles); else thumbTimer = setTimeout(() => thumbs(slides, titles), 250);
     result.textContent = !input.value.trim() ? '들여 쓰지 않은 줄은 장의 제목, 그 아래 들여 쓰거나 "-"로 시작하는 줄은 그 장의 내용이에요. 더 들여 쓰면 한 단계 아래, ">"로 시작하면 발표자 노트예요.'
       : !slides.length ? `슬라이드는 ${MAX_SLIDES}장까지예요. 장을 지운 뒤 다시 해 주세요.`
-        : `${empty ? '비어 있는 지금 장부터' : '지금 장 뒤에'} ${slides.length}장을 만들어요.${cut ? ` ${MAX_SLIDES}장을 넘는 ${cut}장은 만들지 않아요.` : ''} 내용이 ${OUTLINE_LINES}줄을 넘으면 "(이어서)" 장으로 나눠요.`;
+        : `${empty ? '비어 있는 지금 장부터' : '지금 장 뒤에'} ${slides.length}장을 만들어요.${cut ? ` ${MAX_SLIDES}장을 넘는 ${cut}장은 만들지 않아요.` : ''} 내용이 많으면 "(이어서)" 장으로 나눠요.`;
   };
   const make = el('button', { class: 'btn btn-primary', type: 'button', dataset: { outlineMake: '' }, onClick: () => {
     const { slides, cut, empty } = plan();
@@ -1163,7 +1175,7 @@ function openOutline(O) {
     toast(`${slides.length}장을 만들었어요.${cut ? ` (${cut}장은 ${MAX_SLIDES}장을 넘어 만들지 않았어요)` : ''} 글을 눌러 고치고, 틀 · 바탕색으로 꾸며요.`, 4500);
   } }, '장 만들기');
   const sample = el('button', { class: 'btn chip', type: 'button', dataset: { outlineSample: '' }, onClick: () => { input.value = OUTLINE_SAMPLE; update(); input.focus(); } }, '예시 넣어 보기');
-  input.addEventListener('input', update);
+  input.addEventListener('input', () => update(false));
   // 가이X 에게 개요 부탁하기(가이랩처럼 가이X 를 이어 준 곳에서만): 주제 · 장 수를 보내면 개요 글이 칸에 들어온다. 장은 확인 · 고친 뒤 직접 만든다.
   let asking = null, before = null;
   const ai = appMaker && activityAuthoring ? (() => {
@@ -1219,9 +1231,11 @@ function openOutline(O) {
   openModal(el('section', { class: 'cv-find-box cv-outline-box', 'aria-labelledby': 'cv-outline-title', onKeydown: escCloses },
     el('h2', { id: 'cv-outline-title', text: '개요로 장 만들기' }),
     el('p', { class: 'cv-down-note', text: '발표할 차례를 적으면 장마다 제목과 내용을 놓아 한꺼번에 만들어요. 다른 곳에 쓴 개요를 붙여 넣어도 돼요.' }),
-    ai, input, el('div', { class: 'cv-find-opts' }, sample, el('span', { class: 'cv-down-note', text: 'Tab: 들여 쓰기 · Shift+Tab: 내어 쓰기' })),
-    result, list,
-    el('div', { class: 'cv-find-actions' }, el('button', { class: 'btn btn-ghost', type: 'button', onClick: closeModal }, '닫기'), make)), { onClose: () => { asking?.abort(); O.editor.refresh(); } });
+    // 넓은 화면: 왼쪽은 개요 쓰기, 오른쪽은 장 모양과 미리 보기(좁으면 위아래로)
+    el('div', { class: 'cv-outline-cols' },
+      el('div', { class: 'cv-outline-write' }, ai, input, el('div', { class: 'cv-find-opts' }, sample, el('span', { class: 'cv-down-note', text: 'Tab: 들여 쓰기 · Shift+Tab: 내어 쓰기' }))),
+      el('div', { class: 'cv-outline-look' }, el('div', { class: 'cv-outline-style-row' }, el('b', { text: '장 모양' }), styles), result, list)),
+    el('div', { class: 'cv-find-actions' }, el('button', { class: 'btn btn-ghost', type: 'button', onClick: closeModal }, '닫기'), make)), { wide: true, onClose: () => { asking?.abort(); clearTimeout(thumbTimer); O.editor.refresh(); } });
   update();
   requestAnimationFrame(() => (ai ? ai.querySelector('textarea') : input).focus());
 }

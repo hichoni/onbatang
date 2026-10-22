@@ -70,21 +70,27 @@ test('an outline becomes titled slides after the current one, or fills an empty 
   assert.equal(await make.isDisabled(), true, 'nothing to make yet');
   await input.fill('물의 순환\n  - 증발\n  - 비\n> 그림을 먼저 보여 줘요\n식물\n  싹\n마무리');
   await page.waitForFunction(() => /지금 장 뒤에 3장/.test(document.querySelector('.cv-outline-box [role=status]').textContent));
+  assert.equal(await box.locator('[data-outline-style][aria-pressed=true]').getAttribute('data-outline-style'), 'tnet', 'blue first');
+  await page.waitForFunction(() => document.querySelectorAll('.cv-outline-thumb .fe-card').length === 3);   // a small picture of each slide, drawn just after typing stops
   assert.equal(await make.textContent(), '3장 만들기');
-  assert.deepEqual(await box.locator('.cv-outline-list li b').allTextContents(), ['물의 순환', '식물', '마무리']);
+  assert.deepEqual(await box.locator('.cv-outline-thumb figcaption b').allTextContents(), ['물의 순환', '식물', '마무리']);
   await make.click();
   await box.waitFor({state: 'detached'});
   await saved(page, r => r.slides.length === 5);
   let r = await page.evaluate(() => window.readSaved());
   assert.deepEqual(r.slides.map(s => words(s)[0]), ['우리 반 발표', '물의 순환', '식물', '마무리', undefined]);
-  assert.deepEqual(words(r.slides[1]), ['물의 순환', '• 증발', '• 비']);
+  // The first look (blue) dresses each slide: shapes and a picture besides the words, in the theme colours, with the current motion.
+  assert.deepEqual(words(r.slides[1]).filter(w => !/^\d$/.test(w)), ['물의 순환', '증발', '비']);
+  assert.ok(r.slides[1].items.filter(it => it.t === 'shape').length >= 4, 'decorated');
   assert.equal(r.slides[1].notes, '그림을 먼저 보여 줘요');
-  assert.deepEqual([r.slides[1].bg, r.slides[1].tr, r.slides[1].items[0].color], ['navy', 'fade', '#ffffff'], 'colours and motion of the current slide');
+  assert.deepEqual([r.slides[1].bg, r.slides[1].tr], ['#f1f7ff', 'fade'], 'theme background, motion of the current slide');
   assert.equal(await tiles(page).nth(1).getAttribute('class').then(c => /\bon\b/.test(c)), true, 'the first new slide is open');
   // On the empty last slide, from the 틀 panel: the sample fills it (and goes on after it).
   await tiles(page).nth(4).click();
   await page.locator('[data-outline-start]').click();
   await box.locator('[data-outline-sample]').click();
+  // "글만": plain text slides on the current background.
+  await box.locator('[data-outline-style="plain"]').click();
   await page.waitForFunction(() => /비어 있는 지금 장부터/.test(document.querySelector('.cv-outline-box [role=status]').textContent));
   if (process.env.OUTLINE_SHOT) await page.screenshot({path: `${process.env.OUTLINE_SHOT}-dialog.png`});
   // Tab indents the line the caret is on, Shift+Tab takes it back.
@@ -120,7 +126,8 @@ test('where 가이X is joined, the outline dialog asks it for an outline by topi
   if (process.env.OUTLINE_SHOT) await page.screenshot({path: `${process.env.OUTLINE_SHOT}-ai.png`});
   assert.deepEqual(await page.evaluate(() => window.asked), [{kind: 'outline', prompt: '초등 3학년 사회 — 우리 동네 시장', slides: 4}]);
   assert.equal(await input.inputValue(), '우리 동네 시장\n  - 무엇을 파나요\n  - 누가 일하나요\n> 사진을 보여 주며\n정리');
-  assert.deepEqual(await box.locator('.cv-outline-list li b').allTextContents(), ['우리 동네 시장', '정리']);
+  await page.waitForFunction(() => document.querySelectorAll('.cv-outline-thumb').length === 2);
+  assert.deepEqual(await box.locator('.cv-outline-thumb figcaption b').allTextContents(), ['우리 동네 시장', '정리']);
   // The earlier outline can come back.
   await box.locator('[data-outline-undo]').click();
   assert.equal(await input.inputValue(), '내가 먼저 쓴 개요');
