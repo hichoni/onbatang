@@ -58,6 +58,7 @@ let materialAction = null;
 let lessonAction = null;
 let accountAction = null;
 let shareAction = null;
+let showRemote = null;             // 발표의 휴대폰 리모컨(호스트가 연결 · QR 을 맡는다). 없으면 단추도 없다.
 let accountBridge = null;          // 공용 온바탕: 가이랩 계정으로 이어 쓰기(연결 창 주소 등). 계정 저장(sync)이 있으면 쓰지 않는다.
 let bridge = null;
 let accountHome = null;
@@ -1558,6 +1559,28 @@ async function present(O) {
   const tubeNow = () => tube.find((p) => p.started) || null;
   const stage = el('div', { class: 'cv-show-stage' });
   const count = el('span', { class: 'cv-show-count' });
+  // 휴대폰 리모컨(호스트 · 가이랩): 휴대폰에서 다음 · 앞 · 그 장으로 · 검은 화면을 보내고, 발표는 지금 장 · 발표자 노트를 알려 준다.
+  let remote = null, remoteJob = null;
+  const pageTitle = (k) => { const t = (slides[k]?.items || []).filter((it) => it.t === 'text' && String(it.text || '').trim()).sort((a, b) => (Number(a.y) || 0) - (Number(b.y) || 0))[0]; return t ? Array.from(String(t.text).replace(/\s+/g, ' ').trim()).slice(0, 60).join('') : ''; };
+  const remoteState = () => ({ at: i, total: slides.length, title: O.record.name, page: pageTitle(i), next: i + 1 < slides.length ? pageTitle(i + 1) : '', notes: String(slides[i]?.notes || '').slice(0, 2000) });
+  const tellRemote = () => { try { remote?.update?.(remoteState()); } catch (error) { console.warn(error); } };
+  const remoteCommand = (cmd) => {
+    if (closed || !cmd || typeof cmd !== 'object') return;
+    // 넘기기는 글쇠와 같은 길로(검은 화면이면 먼저 걷고, 펜 · 전체 보기 칸도 글쇠처럼 다룬다).
+    if (cmd.action === 'next') { if (!tools?.handle({ key: 'ArrowRight', code: 'ArrowRight' })) go(1); }
+    else if (cmd.action === 'prev') { if (!tools?.handle({ key: 'ArrowLeft', code: 'ArrowLeft' })) go(-1); }
+    else if (cmd.action === 'go' && Number.isSafeInteger(cmd.at)) jump(cmd.at);
+    else if (cmd.action === 'black') tools?.handle({ key: 'b', code: 'KeyB' });
+    else if (cmd.action === 'state') tellRemote();
+  };
+  const openRemote = async () => {
+    if (!showRemote || closed) return;
+    if (remote) { remote.show?.(); return; }
+    if (remoteJob) return;
+    try { remoteJob = showRemote.open({ state: remoteState, command: remoteCommand, root: overlay }); remote = await remoteJob; if (closed) { remote?.close?.(); remote = null; } else tellRemote(); }
+    catch (error) { toast(String(error?.message || '휴대폰 리모컨을 열지 못했어요.').slice(0, 200), 4500); }
+    finally { remoteJob = null; }
+  };
   const btn = (label, title, onClick) => el('button', { class: 'cv-show-key', type: 'button', title, 'aria-label': title, onClick: (e) => { e.stopPropagation(); onClick(); } }, label);
   // 영상 장면이 있는 장에서만 보이는 단추: 틀고 있으면 "멈추기", 멈춰 있으면 "틀기".
   const toggleFilm = () => {
@@ -1628,6 +1651,7 @@ async function present(O) {
     shownDesigns.set(view, design);
     const old = stage.firstElementChild;
     count.textContent = `${i + 1} / ${slides.length}`;
+    tellRemote();
     if(design.activity){
       for(const n of [...stage.children])drop(n);film?.pause();for(const p of tube)p.pause();film=null;tube=[];markFilm();parts=null;
       const host=el('section',{class:'cv-show-activity',dataset:{pixelApp:''}});stage.append(host);
@@ -1727,6 +1751,7 @@ async function present(O) {
   function close() {
     if(savingActivity)return;
     closed=true;pixel?.destroy();pixel=null;
+    try { remote?.close?.(); } catch (error) { console.warn(error); } remote = null;
     tools?.destroy();tools=null;
     settle();
     clearTimeout(filmTimer);
@@ -1760,7 +1785,9 @@ async function present(O) {
     saveTimes: (seconds) => { rehearsed = entries.map((v, k) => [v.page.id, seconds[k]]).filter(([, s]) => s != null); },
     title: O.record.name, notify: toast, keyClass: 'cv-show-key',
   });
-  overlay.querySelector('.cv-show-bar').append(...tools.buttons, btn([ic('close'), '끝내기'], '발표 끝내기 (Esc)', close));
+  const remoteBtn = showRemote ? btn([ic('screen'), '휴대폰 리모컨'], '휴대폰으로 장 넘기기(QR 을 찍어요)', openRemote) : null;
+  if (remoteBtn) remoteBtn.dataset.showRemote = '';
+  overlay.querySelector('.cv-show-bar').append(...tools.buttons, ...(remoteBtn ? [remoteBtn] : []), btn([ic('close'), '끝내기'], '발표 끝내기 (Esc)', close));
   document.body.append(overlay);
   document.body.classList.add('modal-open');
   draw();
@@ -2823,10 +2850,11 @@ function readOpen() {
  * - resume: true 면 새로 고침한 뒤 이 탭에서 꾸미던 그림 · 장을 다시 연다(공용 온바탕 첫 쪽이 켠다. 그림을 스스로 여는 들여 쓰는 곳은 끈 채로 둔다).
  * - lessonAction: {label, editorTitle?, accepts?(record), open({designId,slideIndex,inline})}; 저장 후 같은 편집 영역에서 호스트의 수업 구성/진행을 연다. 공용 기본값은 숨김.
  * - accountAction: {label,editorTitle?,open({from,designId?,inline})}; 첫 화면과 편집기 안의 계정 수업 목록. 기본값은 숨김이며 서버/로그인은 호스트가 담당한다.
+ * - showRemote: {open({state(),command(cmd),root})→{update(state),show?(),close()}}; 발표 막대의 "휴대폰 리모컨". cmd: {action:'next'|'prev'|'go'(at)|'black'|'state'}. 기본값은 숨김.
  * - accountBridge: {url?}; 공용 온바탕 첫 화면의 "가이랩 계정으로 이어 쓰기"(가이랩 연결 창으로 그림을 올리고 가져온다). sync 가 있으면 숨김.
  * - shareAction: {label,title?,open({designId,flush(),goTo(slideIndex,{upload})}),saved?(record)}; 편집기 위 막대의 공유 단추(가이랩의 보기 전용 링크). saved 는 이 기기에 저장할 때마다 불린다(링크에 반영은 호스트가 모아서). 기본값은 숨김.
  */
-export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, accountAction: accountLibrary = null, shareAction: sharing = null, accountBridge: bridging = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false, resume = false, embed = null, syncDelay = null } = {}) {
+export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, accountAction: accountLibrary = null, shareAction: sharing = null, accountBridge: bridging = null, showRemote: remoting = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false, resume = false, embed = null, syncDelay = null } = {}) {
   if (app) throw new Error('minican already started');
   if (!root) throw new Error('minican root');
   app = root;
@@ -2840,6 +2868,7 @@ export function startMinican({ root = document.getElementById('app'), fonts = []
   if(accountLibrary&&typeof accountLibrary.open==='function'&&typeof accountLibrary.label==='string'&&accountLibrary.label.trim())accountAction=accountLibrary;
   if(navigation&&typeof navigation.load==='function')materialNavigation=navigation;
   if(sharing&&typeof sharing.open==='function'&&typeof sharing.label==='string'&&sharing.label.trim())shareAction=sharing;
+  if (remoting && typeof remoting.open === 'function') showRemote = remoting;
   if (bridging && typeof bridging === 'object' && !embed) accountBridge = { ...(typeof bridging.url === 'string' ? { url: bridging.url } : {}) };
   activityAuthoring=authoring===true;
   resumeOpen=resume===true;
