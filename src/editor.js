@@ -15,7 +15,7 @@ import { ENTERS, COMBOS, TRANSITIONS, EMPHASES, STILL, planMotion, playEnter, pl
 import { searchStickers } from './stickers.js';
 import { ART_PACKS, artSvg, artColorable, artReady, loadArt, searchArt } from './art.js';
 import { designView, itemView, placeItem, paintCard, shapeThumb } from './render.js';
-import { layoutLinks, relink, LINK_LINE, LINK_SHAPES, linkSvg, linkHandle, dragLinkHandle } from './links.js';
+import { layoutLinks, relink, LINK_LINE, LINK_SHAPES, LINK_LABEL_MAX, linkSvg, linkHandle, dragLinkHandle, linkLabelSize } from './links.js';
 import { sceneView, scenePlayer, keepScene, probeVideo, ACCEPT_VIDEOS } from './scene.js';
 import { icon } from './icons.js';
 import { parseYouTube, ytStart, ytTime, ytWatch } from './youtube.js';
@@ -670,8 +670,11 @@ export function createEditor({
     const knob = it?.t === 'link' && node && !it.lock && !cropJob && !many.length ? linkHandle(it, settings().aspect) : null;
     linkKnob.hidden = !knob;
     if (knob) {
+      // 선 위의 글이 있으면 손잡이를 글 바로 아래로 비켜 둔다(끌 때는 그만큼 빼서 계산한다: start 의 knobShift).
+      const shift = it.label ? linkLabelSize(it) * 1.25 * settings().aspect : 0;
+      linkKnob.dataset.shift = String(shift);
       linkKnob.style.left = `${knob.at[0]}%`;
-      linkKnob.style.top = `${knob.at[1]}%`;
+      linkKnob.style.top = `${knob.at[1] + shift}%`;
       linkKnob.dataset.kind = knob.kind;
       linkKnob.title = knob.kind === 'bend' ? '끌어서 휘는 정도 · 쪽 바꾸기' : '끌어서 꺾이는 자리 옮기기';
     }
@@ -1702,6 +1705,7 @@ export function createEditor({
       mode, id: e.pointerId, rect, from: it, moved: false,
       px: e.clientX, py: e.clientY, cx, cy,
       corner: corner || mode, width: node?.offsetWidth || 1, height: node?.offsetHeight || 1,
+      knobShift: mode === 'bend' ? Number(linkKnob.dataset.shift) || 0 : 0,
     };
   }
   stage.addEventListener('pointermove', (e) => {
@@ -1756,7 +1760,7 @@ export function createEditor({
     let next = from;
     if (mode === 'bend') {
       const byId = (id) => items().find((x) => x.id === id);
-      const patch = dragLinkHandle(from, byId(from.from), byId(from.to), [(e.clientX - rect.left) / rect.width * 100, (e.clientY - rect.top) / rect.height * 100], settings().aspect);
+      const patch = dragLinkHandle(from, byId(from.from), byId(from.to), [(e.clientX - rect.left) / rect.width * 100, (e.clientY - rect.top) / rect.height * 100 - drag.knobShift], settings().aspect);
       if (patch) put({ ...from, ...patch });
       return;
     }
@@ -1819,6 +1823,8 @@ export function createEditor({
       return;
     }
     const it = cur();
+    // 연결선을 두 번 누르면 선 위의 글 칸을 연다.
+    if (it?.t === 'link' && !it.lock && itemAt(e.clientX, e.clientY) === sel) { if (pop !== 'llabel') toggle('llabel'); return; }
     const box = nodes[sel]?.getBoundingClientRect();
     if (!it || !['text','image'].includes(it.t) || !box) return;
     if (e.clientX >= box.left && e.clientX <= box.right && e.clientY >= box.top && e.clientY <= box.bottom) {
@@ -2447,7 +2453,8 @@ export function createEditor({
       ink.style.background = it.color;
       own.push(tb([icon('palette'), el('span', { class: 'fe-lbl', text: '색' }), ink], () => toggle('color'), { title: '선 색', name: '선 색', on: pop === 'color', cls: 'has-pop color' }),
         pick('thick', '굵기', 'lthick', { title: '선의 굵기' }),
-        pick('right', '화살표', 'arrow', { title: '선 꾸미기: 모양 모음 · 화살표 머리 · 점선 · 곧게/둥글게/꺾어서 · 붙는 곳' }));
+        pick('right', '화살표', 'arrow', { title: '선 꾸미기: 모양 모음 · 화살표 머리 · 점선 · 곧게/둥글게/꺾어서 · 붙는 곳' }),
+        pick('text', '선 위 글', 'llabel', { title: '선 위에 짧은 글 붙이기 (예: 예 · 아니오 · 다음). 선을 두 번 눌러도 돼요' }));
     } else if (it.t === 'yt') {
       // 유튜브 영상: 발표할 때 누르면 그 자리에서 틀어진다. 시작 시각을 정하고, 유튜브에서 미리 볼 수 있다.
       own.push(
@@ -2667,6 +2674,21 @@ export function createEditor({
           chip('그림자', !!it.shadow, { shadow: true }, { shadow: 'on' })),
         el('p', { class: 'fe-note', text: '테두리와 그림자는 그림·영상·PPTX 로 내려받을 때도 함께 나와요.' }),
       ];
+    } else if (pop === 'llabel' && it.t === 'link') {
+      // 선 위의 글: 다 쓰고 칸을 벗어나거나 Enter 를 누르면 저장한다(글자마다 되돌리기 기록이 쌓이지 않게). 비우면 글을 뗀다.
+      const box = el('input', { class: 'fe-alt-input fe-link-label-input', type: 'text', maxlength: String(LINK_LABEL_MAX), 'aria-label': '선 위의 글', placeholder: '예: 예 · 아니오 · 다음 단계', value: it.label || '' });
+      const save = () => { if ((cur()?.label || '') !== box.value.trim()) change({ label: box.value.trim() || undefined }); };
+      box.addEventListener('change', save);
+      box.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); save(); box.blur(); } e.stopPropagation(); });
+      const quick = (text) => el('button', { class: 'fe-chip', type: 'button', dataset: { linkLabel: text }, onClick: () => change({ label: text }) }, text);
+      body = [
+        el('div', { class: 'fe-poshead', text: '선 위의 글' }),
+        box,
+        el('div', { class: 'fe-row' }, ...['예', '아니오', '다음', '원인', '결과'].map(quick),
+          it.label ? el('button', { class: 'fe-chip', type: 'button', dataset: { linkLabelClear: '1' }, onClick: () => change({ label: undefined }) }, '글 떼기') : null),
+        el('p', { class: 'fe-note', text: `선의 한가운데에 선 색으로 붙어요(${LINK_LABEL_MAX}자까지). 색 · 굵기를 바꾸면 글도 함께 바뀌어요. 선을 두 번 눌러도 이 칸이 열려요.` }),
+      ];
+      requestAnimationFrame(() => box.focus({ preventScroll: true }));
     } else if (pop === 'alt' && it.t === 'image') {
       // 그림 설명(대체 텍스트): 다 쓰고 칸을 벗어나거나 Enter 를 누르면 저장한다(글자마다 되돌리기 기록이 쌓이지 않게).
       const box = el('textarea', { class: 'fe-alt-input', rows: '3', maxlength: String(ALT_LIMIT), 'aria-label': '그림 설명', placeholder: '예: 운동장에서 줄넘기를 하는 학생들', value: it.alt || '' });

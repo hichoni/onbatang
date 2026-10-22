@@ -404,3 +404,42 @@ test('a connector can be dressed up: one-tap looks, a head shape per end and das
   assert.ok(ink < 120, `diamond inked ${ink}`);
   assert.deepEqual(external, []);
 });
+
+test('a connector takes a label from its toolbar or a double click, with quick words, and drops it when cleared', options, async t => {
+  const {page, external} = await setup(t);
+  const shapes = page.locator('.cv-canvas .fe-card .fi-shape');
+  await shapes.nth(0).click();
+  await shapes.nth(1).click({modifiers: ['Shift']});
+  await page.locator('.fe-bar button').filter({hasText: '연결선'}).click();
+  await page.locator('.cv-canvas .fe-card .fi-link').waitFor();
+  const [p1, p2] = await ends(page), mid = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2];
+  await page.mouse.click(...mid);
+  const link = r => r.slides[0].items.find(it => it.t === 'link');
+  // Toolbar: type and press Enter.
+  await page.locator('.fe-bar button').filter({hasText: '선 위 글'}).click();
+  const input = page.locator('.fe-link-label-input');
+  await input.waitFor();
+  await input.fill('다음 단계');
+  await input.press('Enter');
+  await saved(page, r => link(r)?.label === '다음 단계');
+  assert.equal(await page.locator('.cv-canvas .fe-card .fi-link .fi-link-label').textContent(), '다음 단계');
+  // A quick word replaces it; clearing removes it.
+  await page.locator('[data-link-label="아니오"]').click();
+  await saved(page, r => link(r)?.label === '아니오');
+  await page.locator('[data-link-label-clear="1"]').click();
+  await saved(page, r => !('label' in link(r)));
+  // Double click on the line opens the same box.
+  await page.keyboard.press('Escape');
+  await page.mouse.click(...mid);
+  await page.mouse.dblclick(...mid);
+  await input.waitFor();
+  await input.fill('예');
+  await input.press('Enter');
+  await saved(page, r => link(r)?.label === '예');
+  // Clicking the label itself picks the line.
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  await page.locator('.cv-canvas .fe-card .fi-link .fi-link-label').click();
+  assert.equal(await page.locator('.cv-canvas .fe-card .fi-link.sel').count(), 1);
+  assert.deepEqual(external, []);
+});
