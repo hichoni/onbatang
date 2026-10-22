@@ -1,0 +1,145 @@
+// 가이랩 계정으로 이어 쓰기(공용 온바탕): 집에서 만든 그림을 가이랩 선생님 계정에 올려 두고, 학교 컴퓨터에서 가져온다.
+// 로그인은 가이랩 창(작은 연결 창)에서만 하고, 로그인 정보는 이 창으로 넘어오지 않는다. 오가는 것은 선생님이 고른 그림뿐이다.
+// 신호(postMessage, type: 'onbatang-account'): 연결 창 → 온바탕 ready · result · error, 온바탕 → 연결 창 list · get · put.
+// 연결 창은 처음 열 때 정한 주소(gai-lab.netlify.app)와 그 창에서 온 신호만 받는다. 다 하면 온바탕이 연결 창을 닫는다.
+import { el, toast, openModal, closeModal } from './ui.js';
+import { cleanRecord, isDesignId, MAX_DESIGNS } from './designs.js';
+
+const PUT_MAX = 10;                 // 한 번에 올리는 그림 수
+export function createAccountBridge({ url = 'https://gai-lab.netlify.app/onbatang-account-connect.html', host = globalThis.window } = {}) {
+  const endpoint = new URL(url), pending = new Map();
+  if (endpoint.protocol !== 'https:' && !(endpoint.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(endpoint.hostname))) throw Error('가이랩 연결 주소를 확인해 주세요.');
+  let popup = null, channel = '', ready = false, waiting = null, poll = 0;
+  const fail = (message) => {
+    ready = false; clearInterval(poll);
+    waiting?.reject(Error(message)); waiting = null;
+    for (const item of pending.values()) item.reject(Error(message));
+    pending.clear();
+  };
+  host.addEventListener('message', (event) => {
+    const data = event.data;
+    if (event.origin !== endpoint.origin || event.source !== popup || data?.type !== 'onbatang-account' || data.channel !== channel) return;
+    if (data.event === 'ready') { ready = true; waiting?.resolve(); waiting = null; return; }
+    const item = pending.get(data.request);
+    if (!item || !['result', 'error'].includes(data.event)) return;
+    pending.delete(data.request);
+    if (data.event === 'error') item.reject(Error(String(data.message || '가이랩 계정에서 처리하지 못했어요.').slice(0, 300)));
+    else item.resolve(data.result);
+  });
+  /** 가이랩 연결 창을 열고, 선생님이 그 창에서 로그인 · 허락하면 끝난다. 누르기에서 바로 불러야 창이 막히지 않는다. */
+  function connect() {
+    if (ready && popup && !popup.closed) return Promise.resolve();
+    if (waiting && popup && !popup.closed) { popup.focus(); return waiting.promise; }
+    channel = crypto.randomUUID(); ready = false;
+    endpoint.hash = new URLSearchParams({ origin: host.location.origin, channel }).toString();
+    popup = host.open(endpoint.href, `onbatang-account-${channel}`, 'popup,width=480,height=680');
+    if (!popup) return Promise.reject(Error('가이랩 연결 창이 막혔어요. 이 사이트의 팝업을 허용하고 다시 눌러 주세요.'));
+    let resolve, reject;
+    const promise = new Promise((ok, no) => { resolve = ok; reject = no; });
+    waiting = { promise, resolve, reject };
+    clearInterval(poll);
+    poll = setInterval(() => { if (popup.closed) fail('가이랩 연결 창이 닫혔어요. 다시 연결해 주세요.'); }, 500);
+    return promise;
+  }
+  function ask(action, payload = {}, timeoutMs = 120000) {
+    if (!ready || !popup || popup.closed) return Promise.reject(Error('가이랩 계정을 먼저 연결해 주세요.'));
+    const request = crypto.randomUUID();
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => { pending.delete(request); reject(Error('가이랩 계정이 답하지 않아요. 다시 해 주세요.')); }, timeoutMs);
+      pending.set(request, { resolve: (v) => { clearTimeout(timer); resolve(v); }, reject: (e) => { clearTimeout(timer); reject(e); } });
+      popup.postMessage({ type: 'onbatang-account', channel, request, action, ...payload }, endpoint.origin);
+    });
+  }
+  return {
+    connect,
+    get connected() { return ready && !!popup && !popup.closed; },
+    /** 계정의 그림 목록: [{ id, name, updatedAt, slides }] */
+    list: () => ask('list'),
+    /** 고른 그림의 원본(사진 포함) */
+    get: (ids) => ask('get', { ids }, 300000),
+    /** 그림을 계정에 올린다: { saved: [id], failed: [{ id, message }] } */
+    put: (records) => ask('put', { records }, 300000),
+    close() { clearInterval(poll); ready = false; try { popup?.close(); } catch { /* 이미 닫혔다 */ } popup = null; },
+  };
+}
+
+const when = (ms) => { const d = new Date(ms); return Number.isNaN(d.getTime()) ? '' : `${d.getMonth() + 1}월 ${d.getDate()}일 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+/** 가져올지 정하기: 이 기기에 없거나 계정 것이 더 새로우면 가져온다. */
+export function importPlan(remote, local) {
+  const here = new Map((local || []).map((r) => [r.id, r]));
+  return (remote || []).filter((r) => isDesignId(r?.id)).map((r) => {
+    const mine = here.get(r.id);
+    return { ...r, state: !mine ? 'new' : (mine.updatedAt || 0) >= (r.updatedAt || 0) ? 'same' : 'newer' };
+  });
+}
+
+/**
+ * 이어 쓰기 창. bridge: createAccountBridge(), store: { list(), put(record) }, onChanged: 가져온 뒤 첫 화면 다시 그리기.
+ */
+export function openAccountBridge({ bridge, store, onChanged = () => {} }) {
+  const status = el('p', { class: 'cv-bridge-status', role: 'status', 'aria-live': 'polite' });
+  const body = el('div', { class: 'cv-bridge-body' });
+  const connect = el('button', { class: 'btn btn-primary', type: 'button', onClick: () => start() }, '가이랩 계정 연결');
+  const panel = el('div', { class: 'cv-bridge' },
+    el('h2', { text: '가이랩 계정으로 이어 쓰기' }),
+    el('p', { class: 'cv-bridge-lead', text: '집에서 만든 그림을 학교에서 열 때 써요. 가이랩 선생님 계정에 올려 두고, 다른 컴퓨터에서 가져와요. 가이랩에서 온바탕을 열면 계정의 그림이 저절로 보여요.' }),
+    el('p', { class: 'cv-bridge-note', text: '로그인은 가이랩 창에서만 해요. 여러 사람이 쓰는 컴퓨터라면 다 쓴 뒤 가져온 그림을 지워 주세요.' }),
+    body, status);
+  body.append(connect);
+  openModal(panel, { wide: true, onClose: () => bridge.close() });
+  const busy = async (job) => { panel.inert = true; status.textContent = ''; try { await job(); } catch (error) { status.textContent = String(error?.message || '하지 못했어요. 다시 해 주세요.'); } finally { panel.inert = false; } };
+  function start() {
+    // 연결 창은 누르기에서 곧바로 연다(기다린 뒤에 열면 브라우저가 막는다).
+    const opened = bridge.connect();
+    status.textContent = '가이랩 창에서 로그인하고 "허락"을 눌러 주세요.';
+    busy(async () => { await opened; await paint(); status.textContent = '가이랩 계정에 연결했어요.'; });
+  }
+  const pick = (rows, label) => {
+    const boxes = rows.map((r) => ({ r, box: el('input', { type: 'checkbox', checked: r.state !== 'same', disabled: r.state === 'same' }) }));
+    const all = el('label', { class: 'cv-bridge-all' }, el('input', { type: 'checkbox', onChange: (e) => { for (const b of boxes) if (!b.box.disabled) b.box.checked = e.currentTarget.checked; } }), ' 모두');
+    const list = el('ul', { class: 'cv-bridge-list', 'aria-label': label }, ...boxes.map(({ r, box }) => el('li', {}, el('label', {}, box,
+      el('b', { text: r.name || '이름 없는 그림' }), el('span', { text: ` ${r.slides || 0}장 · ${when(r.updatedAt)}` }),
+      r.state === 'same' ? el('em', { text: ' 이 기기 것이 같거나 더 새로워요' }) : r.state === 'newer' ? el('em', { text: ' 계정 것이 더 새로워요' }) : null))));
+    return { all, list, chosen: () => boxes.filter((b) => b.box.checked).map((b) => b.r) };
+  };
+  async function paint() {
+    const local = await store.list(), remote = await bridge.list();
+    const upRows = local.map((r) => {
+      const there = remote.find((x) => x.id === r.id);
+      return { id: r.id, name: r.name, slides: r.slides?.length || 0, updatedAt: r.updatedAt, state: there && (there.updatedAt || 0) >= (r.updatedAt || 0) ? 'same' : 'new' };
+    });
+    const up = pick(upRows, '올릴 그림'), down = pick(importPlan(remote, local), '가져올 그림');
+    const send = el('button', { class: 'btn btn-primary', type: 'button', disabled: !upRows.length, onClick: () => busy(async () => {
+      const ids = up.chosen().map((r) => r.id);
+      if (!ids.length) { status.textContent = '올릴 그림을 골라 주세요.'; return; }
+      const records = (await store.list()).filter((r) => ids.includes(r.id));
+      let saved = 0; const failed = [];
+      for (let i = 0; i < records.length; i += PUT_MAX) {
+        const out = await bridge.put(records.slice(i, i + PUT_MAX));
+        saved += out?.saved?.length || 0; failed.push(...(out?.failed || []));
+      }
+      await paint();
+      status.textContent = failed.length ? `${saved}개를 올렸고 ${failed.length}개는 못 올렸어요: ${failed[0].message}` : `${saved}개를 가이랩 계정에 올렸어요. 다른 컴퓨터에서 가져오거나 가이랩에서 열어요.`;
+    }) }, '골라서 계정에 올리기');
+    const take = el('button', { class: 'btn btn-primary', type: 'button', disabled: !remote.length, onClick: () => busy(async () => {
+      const ids = down.chosen().map((r) => r.id);
+      if (!ids.length) { status.textContent = '가져올 그림을 골라 주세요.'; return; }
+      const here = await store.list(), fresh = ids.filter((id) => !here.some((r) => r.id === id)).length;
+      if (here.length + fresh > MAX_DESIGNS) { status.textContent = `이 기기에는 그림을 ${MAX_DESIGNS}장까지 둘 수 있어요. 안 쓰는 그림을 지우고 다시 해 주세요.`; return; }
+      let got = 0;
+      for (const raw of await bridge.get(ids)) {
+        let record = null;
+        try { record = cleanRecord(raw); } catch (error) { console.warn(error); }
+        if (!record) continue;
+        await store.put(record); got++;
+      }
+      onChanged();
+      await paint();
+      status.textContent = `${got}개를 이 기기로 가져왔어요. 첫 화면의 내 그림에서 열어요.`;
+    }) }, '골라서 이 기기로 가져오기');
+    body.replaceChildren(
+      el('section', { class: 'cv-bridge-part' }, el('h3', { text: '이 기기 → 가이랩 계정' }), upRows.length ? up.all : null, upRows.length ? up.list : el('p', { text: '이 기기에 그림이 없어요.' }), send),
+      el('section', { class: 'cv-bridge-part' }, el('h3', { text: '가이랩 계정 → 이 기기' }), remote.length ? down.all : null, remote.length ? down.list : el('p', { text: '계정에 그림이 없어요.' }), take),
+      el('div', { class: 'cv-bridge-end' }, el('button', { class: 'btn', type: 'button', onClick: () => { bridge.close(); closeModal(); toast('가이랩 연결을 끊었어요.'); } }, '다 했어요 · 연결 끊기')));
+  }
+}
