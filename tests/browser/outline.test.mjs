@@ -124,17 +124,24 @@ test('where 가이X is joined, the outline dialog asks it for an outline by topi
   await ask.click();
   await page.waitForFunction(() => /가이X가 쓴 개요예요/.test(document.querySelector('.cv-outline-ai [role=status]').textContent));
   if (process.env.OUTLINE_SHOT) await page.screenshot({path: `${process.env.OUTLINE_SHOT}-ai.png`});
-  assert.deepEqual(await page.evaluate(() => window.asked), [{kind: 'outline', prompt: '초등 3학년 사회 — 우리 동네 시장', slides: 4}]);
+  // The drawing's own words go along as a reference (on by default), and the teacher can see what is sent.
+  assert.deepEqual(await page.evaluate(() => window.asked), [{kind: 'outline', prompt: '초등 3학년 사회 — 우리 동네 시장', slides: 4, context: '그림 이름: 개요 검수\n모두 2장\n1장 (지금 장)\n  - 우리 반 발표\n2장'}]);
+  await box.locator('.cv-outline-ref-peek summary').click();
+  await page.waitForFunction(() => document.querySelector('.cv-outline-ref-text').textContent.length > 0);
+  assert.match(await box.locator('.cv-outline-ref-text').textContent(), /1장 \(지금 장\)\n  - 우리 반 발표/);
   assert.equal(await input.inputValue(), '우리 동네 시장\n  - 무엇을 파나요\n  - 누가 일하나요\n> 사진을 보여 주며\n정리');
   await page.waitForFunction(() => document.querySelectorAll('.cv-outline-thumb').length === 2);
   assert.deepEqual(await box.locator('.cv-outline-thumb figcaption b').allTextContents(), ['우리 동네 시장', '정리']);
   // The earlier outline can come back.
   await box.locator('[data-outline-undo]').click();
   assert.equal(await input.inputValue(), '내가 먼저 쓴 개요');
-  // An answer that is not an outline leaves the box as it is.
+  // An answer that is not an outline leaves the box as it is. Without the reference box ticked, no words go along.
+  await box.locator('[data-outline-share]').uncheck();
+  assert.match(await box.locator('.cv-outline-ref-text').textContent(), /보내지 않아요/);
   await ask.click();
   await page.waitForFunction(() => /개요 모양의 답을 받지 못했어요/.test(document.querySelector('.cv-outline-ai [role=status]').textContent));
   assert.equal(await input.inputValue(), '내가 먼저 쓴 개요');
+  assert.equal('context' in (await page.evaluate(() => window.asked))[1], false);
   assert.deepEqual(external, []);
 });
 
