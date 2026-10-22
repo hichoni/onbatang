@@ -4003,6 +4003,8 @@ export function createEditor({
     showMenu: (x, y, groups, { label = '메뉴' } = {}) => showMenu(x, y, hostRows(groups), { label }),
     /** Host navigation can restore an existing tool without knowing its DOM selectors. */
     openTab: id => { if (card && tabsHere().some(([name]) => name === id)) openTab(id); },
+    /** 내 자료 칸을 그 종류로 연다(호스트가 "유튜브 영상으로 바꿔요"를 안내할 때). kind: 'photo' · 'youtube' */
+    openUpload: kind => { if (!card || !['photo', 'youtube'].includes(kind) || !tabsHere().some(([name]) => name === 'upload')) return; uploadTab = kind; armedFile = null; openTab('upload'); renderPanel({ top: true }); },
     /** 함께 꾸밀 때: 다른 사람이 바꾼 것을 끼워 넣는다 merge(design, patch) · 지금 끼워 넣어도 되는지 idle() */
     merge, idle,
     /** 함께 꾸밀 때: 다른 사람이 고른 요소들 [{ id, name, color }] 에 그 사람의 색 테두리를 두른다(빈 목록이면 지운다). */

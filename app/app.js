@@ -57,6 +57,7 @@ let importAction = null;
 let materialAction = null;
 let lessonAction = null;
 let accountAction = null;
+let shareAction = null;
 let accountHome = null;
 let materialNavigation = null;
 let appMaker = null;
@@ -648,6 +649,7 @@ function openDesign(record, isNew) {
   let acceptsLesson=false;try{acceptsLesson=!!lessonAction&&(!lessonAction.accepts||lessonAction.accepts(record));}catch{}
   const lesson=acceptsLesson?el('button',{class:'btn cv-lesson-btn',type:'button',dataset:{lessonAction:''},onClick:()=>openLessonFromEditor(O)},lessonAction.label):null;
   const accountLibrary=accountAction?el('button',{class:'btn cv-account-btn',type:'button',dataset:{accountAction:''},onClick:()=>openLessonFromEditor(O,accountAction)},accountAction.label):null;
+  const share = shareAction ? el('button', { class: 'btn cv-share-btn', type: 'button', dataset: { shareAction: '' }, title: shareAction.title || '보기 전용 링크로 나눠요', onClick: () => openShareFromEditor(O) }, ...face('link', shareAction.label)) : null;
   const show = el('button', { class: 'btn cv-show-btn', type: 'button', title: '화면 가득 보여 줘요', onClick: () => present(O) }, ...face('play', '발표'));
   // 그림의 모양: 꾸미는 화면 안에서 바로 바꾼다. 놓아 둔 도형과 사진은 찌그러지지 않게 편집기가 맞춰 준다.
   const shapes = el('div', { class: 'cv-shapes', role: 'group', 'aria-label': '그림의 모양' }, ...RATIOS.map((r) => {
@@ -684,7 +686,7 @@ function openDesign(record, isNew) {
     ...(mark ? [mark, el('span', { class: 'cv-bar-sep cv-brand-sep', 'aria-hidden': 'true' })] : []),
     el('button', { class: 'btn btn-ghost cv-back', type: 'button', title: '저장하고 내 그림으로 돌아가요', onClick: (e) => closeDesign(O, e.currentTarget) }, ...face('back', '내 그림')),
     el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' }),
-    name, O.status, ...(material ? [material] : []), ...(lesson?[lesson]:[]), ...(accountLibrary?[accountLibrary]:[]), el('span', { class: 'cv-bar-gap' }), shapes, el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' }), tourButton('editor', O), show, down);
+    name, O.status, ...(material ? [material] : []), ...(lesson?[lesson]:[]), ...(accountLibrary?[accountLibrary]:[]), el('span', { class: 'cv-bar-gap' }), shapes, el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' }), tourButton('editor', O), ...(share ? [share] : []), show, down);
   // 들여쓰기 막대는 보통 막대 뒤에 만든다(이름 칸 · 저장 상태는 한 곳에만 놓일 수 있다).
   const embedHeader = embedBar ? el('header', { class: 'cv-bar cv-embed-bar' },
     el('span', { class: 'onba-editor-logo' }, onbatangLogo()), ...(embedBar.close ? [embedBar.close, el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' })] : []),
@@ -1892,6 +1894,7 @@ async function save(O, { preserveBlank = false, leaving = false } = {}) {
   if (ok) {
     upsert(kept);
     if (accountFor(kept)) pusher.queue(kept);
+    if (typeof shareAction?.saved === 'function') { try { shareAction.saved(kept); } catch (error) { console.warn(error); } }   // 공유 링크가 있으면 호스트가 고친 것을 링크에도 반영한다
     if (!O.dirty) setStatus(O, accountFor(kept) ? '이 기기에 저장했어요 · 계정에 올리는 중…' : '이 기기에 저장했어요', 'ok');
     return true;
   }
@@ -2057,6 +2060,14 @@ async function importFromEditor(O) {
 
 /** The host owns conversion; the editor owns its shell and the saved drawing.
  * No navigation/home render occurs while a host imports inside My materials. */
+// 공유 링크: 저장을 마친 뒤 호스트의 공유 창을 연다(서버 · 로그인은 호스트가 맡는다). goTo 로 그 장 · 내 자료 칸(유튜브 등)을 연다.
+async function openShareFromEditor(O){
+  if(!shareAction||S.open!==O)return;
+  try{
+    await shareAction.open({designId:O.record.id,flush:()=>flushSavedDesign(O.record.id),
+      goTo:(slideIndex,{upload=null}={})=>{if(S.open!==O)return;if(Number.isSafeInteger(slideIndex)&&slideIndex>=0&&slideIndex<O.slides.length)goSlide(O,slideIndex);if(upload)O.editor.openUpload?.(upload);}});
+  }catch(error){toast(String(error?.message||'공유 창을 열지 못했어요.').slice(0,200),4500);}
+}
 async function openLessonFromEditor(O,action=lessonAction){
  if(!action||S.open!==O||O.closed||O.inlineImport||O.leaving||moving||app.inert||hostFlush||videoBusy(O))return;
  O.leaving=true;app.inert=true;
@@ -2791,8 +2802,9 @@ function readOpen() {
  * - resume: true 면 새로 고침한 뒤 이 탭에서 꾸미던 그림 · 장을 다시 연다(공용 온바탕 첫 쪽이 켠다. 그림을 스스로 여는 들여 쓰는 곳은 끈 채로 둔다).
  * - lessonAction: {label, editorTitle?, accepts?(record), open({designId,slideIndex,inline})}; 저장 후 같은 편집 영역에서 호스트의 수업 구성/진행을 연다. 공용 기본값은 숨김.
  * - accountAction: {label,editorTitle?,open({from,designId?,inline})}; 첫 화면과 편집기 안의 계정 수업 목록. 기본값은 숨김이며 서버/로그인은 호스트가 담당한다.
+ * - shareAction: {label,title?,open({designId,flush(),goTo(slideIndex,{upload})}),saved?(record)}; 편집기 위 막대의 공유 단추(가이랩의 보기 전용 링크). saved 는 이 기기에 저장할 때마다 불린다(링크에 반영은 호스트가 모아서). 기본값은 숨김.
  */
-export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, accountAction: accountLibrary = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false, resume = false, embed = null, syncDelay = null } = {}) {
+export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, accountAction: accountLibrary = null, shareAction: sharing = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false, resume = false, embed = null, syncDelay = null } = {}) {
   if (app) throw new Error('minican already started');
   if (!root) throw new Error('minican root');
   app = root;
@@ -2805,6 +2817,7 @@ export function startMinican({ root = document.getElementById('app'), fonts = []
   if(lesson&&typeof lesson.open==='function'&&typeof lesson.label==='string'&&lesson.label.trim()&&(!lesson.accepts||typeof lesson.accepts==='function'))lessonAction=lesson;
   if(accountLibrary&&typeof accountLibrary.open==='function'&&typeof accountLibrary.label==='string'&&accountLibrary.label.trim())accountAction=accountLibrary;
   if(navigation&&typeof navigation.load==='function')materialNavigation=navigation;
+  if(sharing&&typeof sharing.open==='function'&&typeof sharing.label==='string'&&sharing.label.trim())shareAction=sharing;
   activityAuthoring=authoring===true;
   resumeOpen=resume===true;
   if (embed && typeof embed.done === 'function' && (embed.close == null || typeof embed.close === 'function')) {

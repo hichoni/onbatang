@@ -49,6 +49,7 @@ test('a host that saves drawings: its own button label, no close, edits go up af
   await done.waitFor();
   assert.match(await done.textContent(), /선생님께 보내기/);
   assert.equal(await page.locator('[data-embed-close]').count(), 0, 'no close button when the host gives none');
+  assert.equal(await page.locator('[data-share-action]').count(), 0, 'no share button unless the host gives one');
   assert.equal(await page.locator('.cv-canvas .fe-card .fi-text').textContent(), '서버에 있던 글', 'the newer host copy opened');
   // An edit goes up once, after the delay (not at once).
   if (!await page.locator('.fe-textadd.title').isVisible()) await page.locator('.fe-tab[data-tab="text"]').click();
