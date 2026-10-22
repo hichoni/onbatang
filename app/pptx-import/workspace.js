@@ -46,15 +46,17 @@ export function mountImportWorkspace({root, services, onClose, onOpenDocument, o
   const fileInput = element('input', undefined, {type: 'file', accept: '.pptx', 'aria-label': 'PPTX 파일 선택', class: 'oi-file-input'});
   fileInput.addEventListener('change', () => { if (fileInput.files?.[0]) chooseFile(fileInput.files[0]); });
 
-  function say(message, failure = false) { if (disposed) return; status.textContent = message; status.dataset.error = String(failure); if(!failure)busyView?.update({detail:message}); }
+  function say(message, failure = false) { if (disposed) return; status.textContent = message; status.dataset.error = String(failure); status.hidden = !failure && !loading.hidden; if(!failure)busyView?.update({detail:message}); }
   function updateLoading(){
     const visible=state.tab==='import'&&(!!state.busy||state.previewPreparing);
-    loading.hidden=!visible;body.setAttribute('aria-busy',String(visible));
+    loading.hidden=!visible;body.setAttribute('aria-busy',String(visible));if(status.dataset.error!=='true')status.hidden=visible;   // 진행 중에는 아래 카드 한 곳에만 보인다
     if(!visible){busyView=null;loading.replaceChildren();return;}
     const title=state.busy==='saving'?'슬라이드를 온바탕에 담고 있어요':state.busy==='inspecting'?'PPT를 펼쳐보고 있어요':'PPT 화면을 준비하고 있어요';
     busyView=onbatangLoading({title,detail:state.busy==='saving'?`${state.selected.size}쪽을 순서대로 저장해요. 원본은 그대로 보관돼요.`:'슬라이드와 글꼴을 확인해요. 원본 파일은 바뀌지 않아요.',compact:state.step!==1});
     loading.replaceChildren(busyView.node);
   }
+  // 표시가 필요한 쪽: 글 · 도형으로 가져올 수 없는 쪽만(작은 근사 · 생략 안내는 그 쪽의 참고 사항에만 둔다).
+  function needsLook(item) { return !item?.canImport; }
   function page(number = state.active) { return state.inspection?.pages.find(item => item.pageNumber === number); }
   function selectedPages() { return [...state.selected].sort((a, b) => a - b); }
   function displayedFont(font, pages = font.pageNumbers || []) {
@@ -151,7 +153,7 @@ export function mountImportWorkspace({root, services, onClose, onOpenDocument, o
       state.fonts = await services.fonts?.inspect?.({file, inspection}) || [];
       if (disposed || job !== generation) return;
       state.busy = null; state.previewPreparing = !!services.preparePreview; state.step = 2; render();
-      say(`${inspection.pageCount}쪽 확인 · 가능한 슬라이드를 모두 선택했어요. 원하는 쪽과 가져오기 방식을 확인하세요.`);
+      say(`${inspection.pageCount}쪽을 모두 골랐어요. 빼고 싶은 쪽은 체크를 풀어요.`);
       const previewInfo = await services.preparePreview?.({file, inspection, signal: actionController.signal});
       if (disposed || job !== generation) return;
       state.previewPreparing = false;
@@ -195,10 +197,11 @@ export function mountImportWorkspace({root, services, onClose, onOpenDocument, o
       for (const check of rail.querySelectorAll('[data-page-select]')) check.checked = state.selected.has(Number(check.value)); selectionChanged();
     }); allLabel.append(all, element('span', '전체 선택')); selectRow.append(allLabel, element('span', '', {'data-selected-count': ''})); rail.append(selectRow);
     const filters = element('div', undefined, {class: 'oi-segment', 'aria-label': '슬라이드 필터'});
-    for (const [key, title] of [['all', '전체'], ['warnings', '확인 필요']]) filters.append(button(title, () => { state.filter = key; render(); }, {'aria-pressed': String(state.filter === key)})); rail.append(filters);
+    for (const [key, title] of [['all', '전체'], ['warnings', '확인 필요']]) filters.append(button(title, () => { state.filter = key; render(); }, {'aria-pressed': String(state.filter === key)}));
+    if (state.inspection.pages.some(needsLook) || state.filter === 'warnings') rail.append(filters);   // 볼 쪽이 없으면 거르기 칸도 없다
     const list = element('div', undefined, {class: 'oi-pages'}), pendingThumbs = [];
     for (const item of state.inspection.pages) {
-      if (state.filter === 'warnings' && !item.warnings?.length) continue;
+      if (state.filter === 'warnings' && !needsLook(item)) continue;
       const card = element('article', undefined, {class: 'oi-page', 'data-page-number': String(item.pageNumber), 'data-active': String(item.pageNumber === state.active)});
       const thumb = button('', () => { state.active = item.pageNumber; render(); }, {class: 'oi-thumbnail', 'aria-label': `${item.pageNumber}쪽 미리보기`, 'aria-pressed': String(item.pageNumber === state.active)});
       const placeholder = element('span', '미리보기 준비 중', {class: 'oi-preview-empty'}); thumb.append(placeholder);
@@ -206,13 +209,14 @@ export function mountImportWorkspace({root, services, onClose, onOpenDocument, o
       check.checked = state.selected.has(item.pageNumber); check.disabled = !!state.busy || !!state.retry || (!canSelect(item) && !check.checked);
       check.addEventListener('change', () => { check.checked ? state.selected.add(item.pageNumber) : state.selected.delete(item.pageNumber); selectionChanged(); });
       label.append(check, element('span', `${item.pageNumber}쪽`));
-      if (item.warnings?.length) label.append(element('span', '!', {class: 'oi-warning-dot', title: `${item.warnings.length}개 확인 사항`}));
+      if (state.modes[item.pageNumber] === 'image') label.append(element('span', '그림', {class: 'oi-mode-chip', title: '이 쪽은 보이는 그대로 그림으로 가져와요'}));
+      else if (needsLook(item)) label.append(element('span', '!', {class: 'oi-warning-dot', title: '글 · 도형으로 가져올 수 없는 쪽이에요. 눌러서 확인해요'}));
       card.append(thumb, label); list.append(card); pendingThumbs.push([item, thumb]);
     }
     rail.append(list); if (!list.children.length) list.append(element('p', '확인할 항목이 없어요.', {class: 'oi-help'}));
     const center = element('section', undefined, {class: 'oi-preview-column', 'aria-label': '슬라이드 미리보기'});
     const previewBar = element('div', undefined, {class: 'oi-preview-bar'}), views = element('div', undefined, {class: 'oi-segment'});
-    for (const [key, title] of [['pptx', 'PPT 화면'], ['editable', '편집 미리보기']]) {
+    for (const [key, title] of [['pptx', 'PPT 원본'], ['editable', '온바탕에서']]) {
       const toggle = button(title, () => { state.preview = key; render(); }, {'aria-pressed': String(state.preview === key), 'data-preview-mode': key});
       toggle.disabled = key === 'pptx' ? !imageAvailable(state.active) : !editableAvailable(page()); views.append(toggle);
     }
@@ -222,27 +226,39 @@ export function mountImportWorkspace({root, services, onClose, onOpenDocument, o
     pagination.append(prev, element('span', `${state.active} / ${state.inspection.pageCount}`), next); previewBar.append(views, pagination); center.append(previewBar);
     const preview = element('div', undefined, {class: 'oi-large-preview', tabindex: '0', 'data-large-preview': '', 'aria-label': `${state.active}쪽 큰 미리보기`});
     preview.addEventListener('keydown', event => { if (['ArrowLeft', 'ArrowRight'].includes(event.key)) { event.preventDefault(); changeActive(event.key === 'ArrowLeft' ? -1 : 1); body.querySelector('[data-large-preview]')?.focus(); } });
-    center.append(preview, element('p', state.preview === 'pptx' ? 'PPT 파일 미리보기입니다. PowerPoint와 글꼴·효과가 다를 수 있어요.' : '온바탕에서 편집할 모습을 보여줘요. 글꼴·줄바꿈·배치를 확인하세요.', {class: 'oi-preview-caption'}));
+    center.append(preview, element('p', state.preview === 'pptx' ? 'PPT 원본 모습이에요.' : '온바탕에서 고칠 모습이에요. 글 줄바꿈을 한번 봐 주세요.', {class: 'oi-preview-caption'}));
     center.append(element('div', undefined, {'data-render-warnings': '', 'aria-live': 'polite'}));
     const details = element('details', undefined, {class: 'oi-warning-details'}), warnings = page()?.warnings || [];
-    details.append(element('summary', warnings.length ? `이 슬라이드 확인 사항 ${warnings.length}개` : '슬라이드 정보'));
+    details.append(element('summary', warnings.length ? `이 쪽 참고 사항 ${warnings.length}개` : '이 쪽 정보'));
     const warningList = element('ul'); for (const warning of warnings) warningList.append(element('li', warning.message || warning.code));
     details.append(warningList, element('p', '애니메이션은 정적인 화면으로 표시합니다.', {class: 'oi-help'}));
     center.append(details);
-    const aside = element('aside', undefined, {class: 'oi-options', 'aria-label': '가져오기 설정'}); aside.append(element('h2', '이 슬라이드 가져오기'));
-    for (const [key, title, description] of [['image', '화면 유지 · 이미지', '슬라이드를 이미지로 가져와요. 이미지 위에 새 요소를 추가할 수 있어요.'], ['editable', '글 · 도형 편집', '지원하는 글과 도형을 각각 편집할 수 있어요.']]) {
+    const aside = element('aside', undefined, {class: 'oi-options', 'aria-label': '가져오기 설정'}); aside.append(element('h2', `${state.active}쪽 가져오는 방식`));
+    for (const [key, title, description] of [['editable', '글 · 도형 편집', '글과 도형을 하나씩 고칠 수 있어요.'], ['image', '그림 그대로', '보이는 그대로 한 장의 그림이에요. 위에 글을 더할 수 있어요.']]) {
       const label = element('label', undefined, {class: 'oi-mode', 'data-mode': key}), radio = element('input', undefined, {type: 'radio', name: 'slide-import-mode', value: key, 'aria-label': title});
       radio.checked = state.modes[state.active] === key; radio.disabled = !!state.busy || !!state.retry || (key === 'image' ? !imageAvailable(state.active) : !editableAvailable(page()));
       radio.addEventListener('change', () => { state.modes[state.active] = key; selectionChanged(); render(); });
       const wording = element('span'); wording.append(element('strong', title), element('small', description)); label.append(radio, wording); aside.append(label);
     }
-    if (!imageAvailable(state.active)) aside.append(element('p', state.previewPages.get(state.active)?.reason || 'PPT 화면을 준비하면 이미지 방식도 선택할 수 있어요.', {class: 'oi-help'}));
+    if (!imageAvailable(state.active)) aside.append(element('p', state.previewPages.get(state.active)?.reason || 'PPT 원본 화면을 준비하면 그림 방식도 고를 수 있어요.', {class: 'oi-help'}));
+    // 지금 쪽의 방식을 고른 모든 쪽에 한 번에(그 방식이 안 되는 쪽은 그대로 둔다).
+    const every = button('고른 모든 쪽을 이 방식으로', () => {
+      const mode = state.modes[state.active]; let changed = 0;
+      for (const number of state.selected) if ((mode === 'image' ? imageAvailable(number) : editableAvailable(page(number))) && state.modes[number] !== mode) { state.modes[number] = mode; changed++; }
+      render(); say(changed ? `${changed}쪽을 "${mode === 'image' ? '그림 그대로' : '글 · 도형 편집'}"(으)로 바꿨어요.` : '바꿀 쪽이 없어요.');
+    }, {class: 'oi-mode-all', 'data-mode-all': ''});
+    every.disabled = !!state.busy || !!state.retry || state.selected.size < 2; aside.append(every);
+    // 글꼴: 한 줄로 쉽게(바뀌어 보이는 글꼴이 있는지)와 "글꼴 바꾸기". 이용 안내 · 표시 상태의 자세한 숫자는 접어 둔다.
     const fontBox = element('section', undefined, {class: 'oi-font-box'}), unknownLicenses = state.fonts.filter(font => fontLicense(font).status === 'unknown').length;
-    fontBox.append(element('h3', '글꼴 점검'), element('p', state.fonts.length ? `${state.fonts.length}종 · 이용 안내 확인 ${state.fonts.length - unknownLicenses}종 / 확인 전 ${unknownLicenses}종` : '글꼴 이름을 확인하고 있어요.', {class: 'oi-help', 'data-font-license-summary': ''}));
-    if (state.fonts.length) fontBox.append(element('p', `표시 상태: 대체 중 ${state.fonts.filter(font => displayedFont(font).status === 'substituted').length}종 · 기기 확인 전 ${state.fonts.filter(font => displayedFont(font).status === 'unknown').length}종`, {class: 'oi-help', 'data-font-render-summary': ''}));
-    const fonts = button('글꼴 교체 설정', openFontDialog, {'data-font-settings': ''}); fonts.disabled = !!state.busy || !!state.retry || !state.fonts.length || !services.fonts; fontBox.append(fonts); aside.append(fontBox);
-    aside.append(element('div', '앱 제공 글꼴 · OFL 확인', {class: 'oi-license-note'}), element('p', '원본 글꼴을 기본으로 유지해요. 교체는 범위를 확인한 뒤 직접 적용합니다.', {class: 'oi-help'}));
-    if (state.fontPlan) aside.append(element('p', '글꼴 교체 설정이 적용되어 있어요.', {class: 'oi-chip'}));
+    const swapped = state.fonts.filter(font => displayedFont(font).status === 'substituted').length;
+    fontBox.append(element('h3', '글꼴'), element('p', !state.fonts.length ? '글꼴을 살펴보고 있어요.' : swapped ? `${swapped}종은 이 기기에 없어 비슷한 글꼴로 보여요.` : `${state.fonts.length}종 · 원래 글꼴대로 보여요.`, {class: 'oi-font-line'}));
+    const fonts = button('글꼴 바꾸기', openFontDialog, {'data-font-settings': ''}); fonts.disabled = !!state.busy || !!state.retry || !state.fonts.length || !services.fonts; fontBox.append(fonts);
+    if (state.fontPlan) fontBox.append(element('p', '바꾼 글꼴이 적용되어 있어요.', {class: 'oi-chip'}));
+    const more = element('details', undefined, {class: 'oi-font-more'});
+    more.append(element('summary', '자세히'), element('p', state.fonts.length ? `${state.fonts.length}종 · 이용 안내 확인 ${state.fonts.length - unknownLicenses}종 / 확인 전 ${unknownLicenses}종` : '글꼴 이름을 확인하고 있어요.', {class: 'oi-help', 'data-font-license-summary': ''}));
+    if (state.fonts.length) more.append(element('p', `표시 상태: 대체 중 ${swapped}종 · 기기 확인 전 ${state.fonts.filter(font => displayedFont(font).status === 'unknown').length}종`, {class: 'oi-help', 'data-font-render-summary': ''}));
+    more.append(element('p', '앱 제공 글꼴은 OFL 무료 글꼴이에요. 원본 글꼴을 기본으로 두고, 바꾸기는 범위를 확인한 뒤 직접 적용해요.', {class: 'oi-help'}));
+    fontBox.append(more); aside.append(fontBox);
     grid.append(rail, center, aside); body.append(grid); selectionChanged(); loadLargePreview(preview);
     if (doc.defaultView.IntersectionObserver) {
       const byHost = new Map(pendingThumbs.map(([item, host]) => [host, item]));
