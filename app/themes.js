@@ -23,7 +23,7 @@ const round1 = (v) => Math.round(v * 10) / 10;
  * 카드에 붙여 놓는 꾸밈(귀퉁이의 동그라미 · 반짝임 · 바닥의 언덕). 자리는 요소의 가운데 점으로 적는다.
  * y 가 0 보다 작으면 아래에서 잰 거리다(-5 는 아래 끝에서 5 위). 정사각형·세로 그림에서는 꾸밈이 조금 커진다(g).
  */
-function decor(b) {
+export function decor(b) {
   const g = b.wide ? 1 : 1.5;
   const put = (id, cx, y, w, color, more = {}) => {
     const a = shapeAsset(id);
@@ -408,3 +408,12 @@ export const THEME_LAYOUTS = THEMES.flatMap((t) => [
   { id: t.id, name: '표지', group: t.name, cover: true, ratio: THEME_RATIO, bg: t.bg, items: (a) => cover(t, a) },
   { id: `${t.id}-page`, name: '내용', group: t.name, ratio: THEME_RATIO, bg: t.bg, items: (a) => page(t, a) },
 ]);
+
+/**
+ * 개요로 만드는 장(outline-deck.js)이 쓰는 테마의 색 묶음과 뒤에 깔리는 꾸밈. 그림 묶음(art)은 주제마다의 그림이라 빼고 넘긴다.
+ * swatch: 고르는 칩에 쓰는 짧은 색 이름.
+ */
+const SWATCH = { tnet: '파랑', tdetox: '연두', tai: '하늘', tdream: '노랑', tbook: '보라', tart: '주황', tclass: '분홍', tearth: '초록', ttown: '살구' };
+export const THEME_STYLES = Object.freeze(THEMES.map(({ id, name, bg, accent, pill, pillInk, bar, soft, icon, back }) => Object.freeze({
+  id, name, swatch: SWATCH[id] || name, bg, ink: INK, accent, pill, pillInk: pillInk || INK, bar, soft, icon, back,
+})));
