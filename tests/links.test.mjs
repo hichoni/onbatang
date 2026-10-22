@@ -354,3 +354,36 @@ test('the UI font is trimmed to common characters and stays a variable font (reg
   for (const file of [...walk('../app/'), ...walk('../src/')]) for (const ch of readFileSync(new URL(file, import.meta.url), 'utf8')) if (/[\uac00-\ud7a3]/.test(ch) && !ks.has(ch)) missing.add(ch);
   assert.deepEqual([...missing], [], 'screen text uses Hangul the trimmed UI font does not have');
 });
+
+test('an elbow that avoids other pieces goes around them, keeps chosen sides, and stays as drawn when nothing is in the way', async () => {
+  const {layoutLinks, linkCorners, linkHandle} = await import('../src/links.js');
+  const sq = (id, x, y, w = 16, h = 16, patch = {}) => ({id, t: 'shape', shape: 'rect', x, y, w, h, color: '#3d4bc0', ...patch});
+  const line = (patch) => ({t: 'link', id: 'llinkaaaa1', from: 'aboxaaaaa1', to: 'aboxaaaaa2', line: .5, head: 'end', color: '#1d2433', elbow: 1, ...patch});
+  const lay = (items, patch) => layoutLinks([...items, line(patch)], 1).at(-1);
+  const route = (l) => { const [[x1, y1], [x2, y2]] = linkEnds(l, 1), [m1, m2] = linkCorners(l, 1); return [[x1, y1], m1, m2, [x2, y2]]; };
+  const throughBox = (pts, [cx, cy, w, h]) => pts.slice(1).some((q, i) => { const p = pts[i]; const l = cx - w / 2, r = cx + w / 2, t = cy - h / 2, b = cy + h / 2;
+    return Math.abs(p[1] - q[1]) < 1e-6 ? p[1] > t && p[1] < b && Math.max(p[0], q[0]) > l && Math.min(p[0], q[0]) < r : p[0] > l && p[0] < r && Math.max(p[1], q[1]) > t && Math.min(p[1], q[1]) < b; });
+  // In a row with a piece between them: the usual line goes through it, the avoiding one goes around.
+  const row = [sq('aboxaaaaa1', 15, 50), sq('aboxaaaaa2', 85, 50), sq('aboxaaaaa3', 50, 50, 20, 20)];
+  assert.equal(throughBox(route(lay(row, {})), [50, 50, 20, 20]), true);
+  const around = route(lay(row, {avoid: true}));
+  assert.equal(throughBox(around, [50, 50, 20, 20]), false, JSON.stringify(around));
+  assert.ok(around.every(([x, y]) => Number.isFinite(x) && Number.isFinite(y)));
+  // Nothing in the way: exactly the usual route (and its turn handle is not offered while avoiding).
+  const free = [sq('aboxaaaaa1', 20, 30), sq('aboxaaaaa2', 80, 70)];
+  assert.deepEqual(route(lay(free, {avoid: true})), route(lay(free, {})));
+  assert.equal(linkHandle(lay(free, {avoid: true}), 1), null);
+  // Chosen sides are kept: start from the bottom of A even when going around.
+  const kept = route(lay([...row], {avoid: true, fromSide: 'bottom', toSide: 'bottom'}));
+  assert.ok(kept[0][1] > 58 && kept[3][1] > 58, 'leaves and enters from the bottom');
+  assert.equal(throughBox(kept, [50, 50, 20, 20]), false);
+  // Locked backgrounds and full-card pieces are not obstacles.
+  const bg = sq('aboxbgbg01', 50, 50, 100, 100, {lock: true});
+  assert.deepEqual(route(lay([bg, ...free], {avoid: true})), route(lay(free, {})));
+  // Saved only with an elbow; style copy carries it with the route.
+  configure({aspect: 1});
+  const clean = (patch) => cleanDesign({id: 'ppage00001', bg: '#fff', items: [...free, line(patch)]}).items.find(it => it.t === 'link');
+  assert.equal(clean({avoid: true}).avoid, true);
+  assert.equal(Object.hasOwn(clean({avoid: true, elbow: undefined, curve: 1}), 'avoid'), false);
+  assert.equal(styleOf(clean({avoid: true})).values.avoid, true);
+});

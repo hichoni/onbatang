@@ -346,6 +346,8 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
       ...(typeof it.label === 'string' && it.label.trim() && Number.isFinite(it.labelAt) && num(it.labelAt, LINK_LABEL_AT.min, LINK_LABEL_AT.max, 0.5, 1000) !== 0.5 ? { labelAt: num(it.labelAt, LINK_LABEL_AT.min, LINK_LABEL_AT.max, 0.5, 1000) } : {}),
       // 곡선과 꺾인 선은 둘 중 하나(둘 다 적혀 있으면 꺾인 선)
       ...((it.elbow === 1 || it.elbow === -1) ? { elbow: it.elbow } : it.curve === 1 || it.curve === -1 ? { curve: it.curve } : {}),
+      // 피해 가기: 꺾인 선만(다른 조각을 뚫지 않는 길을 스스로 찾는다)
+      ...(it.avoid === true && (it.elbow === 1 || it.elbow === -1) ? { avoid: true } : {}),
       // 붙는 곳(없으면 알아서). 꾸밈이 아니라 잇는 자리라 스타일 복사에는 넣지 않는다.
       ...(LINK_SIDES.includes(it.fromSide) ? { fromSide: it.fromSide } : {}),
       ...(LINK_SIDES.includes(it.toSide) ? { toSide: it.toSide } : {}),
@@ -830,7 +832,7 @@ const STYLE_KEYS = {
   emoji: ['op'],
   image: ['mask', 'op'],
   yt: ['op'],
-  link: ['color', 'line', 'head', 'startShape', 'endShape', 'dash', 'curve', 'elbow', 'op'],
+  link: ['color', 'line', 'head', 'startShape', 'endShape', 'dash', 'curve', 'elbow', 'avoid', 'op'],
 };
 /** 요소의 꾸밈 값 { t, values } (스타일을 옮길 수 없는 것이면 null). */
 export function styleOf(item) {

@@ -314,6 +314,11 @@ test('dragging the middle handle of a curved or elbow connector reshapes it, sav
   await arrowPop();
   await page.locator('[data-elbow="on"]').click();
   await saved(page, r => r.slides[0].items.find(it => it.t === 'link')?.elbow === 1);
+  // A new elbow finds its own way around pieces; turn that off to place the turn by hand.
+  assert.equal(await page.locator('[data-avoid]').getAttribute('aria-pressed'), 'true');
+  assert.equal(await knob.isVisible(), false, 'no turn handle while it finds its own way');
+  await page.locator('[data-avoid]').click();
+  await saved(page, r => { const l = r.slides[0].items.find(it => it.t === 'link'); return l?.elbow === 1 && !('avoid' in l); });
   await page.waitForFunction(() => document.querySelector('.cv-canvas .fe-link-knob')?.dataset.kind === 'turn');
   const e0 = await knob.boundingBox(), [ex, ey] = [e0.x + e0.width / 2, e0.y + e0.height / 2];
   await page.mouse.move(ex, ey);
