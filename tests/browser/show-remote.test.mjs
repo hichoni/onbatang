@@ -19,11 +19,12 @@ record.slides=[{id:'premote001',bg:'#ffffff',notes:'첫 장에서 물어보기',
  {id:'premote003',bg:'#ffffff',items:[]}];
 await putDesign(record);
 window.updates=[];window.opened=0;window.remoteClosed=0;
-await startMinican({storage:'remote-fixture',showRemote:{open:async({state,command})=>{window.opened++;window.command=command;window.firstState=state();return {update:(s)=>window.updates.push(s),close:()=>{window.remoteClosed++;}};}}});
+window.audience={opened:0,updates:[],closed:0};
+await startMinican({storage:'remote-fixture',showAudience:{open:async({state,root})=>{window.audience.opened++;window.audience.first=state();window.audience.root=root.classList.contains('cv-show');return {update:(s)=>window.audience.updates.push(s),close:()=>{window.audience.closed++;}};}},showRemote:{open:async({state,command})=>{window.opened++;window.command=command;window.firstState=state();return {update:(s)=>window.updates.push(s),close:()=>{window.remoteClosed++;}};}}});
 await openSavedDesign(record.id);window.ready=true;
 </script>`;
 
-test('a host phone remote: a button in the show bar, state on every turn, next/prev/go/black commands, closed with the show', options, async t => {
+test('a host phone remote and a host audience panel: buttons in the show bar, state on every turn, remote commands, both closed with the show', options, async t => {
   const server = createServer(async (req, res) => {
     try {
       const path = new URL(req.url, 'http://x').pathname;
@@ -70,8 +71,16 @@ test('a host phone remote: a button in the show bar, state on every turn, next/p
   assert.equal(await count.textContent(), '3 / 3');
   await page.evaluate(() => { window.command({action: 'nope'}); window.command(null); window.command({action: 'go', at: 'x'}); });
   assert.equal(await count.textContent(), '3 / 3');
+  // 질문 · 반응: its own button and host, the show's state on every turn, closed with the show too.
+  const audience = page.locator('[data-show-audience]');
+  assert.match(await audience.textContent(), /질문 · 반응/);
+  await audience.click();
+  await page.waitForFunction(() => window.audience.opened === 1 && window.audience.updates.length > 0);
+  assert.deepEqual(await page.evaluate(() => [window.audience.first, window.audience.root]), [{at: 2, total: 3, title: '리모컨 발표'}, true]);
+  await page.evaluate(() => window.command({action: 'prev'}));
+  await page.waitForFunction(() => window.audience.updates.at(-1).at === 1);
   await page.keyboard.press('Escape');
-  await page.waitForFunction(() => window.remoteClosed === 1);
+  await page.waitForFunction(() => window.remoteClosed === 1 && window.audience.closed === 1);
   assert.equal(await page.locator('.cv-show').count(), 0);
   assert.deepEqual(errors, []);
 });
