@@ -115,3 +115,20 @@ test('with a heavy title typeface, outline titles use it without extra bold and 
     }
   } finally { setTitleFont(''); configure({fonts: []}); }
 });
+
+test('the drawing words for 가이X: slides in order, words top to bottom, line labels and notes, the current slide marked, trimmed far slides first', async () => {
+  const {drawingText} = await import('../app/outline.js');
+  assert.equal(drawingText([{items: []}, {items: [{t: 'shape'}]}]), '', 'no words, nothing to send');
+  const slides = [
+    {items: [{t: 'text', text: '아래 글', y: 80, x: 10}, {t: 'text', text: '  제목   한 줄 ', y: 10, x: 50}, {t: 'link', label: '그래서', y: 0}], notes: '처음에 묻기'},
+    {hidden: true, items: [{t: 'text', text: '숨긴 장의 글', y: 50}]},
+    {items: []},
+  ];
+  assert.equal(drawingText(slides, {title: '시장 탐험', at: 0}),
+    '그림 이름: 시장 탐험\n모두 3장\n1장 (지금 장)\n  - 그래서\n  - 제목 한 줄\n  - 아래 글\n  > 처음에 묻기\n2장 (숨긴 장)\n  - 숨긴 장의 글\n3장');
+  const long = Array.from({length: 20}, (_, i) => ({items: [{t: 'text', text: '가'.repeat(900) + i, y: 0}]}));
+  const text = drawingText(long, {at: 10, max: 6000});
+  assert.ok(text.length <= 6000);
+  assert.ok(text.includes('가'.repeat(900) + '10'), 'the current slide keeps its words');
+  assert.ok(text.includes('20장'), 'every slide is still listed');
+});

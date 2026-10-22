@@ -21,7 +21,7 @@ import {createShowTools} from './show-tools.js';
 import {PRINT_LAYOUTS,printHtml} from './print.js';
 import {encodeGif,GIF_LIMITS} from './gif.js';
 import {findText,replaceText} from './find-replace.js';
-import {parseOutline,outlineSlides,outlineFromAnswer,OUTLINE_STYLES} from './outline.js';
+import {parseOutline,outlineSlides,outlineFromAnswer,drawingText,OUTLINE_STYLES} from './outline.js';
 import {ONBATANG_VERSION} from './version.js';
 import {createGaiMaker,gaiLessonContext} from './gai-maker.js';
 import {
@@ -1210,6 +1210,14 @@ function openOutline(O) {
     const count = el('select', { class: 'cv-outline-count', 'aria-label': '만들 장 수' }, ...[4, 5, 6, 8, 10].map((n) => el('option', { value: String(n), text: `${n}장`, ...(n === 6 ? { selected: true } : {}) })));
     const say = el('p', { class: 'cv-down-note', role: 'status', 'aria-live': 'polite', text: '주제와 대상을 적으면 가이X가 개요를 써 줘요. 써 준 개요는 아래 칸에서 고친 뒤 장으로 만들어요.' });
     const label = el('span', { text: '가이X에게 부탁하기' });
+    // 지금 그림의 글을 참고로 보내기: 글이 있을 때만 보이고 처음엔 켜 둔다. 무엇을 보내는지 펼쳐 볼 수 있다.
+    const reference = () => drawingText(O.slides, { title: O.record.name, at: O.at });
+    const hasText = !!reference();
+    const share = el('input', { type: 'checkbox', checked: hasText, dataset: { outlineShare: '' } });
+    const shown = el('pre', { class: 'cv-outline-ref-text' });
+    const peek = el('details', { class: 'cv-outline-ref-peek', onToggle: () => { if (peek.open) shown.textContent = share.checked ? reference() : '지금 그림의 글을 보내지 않아요.'; } }, el('summary', { text: '보낼 글 보기' }), shown);
+    share.addEventListener('change', () => { if (peek.open) shown.textContent = share.checked ? reference() : '지금 그림의 글을 보내지 않아요.'; });
+    const refRow = hasText ? el('div', { class: 'cv-outline-ref' }, el('label', {}, share, ' 지금 그림의 글을 참고로 보내기(이어지거나 고친 개요를 써 줘요)'), peek) : null;
     const undo = el('button', { class: 'btn chip', type: 'button', hidden: true, dataset: { outlineUndo: '' }, onClick: () => { if (before == null) return; input.value = before; before = null; undo.hidden = true; update(); } }, '전 개요로 되돌리기');
     const go = el('button', { class: 'btn btn-primary cv-outline-ask', type: 'button', dataset: { outlineAsk: '' }, onClick: async () => {
       if (asking) { asking.abort(); return; }
@@ -1218,12 +1226,13 @@ function openOutline(O) {
       // 연결 창은 누른 그 순간에 열어야 막히지 않는다: 기다리기 전에 connect 를 부른다.
       let task; try { task = appMaker.connect(); } catch (error) { task = Promise.reject(error); }
       const controller = asking = new AbortController();
-      label.textContent = '그만두기'; topic.disabled = count.disabled = true; say.textContent = '가이X 연결을 확인하고 있어요…';
+      label.textContent = '그만두기'; topic.disabled = count.disabled = share.disabled = true; say.textContent = '가이X 연결을 확인하고 있어요…';
       try {
         await task;
         if (controller.signal.aborted) throw new DOMException('', 'AbortError');
         say.textContent = '가이X가 개요를 쓰고 있어요… 30초쯤 걸릴 수 있어요.';
-        const answer = await appMaker.generate({ kind: 'outline', prompt: want, slides: Number(count.value) }, { signal: controller.signal });
+        const context = share.checked ? reference() : '';
+        const answer = await appMaker.generate({ kind: 'outline', prompt: want, slides: Number(count.value), ...(context ? { context } : {}) }, { signal: controller.signal });
         const text = answer?.kind === 'outline' ? outlineFromAnswer(answer.outline) : '';
         if (!parseOutline(text).some((part) => part.lines.length)) throw Error('개요 모양의 답을 받지 못했어요. 주제를 조금 더 자세히 적어 다시 부탁해 주세요.');
         if (input.value.trim()) { before = input.value; undo.hidden = false; }
@@ -1234,11 +1243,11 @@ function openOutline(O) {
         say.textContent = error?.name === 'AbortError' ? '부탁을 그만뒀어요.' : String(error?.message || '가이X가 개요를 쓰지 못했어요. 다시 부탁해 주세요.').slice(0, 300);
       } finally {
         if (asking === controller) asking = null;
-        label.textContent = '가이X에게 부탁하기'; topic.disabled = count.disabled = false;
+        label.textContent = '가이X에게 부탁하기'; topic.disabled = count.disabled = share.disabled = false;
       }
     } }, gaiOwl(), label);
     input.rows = 6; input.classList.add('short');                  // 부탁하는 칸이 있으면 개요 칸을 줄여 만들기 단추까지 한 화면에 들게
-    return el('div', { class: 'cv-outline-ai' }, el('b', { text: '가이X에게 개요 부탁하기' }), topic, el('div', { class: 'cv-find-opts' }, count, go, undo), say);
+    return el('div', { class: 'cv-outline-ai' }, el('b', { text: '가이X에게 개요 부탁하기' }), topic, refRow, el('div', { class: 'cv-find-opts' }, count, go, undo), say);
   })() : null;
   input.addEventListener('keydown', (e) => {
     // Tab 으로 들여 쓰기(Shift+Tab 은 내어 쓰기). 개요는 들여 쓰기로 내용을 나누므로 칸 밖으로 나가지 않게 한다.

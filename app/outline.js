@@ -150,3 +150,25 @@ export function outlineFromAnswer(answer) {
     .filter((line, k, all) => line.trim() || (k && all[k - 1].trim()))
     .slice(0, 200).join('\n').trim();
 }
+
+/**
+ * 가이X 에게 개요를 부탁할 때 참고로 보낼 지금 그림의 글(선생님이 고른 경우에만 보낸다). 화면을 모르는 자료.
+ * 장마다 "N장" 아래에 글 조각(위에서 아래 차례) · 선 위의 글 · 발표자 노트(">")를 적는다. 지금 장은 표시한다.
+ * 숨긴 장도 적는다(선생님 자료이므로). 사진 · 영상은 보내지 않는다. 길면 지금 장에서 먼 장부터 줄이고, 그래도 길면 자른다.
+ */
+export const DRAWING_TEXT_MAX = 6000;
+export function drawingText(slides, { title = '', at = 0, max = DRAWING_TEXT_MAX } = {}) {
+  const pages = (Array.isArray(slides) ? slides : []).map((slide, i) => {
+    const items = (slide?.items || []).filter((it) => (it?.t === 'text' && String(it.text || '').trim()) || (it?.t === 'link' && String(it.label || '').trim()));
+    const lines = items.slice().sort((a, b) => (Number(a.y) || 0) - (Number(b.y) || 0) || (Number(a.x) || 0) - (Number(b.x) || 0))
+      .map((it) => `  - ${String(it.t === 'link' ? it.label : it.text).replace(/\s+/g, ' ').trim()}`);
+    const notes = cleanNotes(slide?.notes).replace(/\s+/g, ' ').trim();
+    if (notes) lines.push(`  > ${notes}`);
+    return { i, head: `${i + 1}장${i === at ? ' (지금 장)' : ''}${slide?.hidden ? ' (숨긴 장)' : ''}`, lines };
+  });
+  if (!pages.some((p) => p.lines.length)) return '';
+  const render = (cap) => [title ? `그림 이름: ${String(title).trim()}` : '', `모두 ${pages.length}장`,
+    ...pages.flatMap((p) => [p.head, ...(Math.abs(p.i - at) <= 1 ? p.lines : p.lines.map((l) => l.slice(0, cap)))])].filter(Boolean).join('\n');
+  for (const cap of [400, 120, 50, 20]) { const text = render(cap); if (text.length <= max) return text; }
+  return render(20).slice(0, max);
+}

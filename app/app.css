@@ -1191,3 +1191,9 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero-go { display: flex
 .cv-bridge-list em { color: #8a5a00; font-size: .85rem; font-style: normal; }
 .cv-bridge-end { display: flex; justify-content: flex-end; }
 .cv-bridge-status { min-height: 1.3em; margin: 0; color: var(--brand, #286f62); }
+
+/* 개요 부탁: 지금 그림의 글을 참고로 보내기 */
+.cv-outline-ref { display: grid; gap: 4px; font-size: .9rem; }
+.cv-outline-ref label { display: flex; gap: 6px; align-items: center; }
+.cv-outline-ref-peek summary { cursor: pointer; color: var(--muted, #5d6b66); font-size: .85rem; }
+.cv-outline-ref-text { max-height: 9rem; overflow: auto; margin: 4px 0 0; padding: 8px; border-radius: 8px; background: #f3f6f4; font: .8rem/1.5 inherit; white-space: pre-wrap; }
