@@ -2585,15 +2585,17 @@ export function createEditor({
         headRow('end'),
         el('div', { class: 'fe-poshead', text: '선의 길' }),
         el('div', { class: 'fe-row' },
-          chip('곧게', !it.curve && !it.elbow, { curve: undefined, elbow: undefined }, { curve: 'off' }),
-          chip('둥글게', !!it.curve, { curve: it.curve || 1, elbow: undefined }, { curve: 'on' }),
+          chip('곧게', !it.curve && !it.elbow, { curve: undefined, elbow: undefined, avoid: undefined }, { curve: 'off' }),
+          chip('둥글게', !!it.curve, { curve: it.curve || 1, elbow: undefined, avoid: undefined }, { curve: 'on' }),
           // 꺾어서: 두 조각이 옆으로 더 떨어져 있으면 가로 먼저, 위아래로 더 떨어져 있으면 세로 먼저 꺾는다.
-          chip('꺾어서', !!it.elbow, { elbow: it.elbow || (it.w >= it.vh ? 1 : -1), curve: undefined }, { elbow: 'on' }),
+          // 새로 꺾으면 다른 조각을 피해 가기도 켠다(끄면 늘 같은 모양으로 꺾는다).
+          chip('꺾어서', !!it.elbow, { elbow: it.elbow || (it.w >= it.vh ? 1 : -1), curve: undefined, ...(it.elbow ? {} : { avoid: true }) }, { elbow: 'on' }),
           it.curve ? el('button', { class: 'fe-chip', type: 'button', dataset: { bendLink: '1' }, onClick: () => change({ curve: -it.curve }) }, '반대로 휘기') : null,
           it.elbow ? el('button', { class: 'fe-chip', type: 'button', dataset: { turnLink: '1' }, onClick: () => change({ elbow: -it.elbow }) }, it.elbow > 0 ? '세로 먼저 꺾기' : '가로 먼저 꺾기') : null,
+          it.elbow ? el('button', { class: `fe-chip${it.avoid ? ' on' : ''}`, type: 'button', 'aria-pressed': String(!!it.avoid), dataset: { avoid: it.avoid ? 'on' : 'off' }, title: '다른 조각을 뚫지 않는 길을 스스로 찾아요', onClick: () => change({ avoid: it.avoid ? undefined : true, turn: undefined }) }, '피해 가기') : null,
           // 손잡이로 고친 깊이 · 꺾이는 자리를 처음 모양으로
           (it.curve && Number.isFinite(it.bend)) || (it.elbow && Number.isFinite(it.turn)) ? el('button', { class: 'fe-chip', type: 'button', dataset: { resetLinkShape: '1' }, onClick: () => change({ bend: undefined, turn: undefined }) }, '처음 모양으로') : null),
-        it.curve || it.elbow ? el('p', { class: 'fe-note', text: it.curve ? '선 가운데의 동그란 손잡이를 끌면 휘는 정도와 쪽이 바뀌어요.' : '가운데 마디의 동그란 손잡이를 끌면 꺾이는 자리가 옮겨 가요.' }) : null,
+        it.curve || it.elbow ? el('p', { class: 'fe-note', text: it.curve ? '선 가운데의 동그란 손잡이를 끌면 휘는 정도와 쪽이 바뀌어요.' : it.avoid ? '"피해 가기"를 켜면 다른 조각을 뚫지 않는 길을 스스로 찾아요. 조각을 옮기면 길도 다시 찾아요.' : '가운데 마디의 동그란 손잡이를 끌면 꺾이는 자리가 옮겨 가요.' }) : null,
         // 붙는 곳: 시작 조각 · 끝 조각마다 그 옆 가운데에 붙인다(자동이면 서로를 향하는 쪽).
         el('div', { class: 'fe-poshead', text: '붙는 곳' }),
         ...[['fromSide', '시작'], ['toSide', '끝']].map(([key, label]) => el('div', { class: 'fe-row fe-side-row', role: 'group', 'aria-label': `${label} 붙는 곳` },

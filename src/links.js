@@ -4,7 +4,7 @@
 // 요소에 적는 값: t 'link' · from · to(잇는 두 조각의 이름표) · head('end' 끝에 화살표 · 'both' 양쪽 · 'none' 없음) ·
 //                 color · line(굵기, 카드 너비의 %) · dash(true 긴 점선 · 'dot' 동글 점 · 'dashdot' 긴 점과 점) · head('start' 처음에만도 된다) ·
 //                 startShape · endShape(머리 모양: LINK_SHAPES, 없으면 뾰족 화살표) · label(선 위의 짧은 글, LINK_LABEL_MAX 자까지) ·
-//                 labelAt(그 글이 길을 따라 놓이는 곳 0.05~0.95, 없으면 한가운데) · curve(곡선: 1 은 가는 쪽에서 보아 왼쪽으로, -1 은 오른쪽으로 휜다. 없으면 직선) ·
+//                 labelAt(그 글이 길을 따라 놓이는 곳 0.05~0.95, 없으면 한가운데) · avoid(꺾인 선이 다른 조각을 피해 간다) · curve(곡선: 1 은 가는 쪽에서 보아 왼쪽으로, -1 은 오른쪽으로 휜다. 없으면 직선) ·
 //                 elbow(꺾인 선: 1 은 가로 → 세로 → 가로, -1 은 세로 → 가로 → 세로로 직각으로 꺾어 잇는다. curve 와 함께 쓰지 않는다) ·
 //                 fromSide · toSide(선이 붙는 곳: 'top' · 'right' · 'bottom' · 'left' 면 그 조각의 그 옆 가운데에 붙는다. 없으면 알아서) ·
 //                 bend(곡선이 휘는 깊이: 두 끝 사이 거리에 대한 비율 0.05~0.9, 없으면 CURVE_BEND) ·
@@ -173,13 +173,67 @@ function sidedElbow(A, B, line, elbow, fromSide, toSide, turn = 0.5) {
   m2[a1] = mid; m2[other] = p2[other];
   return { p1, p2, m1, m2 };
 }
-export function linkGeometry(a, b, { line = LINK_LINE.base, aspect = 1, curve = 0, elbow = 0, fromSide, toSide, bend, turn } = {}) {
+// ---------- 피해 가기: 꺾인 선이 다른 조각을 뚫지 않는 길 ----------
+// 늘 쓰는 길이 다른 조각(obstacles: 네모 [왼, 위, 오른, 아래], 카드 너비의 % 단위)을 지나면, 몇 가지 길을 더 그려 보고
+// 아무것도 지나지 않는(없으면 가장 적게 지나는) 가장 짧은 길을 고른다. 길은 늘 꺾이는 점 둘까지(pts 8개)라 그리기 · PPTX 는 그대로다.
+const TURNS = [0.5, 0.3, 0.7, 0.15, 0.85, 0.02, 0.98];
+// 가로 · 세로 마디 하나가 네모의 속을 지나는가(테두리에 닿기만 하면 지나지 않은 것으로 본다)
+function crosses([x1, y1], [x2, y2], [l, t, r, b]) {
+  const e = 1e-6;
+  if (Math.abs(y1 - y2) < e) return y1 > t + e && y1 < b - e && Math.max(x1, x2) > l + e && Math.min(x1, x2) < r - e;
+  if (Math.abs(x1 - x2) < e) return x1 > l + e && x1 < r - e && Math.max(y1, y2) > t + e && Math.min(y1, y2) < b - e;
+  return Math.max(x1, x2) > l && Math.min(x1, x2) < r && Math.max(y1, y2) > t && Math.min(y1, y2) < b;
+}
+function routeCost({ p1, p2, m1, m2 }, rects, t) {
+  const pts = [p1, m1, m2, p2], segs = [[p1, m1], [m1, m2], [m2, p2]];
+  const hits = rects.filter((rect) => segs.some(([u, v]) => crosses(u, v, rect))).length;
+  const length = segs.reduce((n, [u, v]) => n + Math.hypot(v[0] - u[0], v[1] - u[1]), 0);
+  const corners = Math.hypot(m1[0] - m2[0], m1[1] - m2[1]) < 1e-6 ? 1 : 2;
+  return { hits, score: hits * 1e4 + length + corners * 2 + Math.abs(t - 0.5) * 4, pts };
+}
+function avoidingElbow(A, B, line, elbow, fromSide, toSide, turn, obstacles) {
+  const gap = GAP + line, grow = gap * 0.6;
+  // 피할 것: 다른 조각들(선과 떨어지게 조금 넓혀서)과, 잇는 두 조각 자신(선이 되돌아와 뚫지 않게)
+  const rects = [...obstacles.map(([l, t, r, b]) => [l - grow, t - grow, r + grow, b + grow]),
+    ...[A, B].map((box) => [box.cx - box.hw, box.cy - box.hh, box.cx + box.hw, box.cy + box.hh])];
+  const usual = fromSide || toSide ? sidedElbow(A, B, line, elbow, fromSide, toSide, turn) : elbowGeometry(A, B, line, elbow, false, turn);
+  if (!routeCost(usual, rects, 0.5).hits) return usual;
+  const tries = [];
+  for (const t of TURNS) {
+    if (fromSide || toSide) tries.push([sidedElbow(A, B, line, elbow, fromSide, toSide, t), t]);
+    else {
+      for (const e of [elbow, -elbow]) tries.push([elbowGeometry(A, B, line, e, false, t), t]);
+      for (const s1 of LINK_SIDES) for (const s2 of LINK_SIDES) tries.push([sidedElbow(A, B, line, elbow, s1, s2, t), t]);
+    }
+  }
+  // 두 조각 바깥으로 돌아가는 길(ㄷ자): 같은 옆에서 나와, 그 사이에 걸친 조각들보다 더 바깥 줄에서 돌아온다.
+  const sides = fromSide && toSide ? (fromSide === toSide ? [fromSide] : []) : fromSide || toSide ? [fromSide || toSide] : LINK_SIDES;
+  for (const side of sides) {
+    const axis = axisOf(side), other = 1 - axis, n = NORMAL[side][axis];
+    const p1 = sidePoint(A, side, gap), p2 = sidePoint(B, side, gap);
+    const lo = Math.min(p1[other], p2[other]), hi = Math.max(p1[other], p2[other]);
+    const span = rects.filter((rect) => rect[other + 2] > lo && rect[other] < hi);
+    const edge = n < 0 ? Math.min(p1[axis], p2[axis], ...span.map((rect) => rect[axis] - gap)) : Math.max(p1[axis], p2[axis], ...span.map((rect) => rect[axis + 2] + gap));
+    const m1 = [0, 0], m2 = [0, 0];
+    m1[axis] = edge; m1[other] = p1[other];
+    m2[axis] = edge; m2[other] = p2[other];
+    tries.push([{ p1, p2, m1, m2 }, 0.5]);
+  }
+  let best = usual, bestScore = routeCost(usual, rects, 0.5).score;
+  for (const [route, t] of tries) {
+    const { score } = routeCost(route, rects, t);
+    if (score < bestScore - 1e-9) { best = route; bestScore = score; }
+  }
+  return best;
+}
+export function linkGeometry(a, b, { line = LINK_LINE.base, aspect = 1, curve = 0, elbow = 0, fromSide, toSide, bend, turn, obstacles = null } = {}) {
   const A = boxOfItem(a, aspect), B = boxOfItem(b, aspect);
   fromSide = LINK_SIDES.includes(fromSide) ? fromSide : null;
   toSide = LINK_SIDES.includes(toSide) ? toSide : null;
   if (elbow) {
     const t = turnOf(turn);
-    const { p1, p2, m1, m2 } = fromSide || toSide ? sidedElbow(A, B, line, elbow, fromSide, toSide, t) : elbowGeometry(A, B, line, elbow, false, t);
+    const { p1, p2, m1, m2 } = obstacles ? avoidingElbow(A, B, line, elbow, fromSide, toSide, t, obstacles)
+      : fromSide || toSide ? sidedElbow(A, B, line, elbow, fromSide, toSide, t) : elbowGeometry(A, B, line, elbow, false, t);
     const pad = Math.max(1.5, line * 3 + 1);
     const xs = [p1[0], p2[0], m1[0], m2[0]], ys = [p1[1], p2[1], m1[1], m2[1]];
     const left = Math.min(...xs) - pad, top = Math.min(...ys) - pad, bw = Math.max(...xs) - Math.min(...xs) + pad * 2, bh = Math.max(...ys) - Math.min(...ys) + pad * 2;
@@ -236,11 +290,20 @@ export function layoutLinks(items, aspect = 1) {
   const list = Array.isArray(items) ? items : [];
   if (!list.some((it) => it?.t === 'link')) return list;
   const byId = new Map(list.filter((it) => it && it.t !== 'link' && it.id).map((it) => [it.id, it]));
+  // 피해 갈 조각들: 잠그지 않은 것(배경으로 깐 사진은 잠겨 있다) 가운데 카드를 거의 덮지 않는 것
+  let pieces = null;
+  const obstaclesFor = (a, b) => {
+    pieces ||= list.filter((it) => it && it.t !== 'link' && !it.lock && !(Number(it.w) >= 90 && Number(it.h) >= 90))
+      .map((it) => [it, boxOfItem(it, aspect)]).map(([it, box]) => [it, [box.cx - box.hw, box.cy - box.hh, box.cx + box.hw, box.cy + box.hh]]);
+    return pieces.filter(([it]) => it !== a && it !== b).map(([, rect]) => rect);
+  };
   return list.flatMap((it) => {
     if (it?.t !== 'link') return [it];
     const a = byId.get(it.from), b = byId.get(it.to);
     if (!a || !b || a === b) return [];
-    return [{ ...it, rot: 0, ...linkGeometry(a, b, linkOptions(it, aspect)) }];
+    const opts = linkOptions(it, aspect);
+    if (it.avoid && it.elbow) opts.obstacles = obstaclesFor(a, b);
+    return [{ ...it, rot: 0, ...linkGeometry(a, b, opts) }];
   });
 }
 
@@ -277,8 +340,9 @@ export function linkHandle(link, aspect = 1) {
     return { kind: 'bend', at: onCard(link, aspect, x, y) };
   }
   if (p?.length !== 8 || Math.hypot(p[4] - p[6], p[5] - p[7]) < 1e-6) return null;
-  // 같은 쪽을 보는 두 옆을 고른 선(ㄷ자)은 꺾이는 자리가 두 조각의 바깥으로 정해진다.
+  // 같은 쪽을 보는 두 옆을 고른 선(ㄷ자)은 꺾이는 자리가 두 조각의 바깥으로 정해진다. 피해 가는 선은 길을 스스로 찾는다.
   if (LINK_SIDES.includes(link.fromSide) && link.fromSide === link.toSide) return null;
+  if (link.avoid) return null;
   return { kind: 'turn', at: onCard(link, aspect, (p[4] + p[6]) / 2, (p[5] + p[7]) / 2) };
 }
 
