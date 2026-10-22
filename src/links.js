@@ -3,7 +3,8 @@
 //
 // 요소에 적는 값: t 'link' · from · to(잇는 두 조각의 이름표) · head('end' 끝에 화살표 · 'both' 양쪽 · 'none' 없음) ·
 //                 color · line(굵기, 카드 너비의 %) · dash(true 긴 점선 · 'dot' 동글 점 · 'dashdot' 긴 점과 점) · head('start' 처음에만도 된다) ·
-//                 startShape · endShape(머리 모양: LINK_SHAPES, 없으면 뾰족 화살표) · label(선 위의 짧은 글, LINK_LABEL_MAX 자까지) · curve(곡선: 1 은 가는 쪽에서 보아 왼쪽으로, -1 은 오른쪽으로 휜다. 없으면 직선) ·
+//                 startShape · endShape(머리 모양: LINK_SHAPES, 없으면 뾰족 화살표) · label(선 위의 짧은 글, LINK_LABEL_MAX 자까지) ·
+//                 labelAt(그 글이 길을 따라 놓이는 곳 0.05~0.95, 없으면 한가운데) · curve(곡선: 1 은 가는 쪽에서 보아 왼쪽으로, -1 은 오른쪽으로 휜다. 없으면 직선) ·
 //                 elbow(꺾인 선: 1 은 가로 → 세로 → 가로, -1 은 세로 → 가로 → 세로로 직각으로 꺾어 잇는다. curve 와 함께 쓰지 않는다) ·
 //                 fromSide · toSide(선이 붙는 곳: 'top' · 'right' · 'bottom' · 'left' 면 그 조각의 그 옆 가운데에 붙는다. 없으면 알아서) ·
 //                 bend(곡선이 휘는 깊이: 두 끝 사이 거리에 대한 비율 0.05~0.9, 없으면 CURVE_BEND) ·
@@ -23,12 +24,16 @@ export const LINK_DASHES = [true, 'dot', 'dashdot'];
 export const LINK_LABEL_MAX = 30;
 export const linkLabelSize = (link) => r3(Math.max(2.4, Math.min(4, 2.2 + (Number(link?.line) || 0) * 0.8)));
 const xmlText = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-// 선의 한가운데(그려진 길을 따라 반쯤 간 자리, 선 상자 안의 좌표): 곧은 선은 두 끝의 가운데, 곡선은 B(½), 꺾인 선은 마디들을 따라 반.
-function midOnLine(p) {
-  if (p.length === 6) return [0.25 * p[0] + 0.5 * p[4] + 0.25 * p[2], 0.25 * p[1] + 0.5 * p[5] + 0.25 * p[3]];
-  const pts = p.length === 8 ? [[p[0], p[1]], [p[4], p[5]], [p[6], p[7]], [p[2], p[3]]] : [[p[0], p[1]], [p[2], p[3]]];
+// 그려진 길을 꺾은선으로(선 상자 안의 좌표): 곧은 선은 두 끝, 꺾인 선은 꺾이는 점까지, 곡선은 32 마디로 나눠서.
+function routeOf(p) {
+  if (p.length === 6) return Array.from({ length: 33 }, (_, i) => { const t = i / 32, u = 1 - t; return [u * u * p[0] + 2 * u * t * p[4] + t * t * p[2], u * u * p[1] + 2 * u * t * p[5] + t * t * p[3]]; });
+  return p.length === 8 ? [[p[0], p[1]], [p[4], p[5]], [p[6], p[7]], [p[2], p[3]]] : [[p[0], p[1]], [p[2], p[3]]];
+}
+// 길을 따라 t(0 처음 ~ 1 끝)만큼 간 자리. 선 위의 글은 labelAt(없으면 한가운데 0.5)에 놓는다.
+function pointOnLine(p, t = 0.5) {
+  const pts = routeOf(p);
   const lens = pts.slice(1).map((q, i) => Math.hypot(q[0] - pts[i][0], q[1] - pts[i][1]));
-  let left = lens.reduce((a, b) => a + b, 0) / 2;
+  let left = lens.reduce((a, b) => a + b, 0) * t;
   for (let i = 0; i < lens.length; i++) {
     if (left <= lens[i] || i === lens.length - 1) {
       const k = lens[i] ? Math.min(1, left / lens[i]) : 0;
@@ -38,9 +43,27 @@ function midOnLine(p) {
   }
   return pts[0];
 }
+/** 선 위 글의 자리(labelAt)를 정할 수 있는 범위: 머리에 가리지 않게 양 끝은 조금 비운다. */
+export const LINK_LABEL_AT = Object.freeze({ min: 0.05, max: 0.95 });
+const labelT = (link) => (Number.isFinite(link?.labelAt) ? Math.min(LINK_LABEL_AT.max, Math.max(LINK_LABEL_AT.min, link.labelAt)) : 0.5);
+/** 카드 위의 자리 point 에서 가장 가까운 선 위의 곳이 길을 따라 얼마쯤인지(labelAt 으로 쓸 값). 선 위 글을 끌 때 쓴다. */
+export function linkLabelT(link, point, aspect = 1) {
+  const left = link.x - link.w / 2, top = link.y / aspect - link.vh / 2;
+  const px = point[0] - left, py = point[1] / aspect - top, pts = routeOf(link.pts);
+  let walked = 0, best = Infinity, bestAt = 0.5, total = 0;
+  for (let i = 1; i < pts.length; i++) total += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+  for (let i = 1; i < pts.length; i++) {
+    const [ax, ay] = pts[i - 1], [bx, by] = pts[i], dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy);
+    const k = len ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (len * len))) : 0;
+    const d = Math.hypot(ax + dx * k - px, ay + dy * k - py);
+    if (d < best) { best = d; bestAt = total ? (walked + len * k) / total : 0.5; }
+    walked += len;
+  }
+  return Math.round(Math.min(LINK_LABEL_AT.max, Math.max(LINK_LABEL_AT.min, bestAt)) * 1000) / 1000;
+}
 /** 선 위의 글이 놓이는 자리(카드 위: x 는 카드 너비의 %, y 는 카드 높이의 %). PPTX 가 쓴다. */
 export function linkLabelAt(link, aspect = 1) {
-  const [x, y] = midOnLine(link.pts);
+  const [x, y] = pointOnLine(link.pts, labelT(link));
   return [link.x - link.w / 2 + x, (link.y / aspect - link.vh / 2 + y) * aspect];
 }
 export const LINK_SIDES = ['top', 'right', 'bottom', 'left'];
@@ -376,7 +399,7 @@ export function linkSvg(link) {
   // 선 위의 글: 선의 한가운데에 선 색으로, 둘레에 흰 테를 둘러 선 위에서도 읽히게.
   let label = '';
   if (typeof link.label === 'string' && link.label) {
-    const [lx, ly] = midOnLine(link.pts), size = linkLabelSize(link);
+    const [lx, ly] = pointOnLine(link.pts, labelT(link)), size = linkLabelSize(link);
     // 글 뒤에 흰 알약을 깔아 선이 글 사이(띄어쓰기)로 비치지 않게 한다. 폭은 글자 수로 어림한다(한글 · 한자는 한 자, 그 밖은 0.6 자).
     const wide = Array.from(link.label).reduce((n, ch) => n + (/[\u1100-\u11ff\u3000-\u9fff\uac00-\ud7af\uf900-\ufaff\uff00-\uffef]/.test(ch) ? 1 : 0.6), 0) * size;
     const pw = wide + size * 0.9, ph = size * 1.5;

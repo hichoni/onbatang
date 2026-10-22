@@ -1,6 +1,10 @@
-// 찾아 바꾸기: 모든 장의 글상자(와 고르면 발표자 노트)에서 글을 찾고 바꾼다(화면을 모르는 순수한 함수).
-// 잠긴 요소는 건너뛴다(캔바와 같다). 바꾼 글이 그 글상자의 글자 한도를 넘으면 그 글상자는 바꾸지 않고 센다.
+// 찾아 바꾸기: 모든 장의 글상자 · 연결선 위의 글(과 고르면 발표자 노트)에서 글을 찾고 바꾼다(화면을 모르는 순수한 함수).
+// 잠긴 요소는 건너뛴다(캔바와 같다). 바꾼 글이 그 요소의 글자 한도를 넘으면 그 요소는 바꾸지 않고 센다.
 import { cleanNotes } from '../src/document.js';
+import { LINK_LABEL_MAX } from '../src/links.js';
+
+// 요소에서 찾을 글이 든 칸: 글상자는 text, 연결선은 선 위의 글(label)
+const fieldOf = (it) => (it?.lock ? null : it?.t === 'text' ? 'text' : it?.t === 'link' && typeof it.label === 'string' ? 'label' : null);
 
 const pattern = (find, caseSensitive) => new RegExp(String(find).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), caseSensitive ? 'g' : 'gi');
 const countIn = (text, re) => (typeof text === 'string' && text ? (text.match(re) || []).length : 0);
@@ -11,7 +15,7 @@ export function findText(slides, { find = '', caseSensitive = false, notes = tru
   const re = pattern(find, caseSensitive), out = [];
   (Array.isArray(slides) ? slides : []).forEach((slide, index) => {
     let count = 0;
-    for (const it of slide?.items || []) if (it?.t === 'text' && !it.lock) count += countIn(it.text, re);
+    for (const it of slide?.items || []) { const key = fieldOf(it); if (key) count += countIn(it[key], re); }
     if (notes) count += countIn(slide?.notes, re);
     if (count) out.push({ index, count });
   });
@@ -30,10 +34,19 @@ export function replaceText(slides, { find = '', replace = '', caseSensitive = f
   const next = list.map((slide) => {
     let changed = false;
     const items = (slide?.items || []).map((it) => {
-      if (it?.t !== 'text' || it.lock) return it;
-      const hits = countIn(it.text, re);
+      const key = fieldOf(it);
+      if (!key) return it;
+      const hits = countIn(it[key], re);
       if (!hits) return it;
-      const text = it.text.replace(re, () => replace);
+      const text = it[key].replace(re, () => replace);
+      // 선 위의 글은 한 줄 · LINK_LABEL_MAX 자. 비면 글을 뗀다.
+      if (key === 'label') {
+        const label = text.replace(/\s+/g, ' ').trim();
+        if (Array.from(label).length > LINK_LABEL_MAX) { skipped++; return it; }
+        count += hits; changed = true;
+        const { label: _, ...rest } = it;
+        return label ? { ...it, label } : rest;
+      }
       if (text.length > limit(it)) { skipped++; return it; }
       count += hits; changed = true;
       return { ...it, text };

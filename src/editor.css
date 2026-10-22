@@ -51,6 +51,7 @@
 .fi-link .fi-link-hit { stroke: transparent; fill: none; pointer-events: stroke; cursor: pointer; }
 /* 선 위의 글도 눌러서 그 선을 고른다 */
 .fi-link .fi-link-label, .fi-link .fi-link-label-bg { pointer-events: auto; cursor: pointer; user-select: none; }
+.fi-link.sel .fi-link-label, .fi-link.sel .fi-link-label-bg { cursor: grab; }
 .fi-link.sel .fi-link-line, .fi-link.sel .fi-link-head { filter: drop-shadow(0 0 .35cqw rgba(61, 75, 192, .95)); }
 /* 이어 움직이기가 SVG 도형의 테두리도 이어 바꿀 수 있게, 테두리를 그리는 변수의 종류를 알려 둔다(알리지 않은 변수는 중간 값 없이 뚝 바뀐다).
    테두리는 .edged 일 때만 쓰므로 처음 값(0 · 투명)은 보이지 않는다. */

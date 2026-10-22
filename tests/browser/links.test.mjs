@@ -443,3 +443,37 @@ test('a connector takes a label from its toolbar or a double click, with quick w
   assert.equal(await page.locator('.cv-canvas .fe-card .fi-link.sel').count(), 1);
   assert.deepEqual(external, []);
 });
+
+test('the label of a selected connector can be dragged along the line and put back in the middle', options, async t => {
+  const {page, external} = await setup(t);
+  const shapes = page.locator('.cv-canvas .fe-card .fi-shape');
+  await shapes.nth(0).click();
+  await shapes.nth(1).click({modifiers: ['Shift']});
+  await page.locator('.fe-bar button').filter({hasText: '연결선'}).click();
+  await page.locator('.cv-canvas .fe-card .fi-link').waitFor();
+  const [p1, p2] = await ends(page);
+  await page.mouse.click((p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2);
+  await page.locator('.fe-bar button').filter({hasText: '선 위 글'}).click();
+  const input = page.locator('.fe-link-label-input');
+  await input.fill('예');
+  await input.press('Enter');
+  const link = r => r.slides[0].items.find(it => it.t === 'link');
+  await saved(page, r => link(r)?.label === '예');
+  // Drag the label toward the start of the line.
+  const label = page.locator('.cv-canvas .fe-card .fi-link .fi-link-label');
+  const b0 = await label.boundingBox(), from = [b0.x + b0.width / 2, b0.y + b0.height / 2];
+  const to = [p1[0] + (p2[0] - p1[0]) * .2, p1[1] + (p2[1] - p1[1]) * .2 - 10];
+  await page.mouse.move(...from);
+  await page.mouse.down();
+  await page.mouse.move((from[0] + to[0]) / 2, (from[1] + to[1]) / 2, {steps: 4});
+  await page.mouse.move(...to, {steps: 4});
+  await page.mouse.up();
+  await saved(page, r => link(r)?.labelAt > .1 && link(r).labelAt < .35);
+  const b1 = await label.boundingBox();
+  assert.ok(Math.hypot(b1.x - b0.x, b1.y - b0.y) > 60, 'the label moved along the line');
+  // Back to the middle from the label box (open it if it is closed).
+  if (!await page.locator('.fe-link-label-input').isVisible()) await page.locator('.fe-bar button').filter({hasText: '선 위 글'}).click();
+  await page.locator('[data-link-label-center="1"]').click();
+  await saved(page, r => link(r)?.label === '예' && !('labelAt' in link(r)));
+  assert.deepEqual(external, []);
+});
