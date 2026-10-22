@@ -536,6 +536,12 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"], body.mc-app :is(#app,.cv-a
 .cv-find-hits { display: flex; flex-wrap: wrap; gap: 6px; max-height: 120px; overflow: auto; }
 .cv-find-hits:empty { display: none; }
 .cv-find-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.cv-outline-box { width: min(560px, 100%); }
+.cv-outline-input { width: 100%; box-sizing: border-box; min-height: 12em; padding: 10px 12px; border: 1.5px solid #d7dbe6; border-radius: 10px; font: inherit; font-size: .95rem; line-height: 1.5; resize: vertical; tab-size: 2; white-space: pre; overflow-wrap: normal; }
+.cv-outline-input:focus { outline: 2px solid var(--primary); outline-offset: 1px; }
+.cv-outline-list { margin: 0; padding-left: 1.6em; max-height: 9em; overflow: auto; font-size: .9rem; }
+.cv-outline-list li { margin: 2px 0; }
+.cv-outline-list span { color: #5c6370; }
 .cv-find-box .cv-down-note, .cv-keys-box .cv-down-note { margin: 0; }
 @media (max-width: 600px) { .cv-keys { grid-template-columns: 1fr; } .cv-keys dd { margin-bottom: 6px; } }
 .cv-down-ask .cv-size { min-width: 0; padding: 14px 8px 12px; }
