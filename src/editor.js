@@ -67,6 +67,7 @@ const BLOB_CACHE = 12;         // 이번에 올린 사진의 파일 내용을 �
  *       편집기가 미리 줄여서(긴 쪽 800) 넘겨준다. 주지 않으면 이 화면에서만 보이는 임시 주소(blob:)를 쓴다(새로 고침하면 사라진다).
  *   - loadImageBlob(item): 저장해 둔 사진의 파일 내용을 돌려주는 함수(배경 제거용). 주지 않으면 fetch(item.url) 로 받는다.
  *   - documentImport: { label, description?, open() } 내 자료에 문서 가져오기 단추를 보이는 선택 연결. 파일 해석·저장·이동은 호스트가 맡는다.
+ *   - outline: { open() } 틀 칸 맨 위에 "개요로 여러 장 만들기" 단추를 보이는 선택 연결(여러 장을 다루는 프로젝트만 준다. 장을 만드는 일은 프로젝트가 한다).
  *   - fonts(): 지금 고를 수 있는 글꼴 목록을 돌려주는 함수(주지 않으면 configure 에 준 전부).
  *   - onAspect(aspect): 카드의 모양(가로 ÷ 세로)이 실행 취소·다시 실행으로 바뀌었을 때(setAspect 로 모양을 바꾸는 프로젝트만 쓴다).
  *   - notify(message, ms): 알림을 보여 주는 함수(주지 않으면 화면 아래의 작은 알림).
@@ -90,7 +91,7 @@ export function createEditor({
   uploads = null, usedElsewhere = null, onRemoveUpload = null, onMotionAll = null, canPaste = () => true,
   documentImport = null, colorPalettes = null,
   saveVideo = null, createCamera = null, videoLimits = null, videoNote = '', videoHint = '',
-  onSelect = null, lockedBy = null, slideMenu = null,
+  onSelect = null, lockedBy = null, slideMenu = null, outline = null,
 } = {}) {
   let card = null;            // 지금 꾸미는 디자인(card.items 를 새 목록으로, card.bg 를 새 값으로 바꿔 끼운다)
   let palettes;try{palettes=cleanPalettes(colorPalettes?.read());}catch{palettes=cleanPalettes();}
@@ -3398,11 +3399,16 @@ export function createEditor({
       },
         el('span', { class: 'fe-layout-view', 'aria-hidden': 'true' }, designView({ bg: l.bg || card.bg, items: layoutItems(l.id) })),
         el('small', { text: armed === l.id ? '한 번 더 눌러요' : l.name }));
-      return layoutGroups().flatMap((g) => [
+      // 개요로 여러 장 만들기(프로젝트가 outline 을 줄 때만): 틀 하나하나를 고르기 전에, 발표 차례를 적어 장들을 한꺼번에 만든다.
+      const fromOutline = typeof outline?.open === 'function' ? [
+        el('button', { class: 'fe-outline-start', type: 'button', dataset: { outlineStart: '' }, onClick: () => outline.open() },
+          icon('text'), el('span', {}, el('b', { text: '개요로 여러 장 만들기' }), el('small', { text: '차례를 적으면 장마다 제목 · 내용을 놓아 줘요' }))),
+      ] : [];
+      return [...fromOutline, ...layoutGroups().flatMap((g) => [
         g.name ? el('div', { class: 'fe-head', text: g.name }) : null,
         el('div', { class: 'fe-layouts', role: 'group', 'aria-label': g.name ? `${g.name} 틀` : '틀' }, ...g.list.map(tile)),
         armed && g.list.some((l) => l.id === armed) ? armNote() : null,
-      ]);
+      ])];
     }
     if (tab === 'text') {
       return [

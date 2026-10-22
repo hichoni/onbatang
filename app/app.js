@@ -21,6 +21,7 @@ import {createShowTools} from './show-tools.js';
 import {PRINT_LAYOUTS,printHtml} from './print.js';
 import {encodeGif,GIF_LIMITS} from './gif.js';
 import {findText,replaceText} from './find-replace.js';
+import {parseOutline,outlineSlides,OUTLINE_LINES} from './outline.js';
 import {ONBATANG_VERSION} from './version.js';
 import {createGaiMaker,gaiLessonContext} from './gai-maker.js';
 import {
@@ -617,6 +618,7 @@ function openDesign(record, isNew) {
     onMotionAll: (motion) => applyMotionAll(O, motion),
     // 카드의 빈 곳(과 그 둘레)을 우클릭하면 나오는 장(슬라이드) 메뉴
     slideMenu: () => slideMenuGroups(O),
+    outline: { open: () => openOutline(O) },
     // 영상 장면(그 장의 바탕에 까는 영상): 파일은 이 기기에 두고(videos.js), 어느 그림에 딸린 것인지 함께 적는다.
     // 저장하지 못하면 오류가 나고, 편집기가 영상을 넣지 않은 채 알린다(저장되지 않은 영상을 그림에 적어 두지 않는다).
     saveVideo: (made) => saveVideo({ blob: made.blob, design: O.record.id, seconds: made.seconds }),
@@ -1037,6 +1039,7 @@ function slideMenuGroups(O, { strip = false } = {}) {
     ],
     [
       { icon: 'plus', label: '새 장 더하기', run: press(add), disabled: off(add) },
+      { icon: 'text', label: '개요로 장 만들기', run: () => openOutline(O), disabled: off(add) },
       { icon: 'duplicate', label: '이 장 복제', run: press(dup), disabled: off(dup) },
       { icon: 'left', label: '앞으로 옮기기', hint: strip ? 'Alt+←' : '', run: press(left), disabled: off(left) },
       { icon: 'right', label: '뒤로 옮기기', hint: strip ? 'Alt+→' : '', run: press(right), disabled: off(right) },
@@ -1123,6 +1126,67 @@ function openFindReplace(O) {
     el('div', { class: 'cv-find-actions' }, el('button', { class: 'btn btn-ghost', type: 'button', onClick: closeModal }, '닫기'), all)), { onClose: () => O.editor.refresh() });
   update();
   requestAnimationFrame(() => find.focus());
+}
+// 개요로 장 만들기: 줄글 개요(제목 줄 · 들여 쓴 내용 줄 · > 노트)를 적으면 장마다 제목과 내용을 놓아 한꺼번에 만든다(outline.js).
+// 지금 장이 비어 있으면 그 장부터 채우고, 아니면 지금 장 뒤에 넣는다. 바탕 · 글꼴 · 움직임은 지금 장을 따른다.
+const OUTLINE_SAMPLE = '식물의 한살이\n  씨앗이 싹 터요\n  잎과 줄기가 자라요\n    햇빛을 받아 양분을 만들어요\n  꽃이 피고 열매를 맺어요\n> 씨앗을 직접 보여 주며 시작하기\n물의 순환\n  - 증발\n  - 구름\n  - 비\n정리해 볼까요?';
+function openOutline(O) {
+  if (O.closed || videoBusy(O) || O.inlineImport) return;
+  const input = el('textarea', { class: 'cv-outline-input', rows: '11', 'aria-label': '개요', spellcheck: 'false', placeholder: `예)\n${OUTLINE_SAMPLE}` });
+  const result = el('p', { class: 'cv-down-note', role: 'status', 'aria-live': 'polite' });
+  const list = el('ol', { class: 'cv-outline-list' });
+  const blank = (d) => !d.items.length && !d.video && !d.activity && !d.notes;
+  const plan = () => {
+    O.slides[O.at] = O.editor.getDesign();
+    const here = O.slides[O.at], empty = blank(here);
+    const room = MAX_SLIDES - O.slides.length + (empty ? 1 : 0);
+    const font = here.items.find((it) => it.t === 'text' && it.font)?.font;
+    return { empty, ...outlineSlides(parseOutline(input.value), { bg: here.bg, font: font === 'gothic' ? undefined : font, like: here, room }) };
+  };
+  const update = () => {
+    const { slides, cut, empty } = plan();
+    make.disabled = !slides.length;
+    make.textContent = slides.length ? `${slides.length}장 만들기` : '장 만들기';
+    list.replaceChildren(...slides.map((d) => {
+      const words = d.items.filter((it) => it.t === 'text');
+      return el('li', {}, el('b', { text: words[0]?.text || '(제목 없음)' }), el('span', { text: words.length > 1 ? ` · 내용 ${words.length - 1}줄` : ' · 제목만' }));
+    }));
+    result.textContent = !input.value.trim() ? '들여 쓰지 않은 줄은 장의 제목, 그 아래 들여 쓰거나 "-"로 시작하는 줄은 그 장의 내용이에요. 더 들여 쓰면 한 단계 아래, ">"로 시작하면 발표자 노트예요.'
+      : !slides.length ? `슬라이드는 ${MAX_SLIDES}장까지예요. 장을 지운 뒤 다시 해 주세요.`
+        : `${empty ? '비어 있는 지금 장부터' : '지금 장 뒤에'} ${slides.length}장을 만들어요.${cut ? ` ${MAX_SLIDES}장을 넘는 ${cut}장은 만들지 않아요.` : ''} 내용이 ${OUTLINE_LINES}줄을 넘으면 "(이어서)" 장으로 나눠요.`;
+  };
+  const make = el('button', { class: 'btn btn-primary', type: 'button', dataset: { outlineMake: '' }, onClick: () => {
+    const { slides, cut, empty } = plan();
+    if (!slides.length) return;
+    changeSlides(O, (all, at) => { const next = all.slice(); next.splice(empty ? at : at + 1, empty ? 1 : 0, ...slides); return [next, empty ? at : at + 1]; });
+    closeModal();
+    toast(`${slides.length}장을 만들었어요.${cut ? ` (${cut}장은 ${MAX_SLIDES}장을 넘어 만들지 않았어요)` : ''} 글을 눌러 고치고, 틀 · 바탕색으로 꾸며요.`, 4500);
+  } }, '장 만들기');
+  const sample = el('button', { class: 'btn chip', type: 'button', dataset: { outlineSample: '' }, onClick: () => { input.value = OUTLINE_SAMPLE; update(); input.focus(); } }, '예시 넣어 보기');
+  input.addEventListener('input', update);
+  input.addEventListener('keydown', (e) => {
+    // Tab 으로 들여 쓰기(Shift+Tab 은 내어 쓰기). 개요는 들여 쓰기로 내용을 나누므로 칸 밖으로 나가지 않게 한다.
+    if (e.key !== 'Tab' || e.ctrlKey || e.metaKey || e.altKey) return;
+    e.preventDefault();
+    const { selectionStart: a, value } = input, startOfLine = value.lastIndexOf('\n', a - 1) + 1;
+    if (e.shiftKey) {
+      const cut2 = value.slice(startOfLine).match(/^ {1,2}/)?.[0].length || 0;
+      input.value = value.slice(0, startOfLine) + value.slice(startOfLine + cut2);
+      input.selectionStart = input.selectionEnd = Math.max(startOfLine, a - cut2);
+    } else {
+      input.value = value.slice(0, startOfLine) + '  ' + value.slice(startOfLine);
+      input.selectionStart = input.selectionEnd = a + 2;
+    }
+    update();
+  });
+  openModal(el('section', { class: 'cv-find-box cv-outline-box', 'aria-labelledby': 'cv-outline-title', onKeydown: escCloses },
+    el('h2', { id: 'cv-outline-title', text: '개요로 장 만들기' }),
+    el('p', { class: 'cv-down-note', text: '발표할 차례를 적으면 장마다 제목과 내용을 놓아 한꺼번에 만들어요. 다른 곳에 쓴 개요를 붙여 넣어도 돼요.' }),
+    input, el('div', { class: 'cv-find-opts' }, sample, el('span', { class: 'cv-down-note', text: 'Tab: 들여 쓰기 · Shift+Tab: 내어 쓰기' })),
+    result, list,
+    el('div', { class: 'cv-find-actions' }, el('button', { class: 'btn btn-ghost', type: 'button', onClick: closeModal }, '닫기'), make)), { onClose: () => O.editor.refresh() });
+  update();
+  requestAnimationFrame(() => input.focus());
 }
 // 리허설이 끝나면: 장마다 잰 시간을 보여 주고 저장할지 묻는다. 저장한 시간은 자동 넘기기와 영상 만들기에서 그 장의 머무는 시간이 된다.
 function offerRehearsal(O, list) {
