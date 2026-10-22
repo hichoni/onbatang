@@ -72,6 +72,20 @@ test('external image relationships block their affected page while safe pages re
  const linked=await inspectPptx(repack(links));assert.equal(linked.pages[0].canImport,true);assert.ok(linked.pages[0].warnings.some(warning=>warning.code==='EXTERNAL_LINK_OMITTED'));
 });
 
+test('Canva-style packages with Microsoft relationship kinds, repeated Ids and missing extras still import',async()=>{
+ const original=await baseBytes(),parts=unzipSync(original),slideRels='ppt/slides/_rels/slide1.xml.rels',rootRels='_rels/.rels';
+ const ms=(kind,id,target)=>`<Relationship Id="${id}" Type="http://schemas.microsoft.com/office/2007/relationships/${kind}" Target="${target}"/>`;
+ const rels=dec.decode(parts[slideRels]),firstId=rels.match(/Id="([^"]+)"/)[1];
+ parts[slideRels]=enc.encode(rels.replace('</Relationships>',ms('hdphoto','canvaPhoto','../media/missing.wdp')+`<Relationship Id="${firstId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.invalid/" TargetMode="External"/>`+'</Relationships>'));
+ parts[rootRels]=enc.encode(dec.decode(parts[rootRels]).replace('</Relationships>','<Relationship Id="canvaThumb" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail" Target="docProps/missing.jpeg"/>'+ms('../2011/relationships/webextensiontaskpanes','canvaExt','word/missing.xml').replace('2007/relationships/../2011/','2011/')+'</Relationships>'));
+ const inspection=await inspectPptx(repack(parts));assert.equal(inspection.pageCount,2);assert.ok(inspection.pages.every(page=>page.canImport));
+ assert.deepEqual(texts((await convertPptx(repack(parts))).document),texts((await convertPptx(fileOf(original))).document));
+ const media=unzipSync(original);media[slideRels]=enc.encode(dec.decode(media[slideRels]).replace('</Relationships>',ms('media','canvaVideo','../media/clip.mp4')+'</Relationships>'));media['ppt/media/clip.mp4']=new Uint8Array(8);
+ const withMedia=await inspectPptx(repack(media));assert.equal(withMedia.pages[0].canImport,false);assert.equal(withMedia.pages[1].canImport,true);
+ const broken=unzipSync(original);broken[slideRels]=enc.encode(dec.decode(broken[slideRels]).replace('</Relationships>','<Relationship Id="bad" Type="not a uri" Target="x.xml"/></Relationships>'));
+ await assert.rejects(inspectPptx(repack(broken)),{code:'INVALID_RELATIONSHIP'});
+});
+
 test('default OFL font plans apply to the whole PPT or original page numbers and undo from the intact baseline',async()=>{
  const converted=await convertPptx(fileOf(await baseBytes())),baseline=converted.document,before=structuredClone(baseline);
  const sources=Object.fromEntries(converted.report.fontUsage.map(usage=>[usage.elementId,usage.originalName]));
