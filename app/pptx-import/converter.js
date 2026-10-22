@@ -102,6 +102,15 @@ function resolveTarget(owner,target){
   for(const part of decoded.replace(/^\//,'').split('/')){if(part==='..'){if(!parts.length)fail('UNSAFE_RELATIONSHIP','자료 연결이 압축 밖을 가리켜요.');parts.pop();}else if(part&&part!=='.')parts.push(part);}
   const path=parts.join('/');if(!safePath(path))fail('UNSAFE_RELATIONSHIP','자료 연결 경로가 올바르지 않아요.');return path;
 }
+const REQUIRED_PARTS=new Set(['officeDocument','slide','slideLayout','slideMaster','theme']);
+const MS_RELS=/^https?:\/\/schemas\.microsoft\.com\/office\/[0-9a-z/._-]*relationships\/[A-Za-z0-9._/-]+$/;
+// Office relationship kinds keep their short name (slide, image…). Microsoft's own media kinds keep theirs so a video
+// page is still reported on its own page; any other well-formed kind becomes "x-…" and is ignored.
+function relationType(type){
+  for(const base of [NS.r,NS.rels])if(type.startsWith(base+'/')&&type.length>base.length+1)return type.slice(type.lastIndexOf('/')+1);
+  if(MS_RELS.test(type)){const name=type.slice(type.lastIndexOf('/')+1);return ['media','video','audio'].includes(name)?name:'x-'+name;}
+  return /^(https?:\/\/|urn:)[\x21-\x7e]+$/.test(type)?'x-'+type.slice(type.lastIndexOf('/')+1):'';
+}
 function relationships(files,xml){
   const result=new Map();
   for(const name of Object.keys(files).filter(n=>n.endsWith('.rels'))){
@@ -109,14 +118,22 @@ function relationships(files,xml){
     if(doc.documentElement.namespaceURI!==NS.rels||doc.documentElement.localName!=='Relationships')fail('INVALID_RELATIONSHIP','자료 연결 목록이 올바르지 않아요.');
     for(const node of children(doc.documentElement)){
       if(node.namespaceURI!==NS.rels||node.localName!=='Relationship')fail('INVALID_RELATIONSHIP','알 수 없는 자료 연결이에요.');
-      const id=attr(node,'Id'),type=attr(node,'Type');
-      if(!id||map.has(id)||!(type.startsWith(NS.r+'/')||type.startsWith(NS.rels+'/')))fail('INVALID_RELATIONSHIP','자료 연결 ID 또는 종류가 올바르지 않아요.');
+      const id=attr(node,'Id'),type=relationType(attr(node,'Type'));
+      // Canva, Google Slides and newer PowerPoint add their own relationship kinds (Microsoft HD photos, media,
+      // web extensions…) and sometimes repeat an Id. Those never block the package: unknown kinds are kept
+      // under an "x-" name nothing reads, a repeated Id keeps its first meaning.
+      if(!id||!type)fail('INVALID_RELATIONSHIP','자료 연결 ID 또는 종류가 올바르지 않아요.');
+      if(map.has(id))continue;
       // External targets are never resolved or fetched. Hyperlink actions can be omitted;
       // linked content is reported on its own page instead of rejecting the entire package.
-      if(attr(node,'TargetMode').toLowerCase()==='external'){map.set(id,{type:type.slice(type.lastIndexOf('/')+1),external:true});continue;}
+      if(attr(node,'TargetMode').toLowerCase()==='external'){map.set(id,{type,external:true});continue;}
       const target=resolveTarget(owner,attr(node,'Target'));
-      if(!Object.hasOwn(files,target))fail('MISSING_PART','연결된 파일이 PPTX 안에 없어요.',{part:target});
-      map.set(id,{type:type.slice(type.lastIndexOf('/')+1),target});
+      if(!Object.hasOwn(files,target)){
+        // A part the slides need must be there; a missing extra (thumbnail, properties, extension) is left out.
+        if(REQUIRED_PARTS.has(type))fail('MISSING_PART','연결된 파일이 PPTX 안에 없어요.',{part:target});
+        continue;
+      }
+      map.set(id,{type,target});
     }
     result.set(owner,map);
   }

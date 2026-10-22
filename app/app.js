@@ -667,14 +667,16 @@ function openDesign(record, isNew) {
     'aria-label': `${brand.name} 홈으로`, onClick: (e) => closeToHost(O, e.currentTarget),
   } : { class: 'cv-brand', title: brand.name }, el('img', { src: brand.logo, alt: brand.name })) : null;
   // 들여쓰기: 닫기(초안은 이 기기에 남는다) · 다 했어요(저장을 마친 뒤 부른 앱에 그림과 원본을 넘긴다).
+  // 단추 글은 부른 곳이 바꿀 수 있다(doneLabel · closeLabel, 받은함의 "선생님께 보내기" 등). close 를 주지 않으면 닫기 단추가 없다.
   const embedBar = embedMode ? (() => {
-    const done = el('button', { class: 'btn btn-primary cv-embed-done', type: 'button', dataset: { embedDone: '' }, title: '다 만든 그림을 보내요', onClick: async () => {
+    const doneText = embedMode.doneLabel || '다 했어요';
+    const done = el('button', { class: 'btn btn-primary cv-embed-done', type: 'button', dataset: { embedDone: '' }, title: embedMode.doneTitle || '다 만든 그림을 보내요', onClick: async () => {
       if (done.disabled) return;
       done.disabled = true; relabel(done, '보내는 중…');
       try { await embedMode.done(O.record.id); } catch (error) { toast(String(error?.message || '그림을 보내지 못했어요. 다시 눌러 주세요.').slice(0, 200), 4500); }
-      finally { if (done.isConnected) { done.disabled = false; relabel(done, '다 했어요'); } }
-    } }, ...face('check', '다 했어요'));
-    const close = el('button', { class: 'btn btn-ghost cv-embed-close', type: 'button', dataset: { embedClose: '' }, title: '보내지 않고 닫아요(꾸미던 것은 이 기기에 남아요)', onClick: () => embedMode.close(O.record.id) }, ...face('back', '닫기'));
+      finally { if (done.isConnected) { done.disabled = false; relabel(done, doneText); } }
+    } }, ...face('check', doneText));
+    const close = typeof embedMode.close === 'function' ? el('button', { class: 'btn btn-ghost cv-embed-close', type: 'button', dataset: { embedClose: '' }, title: embedMode.closeTitle || '보내지 않고 닫아요(꾸미던 것은 이 기기에 남아요)', onClick: () => embedMode.close(O.record.id) }, ...face('back', embedMode.closeLabel || '닫기')) : null;
     return { done, close };
   })() : null;
   const bar = el('header', { class: 'cv-bar' },
@@ -685,7 +687,7 @@ function openDesign(record, isNew) {
     name, O.status, ...(material ? [material] : []), ...(lesson?[lesson]:[]), ...(accountLibrary?[accountLibrary]:[]), el('span', { class: 'cv-bar-gap' }), shapes, el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' }), tourButton('editor', O), show, down);
   // 들여쓰기 막대는 보통 막대 뒤에 만든다(이름 칸 · 저장 상태는 한 곳에만 놓일 수 있다).
   const embedHeader = embedBar ? el('header', { class: 'cv-bar cv-embed-bar' },
-    el('span', { class: 'onba-editor-logo' }, onbatangLogo()), embedBar.close, el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' }),
+    el('span', { class: 'onba-editor-logo' }, onbatangLogo()), ...(embedBar.close ? [embedBar.close, el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' })] : []),
     name, O.status, el('span', { class: 'cv-bar-gap' }), tourButton('editor', O), embedBar.done) : null;
   const shell = editorShell(O, embedHeader || bar);
   // ? : 꾸미는 화면 단축키 표(글을 쓰는 칸에서는 그냥 글자다). 아무 데도 누르지 않은 때에도 듣도록 문서에 단다.
@@ -2790,7 +2792,7 @@ function readOpen() {
  * - lessonAction: {label, editorTitle?, accepts?(record), open({designId,slideIndex,inline})}; 저장 후 같은 편집 영역에서 호스트의 수업 구성/진행을 연다. 공용 기본값은 숨김.
  * - accountAction: {label,editorTitle?,open({from,designId?,inline})}; 첫 화면과 편집기 안의 계정 수업 목록. 기본값은 숨김이며 서버/로그인은 호스트가 담당한다.
  */
-export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, accountAction: accountLibrary = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false, resume = false, embed = null } = {}) {
+export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, accountAction: accountLibrary = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false, resume = false, embed = null, syncDelay = null } = {}) {
   if (app) throw new Error('minican already started');
   if (!root) throw new Error('minican root');
   app = root;
@@ -2805,11 +2807,14 @@ export function startMinican({ root = document.getElementById('app'), fonts = []
   if(navigation&&typeof navigation.load==='function')materialNavigation=navigation;
   activityAuthoring=authoring===true;
   resumeOpen=resume===true;
-  if (embed && typeof embed.done === 'function' && typeof embed.close === 'function') embedMode = embed;
+  if (embed && typeof embed.done === 'function' && (embed.close == null || typeof embed.close === 'function')) {
+    const label = (v) => (typeof v === 'string' && v.trim() ? Array.from(v.trim()).slice(0, 16).join('') : '');
+    embedMode = { ...embed, doneLabel: label(embed.doneLabel), closeLabel: label(embed.closeLabel) };
+  }
   if(maker&&typeof maker.connect==='function'&&typeof maker.generate==='function')appMaker=maker;
   if (account && ['pull', 'push', 'drop'].every((k) => typeof account[k] === 'function')) {
     sync = account;
-    pusher = createPusher(sync, { onDone: pushed });
+    pusher = createPusher(sync, { onDone: pushed, ...(Number.isFinite(syncDelay) && syncDelay >= 500 ? { delay: Math.min(60000, syncDelay) } : {}) });
   }
   setStorageName(storage);
   colorPalettes=createLocalPalettes(storage);
