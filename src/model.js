@@ -18,7 +18,7 @@ import { metadata, newId, fail, validatePageInput, isSlideItem, itemTextLimit, p
 export { cleanAlt, ALT_LIMIT };
 import { cleanActivity } from './activity.js';
 import { cleanCrop } from './crop.js';
-import { LINK_HEADS, LINK_LINE, LINK_SIDES, LINK_BEND, LINK_SHAPES, LINK_LABEL_MAX, LINK_LABEL_AT, CURVE_BEND, layoutLinks } from './links.js';
+import { LINK_HEADS, LINK_LINE, LINK_SIDES, LINK_BEND, LINK_SHAPES, LINK_LABEL_MAX, LINK_LABEL_AT, LINK_LABEL_SIZES, LINK_LABEL_STYLES, LINK_POS, CURVE_BEND, layoutLinks } from './links.js';
 
 export { SHAPE_GROUPS };
 
@@ -344,6 +344,10 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
       // 선 위의 글: 한 줄(줄바꿈 · 겹친 띄어쓰기는 한 칸으로), LINK_LABEL_MAX 자까지
       ...(typeof it.label === 'string' && it.label.trim() ? { label: Array.from(it.label.replace(/\s+/g, ' ').trim()).slice(0, LINK_LABEL_MAX).join('') } : {}),
       ...(typeof it.label === 'string' && it.label.trim() && Number.isFinite(it.labelAt) && num(it.labelAt, LINK_LABEL_AT.min, LINK_LABEL_AT.max, 0.5, 1000) !== 0.5 ? { labelAt: num(it.labelAt, LINK_LABEL_AT.min, LINK_LABEL_AT.max, 0.5, 1000) } : {}),
+      // 선 위 글의 크기 · 모양 · 글꼴(글이 있을 때만, 처음 값이면 적지 않는다)
+      ...(typeof it.label === 'string' && it.label.trim() && Object.hasOwn(LINK_LABEL_SIZES, it.labelSize) ? { labelSize: it.labelSize } : {}),
+      ...(typeof it.label === 'string' && it.label.trim() && LINK_LABEL_STYLES.includes(it.labelStyle) ? { labelStyle: it.labelStyle } : {}),
+      ...(typeof it.label === 'string' && it.label.trim() && typeof it.labelFont === 'string' && cleanFont(it.labelFont) === it.labelFont && it.labelFont !== DEFAULT_FONT ? { labelFont: it.labelFont } : {}),
       // 곡선과 꺾인 선은 둘 중 하나(둘 다 적혀 있으면 꺾인 선)
       ...((it.elbow === 1 || it.elbow === -1) ? { elbow: it.elbow } : it.curve === 1 || it.curve === -1 ? { curve: it.curve } : {}),
       // 피해 가기: 꺾인 선만(다른 조각을 뚫지 않는 길을 스스로 찾는다)
@@ -351,6 +355,9 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
       // 붙는 곳(없으면 알아서). 꾸밈이 아니라 잇는 자리라 스타일 복사에는 넣지 않는다.
       ...(LINK_SIDES.includes(it.fromSide) ? { fromSide: it.fromSide } : {}),
       ...(LINK_SIDES.includes(it.toSide) ? { toSide: it.toSide } : {}),
+      // 고른 옆 위의 자리(가운데면 적지 않는다)
+      ...(LINK_SIDES.includes(it.fromSide) && Number.isFinite(it.fromPos) && num(it.fromPos, LINK_POS.min, LINK_POS.max, 0.5, 100) !== 0.5 ? { fromPos: num(it.fromPos, LINK_POS.min, LINK_POS.max, 0.5, 100) } : {}),
+      ...(LINK_SIDES.includes(it.toSide) && Number.isFinite(it.toPos) && num(it.toPos, LINK_POS.min, LINK_POS.max, 0.5, 100) !== 0.5 ? { toPos: num(it.toPos, LINK_POS.min, LINK_POS.max, 0.5, 100) } : {}),
     };
     // 손잡이로 고친 곡선의 깊이 · 꺾이는 자리(그 모양일 때만, 처음 값이면 적지 않는다)
     if (out.curve && Number.isFinite(it.bend)) { const b = num(it.bend, LINK_BEND.min, LINK_BEND.max, CURVE_BEND, 1000); if (b !== CURVE_BEND) out.bend = b; }
@@ -832,7 +839,7 @@ const STYLE_KEYS = {
   emoji: ['op'],
   image: ['mask', 'op'],
   yt: ['op'],
-  link: ['color', 'line', 'head', 'startShape', 'endShape', 'dash', 'curve', 'elbow', 'avoid', 'op'],
+  link: ['color', 'line', 'head', 'startShape', 'endShape', 'dash', 'curve', 'elbow', 'avoid', 'labelSize', 'labelStyle', 'labelFont', 'op'],
 };
 /** 요소의 꾸밈 값 { t, values } (스타일을 옮길 수 없는 것이면 null). */
 export function styleOf(item) {

@@ -482,3 +482,62 @@ test('the label of a selected connector can be dragged along the line and put ba
   await saved(page, r => link(r)?.label === '예' && !('labelAt' in link(r)));
   assert.deepEqual(external, []);
 });
+
+test('a connector label can be bigger or smaller, filled or plain, in another font; an end can sit at the left or right of its side', options, async t => {
+  const {page, external} = await setup(t);
+  const shapes = page.locator('.cv-canvas .fe-card .fi-shape');
+  await shapes.nth(0).click();
+  await shapes.nth(1).click({modifiers: ['Shift']});
+  await page.locator('.fe-bar button').filter({hasText: '연결선'}).click();
+  await page.locator('.cv-canvas .fe-card .fi-link').waitFor();
+  const [p1, p2] = await ends(page);
+  await page.mouse.click((p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2);
+  const link = r => r.slides[0].items.find(it => it.t === 'link');
+  await page.locator('.fe-bar button').filter({hasText: '선 위 글'}).click();
+  const input = page.locator('.fe-link-label-input');
+  await input.fill('예');
+  await input.press('Enter');
+  await saved(page, r => link(r)?.label === '예');
+  const open = async () => { if (!await page.locator('[data-label-size="large"]').isVisible()) await page.locator('.fe-bar button').filter({hasText: '선 위 글'}).click(); };
+  const label = page.locator('.cv-canvas .fe-card .fi-link .fi-link-label');
+  const h0 = (await label.boundingBox()).height;
+  await open();
+  await page.locator('[data-label-size="large"]').click();
+  await saved(page, r => link(r)?.labelSize === 'large');
+  assert.ok((await label.boundingBox()).height > h0 * 1.2, 'bigger label');
+  await open();
+  await page.locator('[data-label-style="fill"]').click();
+  await saved(page, r => link(r)?.labelStyle === 'fill');
+  assert.equal(await label.getAttribute('fill'), '#fff');
+  await open();
+  const select = page.locator('.fe-label-font-select');
+  const fontIds = await select.locator('option').evaluateAll(os => os.map(o => o.value));
+  if (fontIds.length > 1) {
+    await select.selectOption(fontIds[1]);
+    await saved(page, r => link(r)?.labelFont === fontIds[1]);
+    assert.match(await page.locator('.cv-canvas .fe-card .fi-link').first().evaluate(n => n.style.fontFamily), /\S/);
+  }
+  await open();
+  await page.locator('[data-label-size="normal"]').click();
+  await saved(page, r => !('labelSize' in link(r)));
+  // An end on a chosen side, then at the left of that side.
+  await page.keyboard.press('Escape');
+  const [q1, q2] = await ends(page);
+  await page.mouse.click((q1[0] + q2[0]) / 2, (q1[1] + q2[1]) / 2);
+  await page.locator('.fe-bar button').filter({hasText: '화살표'}).click();
+  assert.equal(await page.locator('[data-from-pos]').count(), 0, 'no spot row before a side');
+  await page.locator('[data-from-side="bottom"]').click();
+  await page.locator('[data-from-pos="0.25"]').click();
+  await saved(page, r => link(r)?.fromSide === 'bottom' && link(r).fromPos === .25);
+  const s = await page.evaluate(async () => {
+    const {cleanDesign} = await import('/src/index.js');
+    const {linkEnds} = await import('/src/links.js');
+    const slide = cleanDesign((await window.readSaved()).slides[0], {keepSpaces: true});
+    const a = slide.items.find(it => it.t === 'shape'), l = slide.items.find(it => it.t === 'link');
+    return {a, start: linkEnds(l, 16 / 9)[0]};
+  });
+  assert.ok(Math.abs(s.start[0] - (s.a.x - s.a.w / 4)) < .01, `left quarter of the bottom ${JSON.stringify(s)}`);
+  await page.locator('[data-from-pos="mid"]').click();
+  await saved(page, r => link(r)?.fromSide === 'bottom' && !('fromPos' in link(r)));
+  assert.deepEqual(external, []);
+});

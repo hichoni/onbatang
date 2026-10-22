@@ -74,7 +74,12 @@ function nativeLinkLabel(item, id, size) {
   const [cx, cy] = linkLabelAt(item, settings().aspect).map((v, k) => v * (k ? size.height : size.width) / 100);
   const emu = linkLabelSize(item) / 100 * size.width, pt = emu / 12700;
   const w = Math.round(Array.from(item.label).length * emu * 1.05 + emu), h = Math.round(emu * 1.7);
-  return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${xml(`${item.id || '연결선'} 글`)}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${Math.round(cx - w / 2)}" y="${Math.round(cy - h / 2)}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>${solid('#ffffff', 100)}<a:ln><a:noFill/></a:ln></p:spPr><p:txBody><a:bodyPr wrap="none" lIns="0" rIns="0" tIns="0" bIns="0" anchor="ctr"><a:noAutofit/></a:bodyPr><a:lstStyle/><a:p><a:pPr algn="ctr"/><a:r><a:rPr lang="ko-KR" sz="${Math.max(100, Math.round(pt * 100))}" b="1" dirty="0">${solid(item.color, item.op)}</a:rPr><a:t>${xml(item.label)}</a:t></a:r></a:p></p:txBody></p:sp>`;
+  // 모양: 흰 바탕(처음) · 선 색 바탕에 흰 글('fill') · 바탕 없이('none'). 글꼴은 글상자와 같은 규칙으로 이름을 적는다.
+  const fill = item.labelStyle === 'none' ? '<a:noFill/>' : item.labelStyle === 'fill' ? solid(item.color, item.op) : solid('#ffffff', 100);
+  const ink = item.labelStyle === 'fill' ? solid('#ffffff', item.op) : solid(item.color, item.op);
+  const family = item.labelFont ? typeface({ font: item.labelFont }, () => {}) : '';
+  const face = family ? `<a:latin typeface="${xml(family)}"/><a:ea typeface="${xml(family)}"/><a:cs typeface="${xml(family)}"/>` : '';
+  return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${xml(`${item.id || '연결선'} 글`)}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${Math.round(cx - w / 2)}" y="${Math.round(cy - h / 2)}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm><a:prstGeom prst="${item.labelStyle === 'none' ? 'rect' : 'roundRect'}"><a:avLst/></a:prstGeom>${fill}<a:ln><a:noFill/></a:ln></p:spPr><p:txBody><a:bodyPr wrap="none" lIns="0" rIns="0" tIns="0" bIns="0" anchor="ctr"><a:noAutofit/></a:bodyPr><a:lstStyle/><a:p><a:pPr algn="ctr"/><a:r><a:rPr lang="ko-KR" sz="${Math.max(100, Math.round(pt * 100))}" b="1" dirty="0">${ink}${face}</a:rPr><a:t>${xml(item.label)}</a:t></a:r></a:p></p:txBody></p:sp>`;
 }
 function nativeLink(item, id, size) {
   const toEmu = ([x, y]) => [x * size.width / 100, y * size.height / 100];

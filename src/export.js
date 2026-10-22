@@ -42,7 +42,7 @@ function fontData(url) {
 }
 // 디자인이 쓰는 글꼴의 @font-face 들(파일이 있는 글꼴만). 못 받은 글꼴은 기본 글꼴로 나오고, 그 이름을 missing 에 적는다.
 async function fontRules(design) {
-  const used = new Set(design.items.filter((it) => it.t === 'text').map((it) => it.font));
+  const used = new Set(design.items.flatMap((it) => (it.t === 'text' ? [it.font] : it.t === 'link' && it.label && it.labelFont ? [it.labelFont] : [])));
   const missing = [];
   const rules = await Promise.all(fontList().filter((f) => used.has(f.id) && f.url).map(async (f) => {
     const data = await fontData(new URL(f.url, document.baseURI).href);
