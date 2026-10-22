@@ -395,6 +395,9 @@
 .fe-dash-chip { display: inline-flex; align-items: center; gap: 6px; padding-left: 10px; padding-right: 12px; }
 .fe-dash-chip .fe-link-sample { width: 30px; height: 10px; }
 .fe-row.fe-side-row { flex-wrap: nowrap; gap: 4px; }
+.fe-pos-row > .fe-chip { flex: none; min-height: 30px; padding: 2px 10px; font-size: .8rem; }
+.fe-label-font { gap: 8px; }
+.fe-label-font-select { flex: 1; min-width: 0; min-height: 34px; border: 1px solid var(--fe-line, #dde5e1); border-radius: 10px; padding: 4px 8px; font: inherit; background: #fff; }
 .fe-side-row > .fe-chip { flex: none; white-space: nowrap; padding-left: 10px; padding-right: 10px; }
 .fe-side-row > .fe-chip.fe-side-chip { width: 32px; min-width: 0; padding: 0; justify-content: center; font-size: 1rem; line-height: 1; }
 /* 움직임(발표할 때)을 고르는 단추: 작은 카드에서 그 효과를 틀어 보여 준다(올려놓거나 글쇠로 닿으면) */

@@ -31,6 +31,9 @@ export function itemView(item) {
   } else if (item.t === 'link') {
     // 연결선: 두 조각 사이의 선(links.js 가 계산한 자리). 선 둘레만 눌린다(빈 네모는 밑의 조각을 가리지 않는다).
     node = el('div', { class: `fi fi-link${item.dash ? ' dash' : ''}`, html: linkSvg(item) });
+    // 선 위 글의 글꼴: SVG 글자가 이 요소의 글꼴을 물려받는다.
+    const family = item.label && item.labelFont ? fontFamilyOf(item.labelFont) : '';
+    if (family) node.style.fontFamily = `"${family}", var(--fe-font, sans-serif)`;
   } else if (item.t === 'emoji') {
     node = el('div', { class: 'fi fi-emoji', text: item.ch });
   } else if (item.t === 'shape') {

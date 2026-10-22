@@ -4,7 +4,8 @@
 // 요소에 적는 값: t 'link' · from · to(잇는 두 조각의 이름표) · head('end' 끝에 화살표 · 'both' 양쪽 · 'none' 없음) ·
 //                 color · line(굵기, 카드 너비의 %) · dash(true 긴 점선 · 'dot' 동글 점 · 'dashdot' 긴 점과 점) · head('start' 처음에만도 된다) ·
 //                 startShape · endShape(머리 모양: LINK_SHAPES, 없으면 뾰족 화살표) · label(선 위의 짧은 글, LINK_LABEL_MAX 자까지) ·
-//                 labelAt(그 글이 길을 따라 놓이는 곳 0.05~0.95, 없으면 한가운데) · avoid(꺾인 선이 다른 조각을 피해 간다) · curve(곡선: 1 은 가는 쪽에서 보아 왼쪽으로, -1 은 오른쪽으로 휜다. 없으면 직선) ·
+//                 labelAt(그 글이 길을 따라 놓이는 곳 0.05~0.95, 없으면 한가운데) · labelSize · labelStyle · labelFont(그 글의 크기 · 모양 · 글꼴) ·
+//                 avoid(꺾인 선이 다른 조각을 피해 간다) · fromPos · toPos(고른 옆 위의 자리 0.1~0.9, 없으면 가운데) · curve(곡선: 1 은 가는 쪽에서 보아 왼쪽으로, -1 은 오른쪽으로 휜다. 없으면 직선) ·
 //                 elbow(꺾인 선: 1 은 가로 → 세로 → 가로, -1 은 세로 → 가로 → 세로로 직각으로 꺾어 잇는다. curve 와 함께 쓰지 않는다) ·
 //                 fromSide · toSide(선이 붙는 곳: 'top' · 'right' · 'bottom' · 'left' 면 그 조각의 그 옆 가운데에 붙는다. 없으면 알아서) ·
 //                 bend(곡선이 휘는 깊이: 두 끝 사이 거리에 대한 비율 0.05~0.9, 없으면 CURVE_BEND) ·
@@ -22,7 +23,10 @@ export const LINK_SHAPES = ['arrow', 'open', 'dot', 'ring', 'diamond', 'bar'];
 export const LINK_DASHES = [true, 'dot', 'dashdot'];
 /** 선 위의 글: 가장 긴 글자 수, 글자 크기(카드 너비의 %) */
 export const LINK_LABEL_MAX = 30;
-export const linkLabelSize = (link) => r3(Math.max(2.4, Math.min(4, 2.2 + (Number(link?.line) || 0) * 0.8)));
+/** 선 위 글의 크기(labelSize: 'small' · 'large', 없으면 보통)와 모양(labelStyle: 'fill' 선 색 바탕에 흰 글 · 'none' 바탕 없이, 없으면 흰 바탕) */
+export const LINK_LABEL_SIZES = Object.freeze({ small: 0.8, large: 1.35 });
+export const LINK_LABEL_STYLES = ['fill', 'none'];
+export const linkLabelSize = (link) => r3(Math.max(2.4, Math.min(4, 2.2 + (Number(link?.line) || 0) * 0.8)) * (LINK_LABEL_SIZES[link?.labelSize] || 1));
 const xmlText = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 // 그려진 길을 꺾은선으로(선 상자 안의 좌표): 곧은 선은 두 끝, 꺾인 선은 꺾이는 점까지, 곡선은 32 마디로 나눠서.
 function routeOf(p) {
@@ -72,7 +76,16 @@ const NORMAL = { top: [0, -1], right: [1, 0], bottom: [0, 1], left: [-1, 0] };
 const axisOf = (side) => (side === 'left' || side === 'right' ? 0 : 1);
 const halfOf = (box, axis) => (axis === 0 ? box.hw : box.hh);
 // 조각의 그 옆 가운데에서 바깥으로 gap 만큼 떨어진 점
-const sidePoint = (box, side, gap) => [box.cx + NORMAL[side][0] * (box.hw + gap), box.cy + NORMAL[side][1] * (box.hh + gap)];
+// box.at: { 옆: 자리 } 이면 그 옆의 가운데 대신 그 자리(0 처음 ~ 1 끝: 위 · 아래 옆은 왼쪽에서, 왼쪽 · 오른쪽 옆은 위에서 잰다)에 붙는다.
+const sidePoint = (box, side, gap) => {
+  const along = ((box.at?.[side] ?? 0.5) - 0.5) * 2;
+  return axisOf(side) === 1
+    ? [box.cx + along * box.hw, box.cy + NORMAL[side][1] * (box.hh + gap)]
+    : [box.cx + NORMAL[side][0] * (box.hw + gap), box.cy + along * box.hh];
+};
+/** 한 옆 위의 자리(fromPos · toPos)로 고를 수 있는 범위 */
+export const LINK_POS = Object.freeze({ min: 0.1, max: 0.9 });
+const posOf = (v) => (Number.isFinite(v) ? Math.min(LINK_POS.max, Math.max(LINK_POS.min, v)) : null);
 export const LINK_LINE = Object.freeze({ min: 0.2, max: 3, base: 0.5, step: 0.1 });
 const GAP = 0.8;               // 조각의 테두리에서 선 끝까지 띄우는 거리
 const r3 = (v) => Math.round(v * 1000) / 1000;
@@ -226,10 +239,13 @@ function avoidingElbow(A, B, line, elbow, fromSide, toSide, turn, obstacles) {
   }
   return best;
 }
-export function linkGeometry(a, b, { line = LINK_LINE.base, aspect = 1, curve = 0, elbow = 0, fromSide, toSide, bend, turn, obstacles = null } = {}) {
+export function linkGeometry(a, b, { line = LINK_LINE.base, aspect = 1, curve = 0, elbow = 0, fromSide, toSide, fromPos, toPos, bend, turn, obstacles = null } = {}) {
   const A = boxOfItem(a, aspect), B = boxOfItem(b, aspect);
   fromSide = LINK_SIDES.includes(fromSide) ? fromSide : null;
   toSide = LINK_SIDES.includes(toSide) ? toSide : null;
+  // 고른 옆 위의 자리(없으면 가운데)
+  if (fromSide && posOf(fromPos) != null) A.at = { [fromSide]: posOf(fromPos) };
+  if (toSide && posOf(toPos) != null) B.at = { [toSide]: posOf(toPos) };
   if (elbow) {
     const t = turnOf(turn);
     const { p1, p2, m1, m2 } = obstacles ? avoidingElbow(A, B, line, elbow, fromSide, toSide, t, obstacles)
@@ -325,7 +341,7 @@ export function linkControl(link, aspect = 1) {
   return [link.x - link.w / 2 + link.pts[4], (link.y / aspect - link.vh / 2 + link.pts[5]) * aspect];
 }
 
-const linkOptions = (it, aspect) => ({ line: it.line, aspect, curve: it.curve, elbow: it.elbow, fromSide: it.fromSide, toSide: it.toSide, bend: it.bend, turn: it.turn });
+const linkOptions = (it, aspect) => ({ line: it.line, aspect, curve: it.curve, elbow: it.elbow, fromSide: it.fromSide, toSide: it.toSide, fromPos: it.fromPos, toPos: it.toPos, bend: it.bend, turn: it.turn });
 // 선의 상자 안 좌표 → 카드 위의 자리(x 는 카드 너비의 %, y 는 카드 높이의 %)
 const onCard = (link, aspect, x, y) => [link.x - link.w / 2 + x, (link.y / aspect - link.vh / 2 + y) * aspect];
 
@@ -467,8 +483,11 @@ export function linkSvg(link) {
     // 글 뒤에 흰 알약을 깔아 선이 글 사이(띄어쓰기)로 비치지 않게 한다. 폭은 글자 수로 어림한다(한글 · 한자는 한 자, 그 밖은 0.6 자).
     const wide = Array.from(link.label).reduce((n, ch) => n + (/[\u1100-\u11ff\u3000-\u9fff\uac00-\ud7af\uf900-\ufaff\uff00-\uffef]/.test(ch) ? 1 : 0.6), 0) * size;
     const pw = wide + size * 0.9, ph = size * 1.5;
-    label = `<rect class="fi-link-label-bg" x="${r3(lx - pw / 2)}" y="${r3(ly - ph / 2)}" width="${r3(pw)}" height="${r3(ph)}" rx="${r3(ph / 2)}" fill="#fff" fill-opacity="0.94"/>`
-      + `<text class="fi-link-label" x="${r3(lx)}" y="${r3(ly)}" font-size="${size}" font-weight="700" text-anchor="middle" dominant-baseline="central" fill="${link.color}">${xmlText(link.label)}</text>`;
+    const style = link.labelStyle;
+    const bg = style === 'none' ? '' : `<rect class="fi-link-label-bg" x="${r3(lx - pw / 2)}" y="${r3(ly - ph / 2)}" width="${r3(pw)}" height="${r3(ph)}" rx="${r3(ph / 2)}" fill="${style === 'fill' ? link.color : '#fff'}"${style === 'fill' ? '' : ' fill-opacity="0.94"'}/>`;
+    // 바탕이 없으면 글자 둘레에 흰 테를 둘러 선 위에서도 읽히게 한다.
+    const halo = style === 'none' ? ` stroke="#fff" stroke-width="${r3(size * 0.32)}" stroke-linejoin="round" paint-order="stroke"` : '';
+    label = bg + `<text class="fi-link-label" x="${r3(lx)}" y="${r3(ly)}" font-size="${size}" font-weight="700" text-anchor="middle" dominant-baseline="central" fill="${style === 'fill' ? '#fff' : link.color}"${halo}>${xmlText(link.label)}</text>`;
   }
   return `<svg viewBox="0 0 ${link.w} ${link.vh}" preserveAspectRatio="none" aria-hidden="true">${body}`
     + `${end ? head(endShape, x2, y2, ex, ey) : ''}${start ? head(startShape, x1, y1, sx, sy) : ''}${label}</svg>`;

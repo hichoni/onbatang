@@ -387,3 +387,35 @@ test('an elbow that avoids other pieces goes around them, keeps chosen sides, an
   assert.equal(Object.hasOwn(clean({avoid: true, elbow: undefined, curve: 1}), 'avoid'), false);
   assert.equal(styleOf(clean({avoid: true})).values.avoid, true);
 });
+
+test('label size, look and font; ends at a chosen spot along a side; all saved, drawn and exported', async () => {
+  const {linkLabelSize} = await import('../src/links.js');
+  const a = box('nboxaaaaa1', 20, 30), b = box('nboxaaaaa2', 80, 70);
+  // A spot along the side: a quarter from the left on the bottom, near the top on the right side.
+  const [[x1, y1]] = linkEnds(linkGeometry(a, b, {aspect: 1, fromSide: 'bottom', fromPos: .25}), 1);
+  assert.ok(Math.abs(x1 - 15) < .01 && y1 > 40, `${x1},${y1}`);
+  const [, [x2, y2]] = linkEnds(linkGeometry(a, b, {aspect: 1, elbow: 1, toSide: 'left', toPos: .2}), 1);
+  assert.ok(Math.abs(y2 - 64) < .01 && x2 < 70, `${x2},${y2}`);
+  assert.deepEqual(linkGeometry(a, b, {aspect: 1, fromPos: .25}), linkGeometry(a, b, {aspect: 1}), 'no side: no spot');
+  // Size, look.
+  const g = linkGeometry(a, b, {aspect: 1}), base = {...g, color: '#e03131', line: .5, head: 'end', label: '예'};
+  assert.ok(linkLabelSize({...base, labelSize: 'large'}) > linkLabelSize(base) && linkLabelSize({...base, labelSize: 'small'}) < linkLabelSize(base));
+  assert.match(linkSvg({...base, labelStyle: 'fill'}), /<rect class="fi-link-label-bg"[^>]*fill="#e03131"\/><text class="fi-link-label"[^>]*fill="#fff">/);
+  const plain = linkSvg({...base, labelStyle: 'none'});
+  assert.doesNotMatch(plain, /fi-link-label-bg/);
+  assert.match(plain, /<text class="fi-link-label"[^>]*fill="#e03131" stroke="#fff"[^>]*paint-order="stroke">/);
+  // Saved only where they mean something.
+  configure({aspect: 1, fonts: [{id: 'round', name: '동글', url: 'fonts/round.woff2'}]});
+  const keep = (patch) => cleanDesign({id: 'ppage00001', bg: '#fff', items: [a, b, link({from: 'nboxaaaaa1', to: 'nboxaaaaa2', ...patch})]}).items.find(it => it.t === 'link');
+  const k = keep({label: '예', labelSize: 'large', labelStyle: 'fill', labelFont: 'round', fromSide: 'bottom', fromPos: .25, toSide: 'top', toPos: .5});
+  assert.deepEqual([k.labelSize, k.labelStyle, k.labelFont, k.fromPos, Object.hasOwn(k, 'toPos')], ['large', 'fill', 'round', .25, false]);
+  const none = keep({labelSize: 'huge', labelStyle: 'rainbow', labelFont: 'nofont', fromPos: .3});
+  for (const key of ['labelSize', 'labelStyle', 'labelFont', 'fromPos']) assert.equal(Object.hasOwn(none, key), false, key);
+  assert.equal(Object.hasOwn(keep({labelSize: 'large'}), 'labelSize'), false, 'no label, no label look');
+  assert.deepEqual(Object.keys(styleOf(k).values).filter(key => key.startsWith('label')).sort(), ['labelFont', 'labelSize', 'labelStyle']);
+  // PPTX: coloured rounded box with white bold text in the chosen font's name.
+  const slide = cleanDesign({id: 'ppage00001', bg: '#fff', items: [a, b, link({from: 'nboxaaaaa1', to: 'nboxaaaaa2', color: '#e03131', label: '예', labelStyle: 'fill', labelFont: 'round'})]});
+  const xml = new TextDecoder().decode(unzipSync((await createPptx({slides: [slide], size: {width: 9144000, height: 9144000, unit: 'emu'}})).bytes)['ppt/slides/slide1.xml']);
+  assert.match(xml, /name="elink00001 글".*?<a:prstGeom prst="roundRect">.*?<a:srgbClr val="E03131">.*?<a:rPr [^>]*b="1"[^>]*><a:solidFill><a:srgbClr val="FFFFFF"><\/a:srgbClr><\/a:solidFill><a:latin typeface="동글"\/>/i);
+  configure({fonts: []});
+});

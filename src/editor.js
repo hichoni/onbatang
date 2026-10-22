@@ -5,7 +5,7 @@
 import { el, toast } from './dom.js';
 import { newId, cleanNotes, NOTES_LIMIT, cleanTopic } from './document.js';
 import {
-  COLORS, SHAPES, SHAPE_GROUPS, MASKS, OPACITY, TEXT_PRESETS, settings, configure, reshapeItems, backgroundOf, fontList, fontFamilyOf, layoutList, textLimit, clip,
+  COLORS, SHAPES, SHAPE_GROUPS, MASKS, OPACITY, TEXT_PRESETS, settings, configure, reshapeItems, backgroundOf, fontList, fontFamilyOf, layoutList, textLimit, clip, DEFAULT_FONT,
   cleanBg, cleanItems, cleanDesign, emptyDesign, cleanItem, cleanImg, moveLayer, newPresetText, newEmoji, newShape, newArt, newYouTube, newPhoto, moveItem, rotateItem,
   designMotion, reorder, duplicateItem, pasteItem, itemLabel, sizeOf, resizeTo, sizeRange, alignItem, coverItem, layoutItems, EDGE, canEdge, canRound, cornerOf, THICK, isLine, thickOf, thicken,
   designVideo, cleanVideo, trimVideo, videoSeconds, videoTime, VIDEO_FITS, MIN_VIDEO, rebaseItems, alignBoxes, distributeBoxes, clampShift, scaleItems, regroup, newGroupId,
@@ -2598,7 +2598,7 @@ export function createEditor({
         it.curve || it.elbow ? el('p', { class: 'fe-note', text: it.curve ? '선 가운데의 동그란 손잡이를 끌면 휘는 정도와 쪽이 바뀌어요.' : it.avoid ? '"피해 가기"를 켜면 다른 조각을 뚫지 않는 길을 스스로 찾아요. 조각을 옮기면 길도 다시 찾아요.' : '가운데 마디의 동그란 손잡이를 끌면 꺾이는 자리가 옮겨 가요.' }) : null,
         // 붙는 곳: 시작 조각 · 끝 조각마다 그 옆 가운데에 붙인다(자동이면 서로를 향하는 쪽).
         el('div', { class: 'fe-poshead', text: '붙는 곳' }),
-        ...[['fromSide', '시작'], ['toSide', '끝']].map(([key, label]) => el('div', { class: 'fe-row fe-side-row', role: 'group', 'aria-label': `${label} 붙는 곳` },
+        ...[['fromSide', '시작'], ['toSide', '끝']].flatMap(([key, label]) => [el('div', { class: 'fe-row fe-side-row', role: 'group', 'aria-label': `${label} 붙는 곳` },
           el('span', { class: 'fe-side-lbl', text: label }),
           // 좁은 칸에서도 한 줄에 들어가게 방향은 화살표로 보이고, 이름은 읽어 주는 글 · 풍선 도움말로 둔다.
           ...[['auto', '자동', '자동'], ['top', '↑', '위'], ['right', '→', '오른쪽'], ['bottom', '↓', '아래'], ['left', '←', '왼쪽']].map(([side, face, name]) => {
@@ -2606,7 +2606,16 @@ export function createEditor({
             b.title = `${label}: ${name}`; b.setAttribute('aria-label', `${label} ${name}`);
             if (side !== 'auto') b.classList.add('fe-side-chip');
             return b;
-          }))),
+          })),
+          // 옆을 골랐으면 그 옆의 어디에 붙을지(앞 · 가운데 · 뒤): 한 조각의 같은 옆에서 선 여럿이 나갈 때 겹치지 않게.
+          it[key] ? (() => {
+            const posKey = key === 'fromSide' ? 'fromPos' : 'toPos', across = it[key] === 'top' || it[key] === 'bottom';
+            return el('div', { class: 'fe-row fe-side-row fe-pos-row', role: 'group', 'aria-label': `${label} 옆 위의 자리` }, el('span', { class: 'fe-side-lbl', text: '' }),
+              ...[[0.25, across ? '왼쪽' : '위'], [undefined, '가운데'], [0.75, across ? '오른쪽' : '아래']].map(([pos, name]) => {
+                const on = (it[posKey] ?? undefined) === pos;
+                return el('button', { class: `fe-chip${on ? ' on' : ''}`, type: 'button', 'aria-pressed': String(on), dataset: { [posKey]: pos ?? 'mid' }, title: `${label}: 옆의 ${name}`, onClick: () => change({ [posKey]: pos }) }, name);
+              }));
+          })() : null]),
         el('div', { class: 'fe-poshead', text: '선 모양' }),
         el('div', { class: 'fe-row' },
           ...[[undefined, '실선', 'off'], [true, '긴 점선', 'on'], ['dot', '동글 점', 'dot'], ['dashdot', '점과 선', 'dashdot']].map(([dash, name, data]) => {
@@ -2615,7 +2624,7 @@ export function createEditor({
               sample({ head: 'none', dash, line: 1.1 }, { w: 34 }), el('span', { text: name }));
           })),
         el('div', { class: 'fe-row' },
-          el('button', { class: 'fe-chip', type: 'button', dataset: { flipLink: '1' }, onClick: () => change({ from: it.to, to: it.from, fromSide: it.toSide, toSide: it.fromSide }) }, '방향 바꾸기')),
+          el('button', { class: 'fe-chip', type: 'button', dataset: { flipLink: '1' }, onClick: () => change({ from: it.to, to: it.from, fromSide: it.toSide, toSide: it.fromSide, fromPos: it.toPos, toPos: it.fromPos }) }, '방향 바꾸기')),
         el('p', { class: 'fe-note', text: '두 조각 중 하나를 옮기거나 키우면 선이 따라와요. 조각을 지우면 선도 함께 없어져요.' }),
       ];
     } else if (pop === 'thick' && isLine(it)) {
@@ -2696,6 +2705,21 @@ export function createEditor({
         el('div', { class: 'fe-row' }, ...['예', '아니오', '다음', '원인', '결과'].map(quick),
           it.label ? el('button', { class: 'fe-chip', type: 'button', dataset: { linkLabelClear: '1' }, onClick: () => change({ label: undefined }) }, '글 떼기') : null),
         Number.isFinite(it.labelAt) ? el('div', { class: 'fe-row' }, el('button', { class: 'fe-chip', type: 'button', dataset: { linkLabelCenter: '1' }, onClick: () => change({ labelAt: undefined }) }, '가운데로')) : null,
+        // 글의 크기 · 모양 · 글꼴(글이 있을 때)
+        ...(it.label ? [
+          el('div', { class: 'fe-poshead', text: '글 크기 · 모양' }),
+          el('div', { class: 'fe-row' }, ...[['small', '작게'], [undefined, '보통'], ['large', '크게']].map(([size, name]) => {
+            const on = (it.labelSize ?? undefined) === size;
+            return el('button', { class: `fe-chip${on ? ' on' : ''}`, type: 'button', 'aria-pressed': String(on), dataset: { labelSize: size || 'normal' }, onClick: () => change({ labelSize: size }) }, name);
+          })),
+          el('div', { class: 'fe-row' }, ...[[undefined, '흰 바탕'], ['fill', '색 바탕'], ['none', '글만']].map(([look, name]) => {
+            const on = (it.labelStyle ?? undefined) === look;
+            return el('button', { class: `fe-chip${on ? ' on' : ''}`, type: 'button', 'aria-pressed': String(on), dataset: { labelStyle: look || 'pill' }, onClick: () => change({ labelStyle: look }) }, name);
+          })),
+          el('label', { class: 'fe-row fe-label-font' }, el('span', { class: 'fe-side-lbl', text: '글꼴' }),
+            el('select', { class: 'fe-label-font-select', 'aria-label': '선 위 글의 글꼴', onChange: (e) => change({ labelFont: e.target.value === DEFAULT_FONT ? undefined : e.target.value }) },
+              ...fonts().map((f) => { const o = el('option', { value: f.id, text: f.name }); if ((it.labelFont || DEFAULT_FONT) === f.id) o.selected = true; return o; }))),
+        ] : []),
         el('p', { class: 'fe-note', text: `선 색으로 붙어요(${LINK_LABEL_MAX}자까지). 고른 선의 글을 끌면 선을 따라 자리가 옮겨 가요. 선을 두 번 눌러도 이 칸이 열려요.` }),
       ];
       requestAnimationFrame(() => box.focus({ preventScroll: true }));
