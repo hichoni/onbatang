@@ -21,7 +21,7 @@ import {createShowTools} from './show-tools.js';
 import {PRINT_LAYOUTS,printHtml} from './print.js';
 import {encodeGif,GIF_LIMITS} from './gif.js';
 import {findText,replaceText} from './find-replace.js';
-import {parseOutline,outlineSlides,OUTLINE_LINES} from './outline.js';
+import {parseOutline,outlineSlides,outlineFromAnswer,OUTLINE_LINES} from './outline.js';
 import {ONBATANG_VERSION} from './version.js';
 import {createGaiMaker,gaiLessonContext} from './gai-maker.js';
 import {
@@ -1164,6 +1164,43 @@ function openOutline(O) {
   } }, '장 만들기');
   const sample = el('button', { class: 'btn chip', type: 'button', dataset: { outlineSample: '' }, onClick: () => { input.value = OUTLINE_SAMPLE; update(); input.focus(); } }, '예시 넣어 보기');
   input.addEventListener('input', update);
+  // 가이X 에게 개요 부탁하기(가이랩처럼 가이X 를 이어 준 곳에서만): 주제 · 장 수를 보내면 개요 글이 칸에 들어온다. 장은 확인 · 고친 뒤 직접 만든다.
+  let asking = null, before = null;
+  const ai = appMaker && activityAuthoring ? (() => {
+    const topic = el('textarea', { class: 'cv-outline-topic', rows: '2', maxlength: '600', 'aria-label': '가이X에게 부탁할 주제', placeholder: '예) 초등 4학년 과학 — 식물의 한살이를 처음 배우는 시간. 씨앗 관찰부터 열매까지.' });
+    const count = el('select', { class: 'cv-outline-count', 'aria-label': '만들 장 수' }, ...[4, 5, 6, 8, 10].map((n) => el('option', { value: String(n), text: `${n}장`, ...(n === 6 ? { selected: true } : {}) })));
+    const say = el('p', { class: 'cv-down-note', role: 'status', 'aria-live': 'polite', text: '주제와 대상을 적으면 가이X가 개요를 써 줘요. 써 준 개요는 아래 칸에서 고친 뒤 장으로 만들어요.' });
+    const label = el('span', { text: '가이X에게 부탁하기' });
+    const undo = el('button', { class: 'btn chip', type: 'button', hidden: true, dataset: { outlineUndo: '' }, onClick: () => { if (before == null) return; input.value = before; before = null; undo.hidden = true; update(); } }, '전 개요로 되돌리기');
+    const go = el('button', { class: 'btn btn-primary cv-outline-ask', type: 'button', dataset: { outlineAsk: '' }, onClick: async () => {
+      if (asking) { asking.abort(); return; }
+      const want = topic.value.trim();
+      if (want.length < 3) { say.textContent = '부탁할 주제를 3자 넘게 적어 주세요.'; topic.focus(); return; }
+      // 연결 창은 누른 그 순간에 열어야 막히지 않는다: 기다리기 전에 connect 를 부른다.
+      let task; try { task = appMaker.connect(); } catch (error) { task = Promise.reject(error); }
+      const controller = asking = new AbortController();
+      label.textContent = '그만두기'; topic.disabled = count.disabled = true; say.textContent = '가이X 연결을 확인하고 있어요…';
+      try {
+        await task;
+        if (controller.signal.aborted) throw new DOMException('', 'AbortError');
+        say.textContent = '가이X가 개요를 쓰고 있어요… 30초쯤 걸릴 수 있어요.';
+        const answer = await appMaker.generate({ kind: 'outline', prompt: want, slides: Number(count.value) }, { signal: controller.signal });
+        const text = answer?.kind === 'outline' ? outlineFromAnswer(answer.outline) : '';
+        if (!parseOutline(text).some((part) => part.lines.length)) throw Error('개요 모양의 답을 받지 못했어요. 주제를 조금 더 자세히 적어 다시 부탁해 주세요.');
+        if (input.value.trim()) { before = input.value; undo.hidden = false; }
+        input.value = text;
+        update();
+        say.textContent = '가이X가 쓴 개요예요. 아래 칸에서 고친 뒤 "장 만들기"를 눌러요.';
+      } catch (error) {
+        say.textContent = error?.name === 'AbortError' ? '부탁을 그만뒀어요.' : String(error?.message || '가이X가 개요를 쓰지 못했어요. 다시 부탁해 주세요.').slice(0, 300);
+      } finally {
+        if (asking === controller) asking = null;
+        label.textContent = '가이X에게 부탁하기'; topic.disabled = count.disabled = false;
+      }
+    } }, gaiOwl(), label);
+    input.rows = 6; input.classList.add('short');                  // 부탁하는 칸이 있으면 개요 칸을 줄여 만들기 단추까지 한 화면에 들게
+    return el('div', { class: 'cv-outline-ai' }, el('b', { text: '가이X에게 개요 부탁하기' }), topic, el('div', { class: 'cv-find-opts' }, count, go, undo), say);
+  })() : null;
   input.addEventListener('keydown', (e) => {
     // Tab 으로 들여 쓰기(Shift+Tab 은 내어 쓰기). 개요는 들여 쓰기로 내용을 나누므로 칸 밖으로 나가지 않게 한다.
     if (e.key !== 'Tab' || e.ctrlKey || e.metaKey || e.altKey) return;
@@ -1182,11 +1219,11 @@ function openOutline(O) {
   openModal(el('section', { class: 'cv-find-box cv-outline-box', 'aria-labelledby': 'cv-outline-title', onKeydown: escCloses },
     el('h2', { id: 'cv-outline-title', text: '개요로 장 만들기' }),
     el('p', { class: 'cv-down-note', text: '발표할 차례를 적으면 장마다 제목과 내용을 놓아 한꺼번에 만들어요. 다른 곳에 쓴 개요를 붙여 넣어도 돼요.' }),
-    input, el('div', { class: 'cv-find-opts' }, sample, el('span', { class: 'cv-down-note', text: 'Tab: 들여 쓰기 · Shift+Tab: 내어 쓰기' })),
+    ai, input, el('div', { class: 'cv-find-opts' }, sample, el('span', { class: 'cv-down-note', text: 'Tab: 들여 쓰기 · Shift+Tab: 내어 쓰기' })),
     result, list,
-    el('div', { class: 'cv-find-actions' }, el('button', { class: 'btn btn-ghost', type: 'button', onClick: closeModal }, '닫기'), make)), { onClose: () => O.editor.refresh() });
+    el('div', { class: 'cv-find-actions' }, el('button', { class: 'btn btn-ghost', type: 'button', onClick: closeModal }, '닫기'), make)), { onClose: () => { asking?.abort(); O.editor.refresh(); } });
   update();
-  requestAnimationFrame(() => input.focus());
+  requestAnimationFrame(() => (ai ? ai.querySelector('textarea') : input).focus());
 }
 // 리허설이 끝나면: 장마다 잰 시간을 보여 주고 저장할지 묻는다. 저장한 시간은 자동 넘기기와 영상 만들기에서 그 장의 머무는 시간이 된다.
 function offerRehearsal(O, list) {
