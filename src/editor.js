@@ -15,7 +15,7 @@ import { ENTERS, COMBOS, TRANSITIONS, EMPHASES, STILL, planMotion, playEnter, pl
 import { searchStickers } from './stickers.js';
 import { ART_PACKS, artSvg, artColorable, artReady, loadArt, searchArt } from './art.js';
 import { designView, itemView, placeItem, paintCard, shapeThumb } from './render.js';
-import { layoutLinks, relink, LINK_LINE, LINK_SHAPES, LINK_LABEL_MAX, linkSvg, linkHandle, dragLinkHandle, linkLabelSize } from './links.js';
+import { layoutLinks, relink, LINK_LINE, LINK_SHAPES, LINK_LABEL_MAX, linkSvg, linkHandle, dragLinkHandle, linkLabelSize, linkLabelT } from './links.js';
 import { sceneView, scenePlayer, keepScene, probeVideo, ACCEPT_VIDEOS } from './scene.js';
 import { icon } from './icons.js';
 import { parseYouTube, ytStart, ytTime, ytWatch } from './youtube.js';
@@ -1627,6 +1627,8 @@ export function createEditor({
     const top = e.target.closest?.('.fi') ? itemAt(e.clientX, e.clientY, !!e.pointerType && e.pointerType !== 'mouse') : -1;
     if (h && h.dataset.h === 'gscale' && many.length) startGroupScale(e, h.dataset.corner);
     else if (h && sel >= 0 && !cur().lock) start(h.dataset.h, e, h.dataset.corner);
+    // 고른 연결선의 글을 잡으면 그 글을 선을 따라 옮긴다.
+    else if (top >= 0 && top === sel && items()[top].t === 'link' && !items()[top].lock && e.target.closest?.('.fi-link-label, .fi-link-label-bg')) start('label', e);
     // Shift 를 누른 채 누르면 그 요소를 고른 것에 넣거나 뺀다. 빈 곳에서 끌면 고른 것에 더한다.
     else if (e.shiftKey && top >= 0 && !items()[top].lock) { e.preventDefault(); focusStage(); toggleChosen(top); }
     // 여럿 고른 것 가운데 하나를 잡으면 모두 함께 옮긴다(끌지 않고 떼면 그것 하나만 고른다).
@@ -1693,7 +1695,7 @@ export function createEditor({
     focusStage();
     const it = cur();
     if (!it) return;
-    if (it.t === 'link' && mode !== 'bend') return;  // 연결선은 끌어 옮기지 않는다(잇는 조각을 옮긴다). 가운데 손잡이만 끈다.
+    if (it.t === 'link' && mode !== 'bend' && mode !== 'label') return;  // 연결선은 끌어 옮기지 않는다(잇는 조각을 옮긴다). 가운데 손잡이와 선 위의 글만 끈다.
     try { stage.setPointerCapture(e.pointerId); } catch { /* 잡지 못해도 계속한다 */ }
     const rect = stage.getBoundingClientRect();
     const cx = rect.left + rect.width * it.x / 100;
@@ -1758,6 +1760,11 @@ export function createEditor({
       remember();
     }
     let next = from;
+    if (mode === 'label') {
+      const labelAt = linkLabelT(from, [(e.clientX - rect.left) / rect.width * 100, (e.clientY - rect.top) / rect.height * 100], settings().aspect);
+      if (labelAt !== (items()[sel].labelAt ?? 0.5)) put({ ...from, labelAt }, { rebuild: true });   // 선의 길은 그대로라 다시 그려야 글이 따라온다
+      return;
+    }
     if (mode === 'bend') {
       const byId = (id) => items().find((x) => x.id === id);
       const patch = dragLinkHandle(from, byId(from.from), byId(from.to), [(e.clientX - rect.left) / rect.width * 100, (e.clientY - rect.top) / rect.height * 100 - drag.knobShift], settings().aspect);
@@ -2686,7 +2693,8 @@ export function createEditor({
         box,
         el('div', { class: 'fe-row' }, ...['예', '아니오', '다음', '원인', '결과'].map(quick),
           it.label ? el('button', { class: 'fe-chip', type: 'button', dataset: { linkLabelClear: '1' }, onClick: () => change({ label: undefined }) }, '글 떼기') : null),
-        el('p', { class: 'fe-note', text: `선의 한가운데에 선 색으로 붙어요(${LINK_LABEL_MAX}자까지). 색 · 굵기를 바꾸면 글도 함께 바뀌어요. 선을 두 번 눌러도 이 칸이 열려요.` }),
+        Number.isFinite(it.labelAt) ? el('div', { class: 'fe-row' }, el('button', { class: 'fe-chip', type: 'button', dataset: { linkLabelCenter: '1' }, onClick: () => change({ labelAt: undefined }) }, '가운데로')) : null,
+        el('p', { class: 'fe-note', text: `선 색으로 붙어요(${LINK_LABEL_MAX}자까지). 고른 선의 글을 끌면 선을 따라 자리가 옮겨 가요. 선을 두 번 눌러도 이 칸이 열려요.` }),
       ];
       requestAnimationFrame(() => box.focus({ preventScroll: true }));
     } else if (pop === 'alt' && it.t === 'image') {

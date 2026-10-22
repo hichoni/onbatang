@@ -18,7 +18,7 @@ import { metadata, newId, fail, validatePageInput, isSlideItem, itemTextLimit, p
 export { cleanAlt, ALT_LIMIT };
 import { cleanActivity } from './activity.js';
 import { cleanCrop } from './crop.js';
-import { LINK_HEADS, LINK_LINE, LINK_SIDES, LINK_BEND, LINK_SHAPES, LINK_LABEL_MAX, CURVE_BEND, layoutLinks } from './links.js';
+import { LINK_HEADS, LINK_LINE, LINK_SIDES, LINK_BEND, LINK_SHAPES, LINK_LABEL_MAX, LINK_LABEL_AT, CURVE_BEND, layoutLinks } from './links.js';
 
 export { SHAPE_GROUPS };
 
@@ -343,6 +343,7 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
       ...(LINK_SHAPES.includes(it.endShape) && it.endShape !== 'arrow' ? { endShape: it.endShape } : {}),
       // 선 위의 글: 한 줄(줄바꿈 · 겹친 띄어쓰기는 한 칸으로), LINK_LABEL_MAX 자까지
       ...(typeof it.label === 'string' && it.label.trim() ? { label: Array.from(it.label.replace(/\s+/g, ' ').trim()).slice(0, LINK_LABEL_MAX).join('') } : {}),
+      ...(typeof it.label === 'string' && it.label.trim() && Number.isFinite(it.labelAt) && num(it.labelAt, LINK_LABEL_AT.min, LINK_LABEL_AT.max, 0.5, 1000) !== 0.5 ? { labelAt: num(it.labelAt, LINK_LABEL_AT.min, LINK_LABEL_AT.max, 0.5, 1000) } : {}),
       // 곡선과 꺾인 선은 둘 중 하나(둘 다 적혀 있으면 꺾인 선)
       ...((it.elbow === 1 || it.elbow === -1) ? { elbow: it.elbow } : it.curve === 1 || it.curve === -1 ? { curve: it.curve } : {}),
       // 붙는 곳(없으면 알아서). 꾸밈이 아니라 잇는 자리라 스타일 복사에는 넣지 않는다.

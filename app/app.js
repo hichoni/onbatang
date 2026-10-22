@@ -1096,7 +1096,7 @@ function openFindReplace(O) {
   const slides = () => { O.slides[O.at] = O.editor.getDesign(); return O.slides; };
   const update = () => {
     const found = findText(slides(), options());
-    result.textContent = !find.value ? '찾을 글을 적어요.' : found.total ? `${found.slides.length}장에서 ${found.total}곳을 찾았어요. 장 번호를 누르면 그 장으로 가요.` : '찾은 곳이 없어요. 잠긴 글상자는 찾지 않아요.';
+    result.textContent = !find.value ? '찾을 글을 적어요.' : found.total ? `${found.slides.length}장에서 ${found.total}곳을 찾았어요. 장 번호를 누르면 그 장으로 가요.` : '찾은 곳이 없어요. 잠긴 조각은 찾지 않아요(글상자와 연결선 위의 글을 찾아요).';
     hits.replaceChildren(...found.slides.map(({ index, count }) => el('button', { class: `btn chip${index === O.at ? ' on' : ''}`, type: 'button', onClick: () => { goSlide(O, index); update(); } }, `${index + 1}장 · ${count}곳`)));
     all.disabled = !found.total;
   };
@@ -1108,7 +1108,7 @@ function openFindReplace(O) {
     renderStrip(O);
     touched(O);
     update();
-    result.textContent = `${r.count}곳을 바꿨어요.${r.skipped ? ` 글자 수가 넘치는 글상자 ${r.skipped}개는 바꾸지 않았어요.` : ''} 되돌리려면 반대로 한 번 더 바꿔요.`;
+    result.textContent = `${r.count}곳을 바꿨어요.${r.skipped ? ` 글자 수가 넘치는 글상자 · 선 위의 글 ${r.skipped}개는 바꾸지 않았어요.` : ''} 되돌리려면 반대로 한 번 더 바꿔요.`;
   } }, '모두 바꾸기');
   for (const input of [find, replace]) input.addEventListener('input', update);
   for (const box of [notes, cased]) box.addEventListener('change', update);
