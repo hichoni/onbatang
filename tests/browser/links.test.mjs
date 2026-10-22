@@ -330,7 +330,7 @@ test('dragging the middle handle of a curved or elbow connector reshapes it, sav
   assert.deepEqual(external, []);
 });
 
-test('the 꾸미기 panel and a single selected piece both start joining: pick the start, then the end; Esc or an empty spot stops', options, async t => {
+test('the 꾸미기 panel and a single selected piece both start joining: pick the start, then the end or an empty spot (a new piece there); Esc stops', options, async t => {
   const {page, external} = await setup(t);
   const shapes = page.locator('.cv-canvas .fe-card .fi-shape');
   const hint = page.locator('.cv-canvas .fe-link-hint');
@@ -349,15 +349,26 @@ test('the 꾸미기 panel and a single selected piece both start joining: pick t
   await saved(page, r => { const [a, b] = r.slides[0].items.filter(it => it.t === 'shape'); const l = r.slides[0].items.find(it => it.t === 'link'); return l?.from === b.id && l.to === a.id; });
   assert.equal(await hint.isVisible(), false);
   assert.ok(await page.locator('.cv-canvas .fe-card .fi-link.sel').count() === 1, 'the new line is selected');
-  // From a single selected piece: "선 잇기" in the toolbar, then the piece to reach. An empty spot cancels.
+  // From a single selected piece: "선 잇기" in the toolbar, then the piece to reach. An empty spot puts a copy of the start there, joined.
   await page.keyboard.press('Control+z');
   await saved(page, r => !r.slides[0].items.some(it => it.t === 'link'));
   await shapes.nth(0).click();
   await page.locator('.fe-bar button').filter({hasText: '선 잇기'}).click();
-  assert.match(await hint.textContent(), /② 화살표가 닿을 조각/);
+  assert.match(await hint.textContent(), /② 화살표가 닿을 조각.*빈 곳을 누르면 새 조각/);
   const card = await page.locator('.cv-canvas .fe-card').boundingBox();
-  await page.mouse.click(card.x + card.width - 6, card.y + card.height - 6);
-  assert.equal(await hint.isVisible(), false, 'an empty spot stops');
+  await page.mouse.click(card.x + card.width * .5, card.y + card.height * .85);
+  assert.equal(await hint.isVisible(), false);
+  await saved(page, r => {
+    const list = r.slides[0].items, made = list.filter(it => it.t === 'shape')[2], l = list.find(it => it.t === 'link');
+    return made && made.shape === 'round' && Math.abs(made.x - 50) < .5 && made.y > 70 && made.y <= 100 - 11 + .5 && !made.g && l?.from === 'ebox000001' && l.to === made.id;
+  });
+  await page.keyboard.press('Control+z');
+  await saved(page, r => !r.slides[0].items.some(it => it.t === 'link') && r.slides[0].items.filter(it => it.t === 'shape').length === 2);
+  // In step ① an empty spot still stops.
+  if (!await page.locator('[data-start-link]').isVisible()) await page.locator('.fe-tab[data-tab="element"]').click();
+  await page.locator('[data-start-link]').click();
+  await page.mouse.click(card.x + card.width * .5, card.y + card.height * .85);
+  assert.equal(await hint.isVisible(), false, 'an empty spot before a start stops');
   await shapes.nth(0).click();
   await page.locator('.fe-bar button').filter({hasText: '선 잇기'}).click();
   await shapes.nth(1).click();
@@ -573,13 +584,20 @@ test('dragging an end of a selected connector onto another piece rejoins it ther
   // Back onto the circle, near the left of its bottom edge (circle: x 65~79, y 50~74).
   await dragTo(toKnob, at(68.5, 73));
   await saved(page, r => link(r)?.to === 'ebox000002' && link(r).toSide === 'bottom' && link(r).toPos === .25);
-  // Onto empty space, or onto the piece at the other end: nothing changes.
-  await dragTo(toKnob, at(50, 92), false);
+  // Onto the piece at the other end: nothing changes.
   await dragTo(page.locator('.fe-link-end[data-corner="from"]'), at(72, 62), false);
   await new Promise(r => setTimeout(r, 600));
   const now = link(await page.evaluate(() => window.readSaved()));
   assert.deepEqual([now.from, now.to, now.toSide, now.toPos], ['ebox000001', 'ebox000002', 'bottom', .25]);
-  // Undo goes back one drop.
+  // Onto empty space: a copy of the circle it was on appears there and the end joins it (side picked automatically again).
+  await dragTo(toKnob, at(40, 80), false);
+  await saved(page, r => {
+    const circles = r.slides[0].items.filter(it => it.shape === 'circle'), l = link(r);
+    return circles.length === 2 && l.from === 'ebox000001' && l.to === circles[1].id && !('toSide' in l) && Math.abs(circles[1].x - 40) < .5 && Math.abs(circles[1].y - 80) < .5;
+  });
+  // Undo takes the new piece away and goes back to the circle; one more undo goes back one more drop.
+  await page.keyboard.press('Control+z');
+  await saved(page, r => link(r)?.to === 'ebox000002' && r.slides[0].items.filter(it => it.shape === 'circle').length === 1);
   await page.keyboard.press('Control+z');
   await saved(page, r => link(r)?.to === 'etext00001');
   assert.deepEqual(external, []);
