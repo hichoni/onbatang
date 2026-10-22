@@ -3,7 +3,7 @@
 //
 // 요소에 적는 값: t 'link' · from · to(잇는 두 조각의 이름표) · head('end' 끝에 화살표 · 'both' 양쪽 · 'none' 없음) ·
 //                 color · line(굵기, 카드 너비의 %) · dash(true 긴 점선 · 'dot' 동글 점 · 'dashdot' 긴 점과 점) · head('start' 처음에만도 된다) ·
-//                 startShape · endShape(머리 모양: LINK_SHAPES, 없으면 뾰족 화살표) · curve(곡선: 1 은 가는 쪽에서 보아 왼쪽으로, -1 은 오른쪽으로 휜다. 없으면 직선) ·
+//                 startShape · endShape(머리 모양: LINK_SHAPES, 없으면 뾰족 화살표) · label(선 위의 짧은 글, LINK_LABEL_MAX 자까지) · curve(곡선: 1 은 가는 쪽에서 보아 왼쪽으로, -1 은 오른쪽으로 휜다. 없으면 직선) ·
 //                 elbow(꺾인 선: 1 은 가로 → 세로 → 가로, -1 은 세로 → 가로 → 세로로 직각으로 꺾어 잇는다. curve 와 함께 쓰지 않는다) ·
 //                 fromSide · toSide(선이 붙는 곳: 'top' · 'right' · 'bottom' · 'left' 면 그 조각의 그 옆 가운데에 붙는다. 없으면 알아서) ·
 //                 bend(곡선이 휘는 깊이: 두 끝 사이 거리에 대한 비율 0.05~0.9, 없으면 CURVE_BEND) ·
@@ -19,6 +19,30 @@ export const LINK_HEADS = ['end', 'both', 'none', 'start'];
 export const LINK_SHAPES = ['arrow', 'open', 'dot', 'ring', 'diamond', 'bar'];
 /** 선의 모양: 실선(없음) · true(긴 점선) · 'dot'(동글동글 점) · 'dashdot'(긴 점과 점) */
 export const LINK_DASHES = [true, 'dot', 'dashdot'];
+/** 선 위의 글: 가장 긴 글자 수, 글자 크기(카드 너비의 %) */
+export const LINK_LABEL_MAX = 30;
+export const linkLabelSize = (link) => r3(Math.max(2.4, Math.min(4, 2.2 + (Number(link?.line) || 0) * 0.8)));
+const xmlText = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+// 선의 한가운데(그려진 길을 따라 반쯤 간 자리, 선 상자 안의 좌표): 곧은 선은 두 끝의 가운데, 곡선은 B(½), 꺾인 선은 마디들을 따라 반.
+function midOnLine(p) {
+  if (p.length === 6) return [0.25 * p[0] + 0.5 * p[4] + 0.25 * p[2], 0.25 * p[1] + 0.5 * p[5] + 0.25 * p[3]];
+  const pts = p.length === 8 ? [[p[0], p[1]], [p[4], p[5]], [p[6], p[7]], [p[2], p[3]]] : [[p[0], p[1]], [p[2], p[3]]];
+  const lens = pts.slice(1).map((q, i) => Math.hypot(q[0] - pts[i][0], q[1] - pts[i][1]));
+  let left = lens.reduce((a, b) => a + b, 0) / 2;
+  for (let i = 0; i < lens.length; i++) {
+    if (left <= lens[i] || i === lens.length - 1) {
+      const k = lens[i] ? Math.min(1, left / lens[i]) : 0;
+      return [pts[i][0] + (pts[i + 1][0] - pts[i][0]) * k, pts[i][1] + (pts[i + 1][1] - pts[i][1]) * k];
+    }
+    left -= lens[i];
+  }
+  return pts[0];
+}
+/** 선 위의 글이 놓이는 자리(카드 위: x 는 카드 너비의 %, y 는 카드 높이의 %). PPTX 가 쓴다. */
+export function linkLabelAt(link, aspect = 1) {
+  const [x, y] = midOnLine(link.pts);
+  return [link.x - link.w / 2 + x, (link.y / aspect - link.vh / 2 + y) * aspect];
+}
 export const LINK_SIDES = ['top', 'right', 'bottom', 'left'];
 // 옆마다 바깥을 향하는 방향과 그 옆이 놓인 축(0 = 가로로 나간다, 1 = 세로로 나간다)
 const NORMAL = { top: [0, -1], right: [1, 0], bottom: [0, 1], left: [-1, 0] };
@@ -349,6 +373,16 @@ export function linkSvg(link) {
       + `<path class="fi-link-line" d="M${r3(a[0])} ${r3(a[1])}Q${r3(qx)} ${r3(qy)} ${r3(b[0])} ${r3(b[1])}" fill="none" ${paint}/>`
     : `<line class="fi-link-hit" x1="${r3(x1)}" y1="${r3(y1)}" x2="${r3(x2)}" y2="${r3(y2)}" stroke-width="${hit}"/>`
       + `<line class="fi-link-line" x1="${r3(a[0])}" y1="${r3(a[1])}" x2="${r3(b[0])}" y2="${r3(b[1])}" ${paint}/>`;
+  // 선 위의 글: 선의 한가운데에 선 색으로, 둘레에 흰 테를 둘러 선 위에서도 읽히게.
+  let label = '';
+  if (typeof link.label === 'string' && link.label) {
+    const [lx, ly] = midOnLine(link.pts), size = linkLabelSize(link);
+    // 글 뒤에 흰 알약을 깔아 선이 글 사이(띄어쓰기)로 비치지 않게 한다. 폭은 글자 수로 어림한다(한글 · 한자는 한 자, 그 밖은 0.6 자).
+    const wide = Array.from(link.label).reduce((n, ch) => n + (/[\u1100-\u11ff\u3000-\u9fff\uac00-\ud7af\uf900-\ufaff\uff00-\uffef]/.test(ch) ? 1 : 0.6), 0) * size;
+    const pw = wide + size * 0.9, ph = size * 1.5;
+    label = `<rect class="fi-link-label-bg" x="${r3(lx - pw / 2)}" y="${r3(ly - ph / 2)}" width="${r3(pw)}" height="${r3(ph)}" rx="${r3(ph / 2)}" fill="#fff" fill-opacity="0.94"/>`
+      + `<text class="fi-link-label" x="${r3(lx)}" y="${r3(ly)}" font-size="${size}" font-weight="700" text-anchor="middle" dominant-baseline="central" fill="${link.color}">${xmlText(link.label)}</text>`;
+  }
   return `<svg viewBox="0 0 ${link.w} ${link.vh}" preserveAspectRatio="none" aria-hidden="true">${body}`
-    + `${end ? head(endShape, x2, y2, ex, ey) : ''}${start ? head(startShape, x1, y1, sx, sy) : ''}</svg>`;
+    + `${end ? head(endShape, x2, y2, ex, ey) : ''}${start ? head(startShape, x1, y1, sx, sy) : ''}${label}</svg>`;
 }

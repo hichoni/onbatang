@@ -5,7 +5,7 @@ import {cleanDesign, settings, fontList, backgroundOf, hangsPunctuation} from '.
 import {designToBlob, designSheet} from '../src/export.js';
 import {itemView, paintCard} from '../src/render.js';
 import {sceneFrame} from '../src/scene.js';
-import {linkEnds, linkControl, linkCorners} from '../src/links.js';
+import { linkEnds, linkControl, linkCorners, linkLabelAt, linkLabelSize } from '../src/links.js';
 
 export const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 export const PPTX_MAX_SLIDES = 200;
@@ -69,6 +69,13 @@ function itemBox(item, size, textHeight) {
 }
 // 연결선 → PowerPoint 의 직선 연결선(straightConnector1). 굵기 · 색 · 점선 · 화살표 머리가 그대로 고칠 수 있게 들어간다.
 // (두 도형에 "붙는" 연결은 하지 않는다: PowerPoint 에서 도형을 옮기면 선은 제자리에 남는다.)
+// 선 위의 글 → 선의 한가운데에 놓는 작은 글상자(흰 바탕 · 선 색 굵은 글). PowerPoint 에서 그대로 고칠 수 있다.
+function nativeLinkLabel(item, id, size) {
+  const [cx, cy] = linkLabelAt(item, settings().aspect).map((v, k) => v * (k ? size.height : size.width) / 100);
+  const emu = linkLabelSize(item) / 100 * size.width, pt = emu / 12700;
+  const w = Math.round(Array.from(item.label).length * emu * 1.05 + emu), h = Math.round(emu * 1.7);
+  return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${xml(`${item.id || '연결선'} 글`)}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${Math.round(cx - w / 2)}" y="${Math.round(cy - h / 2)}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>${solid('#ffffff', 100)}<a:ln><a:noFill/></a:ln></p:spPr><p:txBody><a:bodyPr wrap="none" lIns="0" rIns="0" tIns="0" bIns="0" anchor="ctr"><a:noAutofit/></a:bodyPr><a:lstStyle/><a:p><a:pPr algn="ctr"/><a:r><a:rPr lang="ko-KR" sz="${Math.max(100, Math.round(pt * 100))}" b="1" dirty="0">${solid(item.color, item.op)}</a:rPr><a:t>${xml(item.label)}</a:t></a:r></a:p></p:txBody></p:sp>`;
+}
 function nativeLink(item, id, size) {
   const toEmu = ([x, y]) => [x * size.width / 100, y * size.height / 100];
   const [[x1, y1], [x2, y2]] = linkEnds(item, settings().aspect).map(toEmu);
@@ -308,7 +315,7 @@ export async function createPptx({slides, aspect = 16 / 9, size, title = '온바
         abort(signal); const item = design.items[itemIndex], itemWarn = warn(pageNumber, item.id), id = shapes.length + 2;
         if (item.t === 'text') shapes.push(nativeText(item, itemBox(item, slideSize, await cancellable(textHeight(item, slideSize, itemWarn), signal)), id, slideSize, itemWarn));
         else if (item.t === 'shape' && nativeShapes.has(item.shape)) shapes.push(nativeShape(item, itemBox(item, slideSize), id, slideSize));
-        else if (item.t === 'link') shapes.push(nativeLink(item, id, slideSize));
+        else if (item.t === 'link') { shapes.push(nativeLink(item, id, slideSize)); if (item.label) shapes.push(nativeLinkLabel(item, shapes.length + 2, slideSize)); }
         else if (item.t === 'image' && item.mask === 'none') {
           const loaded = await photo(item, signal), box = itemBox(item, slideSize), sourceAspect = loaded.width / loaded.height, targetAspect = box.w / box.h;
           const horizontal = sourceAspect > targetAspect, crop = Math.max(0, Math.round((1 - (horizontal ? targetAspect / sourceAspect : sourceAspect / targetAspect)) * 50000));

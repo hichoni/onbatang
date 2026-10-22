@@ -18,7 +18,7 @@ import { metadata, newId, fail, validatePageInput, isSlideItem, itemTextLimit, p
 export { cleanAlt, ALT_LIMIT };
 import { cleanActivity } from './activity.js';
 import { cleanCrop } from './crop.js';
-import { LINK_HEADS, LINK_LINE, LINK_SIDES, LINK_BEND, LINK_SHAPES, CURVE_BEND, layoutLinks } from './links.js';
+import { LINK_HEADS, LINK_LINE, LINK_SIDES, LINK_BEND, LINK_SHAPES, LINK_LABEL_MAX, CURVE_BEND, layoutLinks } from './links.js';
 
 export { SHAPE_GROUPS };
 
@@ -341,6 +341,8 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
       // 머리 모양(처음 모양인 뾰족 화살표면 적지 않는다)
       ...(LINK_SHAPES.includes(it.startShape) && it.startShape !== 'arrow' ? { startShape: it.startShape } : {}),
       ...(LINK_SHAPES.includes(it.endShape) && it.endShape !== 'arrow' ? { endShape: it.endShape } : {}),
+      // 선 위의 글: 한 줄(줄바꿈 · 겹친 띄어쓰기는 한 칸으로), LINK_LABEL_MAX 자까지
+      ...(typeof it.label === 'string' && it.label.trim() ? { label: Array.from(it.label.replace(/\s+/g, ' ').trim()).slice(0, LINK_LABEL_MAX).join('') } : {}),
       // 곡선과 꺾인 선은 둘 중 하나(둘 다 적혀 있으면 꺾인 선)
       ...((it.elbow === 1 || it.elbow === -1) ? { elbow: it.elbow } : it.curve === 1 || it.curve === -1 ? { curve: it.curve } : {}),
       // 붙는 곳(없으면 알아서). 꾸밈이 아니라 잇는 자리라 스타일 복사에는 넣지 않는다.
@@ -693,7 +695,7 @@ export function itemLabel(it) {
   if (it.t === 'shape') return `도형: ${SHAPES.find((s) => s.id === it.shape)?.name || '네모'}`;
   if (it.t === 'art') return `그림: ${artName(it.art) || it.art.slice(3)}`;
   if (it.t === 'yt') return `유튜브 영상${it.start ? ` (${ytTime(it.start)}부터)` : ''}`;
-  if (it.t === 'link') return `연결선${it.head === 'none' ? '' : ' (화살표)'}`;
+  if (it.t === 'link') return `연결선${it.head === 'none' ? '' : ' (화살표)'}${it.label ? ` "${it.label}"` : ''}`;
   return '사진';
 }
 

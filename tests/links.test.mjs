@@ -277,3 +277,27 @@ test('connector heads come in shapes per end, lines in dash styles; old drawings
   const xml2 = new TextDecoder().decode(unzipSync((await createPptx({slides: [bar], size: {width: 9144000, height: 9144000, unit: 'emu'}})).bytes)['ppt/slides/slide1.xml']);
   assert.match(xml2, /<a:prstDash val="sysDot"\/><\/a:ln>/, 'a bar end has no PowerPoint equivalent: no head');
 });
+
+test('a connector can carry a short label at the middle of its route, escaped, one line, and as an editable PowerPoint text box', async () => {
+  const {linkLabelAt, LINK_LABEL_MAX} = await import('../src/links.js');
+  const a = box('lboxaaaaa1', 20, 30), b = box('lboxaaaaa2', 80, 70);
+  // Middle of the drawn route: straight, curve and elbow.
+  const straight = linkGeometry(a, b, {aspect: 1}), [[x1, y1], [x2, y2]] = linkEnds(straight, 1);
+  const at = linkLabelAt(straight, 1);
+  assert.ok(Math.abs(at[0] - (x1 + x2) / 2) < .01 && Math.abs(at[1] - (y1 + y2) / 2) < .01);
+  assert.deepEqual(linkLabelAt(linkGeometry(a, b, {aspect: 1, elbow: 1}), 1), [50, 50], 'elbow: halfway along the runs');
+  // Drawn as text in the line colour with a white halo; user text is escaped.
+  const svg = linkSvg({...straight, color: '#e03131', line: .5, head: 'end', label: '예 & <아니오>'});
+  assert.match(svg, /<rect class="fi-link-label-bg"[^>]*fill="#fff"[^>]*\/><text class="fi-link-label"[^>]*fill="#e03131">예 &amp; &lt;아니오&gt;<\/text>/);
+  assert.doesNotMatch(linkSvg({...straight, color: '#e03131', line: .5, head: 'end'}), /fi-link-label/);
+  // Cleaning: one line, spaces folded, at most LINK_LABEL_MAX characters; empty drops it.
+  configure({aspect: 1});
+  const keep = (label) => cleanDesign({id: 'ppage00001', bg: '#fff', items: [a, b, link({from: 'lboxaaaaa1', to: 'lboxaaaaa2', label})]}).items.find(it => it.t === 'link');
+  assert.equal(keep('  다음\n  단계  ').label, '다음 단계');
+  assert.equal(Array.from(keep('가'.repeat(50)).label).length, LINK_LABEL_MAX);
+  assert.equal(Object.hasOwn(keep('   '), 'label'), false);
+  // PPTX: a text box after the line, centred on the label point.
+  const slide = cleanDesign({id: 'ppage00001', bg: '#fff', items: [a, b, link({from: 'lboxaaaaa1', to: 'lboxaaaaa2', label: '원인'})]});
+  const xml = new TextDecoder().decode(unzipSync((await createPptx({slides: [slide], size: {width: 9144000, height: 9144000, unit: 'emu'}})).bytes)['ppt/slides/slide1.xml']);
+  assert.match(xml, /<\/p:cxnSp><p:sp><p:nvSpPr><p:cNvPr id="\d+" name="elink00001 글"\/><p:cNvSpPr txBox="1"\/>.*?<a:t>원인<\/a:t>/);
+});
