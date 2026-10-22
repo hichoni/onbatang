@@ -60,6 +60,8 @@ let accountAction = null;
 let accountHome = null;
 let materialNavigation = null;
 let appMaker = null;
+// 들여쓰기(embed.html): 다른 앱이 부른 온바탕. { done(id), close() } — 위 막대가 "닫기" · "다 했어요"가 되고, 첫 화면 · 모양 바꾸기 · 발표 · 내려받기 · 영상 · 카메라가 없다.
+let embedMode = null;
 let activityAuthoring = false; // Host opt-in; playback/result saving never depends on this.
 let colorPalettes=null;
 let brand = null;                // 들여 쓰는 곳의 표시 { name, logo } (없으면 표시하지 않는다)
@@ -621,8 +623,8 @@ function openDesign(record, isNew) {
     outline: { open: () => openOutline(O) },
     // 영상 장면(그 장의 바탕에 까는 영상): 파일은 이 기기에 두고(videos.js), 어느 그림에 딸린 것인지 함께 적는다.
     // 저장하지 못하면 오류가 나고, 편집기가 영상을 넣지 않은 채 알린다(저장되지 않은 영상을 그림에 적어 두지 않는다).
-    saveVideo: (made) => saveVideo({ blob: made.blob, design: O.record.id, seconds: made.seconds }),
-    createCamera: canRecord() ? createCamera : null,
+    saveVideo: embedMode ? null : (made) => saveVideo({ blob: made.blob, design: O.record.id, seconds: made.seconds }),
+    createCamera: !embedMode && canRecord() ? createCamera : null,
     videoNote: '영상 파일은 이 기기에만 저장돼요. 다른 기기에서 이 그림을 열면 영상 자리가 비어 보여요.',
     videoHint: canFilmScenes() ? '영상은 "발표"할 때와 영상으로 내려받을 때 소리와 함께 틀어져요. 그림으로 내려받으면 첫 모습이 나와요.' : '',
     onRemoveUpload: (img) => {
@@ -664,13 +666,28 @@ function openDesign(record, isNew) {
     class: 'cv-brand cv-brand-link', type: 'button', title: `저장하고 ${brand.name} 홈으로`,
     'aria-label': `${brand.name} 홈으로`, onClick: (e) => closeToHost(O, e.currentTarget),
   } : { class: 'cv-brand', title: brand.name }, el('img', { src: brand.logo, alt: brand.name })) : null;
+  // 들여쓰기: 닫기(초안은 이 기기에 남는다) · 다 했어요(저장을 마친 뒤 부른 앱에 그림과 원본을 넘긴다).
+  const embedBar = embedMode ? (() => {
+    const done = el('button', { class: 'btn btn-primary cv-embed-done', type: 'button', dataset: { embedDone: '' }, title: '다 만든 그림을 보내요', onClick: async () => {
+      if (done.disabled) return;
+      done.disabled = true; relabel(done, '보내는 중…');
+      try { await embedMode.done(O.record.id); } catch (error) { toast(String(error?.message || '그림을 보내지 못했어요. 다시 눌러 주세요.').slice(0, 200), 4500); }
+      finally { if (done.isConnected) { done.disabled = false; relabel(done, '다 했어요'); } }
+    } }, ...face('check', '다 했어요'));
+    const close = el('button', { class: 'btn btn-ghost cv-embed-close', type: 'button', dataset: { embedClose: '' }, title: '보내지 않고 닫아요(꾸미던 것은 이 기기에 남아요)', onClick: () => embedMode.close(O.record.id) }, ...face('back', '닫기'));
+    return { done, close };
+  })() : null;
   const bar = el('header', { class: 'cv-bar' },
     el('span', { class: 'onba-editor-logo' }, onbatangLogo()),
     ...(mark ? [mark, el('span', { class: 'cv-bar-sep cv-brand-sep', 'aria-hidden': 'true' })] : []),
     el('button', { class: 'btn btn-ghost cv-back', type: 'button', title: '저장하고 내 그림으로 돌아가요', onClick: (e) => closeDesign(O, e.currentTarget) }, ...face('back', '내 그림')),
     el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' }),
     name, O.status, ...(material ? [material] : []), ...(lesson?[lesson]:[]), ...(accountLibrary?[accountLibrary]:[]), el('span', { class: 'cv-bar-gap' }), shapes, el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' }), tourButton('editor', O), show, down);
-  const shell = editorShell(O, bar);
+  // 들여쓰기 막대는 보통 막대 뒤에 만든다(이름 칸 · 저장 상태는 한 곳에만 놓일 수 있다).
+  const embedHeader = embedBar ? el('header', { class: 'cv-bar cv-embed-bar' },
+    el('span', { class: 'onba-editor-logo' }, onbatangLogo()), embedBar.close, el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' }),
+    name, O.status, el('span', { class: 'cv-bar-gap' }), tourButton('editor', O), embedBar.done) : null;
+  const shell = editorShell(O, embedHeader || bar);
   // ? : 꾸미는 화면 단축키 표(글을 쓰는 칸에서는 그냥 글자다). 아무 데도 누르지 않은 때에도 듣도록 문서에 단다.
   const onHelpKey = (e) => {
     if (!shell.isConnected) { document.removeEventListener('keydown', onHelpKey); return; }
@@ -688,7 +705,8 @@ function openDesign(record, isNew) {
   O.materialLoadingPromise=loadMaterialNavigation(O);
   // 처음 꾸미는 화면을 열면 사용법 안내를 한 번 보여 준다(이 기기에서 한 번). 언제든 ? 단추로 다시 본다.
   // 안내를 이미 본 기기에는 새 기능이 들어온 뒤 처음 열 때 새 기능 안내를 한 번 보여 준다(처음 온 기기의 안내에는 이미 들어 있다).
-  if (!tourSeen('editor')) {
+  if (embedMode) { markTourSeen('editor'); markTourSeen(NEWS_KEY); }   // 들여쓰기는 바로 꾸민다(사용법은 ? 단추로)
+  else if (!tourSeen('editor')) {
     markTourSeen('editor');
     markTourSeen(NEWS_KEY);
     setTimeout(() => { if (!O.closed && app.dataset.view === 'edit') editorTour(O); }, 700);
@@ -851,6 +869,8 @@ function renderStrip(O) {
       del,
       activityAuthoring&&el('button',{class:'btn cv-activity-add',type:'button',dataset:{addActivity:''},title:'미리 준비된 픽셀아트 활동을 새 슬라이드로 넣어요',onClick:()=>configureActivity(O)},'픽셀아트 활동 넣기'),
       activityAuthoring&&appMaker&&el('button',{class:'btn cv-activity-add',type:'button',dataset:{addGaiApp:''},onClick:()=>configureGaiActivity(O)},gaiOwl(),'가이X로 앱 만들기'),
+      // 가이X 에게 개요를 부탁해 꾸민 장 여러 장을 만든다(개요로 장 만들기 창이 부탁 칸부터 열린다)
+      activityAuthoring&&appMaker&&el('button',{class:'btn cv-activity-add',type:'button',dataset:{addGaiSlides:''},onClick:()=>openOutline(O)},gaiOwl(),'가이X로 장 만들기'),
       el('button',{class:'btn cv-activity-add',type:'button',dataset:{importLessonResults:''},onClick:()=>importLessonResults(O)},'HTML 수업 결과 가져오기'),
       el('button',{class:'btn cv-activity-edit',type:'button',dataset:{editActivity:''},onClick:()=>configureActivity(O,true)},'활동 설정')));
   updateActivityTools(O);
@@ -2770,7 +2790,7 @@ function readOpen() {
  * - lessonAction: {label, editorTitle?, accepts?(record), open({designId,slideIndex,inline})}; 저장 후 같은 편집 영역에서 호스트의 수업 구성/진행을 연다. 공용 기본값은 숨김.
  * - accountAction: {label,editorTitle?,open({from,designId?,inline})}; 첫 화면과 편집기 안의 계정 수업 목록. 기본값은 숨김이며 서버/로그인은 호스트가 담당한다.
  */
-export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, accountAction: accountLibrary = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false, resume = false } = {}) {
+export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, accountAction: accountLibrary = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false, resume = false, embed = null } = {}) {
   if (app) throw new Error('minican already started');
   if (!root) throw new Error('minican root');
   app = root;
@@ -2785,6 +2805,7 @@ export function startMinican({ root = document.getElementById('app'), fonts = []
   if(navigation&&typeof navigation.load==='function')materialNavigation=navigation;
   activityAuthoring=authoring===true;
   resumeOpen=resume===true;
+  if (embed && typeof embed.done === 'function' && typeof embed.close === 'function') embedMode = embed;
   if(maker&&typeof maker.connect==='function'&&typeof maker.generate==='function')appMaker=maker;
   if (account && ['pull', 'push', 'drop'].every((k) => typeof account[k] === 'function')) {
     sync = account;

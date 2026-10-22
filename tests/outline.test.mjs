@@ -98,3 +98,20 @@ test('themed outline slides pick a layout per slide and stay inside the card for
   }
   configure({aspect: 16 / 9});
 });
+
+test('with a heavy title typeface, outline titles use it without extra bold and body lines never do', async () => {
+  const {setTitleFont} = await import('../app/templates.js');
+  configure({aspect: 16 / 9, maxItems: 40, fonts: [{id: 'gai-black', name: '굵은 제목', url: 'fonts/black.woff2'}, {id: 'round', name: '동글', url: 'fonts/round.woff2'}]});
+  setTitleFont('gai-black');
+  try {
+    const sections = parseOutline('식물의 한살이\n  씨앗이 싹 터요\n  잎과 줄기가 자라요\n    햇빛을 받아 양분을 만들어요\n  꽃이 피고 열매를 맺어요');
+    for (const font of ['gai-black', 'round', undefined]) {
+      const {slides} = outlineSlides(sections, {style: 'tnet', font});
+      const texts = slides[0].items.filter(it => it.t === 'text');
+      const title = texts.find(it => it.text === '식물의 한살이');
+      assert.deepEqual([title.font, title.bold], ['gai-black', false], 'the black typeface is bold enough');
+      for (const it of texts.filter(it => it !== title)) assert.notEqual(it.font, 'gai-black', it.text);
+      if (font === 'round') assert.ok(texts.filter(it => it !== title).every(it => it.font === 'round'));
+    }
+  } finally { setTitleFont(''); configure({fonts: []}); }
+});
