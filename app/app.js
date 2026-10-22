@@ -58,6 +58,8 @@ let materialAction = null;
 let lessonAction = null;
 let accountAction = null;
 let shareAction = null;
+let accountBridge = null;          // 공용 온바탕: 가이랩 계정으로 이어 쓰기(연결 창 주소 등). 계정 저장(sync)이 있으면 쓰지 않는다.
+let bridge = null;
 let accountHome = null;
 let materialNavigation = null;
 let appMaker = null;
@@ -441,6 +443,7 @@ function render() {
           finally { button.disabled = false; }
         } }, importAction.label) : null,
         accountAction ? el('button',{class:'btn cv-account-btn',type:'button',disabled:loading,dataset:{accountAction:''},onClick:()=>openAccountFromHome()},accountAction.label) : null,
+        accountBridge && !sync ? el('button', { class: 'btn cv-bridge-btn', type: 'button', disabled: loading, dataset: { accountBridge: '' }, title: '집에서 만든 그림을 학교에서: 가이랩 선생님 계정에 올리고 가져와요', onClick: () => openBridgeFromHome() }, ...face('cloud', '가이랩 계정으로 이어 쓰기')) : null,
         full ? el('p', { class: 'cv-hero-full', text: `그림은 ${MAX_DESIGNS}장까지 저장돼요. 안 쓰는 그림을 지워 주세요.` }) : null),
       el('p', { class: 'cv-hero-tag', text: `작은 생각도 멋진 작품이 되도록 · ${sync ? '내 계정에 자동 저장' : '이 기기에 자동 저장'}` })),
     heroShowcase()));
@@ -2060,6 +2063,15 @@ async function importFromEditor(O) {
 
 /** The host owns conversion; the editor owns its shell and the saved drawing.
  * No navigation/home render occurs while a host imports inside My materials. */
+// 가이랩 계정으로 이어 쓰기(공용 온바탕): 첫 화면에서만. 가져오면 첫 화면 목록을 다시 읽는다.
+async function openBridgeFromHome() {
+  if (!accountBridge || S.open || S.phase !== 'home') return;
+  try {
+    const { createAccountBridge, openAccountBridge } = await import('./account-bridge.js');
+    bridge ||= createAccountBridge(accountBridge);
+    openAccountBridge({ bridge, store: { list: listDesigns, put: putDesign }, onChanged: () => { if (!S.open && S.phase === 'home') refresh(); } });
+  } catch (error) { console.warn(error); toast(String(error?.message || '이어 쓰기 창을 열지 못했어요.').slice(0, 200), 4500); }
+}
 // 공유 링크: 저장을 마친 뒤 호스트의 공유 창을 연다(서버 · 로그인은 호스트가 맡는다). goTo 로 그 장 · 내 자료 칸(유튜브 등)을 연다.
 async function openShareFromEditor(O){
   if(!shareAction||S.open!==O)return;
@@ -2802,9 +2814,10 @@ function readOpen() {
  * - resume: true 면 새로 고침한 뒤 이 탭에서 꾸미던 그림 · 장을 다시 연다(공용 온바탕 첫 쪽이 켠다. 그림을 스스로 여는 들여 쓰는 곳은 끈 채로 둔다).
  * - lessonAction: {label, editorTitle?, accepts?(record), open({designId,slideIndex,inline})}; 저장 후 같은 편집 영역에서 호스트의 수업 구성/진행을 연다. 공용 기본값은 숨김.
  * - accountAction: {label,editorTitle?,open({from,designId?,inline})}; 첫 화면과 편집기 안의 계정 수업 목록. 기본값은 숨김이며 서버/로그인은 호스트가 담당한다.
+ * - accountBridge: {url?}; 공용 온바탕 첫 화면의 "가이랩 계정으로 이어 쓰기"(가이랩 연결 창으로 그림을 올리고 가져온다). sync 가 있으면 숨김.
  * - shareAction: {label,title?,open({designId,flush(),goTo(slideIndex,{upload})}),saved?(record)}; 편집기 위 막대의 공유 단추(가이랩의 보기 전용 링크). saved 는 이 기기에 저장할 때마다 불린다(링크에 반영은 호스트가 모아서). 기본값은 숨김.
  */
-export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, accountAction: accountLibrary = null, shareAction: sharing = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false, resume = false, embed = null, syncDelay = null } = {}) {
+export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, accountAction: accountLibrary = null, shareAction: sharing = null, accountBridge: bridging = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false, resume = false, embed = null, syncDelay = null } = {}) {
   if (app) throw new Error('minican already started');
   if (!root) throw new Error('minican root');
   app = root;
@@ -2818,6 +2831,7 @@ export function startMinican({ root = document.getElementById('app'), fonts = []
   if(accountLibrary&&typeof accountLibrary.open==='function'&&typeof accountLibrary.label==='string'&&accountLibrary.label.trim())accountAction=accountLibrary;
   if(navigation&&typeof navigation.load==='function')materialNavigation=navigation;
   if(sharing&&typeof sharing.open==='function'&&typeof sharing.label==='string'&&sharing.label.trim())shareAction=sharing;
+  if (bridging && typeof bridging === 'object' && !embed) accountBridge = { ...(typeof bridging.url === 'string' ? { url: bridging.url } : {}) };
   activityAuthoring=authoring===true;
   resumeOpen=resume===true;
   if (embed && typeof embed.done === 'function' && (embed.close == null || typeof embed.close === 'function')) {

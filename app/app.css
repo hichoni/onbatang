@@ -1174,3 +1174,20 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero-go { display: flex
 .cv-news-when { margin: 0; color: var(--muted, #5f6b66); font-size: .9rem; line-height: 1.5; }
 .cv-news-how { margin: 2px 0 0; padding-left: 1.3em; display: grid; gap: 4px; font-size: .9rem; line-height: 1.5; }
 .cv-news-foot { justify-content: flex-end; }
+
+/* 가이랩 계정으로 이어 쓰기(공용 온바탕 첫 화면 → 창) */
+.cv-bridge { display: grid; gap: 10px; }
+.cv-bridge h2 { margin: 0; font-size: 1.25rem; }
+.cv-bridge-lead { margin: 0; }
+.cv-bridge-note { margin: 0; font-size: .9rem; color: var(--muted, #5d6b66); }
+.cv-bridge-body { display: grid; gap: 14px; }
+.cv-bridge-body > .btn { justify-self: start; }
+.cv-bridge-part { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--line, #dfe6e2); border-radius: 12px; }
+.cv-bridge-part h3 { margin: 0; font-size: 1rem; }
+.cv-bridge-part > .btn { justify-self: start; }
+.cv-bridge-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-height: 13rem; overflow: auto; }
+.cv-bridge-list label, .cv-bridge-all { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; font-size: .95rem; }
+.cv-bridge-list span { color: var(--muted, #5d6b66); font-size: .88rem; }
+.cv-bridge-list em { color: #8a5a00; font-size: .85rem; font-style: normal; }
+.cv-bridge-end { display: flex; justify-content: flex-end; }
+.cv-bridge-status { min-height: 1.3em; margin: 0; color: var(--brand, #286f62); }
