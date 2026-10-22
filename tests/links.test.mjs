@@ -419,3 +419,31 @@ test('label size, look and font; ends at a chosen spot along a side; all saved, 
   assert.match(xml, /name="elink00001 글".*?<a:prstGeom prst="roundRect">.*?<a:srgbClr val="E03131">.*?<a:rPr [^>]*b="1"[^>]*><a:solidFill><a:srgbClr val="FFFFFF"><\/a:srgbClr><\/a:solidFill><a:latin typeface="동글"\/>/i);
   configure({fonts: []});
 });
+
+test('dropping a line end on a piece picks the nearest side and the spot along it; the middle means automatic', async () => {
+  const {endSpot, pieceNear} = await import('../src/links.js');
+  const a = box('nboxaaaaa1', 50, 50, {w: 40, h: 20});           // x 30~70, y 40~60 (aspect 1)
+  assert.deepEqual(endSpot(a, [52, 51], 1), {}, 'middle: automatic');
+  assert.deepEqual(endSpot(a, [40, 59], 1), {side: 'bottom', pos: .25});
+  assert.deepEqual(endSpot(a, [51, 41], 1), {side: 'top', pos: .5}, 'near the middle of the side snaps to it');
+  assert.deepEqual(endSpot(a, [69, 44], 1), {side: 'right', pos: .2});
+  assert.deepEqual(endSpot(a, [29, 70], 1), {side: 'bottom', pos: .1}, 'clamped to the side');
+  // On a 16:9 card the y point is in card-height % and is turned into card-width units first.
+  const wide = box('nboxaaaaa1', 50, 50, {w: 20, h: 40});         // half height 20% of card height
+  assert.equal(endSpot(wide, [50, 69], 16 / 9).side, 'bottom');
+  // Which piece: the one under the point (topmost first), else the closest edge within reach; never lines or locked pieces.
+  const list = [box('nbg0000001', 50, 50, {w: 100, h: 100, lock: true}), a, box('nboxaaaaa2', 50, 50, {w: 10, h: 10}), {id: 'elink00001', t: 'link', from: 'nboxaaaaa1', to: 'nboxaaaaa2', x: 50, y: 50, w: 100, h: 100}];
+  assert.equal(pieceNear(list, [50, 50], 1), 2, 'topmost piece under the point');
+  assert.equal(pieceNear(list, [35, 50], 1), 1);
+  assert.equal(pieceNear(list, [71.5, 50], 1), 1, 'just outside the edge');
+  assert.equal(pieceNear(list, [90, 90], 1), -1, 'nothing near: the locked background does not count');
+});
+
+test('an end at a spot along the side of a round piece sits on its curved edge', () => {
+  const ring = box('nboxaaaaa1', 50, 50, {shape: 'circle'}), far = box('nboxaaaaa2', 50, 90);
+  const [[x, y]] = linkEnds(linkGeometry(ring, far, {aspect: 1, fromSide: 'bottom', fromPos: .25}), 1);
+  // Circle r=10 at (50,50): at x=45 the edge is at y=50+sqrt(75)≈58.66, plus the small gap.
+  const [[, mid]] = linkEnds(linkGeometry(ring, far, {aspect: 1, fromSide: 'bottom'}), 1);
+  assert.ok(Math.abs(x - 45) < .01 && Math.abs(y - (mid - 10 + Math.sqrt(75))) < .01, `${x},${y} (middle ${mid})`);
+  assert.ok(Math.abs(mid - 61.3) < .01, 'the middle of the side is unchanged');
+});

@@ -77,11 +77,12 @@ const axisOf = (side) => (side === 'left' || side === 'right' ? 0 : 1);
 const halfOf = (box, axis) => (axis === 0 ? box.hw : box.hh);
 // 조각의 그 옆 가운데에서 바깥으로 gap 만큼 떨어진 점
 // box.at: { 옆: 자리 } 이면 그 옆의 가운데 대신 그 자리(0 처음 ~ 1 끝: 위 · 아래 옆은 왼쪽에서, 왼쪽 · 오른쪽 옆은 위에서 잰다)에 붙는다.
+// 동그란 조각은 그 자리의 테두리가 타원을 따라 안쪽으로 들어오므로 그만큼 당겨 붙인다.
 const sidePoint = (box, side, gap) => {
-  const along = ((box.at?.[side] ?? 0.5) - 0.5) * 2;
+  const along = ((box.at?.[side] ?? 0.5) - 0.5) * 2, depth = box.round ? Math.sqrt(Math.max(0, 1 - along * along)) : 1;
   return axisOf(side) === 1
-    ? [box.cx + along * box.hw, box.cy + NORMAL[side][1] * (box.hh + gap)]
-    : [box.cx + NORMAL[side][0] * (box.hw + gap), box.cy + along * box.hh];
+    ? [box.cx + along * box.hw, box.cy + NORMAL[side][1] * (box.hh * depth + gap)]
+    : [box.cx + NORMAL[side][0] * (box.hw * depth + gap), box.cy + along * box.hh];
 };
 /** 한 옆 위의 자리(fromPos · toPos)로 고를 수 있는 범위 */
 export const LINK_POS = Object.freeze({ min: 0.1, max: 0.9 });
@@ -399,6 +400,37 @@ export function dragLinkHandle(link, a, b, point, aspect = 1) {
   if (reach(hi) <= goal) return { curve, bend: hi };
   for (let k = 0; k < 24; k++) { const m = (lo + hi) / 2; if (reach(m) < goal) lo = m; else hi = m; }
   return { curve, bend: r3((lo + hi) / 2) };
+}
+
+/**
+ * 선의 끝을 조각 위의 point(카드 위의 자리, linkEnds 와 같은 단위)에 놓았을 때 붙는 곳: { side, pos }.
+ * 가운데 언저리(반너비 · 반높이의 40% 안)면 {}(알아서). 아니면 가장 가까운 테두리의 옆과, 그 옆을 따라 잰 자리(0.05 마디, 가운데 가까우면 0.5).
+ */
+export function endSpot(item, point, aspect = 1) {
+  const box = boxOfItem(item, aspect), px = point[0], py = point[1] / aspect;
+  if (!(box.hw > 0 && box.hh > 0)) return {};
+  const dx = px - box.cx, dy = py - box.cy;
+  if (Math.abs(dx) < box.hw * 0.4 && Math.abs(dy) < box.hh * 0.4) return {};
+  const across = box.hh - Math.abs(dy) < box.hw - Math.abs(dx);      // 위 · 아래 테두리가 더 가깝다
+  const side = across ? (dy > 0 ? 'bottom' : 'top') : (dx > 0 ? 'right' : 'left');
+  const t = across ? (dx + box.hw) / (2 * box.hw) : (dy + box.hh) / (2 * box.hh);
+  let pos = Math.min(LINK_POS.max, Math.max(LINK_POS.min, Math.round(t * 20) / 20));
+  if (Math.abs(pos - 0.5) < 0.075) pos = 0.5;
+  return { side, pos: r3(pos) };
+}
+/** 끝을 point 에 놓을 조각을 고른다: 그 점을 품은 것(위에 있는 것 먼저), 없으면 테두리에서 near 안쪽으로 가까운 것. 연결선 · 잠근 것은 빼고 번호(없으면 -1). */
+export function pieceNear(items, point, aspect = 1, near = 2) {
+  const px = point[0], py = point[1] / aspect;
+  let best = -1, gap = near;
+  for (let i = items.length - 1; i >= 0; i--) {
+    const it = items[i];
+    if (!it || it.t === 'link' || it.lock) continue;
+    const b = boxOfItem(it, aspect);
+    const out = Math.max(Math.abs(px - b.cx) - b.hw, Math.abs(py - b.cy) - b.hh);   // 네모 바깥으로 떨어진 거리(안이면 0 이하)
+    if (out <= 0) return i;
+    if (out < gap) { gap = out; best = i; }
+  }
+  return best;
 }
 
 /** 다른 조각을 복제·붙여넣기했을 때: 원래 이름표 → 새 이름표 로 잇는 곳을 바꾼다(둘 다 함께 옮긴 선만). */

@@ -541,3 +541,46 @@ test('a connector label can be bigger or smaller, filled or plain, in another fo
   await saved(page, r => link(r)?.fromSide === 'bottom' && !('fromPos' in link(r)));
   assert.deepEqual(external, []);
 });
+
+test('dragging an end of a selected connector onto another piece rejoins it there, at the side and spot it was dropped on', options, async t => {
+  const {page, external} = await setup(t);
+  const shapes = page.locator('.cv-canvas .fe-card .fi-shape');
+  await shapes.nth(0).click();
+  await shapes.nth(1).click({modifiers: ['Shift']});
+  await page.locator('.fe-bar button').filter({hasText: '연결선'}).click();
+  await page.locator('.cv-canvas .fe-card .fi-link').waitFor();
+  const [p1, p2] = await ends(page);
+  await page.mouse.click((p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2);
+  const link = r => r.slides[0].items.find(it => it.t === 'link');
+  const toKnob = page.locator('.fe-link-end[data-corner="to"]');
+  await toKnob.waitFor();
+  const stage = await page.locator('.cv-canvas .fe-stage').boundingBox();
+  const at = (x, y) => [stage.x + stage.width * x / 100, stage.y + stage.height * y / 100];
+  const dragTo = async (knob, [x, y], outline = true) => {
+    const [kx, ky] = await center(knob);
+    await page.mouse.move(kx, ky);
+    await page.mouse.down();
+    await page.mouse.move((kx + x) / 2, (ky + y) / 2, {steps: 4});
+    await page.mouse.move(x, y, {steps: 4});
+    assert.equal(await page.locator('.fe-link-target').isVisible(), outline, 'outline of the piece it will join');
+    if (process.env.LINK_SHOT && outline) await page.screenshot({path: process.env.LINK_SHOT});
+    await page.mouse.up();
+  };
+  // Onto the middle of the text: joined to it, side chosen automatically.
+  await dragTo(toKnob, at(50, 12));
+  await saved(page, r => link(r)?.to === 'etext00001' && !('toSide' in link(r)));
+  assert.equal(await page.locator('.fe-link-target').isVisible(), false, 'outline goes away on drop');
+  // Back onto the circle, near the left of its bottom edge (circle: x 65~79, y 50~74).
+  await dragTo(toKnob, at(68.5, 73));
+  await saved(page, r => link(r)?.to === 'ebox000002' && link(r).toSide === 'bottom' && link(r).toPos === .25);
+  // Onto empty space, or onto the piece at the other end: nothing changes.
+  await dragTo(toKnob, at(50, 92), false);
+  await dragTo(page.locator('.fe-link-end[data-corner="from"]'), at(72, 62), false);
+  await new Promise(r => setTimeout(r, 600));
+  const now = link(await page.evaluate(() => window.readSaved()));
+  assert.deepEqual([now.from, now.to, now.toSide, now.toPos], ['ebox000001', 'ebox000002', 'bottom', .25]);
+  // Undo goes back one drop.
+  await page.keyboard.press('Control+z');
+  await saved(page, r => link(r)?.to === 'etext00001');
+  assert.deepEqual(external, []);
+});

@@ -367,6 +367,9 @@
 .fe-h.fe-link-knob { position: absolute; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; background: #fff; border: 2px solid var(--fe-primary); box-shadow: 0 1px 4px rgba(0, 0, 0, .25); cursor: grab; touch-action: none; pointer-events: auto; z-index: 3; }
 .fe-h.fe-link-knob:active { cursor: grabbing; }
 @media (pointer: coarse) { .fe-h.fe-link-knob { width: 26px; height: 26px; margin: -13px 0 0 -13px; } }
+.fe-h.fe-link-end { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: var(--fe-primary); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .3); cursor: crosshair; touch-action: none; pointer-events: auto; z-index: 3; }
+@media (pointer: coarse) { .fe-h.fe-link-end { width: 24px; height: 24px; margin: -12px 0 0 -12px; } }
+.fe-link-target { position: absolute; box-sizing: border-box; border: 2px dashed var(--fe-primary); border-radius: 6px; pointer-events: none; }
 /* 잇기: 꾸미기 칸의 "연결선" 카드와 잇는 동안의 안내 띠 */
 .fe-link-start { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; border: 1.5px solid var(--fe-line, #dde5e1); border-radius: 12px; background: #fff; color: var(--fe-text); text-align: left; font: inherit; cursor: pointer; }
 .fe-link-start:hover { border-color: var(--fe-primary); background: var(--fe-soft); }
