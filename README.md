@@ -1,5 +1,10 @@
 # 온바탕 — 생각을 펼치는 따뜻한 디자인 공간
 
+## v0.63.0 · 발표의 질문 · 반응 자리(showAudience) (2026-10-22)
+
+- `startMinican({ showAudience: { open({ state(), root }) → { update(state), show?(), close() } } })`: 발표 막대에 **질문 · 반응** 단추가 생깁니다. 장이 바뀔 때마다 `update({ at, total, title })`, 발표를 끝내면 `close()`. 호스트가 학생 QR · 반응 띄우기 · 질문 칸을 맡고, 발표를 넘기는 길은 주지 않습니다(리모컨과 따로).
+- 공용 온바탕에는 단추가 없습니다. 가이랩이 Supabase 실시간 채널로 씁니다.
+
 ## v0.62.0 · 발표의 휴대폰 리모컨 자리(showRemote) (2026-10-22)
 
 - `startMinican({ showRemote: { open({ state(), command(cmd), root }) → { update(state), show?(), close() } } })`: 발표 막대에 **휴대폰 리모컨** 단추가 생깁니다(호스트가 연결 · QR 을 맡음). 장이 바뀔 때마다 `update({ at, total, title, page, next, notes })`(지금 · 다음 장의 맨 위 글, 발표자 노트), 발표를 끝내면 `close()`.
