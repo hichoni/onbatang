@@ -9,21 +9,23 @@ import {resolve, extname, sep} from 'node:path';
 
 const root = resolve(fileURLToPath(new URL('../../', import.meta.url)));
 const options = {skip: !process.env.MINICAN_PLAYWRIGHT_PATH, timeout: 120000};
-const html = `<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/src/editor.css"><link rel="stylesheet" href="/app/app.css"><body class="mc-app"><main id="app"></main><script type="module">
+const html = (ai = '') => `<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/src/editor.css"><link rel="stylesheet" href="/app/app.css"><body class="mc-app"><main id="app"></main><script type="module">
 import {startMinican} from '/app/app.js';import {newRecord} from '/app/designs.js';import {putDesign,getDesign,setStorageName} from '/app/store.js';
 setStorageName('outline-fixture');
 const seed=newRecord('16:9');seed.name='개요 검수';
 seed.slides=[{id:'poutline001',bg:'navy',tr:'fade',items:[{id:'etexta0001',t:'text',text:'우리 반 발표',x:50,y:40,w:60,size:8,color:'#ffffff'}]},
  {id:'poutline002',bg:'#ffffff',items:[]}];
 await putDesign(seed);window.readSaved=()=>getDesign(seed.id);
-await startMinican({storage:'outline-fixture'});window.ready=true;
+await startMinican({storage:'outline-fixture'${ai}});window.ready=true;
 </script>`;
 
-async function setup(t) {
+async function setup(t, page0 = '/fixture.html') {
   const server = createServer(async (req, res) => {
     try {
       const path = new URL(req.url, 'http://localhost').pathname;
-      if (path === '/fixture.html') { res.setHeader('Content-Type', 'text/html'); return res.end(html); }
+      if (path === '/fixture.html') { res.setHeader('Content-Type', 'text/html'); return res.end(html()); }
+      // 가이X 를 이어 준 곳처럼: 개요 부탁을 받아 두고, 정해 둔 답을 돌려준다(두 번째 부탁은 개요가 아닌 답).
+      if (path === '/fixture-ai.html') { res.setHeader('Content-Type', 'text/html'); return res.end(html(`,activityAuthoring:true,appMaker:{connect:async()=>({label:'가이X 연결됨'}),generate:async(input)=>{(window.asked||=[]).push(input);return window.asked.length===1?{kind:'outline',outline:'좋아요!\\n\\n\\u0060\\u0060\\u0060outline\\n1. **우리 동네 시장**\\n  - 무엇을 파나요\\n  - 누가 일하나요\\n> 사진을 보여 주며\\n2장: 정리\\n\\u0060\\u0060\\u0060'}:{kind:'answer',answer:'무엇을 도와드릴까요?'};}}`)); }
       const f = resolve(root, '.' + decodeURIComponent(path));
       if (!f.startsWith(root + sep)) throw Error('path');
       res.setHeader('Content-Type', ({'.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.woff': 'font/woff', '.png': 'image/png'})[extname(f)] || 'application/octet-stream');
@@ -40,7 +42,7 @@ async function setup(t) {
   await context.route('**/*', route => /^https?:/.test(route.request().url()) && !route.request().url().startsWith(origin + '/') ? (external.push(route.request().url()), route.abort()) : route.continue());
   await context.addInitScript(() => { try { localStorage.setItem('onbatang-tour-seen-v1:editor', '1'); localStorage.setItem('onbatang-tour-seen-v1:news-0.45', '1'); } catch {} });
   const page = await context.newPage();
-  await page.goto(origin + '/fixture.html');
+  await page.goto(origin + page0);
   await page.waitForFunction(() => window.ready);
   await page.locator('.cv-item .cv-thumb').first().click();
   await page.locator('.cv-canvas .fe-stage').waitFor();
@@ -99,4 +101,40 @@ test('an outline becomes titled slides after the current one, or fills an empty 
   assert.ok(words(r.slides[4]).includes('◦ 햇빛을 받아 양분을 만들어요'), 'second level line');
   assert.equal(r.slides[4].bg, '#ffffff');
   assert.deepEqual(external, []);
+});
+
+test('where 가이X is joined, the outline dialog asks it for an outline by topic and slide count, fills the box and can go back', options, async t => {
+  const {page, external} = await setup(t, '/fixture-ai.html');
+  await slideMenu(page);
+  await page.locator('.fe-menu .fe-mi').filter({hasText: '개요로 장 만들기'}).click();
+  const box = page.locator('.cv-outline-box'), input = box.locator('.cv-outline-input'), topic = box.locator('.cv-outline-topic'), ask = box.locator('[data-outline-ask]');
+  await topic.waitFor();
+  assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('cv-outline-topic')), true, 'the topic box is ready to type in');
+  await ask.click();
+  assert.match(await box.locator('.cv-outline-ai [role=status]').textContent(), /3자 넘게/);
+  await topic.fill('초등 3학년 사회 — 우리 동네 시장');
+  await box.locator('.cv-outline-count').selectOption('4');
+  await input.fill('내가 먼저 쓴 개요');
+  await ask.click();
+  await page.waitForFunction(() => /가이X가 쓴 개요예요/.test(document.querySelector('.cv-outline-ai [role=status]').textContent));
+  if (process.env.OUTLINE_SHOT) await page.screenshot({path: `${process.env.OUTLINE_SHOT}-ai.png`});
+  assert.deepEqual(await page.evaluate(() => window.asked), [{kind: 'outline', prompt: '초등 3학년 사회 — 우리 동네 시장', slides: 4}]);
+  assert.equal(await input.inputValue(), '우리 동네 시장\n  - 무엇을 파나요\n  - 누가 일하나요\n> 사진을 보여 주며\n정리');
+  assert.deepEqual(await box.locator('.cv-outline-list li b').allTextContents(), ['우리 동네 시장', '정리']);
+  // The earlier outline can come back.
+  await box.locator('[data-outline-undo]').click();
+  assert.equal(await input.inputValue(), '내가 먼저 쓴 개요');
+  // An answer that is not an outline leaves the box as it is.
+  await ask.click();
+  await page.waitForFunction(() => /개요 모양의 답을 받지 못했어요/.test(document.querySelector('.cv-outline-ai [role=status]').textContent));
+  assert.equal(await input.inputValue(), '내가 먼저 쓴 개요');
+  assert.deepEqual(external, []);
+});
+
+test('without 가이X the outline dialog has no ask box', options, async t => {
+  const {page} = await setup(t);
+  await slideMenu(page);
+  await page.locator('.fe-menu .fe-mi').filter({hasText: '개요로 장 만들기'}).click();
+  await page.locator('.cv-outline-input').waitFor();
+  assert.equal(await page.locator('.cv-outline-ai').count(), 0);
 });

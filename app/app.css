@@ -542,6 +542,13 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"], body.mc-app :is(#app,.cv-a
 .cv-outline-list { margin: 0; padding-left: 1.6em; max-height: 9em; overflow: auto; font-size: .9rem; }
 .cv-outline-list li { margin: 2px 0; }
 .cv-outline-list span { color: #5c6370; }
+.cv-outline-input.short { min-height: 7em; }
+.cv-outline-ai { display: grid; gap: 8px; padding: 12px; border-radius: 12px; background: var(--soft); }
+.cv-outline-topic { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1.5px solid #d7dbe6; border-radius: 10px; font: inherit; resize: vertical; }
+.cv-outline-count { padding: 6px 8px; border: 1.5px solid #d7dbe6; border-radius: 8px; font: inherit; background: #fff; }
+.cv-outline-ask { display: inline-flex; align-items: center; gap: 6px; }
+.cv-outline-ask svg { width: 20px; height: 20px; }
+.cv-outline-ai .cv-down-note { margin: 0; }
 .cv-find-box .cv-down-note, .cv-keys-box .cv-down-note { margin: 0; }
 @media (max-width: 600px) { .cv-keys { grid-template-columns: 1fr; } .cv-keys dd { margin-bottom: 6px; } }
 .cv-down-ask .cv-size { min-width: 0; padding: 14px 8px 12px; }

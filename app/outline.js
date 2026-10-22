@@ -115,3 +115,17 @@ export function outlineSlides(sections, { bg, font, like = null, room = Infinity
   }
   return { slides: made, cut };
 }
+
+/**
+ * 가이X 가 써 준 답 → 개요 글. 코드 블록(```)이 있으면 그 안만 쓰고, 굵게 · 기울임 표시를 떼고,
+ * 들여 쓰지 않은 줄 앞의 "1.", "1장:", "슬라이드 1:" 같은 장 번호는 떼어 제목으로 읽히게 한다. 200줄까지.
+ */
+export function outlineFromAnswer(answer) {
+  const text = String(answer ?? '').replace(/\r\n?/g, '\n');
+  const fenced = /```[^\n]*\n([\s\S]*?)```/.exec(text);
+  return (fenced ? fenced[1] : text).split('\n')
+    .map((line) => line.replace(/\*\*|__|`/g, '').replace(/\s+$/, ''))
+    .map((line) => (/^\S/.test(line) ? line.replace(/^(?:#{1,6}\s+)?(?:(?:\d{1,2}\s*장\s*[:.)]?|슬라이드\s*\d{1,2}\s*[:.)]?|\d{1,2}[.)])\s*)?/, '') : line))
+    .filter((line, k, all) => line.trim() || (k && all[k - 1].trim()))
+    .slice(0, 200).join('\n').trim();
+}

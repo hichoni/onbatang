@@ -54,3 +54,13 @@ test('outline slides lay a title, a short bar and stacked body lines in the slid
   assert.ok(bodies[0].size < 5);
   for (const s of full.slides) for (const it of s.items) assert.ok(it.y < 95, `${it.text} at ${it.y}`);
 });
+
+test('an outline written by 가이X is taken from its code block, without numbering or bold marks', async () => {
+  const {outlineFromAnswer} = await import('../app/outline.js');
+  const answer = '좋아요! 개요를 써 볼게요.\n\n```outline\n1. **식물의 한살이**\n  - 씨앗이 **싹** 터요\n> 씨앗을 보여 주기\n2장: 잎과 줄기\n  - 햇빛\n슬라이드 3) 정리\n```\n더 필요하면 말해 주세요.';
+  const text = outlineFromAnswer(answer);
+  assert.equal(text, '식물의 한살이\n  - 씨앗이 싹 터요\n> 씨앗을 보여 주기\n잎과 줄기\n  - 햇빛\n정리');
+  assert.deepEqual(parseOutline(text).map(s => s.title), ['식물의 한살이', '잎과 줄기', '정리']);
+  assert.equal(outlineFromAnswer('### 제목\n  내용'), '제목\n  내용', 'no code block: the whole answer');
+  assert.equal(outlineFromAnswer(null), '');
+});
