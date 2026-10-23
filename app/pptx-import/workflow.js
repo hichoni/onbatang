@@ -58,8 +58,27 @@ function shell(inspection){
   assets:[{id:source.assetId,kind:'source',mimeType:MIME,sha256:source.sha256,byteLength:source.byteLength}],slides:[]};
 }
 
+// 영상 파일을 이 기기의 영상 저장소(app/videos.js)에 맡긴다. 영상을 틀 수 없는 브라우저면 null(그 장은 표지 그림으로 남는다).
+async function keepVideoDefault({blob,design}){
+ const [{probeVideo},{saveVideo}]=await Promise.all([import('../../src/scene.js'),import('../videos.js')]);
+ const info=await probeVideo(blob);if(!info)return null;
+ return {src:await saveVideo({blob,design,seconds:info.seconds}),dur:info.seconds};
+}
+/** 화면 그림이 한 가지 색뿐인지(영상만 있는 장 · 나중에 나타나는 요소만 있는 장이 까맣게 찍힌다). 알 수 없으면 false. */
+export async function blankPicture(dataUrl){
+ try{
+  if(typeof createImageBitmap!=='function'||typeof OffscreenCanvas!=='function')return false;
+  const match=/^data:(image\/(?:png|jpeg|webp));base64,(.+)$/.exec(String(dataUrl||''));if(!match)return false;
+  const raw=Uint8Array.from(atob(match[2]),c=>c.charCodeAt(0)),bitmap=await createImageBitmap(new Blob([raw],{type:match[1]})),canvas=new OffscreenCanvas(48,27),ctx=canvas.getContext('2d');
+  ctx.drawImage(bitmap,0,0,48,27);bitmap.close?.();
+  const data=ctx.getImageData(0,0,48,27).data;let min=[255,255,255],max=[0,0,0];
+  for(let i=0;i<data.length;i+=4)for(let c=0;c<3;c++){min[c]=Math.min(min[c],data[i+c]);max[c]=Math.max(max[c],data[i+c]);}
+  return max.every((v,c)=>v-min[c]<=10);
+ }catch{return false;}
+}
+
 /** One user operation, multiple fixed documents when needed. Retry reuses exact inputs. */
-export function createPptxImportWorkflow({imports,convert=convertPptx,applyFonts=applyFontPlan,loadFonts=loadImportFontAssets}={}){
+export function createPptxImportWorkflow({imports,convert=convertPptx,applyFonts=applyFontPlan,loadFonts=loadImportFontAssets,keepVideo=keepVideoDefault,isBlank=blankPicture}={}){
  if(typeof imports?.saveConvertedDocument!=='function')throw new TypeError('imports.saveConvertedDocument is required');
  const jobs=new Map();
  async function saveAll(options={}){
@@ -81,22 +100,44 @@ export function createPptxImportWorkflow({imports,convert=convertPptx,applyFonts
    if(job.complete)return result(job);
    job.running=true;acquired=true;
    const sourceBlob=new Blob([file],{type:MIME});
-   const progress=phase=>{const stored=job.queue.filter(p=>p.envelope).flatMap(p=>p.pages);try{onProgress({phase,completed:stored.length,total:job.selectedPages.length,documents:job.queue.filter(p=>p.envelope).length});}catch{/* Status rendering cannot cancel a durable write. */}};
+   // current: 지금 다루는 쪽들(보여 주는 쪽이 "담는 중"으로 그린다).
+   const progress=(phase,current)=>{const stored=job.queue.filter(p=>p.envelope).flatMap(p=>p.pages);try{onProgress({phase,completed:stored.length,total:job.selectedPages.length,documents:job.queue.filter(p=>p.envelope).length,...(current?{current:[...current]}:{})});}catch{/* Status rendering cannot cancel a durable write. */}};
    for(let index=0;index<job.queue.length;index++){
-    const part=job.queue[index];if(part.envelope)continue;cancelled(signal);progress('converting');
+    const part=job.queue[index];if(part.envelope)continue;cancelled(signal);progress('converting',part.pages);
     try{
      if(!part.input){
-      const editable=part.pages.filter(n=>(importModes[n]||'editable')==='editable');
-      const converted=editable.length?await convert(file,{selectedPages:editable,signal}):null;
-      const document=converted?clone(converted.document):shell(inspection);
-      const pages=new Map(document.slides.map(p=>[p.source.pageNumber,p]));
+      // 그림으로 가져오려던 쪽의 화면이 한 가지 색뿐이면(영상만 있는 장처럼 까맣게 찍힌 것), 글 · 도형으로 가져올 수 있는 쪽은 그렇게 바꾼다.
+      const rendered=new Map(),blankPages=[];
       let fontAssets;
       for(const n of part.pages.filter(n=>importModes[n]==='image')){
        if(typeof previewSession?.renderPage!=='function')fail('PREVIEW_UNAVAILABLE',`${n}쪽의 PPT 화면을 먼저 확인해 주세요.`);
        cancelled(signal);
        if(fontPlan&&!fontAssets)fontAssets=await loadFonts(fontPlan,{signal});
-       const rendered=await previewSession.renderPage(n,{width:1600,signal,fontPlan,fontAssets});
-       const url=await compressImportPreview(rendered.dataUrl,{signal}),source={...document.source,pageNumber:n};delete source.filename;
+       progress('rendering',[n]);
+       const picture=await previewSession.renderPage(n,{width:1600,signal,fontPlan,fontAssets});
+       if(await isBlank(picture.dataUrl)){blankPages.push(n);if(inspection.pages.find(p=>p.pageNumber===n)?.canImport)continue;}
+       rendered.set(n,picture);
+      }
+      const switched=blankPages.filter(n=>!rendered.has(n));
+      const editable=part.pages.filter(n=>(importModes[n]||'editable')==='editable'||switched.includes(n));
+      const converted=editable.length?await convert(file,{selectedPages:editable,signal}):null;
+      const document=converted?clone(converted.document):shell(inspection);
+      const pages=new Map(document.slides.map(p=>[p.source.pageNumber,p]));
+      // 장을 채운 영상: 이 기기에 저장하고 그 장의 바탕 영상으로 깐다(표지 그림은 뺀다). 저장하지 못하면 표지 그림이 남는다.
+      const videoNotes=[];
+      for(const m of converted?.media||[]){
+       const slide=pages.get(m.pageNumber);if(!slide||slide.video)continue;
+       cancelled(signal);progress('video',[m.pageNumber]);
+       try{
+        const video=await keepVideo({blob:new Blob([m.bytes],{type:m.mime}),design:document.id,pageNumber:m.pageNumber});
+        if(!video?.src){videoNotes.push(m.pageNumber);continue;}
+        slide.video={src:video.src,dur:video.dur,fit:'cover',...(m.auto?{auto:true}:{})};      // PPT 에서 "자동으로"였던 것만 저절로. 아니면 누를 때 튼다
+        slide.items=slide.items.filter(item=>item.id!==m.posterId);
+       }catch(error){if(error?.code==='CANCELLED')throw error;videoNotes.push(m.pageNumber);}
+      }
+      for(const [n,picture] of rendered){
+       cancelled(signal);
+       const url=await compressImportPreview(picture.dataUrl,{signal}),source={...document.source,pageNumber:n};delete source.filename;
        pages.set(n,{id:legacyId('p',`${inspection.source.sha256}:${n}`),bg:'paper',source,assetRefs:[inspection.source.assetId],items:[{
         id:legacyId('e',`${inspection.source.sha256}:${n}:rendered-slide`),t:'image',layout:'slide',x:50,y:50,w:100,h:100,rot:0,op:100,mask:'none',url,source:{...source,objectId:'rendered-slide'},assetRefs:[inspection.source.assetId]}]});
       }
@@ -110,7 +151,10 @@ export function createPptxImportWorkflow({imports,convert=convertPptx,applyFonts
       const report=converted?clone(converted.report):{contractVersion:1,jobId:newId('j'),status:'ready',sourceDocumentId:inspection.source.sourceDocumentId,sourceAssetId:inspection.source.assetId,converter:clone(inspection.converter),selectedPages:[],pageCount:inspection.pageCount,warnings:[]};
       report.selectedPages=[...part.pages];report.fontUsage=fontUsage;
       report.importBatch={id:job.batchId,partIndex:index+1,selectedPages:job.selectedPages,pages:[...part.pages]};
-      report.importModes=Object.fromEntries(part.pages.map(n=>[n,importModes[n]||'editable']));
+      report.importModes=Object.fromEntries(part.pages.map(n=>[n,switched.includes(n)?'editable':importModes[n]||'editable']));
+      for(const n of switched)report.warnings.push({code:'BLANK_IMAGE_SWITCHED',message:`${n}쪽은 PPT 화면이 한 가지 색으로만 보여서(영상 · 나중에 나타나는 요소) 글 · 도형으로 가져왔어요.`,pageNumber:n});
+      for(const n of blankPages.filter(n=>rendered.has(n)))report.warnings.push({code:'BLANK_IMAGE',message:`${n}쪽의 PPT 화면이 한 가지 색으로만 보여요. 원본과 비교해 주세요.`,pageNumber:n});
+      for(const n of videoNotes)report.warnings.push({code:'VIDEO_NOT_SAVED',message:`${n}쪽의 영상을 이 기기에 저장하지 못해 표지 그림으로 가져왔어요. "바탕 영상"에서 다시 넣을 수 있어요.`,pageNumber:n});
       report.fontChanges=payload.slides.flatMap(p=>p.items.filter(e=>e.t==='text').flatMap(e=>{
        const old=before.slides.find(page=>page.id===p.id)?.items.find(i=>i.id===e.id);
        return old&&(old.font!==e.font||old.typeface!==e.typeface)?[{elementId:e.id,pageNumber:p.source.pageNumber,from:fontUsage.find(u=>u.elementId===e.id)?.originalName||old.typeface||old.font,to:e.font}]:[];
@@ -119,7 +163,7 @@ export function createPptxImportWorkflow({imports,convert=convertPptx,applyFonts
       if(bytes(payload)>524288||bytes({importReport:report})>65536)fail('DOCUMENT_SIZE_LIMIT');
       part.input={document:payload,report};
      }
-     cancelled(signal);progress('saving');
+     cancelled(signal);progress('saving',part.pages);
      // Do not abandon an in-flight durable write on cancel; record its receipt first.
      part.envelope=await imports.saveConvertedDocument({input:part.input,sourceBlob});
      part.input=null;progress('saved');

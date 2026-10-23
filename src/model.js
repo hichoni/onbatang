@@ -5,7 +5,8 @@
 // 디자인 한 장은 { bg, items } 이다.
 //   - bg: 배경. 정해 둔 이름(BACKGROUNDS 의 id) 또는 '#rrggbb'.
 //   - items: 요소들. 뒤에 있을수록 위에 보인다.
-//   - video(있을 때만): 영상 장면. 이 장의 바탕에 까는 영상 { src, dur, in, out, vol, fit }. 요소들은 그 위에 놓인다(아래 "영상 장면").
+//   - video(있을 때만): 영상 장면. 이 장의 바탕에 까는 영상 { src, dur, in, out, vol, fit, auto }. 요소들은 그 위에 놓인다(아래 "영상 장면").
+//     auto: true 면 장이 열리면 바로 튼다. 없으면 발표하다가 누를 때(다음 장으로) 튼다(PowerPoint 의 "클릭할 때"와 같다. 그때까지 첫 모습으로 기다린다).
 // 자리(x, y)는 요소의 가운데 점을 카드의 가로·세로에 대한 백분율로, 크기(w)는 카드 너비에 대한 백분율로 적는다.
 // 글자 크기(size)도 카드 너비를 100 으로 본 값이라, 카드가 커지거나 작아져도 모양이 그대로다.
 //
@@ -457,6 +458,7 @@ export function cleanVideo(raw) {
     src: v.src, dur, in: from, out: to,
     vol: given(v.vol) ? Math.round(Math.min(100, Math.max(0, Number(v.vol)))) : 100,
     fit: VIDEO_FITS.some((f) => f.id === v.fit) ? v.fit : 'cover',
+    ...(v.auto === true ? { auto: true } : {}),
   };
 }
 /**

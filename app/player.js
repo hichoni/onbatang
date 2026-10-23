@@ -14,7 +14,7 @@ import { cleanDesign } from '../src/model.js';
  */
 export function mountPlayer(stage, { slides = [], aspect = 16 / 9, onChange = () => {}, edge = 1920 } = {}) {
   const pages = slides.map((s) => cleanDesign(s, { keepSpaces: true }));
-  let at = 0, parts = null, turning = null, leaving = null, film = null, tube = [], timers = [], alive = true;
+  let at = 0, parts = null, turning = null, leaving = null, film = null, waiting = null, tube = [], timers = [], alive = true;
   const shown = new WeakMap(), films = new WeakMap(), tubes = new WeakMap();
   stage.classList.add('ob-player');
   stage.style.setProperty('--ob-player-ratio', String(aspect));
@@ -33,17 +33,24 @@ export function mountPlayer(stage, { slides = [], aspect = 16 / 9, onChange = ()
     card.remove();
   };
   const settle = () => { turning?.finish(); turning = null; if (leaving) drop(leaving); leaving = null; };
-  const tell = () => { try { onChange({ at, total: pages.length, left: parts?.left?.() || 0 }); } catch (error) { console.warn(error); } };
+  // left: 이 장에 남은 누를 것(누를 때 나오는 요소 + 기다리는 바탕 영상).
+  const tell = () => { try { onChange({ at, total: pages.length, left: (parts?.left?.() || 0) + (waiting ? 1 : 0) }); } catch (error) { console.warn(error); } };
   // 들어오는 장의 영상 장면 · 유튜브: 나가는 장의 것은 멈추고, delay 뒤에 튼다("장이 열리면 바로 틀기"로 정한 유튜브만 저절로).
   const startMedia = (card, design, delay) => {
     for (const t of timers) clearTimeout(t);
     timers = [];
-    film?.pause(); film = null;
+    film?.pause(); film = null; waiting = null;
     const layer = design.video ? card.querySelector(':scope > .fe-scene') : null;
     if (layer) {
       const mine = film = scenePlayer(layer, design.video);
       films.set(card, mine);
-      timers.push(setTimeout(() => { if (film === mine) mine.play({ from: design.video.in }); }, delay));
+      // 장이 열리면 바로 트는 영상만 저절로. 아니면 첫 모습으로 기다리다가 next() 에서 튼다(발표 화면과 같다).
+      if (design.video.auto) timers.push(setTimeout(() => { if (film === mine) mine.play({ from: design.video.in }); }, delay));
+      else {
+        waiting = { player: mine, layer, from: design.video.in };
+        layer.classList.add('fe-standby');
+        mine.ready.then((ok) => { if (!ok && waiting?.player === mine) { waiting = null; layer.classList.remove('fe-standby'); tell(); } });
+      }
     }
     for (const p of tube) if (p.started) p.pause();
     tube = youTubePlayers(card);
@@ -78,9 +85,10 @@ export function mountPlayer(stage, { slides = [], aspect = 16 / 9, onChange = ()
       if (!alive || !pages.length) return false;
       settle();
       parts?.finish();
+      if (waiting) { const w = waiting; waiting = null; w.layer.classList.remove('fe-standby'); w.player.play({ from: w.from }); tell(); return true; }
       if (parts?.next()) { tell(); return true; }
-      const waiting = tube.find((p) => !p.started);
-      if (waiting) { waiting.play(); return true; }
+      const tubeWaiting = tube.find((p) => !p.started);
+      if (tubeWaiting) { tubeWaiting.play(); return true; }
       if (at >= pages.length - 1) return false;
       at++; draw(1); return true;
     },

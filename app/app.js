@@ -1554,6 +1554,7 @@ async function present(O) {
   let turning = null;        // 틀고 있는 전환 효과
   let leaving = null;        // 나가는 중인 장(전환이 끝나면 뗀다)
   let film = null;           // 지금 장의 영상 조종기(영상 장면이 없는 장이면 null)
+  let filmWaiting = null;    // 누를 때 트려고 기다리는 영상(그 장의 film)
   let filmTimer = 0;
   const films = new WeakMap();      // 장(그린 요소) → 그 장의 영상 조종기
   // 유튜브 영상(장마다 미리 불러 둔다): 스페이스 바로 튼다(누를 때 나오는 요소들 다음 차례). 틀고 있는 동안 스페이스 바는 멈추기·다시 틀기다.
@@ -1624,6 +1625,7 @@ async function present(O) {
     if (!film && tube.length) { (tubeNow() || tube[0]).toggle(); return; }
     if (!film) return;
     clearTimeout(filmTimer);
+    if (filmWaiting === film) { startWaitingFilm(); return; }
     if (film.playing) film.pause(); else film.play();
   };
   const filmBtn = btn(ic('pause'), '영상 멈추기 (K)', toggleFilm);
@@ -1645,18 +1647,29 @@ async function present(O) {
     tubes.delete(view);
     view.remove();
   };
-  // 지금 장의 영상을 준비하고, delay(ms) 뒤에 처음부터 튼다. 영상 장면이 없는 장이면 단추를 감춘다.
+  // 누를 때 트는 영상(video.auto 가 아닌 것): 첫 모습으로 기다리다가 다음을 누르면(→ · 스페이스 · 리모컨 · K) 처음부터 튼다.
+  const startWaitingFilm = () => {
+    const mine = filmWaiting;
+    filmWaiting = null;
+    if (!mine) return false;
+    mine.layer?.classList.remove('fe-standby');
+    mine.play({ from: mine.from });
+    return true;
+  };
+  // 지금 장의 영상을 준비하고, 장이 열리면 바로 트는 영상은 delay(ms) 뒤에 처음부터 튼다. 영상 장면이 없는 장이면 단추를 감춘다.
   const startFilm = (view, design, delay) => {
     clearTimeout(filmTimer);
     film?.pause();                     // 나가는 장의 영상은 멈춘다(마지막에 보이던 모습 그대로 넘어간다)
     film = null;
+    filmWaiting = null;
     const layer = design.video ? view.querySelector(':scope > .fe-scene') : null;
     if (layer) {
       const mine = film = scenePlayer(layer, design.video, { onState: () => { if (film === mine) markFilm(); } });
       films.set(view, mine);
-      filmTimer = setTimeout(() => { if (film === mine) mine.play({ from: design.video.in }); }, delay);
+      if (design.video.auto) filmTimer = setTimeout(() => { if (film === mine) mine.play({ from: design.video.in }); }, delay);
+      else { mine.layer = layer; mine.from = design.video.in; filmWaiting = mine; layer.classList.add('fe-standby'); }
       // 파일이 이 기기에 없으면 틀 것이 없다: 단추를 감춘다
-      mine.ready.then((ok) => { if (!ok && film === mine) { film = null; markFilm(); } });
+      mine.ready.then((ok) => { if (!ok && film === mine) { film = null; if (filmWaiting === mine) filmWaiting = null; layer.classList.remove('fe-standby'); markFilm(); } });
     }
     // 유튜브: 나가는 장의 영상은 멈추고, 들어오는 장의 영상을 미리 불러 둔다. "장이 열리면 바로 틀기"로 정한 것은 저절로 튼다.
     clearTimeout(tubeTimer);
@@ -1744,6 +1757,8 @@ async function present(O) {
       // 움직이는 중에 넘기면 그 움직임은 바로 끝낸다. 누를 때 나오는 것이 남아 있으면 그것부터 하나 나타나게 한다.
       settle();
       parts?.finish();
+      // 누를 때 트는 바탕 영상이 기다리고 있으면 그것부터 튼다(PowerPoint 의 "클릭할 때"처럼 영상도 발표의 한 차례다).
+      if (startWaitingFilm()) return;
       if (parts?.next()) return;
       // 아직 틀지 않은 유튜브 영상이 있으면 그것을 튼다(영상도 발표의 한 차례다).
       const waiting = tube.find((p) => !p.started);

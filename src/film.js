@@ -6,7 +6,8 @@
 //   - 저절로 나오는 요소는 발표할 때와 같은 차례 · 같은 간격으로 나온다.
 //   - "누를 때" 나오는 요소는 읽는 차례대로 하나씩 저절로 나온다. 남은 시간에 고르게 나누되, 너무 급하거나 느리지 않게 한다.
 //   - 요소가 다 나온 뒤에도 읽을 틈(TAIL)은 남긴다. 그래서 요소가 많은 장은 머무는 시간보다 조금 길어진다.
-//   - 영상 장면(그 장의 바탕에 깐 영상)은 발표할 때처럼 그 장이 열리면(전환 효과가 끝나면) 틀기 시작해서, 쓰는 구간이 끝날 때까지 튼다.
+//   - 영상 장면(그 장의 바탕에 깐 영상)은 "장이 열리면 바로"(video.auto)면 그 장이 열리면(전환 효과가 끝나면), 아니면(누를 때) 저절로 나오는 요소가
+//     다 나온 뒤 잠깐 있다가 틀기 시작해서, 쓰는 구간이 끝날 때까지 튼다.
 //     그래서 영상 장면이 있는 장은 적어도 그 영상의 길이만큼 이어진다. 끝난 뒤에는 마지막 모습에 잠깐 머문다.
 import { planMotion, enterPose, enterTime, emphasisPose, emphasisTime, exitPose, exitTime, idlePose, idlePhase, transitionPose, matchItems, morphs, looksChanged } from './motion.js';
 
@@ -21,6 +22,7 @@ const STEP_MAX = 2500;       //                                    가장 길게
 const CLICKS_MAX = 20000;    // 한 장에서 "누를 때" 요소들에 쓰는 시간의 한도(아주 많으면 간격을 줄인다)
 const STEP_LEAST = 400;
 const SCENE_TAIL = 500;      // 영상 장면이 끝난 뒤에 마지막 모습으로 이만큼 더 보여 준다
+const SCENE_WAIT = 800;      // 누를 때 트는 영상 장면: 저절로 나오는 요소가 다 나온 뒤 이만큼 기다렸다가 튼다(발표에서 누른 것처럼)
 /** 만들 수 있는 영상의 가장 긴 길이(초). 영상은 다 만들 때까지 메모리에 쌓이므로 한도를 둔다. */
 export const MAX_FILM_SECONDS = 600;
 
@@ -85,7 +87,8 @@ export function filmPlan(designs, { stay = DEFAULT_STAY, scenes = true } = {}) {
       return m ? { i: l.i, loop: l.loop, start: m.start + m.ms, phase: 0 } : { i: l.i, loop: l.loop, start: lead, phase: idlePhase(l.i, l.loop, items[l.i]) };
     });
     const video = scenes && design?.video && design.video.out > design.video.in ? design.video : null;
-    const scene = video ? { start: turn ? turn.ms : n === 0 ? FIRST_LEAD : 0, ms: Math.round((video.out - video.in) * 1000) } : null;
+    const opened = turn ? turn.ms : n === 0 ? FIRST_LEAD : 0;
+    const scene = video ? { start: video.auto ? opened : Math.max(opened, lead + plan.ms) + SCENE_WAIT, ms: Math.round((video.out - video.in) * 1000) } : null;
     const ms = Math.round(Math.max(lead + Math.max(stayMs, settle - lead + (moves.length ? TAIL : 0)), scene ? scene.start + scene.ms + SCENE_TAIL : 0));
     const slide = { turn, lead, moves, settle, ms, ...(loops.length ? { loops } : {}), ...(scene ? { scene } : {}) };
     Object.defineProperty(slide, 'items', { value: items, enumerable: false });

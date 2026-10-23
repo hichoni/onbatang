@@ -109,6 +109,7 @@ export function slideVideo(slide) {
   const video = { src: v.src, dur: v.dur };
   for (const key of ['in', 'out', 'vol']) if (Number.isFinite(v[key])) video[key] = v[key];
   if (v.fit === 'cover' || v.fit === 'contain') video.fit = v.fit;
+  if (v.auto === true) video.auto = true;           // 장이 열리면 바로 틀기(없으면 누를 때 튼다)
   return { video };
 }
 /** 장에 딸린 것 모두(움직임 · 영상 장면 · 발표자 노트). 슬라이드를 새로 짜 맞추는 곳({ bg, items } 를 만드는 곳)마다 함께 펼쳐 넣는다(빠뜨리면 저장하면서 사라진다). */

@@ -39,8 +39,7 @@ const TABS = [
 // 움직임 칸은 configure({ motion: true }) 를 한 프로젝트에만 나온다(발표 화면이 있는 곳).
 const MOTION_TAB = ['motion', 'motion', '움직임', '발표할 때 조각과 장이 움직여요.'];
 const tabList = () => (settings().motion ? [...TABS, MOTION_TAB] : TABS);
-// 영상 칸은 편집기에 saveVideo 를 준 프로젝트에만 나온다(업로드 칸 다음에). 영상 장면: 그 장의 바탕에 까는 영상.
-const VIDEO_TAB = ['video', 'video', '바탕 영상', '이 장의 바탕에 영상을 깔아요.'];
+// 영상(바탕 영상 · 유튜브)은 "내 자료"의 "영상" 칸 한곳에 있다. 바탕 영상(그 장의 바탕에 까는 영상 파일 · 찍은 것)은 편집기에 saveVideo 를 준 프로젝트에만 나온다.
 // 영상 장면의 한도(기본값): 카메라로 한 번에 찍는 길이(초) · 골라 넣는 파일의 길이(초)와 크기(바이트)
 const VIDEO_LIMITS = { maxSeconds: 60, maxFileSeconds: 300, maxBytes: 200 * 1024 * 1024 };
 const ALIGN_NAME = { l: '왼쪽', c: '가운데', r: '오른쪽' };
@@ -179,12 +178,9 @@ export function createEditor({
   let lastSelId = '';         // 마지막으로 onSelect 에 알린 이름표
   const limits = { ...VIDEO_LIMITS, ...(videoLimits && typeof videoLimits === 'object' ? videoLimits : {}) };
   const hasDocumentImport = typeof documentImport?.open === 'function' && typeof documentImport.label === 'string' && !!documentImport.label.trim();
-  const tabsHere = () => {
-    const list = tabList().map(row => hasDocumentImport && row[0] === 'upload' ? [...row.slice(0, 3), '사진·PPT·영상을 넣어요.'] : row);
-    if (!saveVideo) return list;
-    const at = list.findIndex((t) => t[0] === 'upload') + 1;
-    return [...list.slice(0, at), VIDEO_TAB, ...list.slice(at)];
-  };
+  const tabsHere = () => tabList().map(row => row[0] === 'upload' ? [...row.slice(0, 3), hasDocumentImport ? '사진·PPT·영상을 넣어요.' : '사진·영상을 넣어요.'] : row);
+  // 영상 칸(내 자료 → 영상)을 보고 있는지. 바탕 영상의 상태가 바뀌면 칸을 다시 그린다.
+  const videoOpen = () => tab === 'upload' && uploadTab === 'video';
 
   const guideV = el('div', { class: 'fe-guide v', hidden: true });
   const guideH = el('div', { class: 'fe-guide h', hidden: true });
@@ -338,7 +334,7 @@ export function createEditor({
     renderUi();
     // 템플릿 칸은 지금 배경의 묶음을 맨 위에 보여 준다. 되돌려서 배경이 바뀌었으면 그 차례도 다시 맞춘다
     if (bgChanged && tab === 'layout') { armed = null; renderPanel({ top: true }); }
-    if (tab === 'motion' || tab === 'video') renderPanel();
+    if (tab === 'motion' || videoOpen()) renderPanel();
     onChange();
     keepKeys();
   }
@@ -418,7 +414,7 @@ export function createEditor({
       if (scene !== mine) return;
       mine.state = ok ? 'ready' : 'missing';
       sceneFlag.hidden = ok;
-      if (tab === 'video' && !cam) renderPanel();
+      if (videoOpen() && !cam) renderPanel();
     });
     cardEl.prepend(layer);
   }
@@ -490,14 +486,14 @@ export function createEditor({
     card.video = video;
     renderStage();
     renderBar();
-    if (tab === 'video') renderPanel();
+    if (videoOpen()) renderPanel();
     onChange();
     notify(had ? '영상을 바꿨어요. 실행 취소로 되돌릴 수 있어요.' : '영상을 깔았어요. 그 위에 글과 조각을 올릴 수 있어요.', 4000);
     return true;
   }
   // 영상을 넣은 뒤: 글쇠로 누르던 사람이 길을 잃지 않게 초점을 "틀어 보기"(없으면 꾸미기 판)에 둔다.
   function focusVideo() {
-    const play = tab === 'video' && !cam ? panel.querySelector('.fe-video-play') : null;
+    const play = videoOpen() && !cam ? panel.querySelector('.fe-video-play') : null;
     if (play && !play.disabled) play.focus({ preventScroll: true }); else keepKeys();
   }
   function removeVideo() {
@@ -535,7 +531,7 @@ export function createEditor({
     }
     filing = false;
     if (!card) return;
-    if (tab === 'video') renderPanel();
+    if (videoOpen()) renderPanel();
     focusVideo();
   }
 
@@ -3195,7 +3191,7 @@ export function createEditor({
     fileInput.multiple = libraryOn();        // 올린 파일 목록을 쓰면 여러 장을 한꺼번에 고를 수 있다
     if (tab === 'upload') {
       if (focusedUploadTab) panel.querySelector(`[data-upload-tab="${uploadTab}"]`)?.focus({ preventScroll: true });
-      else if (focusedYoutube && uploadTab === 'youtube') youtubeInput?.focus({ preventScroll: true });
+      else if (focusedYoutube && uploadTab === 'video') youtubeInput?.focus({ preventScroll: true });
     }
   }
 
@@ -3535,7 +3531,6 @@ export function createEditor({
         el('p', { class: 'fe-note', text: settings().motionNote || '움직임은 "발표"를 누르면 보여요. 내려받은 그림에는 움직임이 없어요.' }),
       ];
     }
-    if (tab === 'video') return videoBody();
     if (tab === 'layout') {
       const tile = (l) => el('button', {
         class: `fe-layout${armed === l.id ? ' armed' : ''}`, type: 'button', dataset: { layout: l.id }, onClick: () => applyLayout(l.id),
@@ -3704,15 +3699,31 @@ export function createEditor({
       el('div', { class: 'fe-grid two', role: 'group', 'aria-label': '화면 맞춤' }, ...VIDEO_FITS.map((f) => pbtn(f.name, () => { if (card.video.fit !== f.id) changeVideo({ fit: f.id }); }, {
         'aria-pressed': String(v.fit === f.id), class: `fe-btn fe-video-fit${v.fit === f.id ? ' on' : ''}`, title: f.hint, dataset: { fit: f.id },
       }))),
+      // 발표할 때: 누르면 틀기(PowerPoint 의 "클릭할 때"처럼 첫 모습으로 기다린다) · 장이 열리면 바로 틀기
+      el('div', { class: 'fe-head', text: '발표할 때' }),
+      el('div', { class: 'fe-grid two', role: 'group', 'aria-label': '발표할 때 영상을 트는 때' },
+        ...[['click', '누르면 틀기', '다음(→ · 스페이스 · 리모컨)을 누르면 틀어져요'], ['auto', '장이 열리면 바로', '장이 열리자마자 저절로 틀어져요']].map(([id, name, hint]) => {
+          const on = (id === 'auto') === !!v.auto;
+          return pbtn(name, () => { if (on) return; changeVideo({ auto: id === 'auto' || undefined }); panel.querySelector(`.fe-video-start[data-start="${id}"]`)?.focus({ preventScroll: true }); }, {
+            'aria-pressed': String(on), class: `fe-btn fe-video-start${on ? ' on' : ''}`, title: hint, dataset: { start: id },
+          });
+        })),
+      el('p', { class: 'fe-note', text: v.auto ? '장이 열리면 저절로 틀어져요.' : '발표할 때 영상이 첫 모습으로 기다리다가, 다음을 누르면 틀어져요. 한 번 더 누르면 다음 차례로 넘어가요.' }),
       ...swap,
       el('p', { class: 'fe-note', text: videoHint || '영상은 "발표"에서 소리와 함께 틀어져요. 그림으로 내려받으면 첫 모습이 나와요.' }),
       where,
     ];
   }
 
+  // 영상 칸: 이 장의 바탕 영상(파일 · 찍기. saveVideo 가 있을 때) 과 유튜브 영상(조각으로 놓는다)을 한곳에서.
+  function videoPane() {
+    const yt = [el('div', { class: 'fe-head', text: '유튜브 영상' }), ytAdder()];
+    if (!saveVideo) return yt;
+    return [el('div', { class: 'fe-head', text: '이 장의 바탕 영상' }), ...videoBody(), el('div', { class: 'fe-video-split', 'aria-hidden': 'true' }), ...yt];
+  }
   // 내 자료: 종류를 먼저 고르고, 고른 자료의 작업만 보여 준다.
   function uploadPane() {
-    const choices = [['photo', '사진'], ...(hasDocumentImport ? [['ppt', 'PPT']] : []), ['youtube', '유튜브']];
+    const choices = [['photo', '사진'], ...(hasDocumentImport ? [['ppt', 'PPT']] : []), ['video', '영상']];
     const choose = id => {
       if (importingDocument || !choices.some(([key]) => key === id)) return;
       uploadTab = id; armedFile = null; renderPanel({ top: true });
@@ -3729,7 +3740,7 @@ export function createEditor({
           if (next < 0) return; event.preventDefault(); choose(choices[next][0]);
         },
       }, name)));
-    const content = uploadTab === 'photo' ? (libraryOn() ? uploadBody() : directPhotoBody()) : uploadTab === 'ppt' ? pptUploadBody() : [ytAdder()];
+    const content = uploadTab === 'photo' ? (libraryOn() ? uploadBody() : directPhotoBody()) : uploadTab === 'ppt' ? pptUploadBody() : videoPane();
     return [tabs, ...choices.map(([id]) => el('div', {
       class: 'fe-upload-panel', role: 'tabpanel', id: `${uploadTabsId}-panel-${id}`, 'aria-labelledby': `${uploadTabsId}-tab-${id}`,
       dataset: { uploadPanel: id }, hidden: uploadTab !== id,
@@ -4082,7 +4093,7 @@ export function createEditor({
     closeMenu();
     // 움직임 칸을 보고 있었으면 그대로 둔다(장마다 전환 효과를 정하는 중일 수 있다). 빈 장은 템플릿 칸부터.
     // 영상 칸도 그대로 둔다(장마다 영상을 넣는 중일 수 있다).
-    tab = tab === 'video' && saveVideo ? 'video' : !card.items.length ? 'layout' : tab === 'motion' && settings().motion ? 'motion' : 'text';
+    tab = videoOpen() ? 'upload' : !card.items.length ? 'layout' : tab === 'motion' && settings().motion ? 'motion' : 'text';
     motionSel = -1;
     renderStage();
     renderBar();
@@ -4146,8 +4157,8 @@ export function createEditor({
     showMenu: (x, y, groups, { label = '메뉴' } = {}) => showMenu(x, y, hostRows(groups), { label }),
     /** Host navigation can restore an existing tool without knowing its DOM selectors. */
     openTab: id => { if (card && tabsHere().some(([name]) => name === id)) openTab(id); },
-    /** 내 자료 칸을 그 종류로 연다(호스트가 "유튜브 영상으로 바꿔요"를 안내할 때). kind: 'photo' · 'youtube' */
-    openUpload: kind => { if (!card || !['photo', 'youtube'].includes(kind) || !tabsHere().some(([name]) => name === 'upload')) return; uploadTab = kind; armedFile = null; openTab('upload'); renderPanel({ top: true }); },
+    /** 내 자료 칸을 그 종류로 연다(호스트가 "유튜브 영상으로 바꿔요"를 안내할 때). kind: 'photo' · 'video'('youtube' 도 영상 칸) */
+    openUpload: kind => { if (!card || !['photo', 'youtube', 'video'].includes(kind) || !tabsHere().some(([name]) => name === 'upload')) return; uploadTab = kind === 'photo' ? 'photo' : 'video'; armedFile = null; openTab('upload'); renderPanel({ top: true }); },
     /** 함께 꾸밀 때: 다른 사람이 바꾼 것을 끼워 넣는다 merge(design, patch) · 지금 끼워 넣어도 되는지 idle() */
     merge, idle,
     /** 함께 꾸밀 때: 다른 사람이 고른 요소들 [{ id, name, color }] 에 그 사람의 색 테두리를 두른다(빈 목록이면 지운다). */
