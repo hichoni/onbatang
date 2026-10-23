@@ -309,7 +309,7 @@ export async function createPptx({slides, aspect = 16 / 9, size, title = '온바
       shapes.push(picture(box, shapes.length + 2, relation, name, item, crop));
     }
     const options = {aspect: slideSize.aspect, signal, pageNumber};
-    if (design.video || design.pa || design.tr || design.items.some(item => (item.an && item.an !== 'none') || item.em || item.aw)) pageWarn('STATIC_EXPORT', '움직임과 소리는 포함하지 않고 현재 그림을 저장해요.');
+    if (design.video || design.pa || design.tr || design.items.some(item => (item.an && item.an !== 'none') || item.em || item.aw || (item.lp && item.lp !== 'none'))) pageWarn('STATIC_EXPORT', '움직임과 소리는 포함하지 않고 현재 그림을 저장해요.');
     if (mode === 'image') await raster(await cancellable(renderSlide(design, options), signal), `슬라이드 ${pageNumber}`);
     else {
       if (design.video || !/^#[a-f0-9]{6}$/i.test(backgroundOf(design.bg).bg)) {

@@ -471,6 +471,7 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"], body.mc-app :is(#app,.cv-a
 .cv-show-key:hover { background: rgba(255, 255, 255, .3); }
 .cv-show-key[hidden] { display: none; }      /* 영상 장면이 없는 장에서는 영상 단추를 감춘다 */
 .cv-show-key,.cv-show-count{white-space:nowrap;flex-shrink:0}
+@media(max-width:640px){.cv-show-word{display:none}}      /* 휴대폰: 리모컨 · 질문 · 끝내기는 그림만(이름은 aria-label · title 에 있다) */
 @media(max-width:960px){.cv-show-bar{gap:6px;padding:8px;left:8px;right:8px;width:max-content;max-width:calc(100vw - 16px);margin:0 auto;transform:none;flex-wrap:wrap;justify-content:center;border-radius:18px}.cv-show-key{padding:8px 10px;min-height:44px}.cv-show-count{font-size:14px}}
 @media (pointer: coarse) { .cv-show-bar { opacity: .9; } }
 

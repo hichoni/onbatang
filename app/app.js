@@ -1655,6 +1655,7 @@ async function present(O) {
   const draw = (dir = 0) => {
     pixel?.destroy();pixel=null;
     settle();
+    parts?.stop();             // 떠나는 장의 "계속 움직이기"를 멈춘다(흔적이 없다)
     tools?.changed();
     const design = slides[i];
     const ar=aspectOf(entries[i].record);
@@ -1769,6 +1770,7 @@ async function present(O) {
     try { audience?.close?.(); } catch (error) { console.warn(error); } audience = null;
     tools?.destroy();tools=null;
     settle();
+    parts?.stop();parts=null;
     clearTimeout(filmTimer);
     clearTimeout(tubeTimer);
     film = null;
@@ -1800,11 +1802,13 @@ async function present(O) {
     saveTimes: (seconds) => { rehearsed = entries.map((v, k) => [v.page.id, seconds[k]]).filter(([, s]) => s != null); },
     title: O.record.name, notify: toast, keyClass: 'cv-show-key',
   });
-  const remoteBtn = showRemote ? btn([ic('screen'), '휴대폰 리모컨'], '휴대폰으로 장 넘기기(QR 을 찍어요)', openRemote) : null;
+  // 좁은 화면(휴대폰)에서는 막대가 여러 줄로 커져 장을 가리지 않게 이 단추들의 글자를 숨기고 그림만 둔다(app.css 의 .cv-show-word).
+  const word = (text) => el('span', { class: 'cv-show-word', text });
+  const remoteBtn = showRemote ? btn([ic('screen'), word('휴대폰 리모컨')], '휴대폰으로 장 넘기기(QR 을 찍어요)', openRemote) : null;
   if (remoteBtn) remoteBtn.dataset.showRemote = '';
-  const audienceBtn = showAudience ? btn([ic('people'), '질문 · 반응'], '학생이 QR 로 반응 · 질문을 보내요', openAudience) : null;
+  const audienceBtn = showAudience ? btn([ic('people'), word('질문 · 반응')], '학생이 QR 로 반응 · 질문을 보내요', openAudience) : null;
   if (audienceBtn) audienceBtn.dataset.showAudience = '';
-  overlay.querySelector('.cv-show-bar').append(...tools.buttons, ...(remoteBtn ? [remoteBtn] : []), ...(audienceBtn ? [audienceBtn] : []), btn([ic('close'), '끝내기'], '발표 끝내기 (Esc)', close));
+  overlay.querySelector('.cv-show-bar').append(...tools.buttons, ...(remoteBtn ? [remoteBtn] : []), ...(audienceBtn ? [audienceBtn] : []), btn([ic('close'), word('끝내기')], '발표 끝내기 (Esc)', close));
   document.body.append(overlay);
   document.body.classList.add('modal-open');
   draw();
