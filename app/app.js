@@ -22,6 +22,7 @@ import {PRINT_LAYOUTS,printHtml} from './print.js';
 import {encodeGif,GIF_LIMITS} from './gif.js';
 import {findText,replaceText} from './find-replace.js';
 import {parseOutline,outlineSlides,outlineFromAnswer,drawingText,OUTLINE_STYLES} from './outline.js';
+import { pollResultPage } from './poll-result.js';
 import {ONBATANG_VERSION} from './version.js';
 import {createGaiMaker,gaiLessonContext} from './gai-maker.js';
 import {
@@ -1586,11 +1587,32 @@ async function present(O) {
   let audience = null, audienceJob = null;
   const audienceState = () => ({ at: i, total: slides.length, title: O.record.name });
   const tellAudience = () => { try { audience?.update?.(audienceState()); } catch (error) { console.warn(error); } };
+  // 투표 결과를 지금 장 다음에 넣고 그 장으로 간다(가이랩 실시간 투표의 "결과를 다음 장으로 저장"). 활동 결과 장과 같은 길로 저장한다.
+  const savePoll = async (raw) => {
+    if (closed) throw Error('발표가 끝났어요.');
+    if (savingActivity) throw Error('저장하는 중이에요. 잠시 뒤에 다시 해 주세요.');
+    const design = slides[i], source = entries.find((v) => v.page.id === design.id);
+    const record = source.record.id === O.record.id ? { ...O.record, slides: currentSlides(O) } : source.record;
+    if (record.slides.length >= MAX_SLIDES) throw Error(`장은 ${MAX_SLIDES}장까지예요. 장을 정리한 뒤 다시 저장해 주세요.`);
+    const page = pollResultPage(raw, aspectOf(record));
+    if (!page) throw Error('저장할 투표 결과를 확인해 주세요.');
+    page.origin = { documentId: record.id, pageId: design.id, revision: record.revision };
+    savingActivity = true;
+    try {
+      const next = [...record.slides], index = next.findIndex((p) => p.id === design.id);
+      next.splice(index + 1, 0, page);
+      const ids = lessonPages(O).map((v) => v.page.id); ids.splice(ids.indexOf(design.id) + 1, 0, page.id);
+      await commitActivityDocument(O, { ...record, slides: next }, ids, page.id, record.id === O.record.id ? O.persistedRecord : record);
+      entries = showable(); slides = entries.map((v) => cleanDesign(v.page, { keepSpaces: true }));
+      i = Math.max(0, slides.findIndex((p) => p.id === page.id)); draw(1);
+      return { at: i, total: slides.length };
+    } finally { savingActivity = false; }
+  };
   const openAudience = async () => {
     if (!showAudience || closed) return;
     if (audience) { audience.show?.(); return; }
     if (audienceJob) return;
-    try { audienceJob = showAudience.open({ state: audienceState, root: overlay }); audience = await audienceJob; if (closed) { audience?.close?.(); audience = null; } else tellAudience(); }
+    try { audienceJob = showAudience.open({ state: audienceState, root: overlay, savePoll }); audience = await audienceJob; if (closed) { audience?.close?.(); audience = null; } else tellAudience(); }
     catch (error) { toast(String(error?.message || '질문 · 반응을 열지 못했어요.').slice(0, 200), 4500); }
     finally { audienceJob = null; }
   };
@@ -2873,7 +2895,8 @@ function readOpen() {
  * - resume: true 면 새로 고침한 뒤 이 탭에서 꾸미던 그림 · 장을 다시 연다(공용 온바탕 첫 쪽이 켠다. 그림을 스스로 여는 들여 쓰는 곳은 끈 채로 둔다).
  * - lessonAction: {label, editorTitle?, accepts?(record), open({designId,slideIndex,inline})}; 저장 후 같은 편집 영역에서 호스트의 수업 구성/진행을 연다. 공용 기본값은 숨김.
  * - accountAction: {label,editorTitle?,open({from,designId?,inline})}; 첫 화면과 편집기 안의 계정 수업 목록. 기본값은 숨김이며 서버/로그인은 호스트가 담당한다.
- * - showAudience: {open({state(),root})→{update(state),show?(),close()}}; 발표 막대의 "질문 · 반응"(state: {at,total,title}). 기본값은 숨김.
+ * - showAudience: {open({state(),root,savePoll(result)})→{update(state),show?(),close()}}; 발표 막대의 "질문 · 반응"(state: {at,total,title}). 기본값은 숨김.
+ *   savePoll({question,options,counts}): 투표 결과 장(app/poll-result.js)을 지금 장 다음에 저장하고 그 장으로 간다 → {at,total}.
  * - showRemote: {open({state(),command(cmd),root})→{update(state),show?(),close()}}; 발표 막대의 "휴대폰 리모컨". cmd: {action:'next'|'prev'|'go'(at)|'black'|'state'}. 기본값은 숨김.
  * - accountBridge: {url?}; 공용 온바탕 첫 화면의 "가이랩 계정으로 이어 쓰기"(가이랩 연결 창으로 그림을 올리고 가져온다). sync 가 있으면 숨김.
  * - shareAction: {label,title?,open({designId,flush(),goTo(slideIndex,{upload})}),saved?(record)}; 편집기 위 막대의 공유 단추(가이랩의 보기 전용 링크). saved 는 이 기기에 저장할 때마다 불린다(링크에 반영은 호스트가 모아서). 기본값은 숨김.
