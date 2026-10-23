@@ -1,0 +1,3 @@
+/* 발표처럼 트는 재생기(app/player.js): 장들을 한 칸에 겹쳐 두고(전환 효과가 두 장을 함께 그린다) 화면에 맞춘다. */
+.ob-player { display: grid; position: relative; overflow: hidden; width: min(100%, calc(var(--ob-player-height, 100dvh) * var(--ob-player-ratio, 1))); }
+.ob-player > .fe-card { grid-area: 1 / 1; width: 100%; }
