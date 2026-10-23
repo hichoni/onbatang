@@ -21,7 +21,7 @@ export const RATIOS = [
   { id: '16:9', name: '가로', desc: '발표 화면처럼', aspect: 16 / 9 },
   { id: '9:16', name: '길게', desc: '휴대폰 화면처럼', aspect: 9 / 16 },
 ];
-export const MAX_DESIGNS = 30;        // 둘 수 있는 그림 수
+export const MAX_DESIGNS = 60;        // 둘 수 있는 그림 수(내 그림의 칸 수: 한 PPT 를 나눠 담은 파트들은 한 칸으로 센다, homeEntries)
 export const MAX_SLIDES = 20;         // 그림 한 편의 슬라이드 수
 export const MAX_NAME = 30;
 export const MAX_CARD_PHOTOS = 10;    // 슬라이드 한 장에 놓을 수 있는 사진 수

@@ -424,7 +424,9 @@ function render() {
   setView('home');
   const loading = S.list === null;
   const list = S.list || [];
-  const full = list.length >= MAX_DESIGNS;
+  // 한도는 칸 수로 센다: PPT 한 번 가져온 것은 파트가 몇 개든 한 칸이다.
+  const entries = loading ? [] : homeEntries(list, homeGroups(list));
+  const full = entries.length >= MAX_DESIGNS;
   // 주제 테마는 표지만 보여 준다(내용 장은 꾸미는 화면의 템플릿 칸에서 넣는다). 이름은 테마의 이름.
   const starts = startTab === 'theme'
     ? layoutList().filter((l) => l.cover).map((l) => [l, l.group])
@@ -450,7 +452,7 @@ function render() {
         } }, importAction.label) : null,
         accountAction ? el('button',{class:'btn cv-account-btn',type:'button',disabled:loading,dataset:{accountAction:''},onClick:()=>openAccountFromHome()},accountAction.label) : null,
         accountBridge && !sync ? el('button', { class: 'btn cv-bridge-btn', type: 'button', disabled: loading, dataset: { accountBridge: '' }, title: '집에서 만든 그림을 학교에서: 가이랩 선생님 계정에 올리고 가져와요', onClick: () => openBridgeFromHome() }, ...face('cloud', '가이랩 계정으로 이어 쓰기')) : null,
-        full ? el('p', { class: 'cv-hero-full', text: `그림은 ${MAX_DESIGNS}장까지 저장돼요. 안 쓰는 그림을 지워 주세요.` }) : null),
+        full ? el('p', { class: 'cv-hero-full', text: `그림은 ${MAX_DESIGNS}개까지 저장돼요(PPT 하나는 파트가 여럿이어도 1개). 안 쓰는 그림을 지워 주세요.` }) : null),
       el('p', { class: 'cv-hero-tag', text: `작은 생각도 멋진 작품이 되도록 · ${sync ? '내 계정에 자동 저장' : '이 기기에 자동 저장'}` })),
     heroShowcase()));
 
@@ -478,7 +480,6 @@ function render() {
 
   // ② 내 그림: 불러온다 → 없으면 없다고 알리고 새로 만들게 한다. 그림은 이 기기에만 저장된다.
   // 한 PPT 를 나눠 담은 파트들은 한 칸으로 묶어 보여 준다(homeEntries). 거르기 · 찾기 · 늘어놓기는 목록 위 막대에서.
-  const entries = loading ? [] : homeEntries(list, homeGroups(list));
   const arrive = wasLoading && !loading;
   wasLoading = loading;
   const mine = el('section', { class: `cv-mine${arrive ? ' cv-arrive' : ''}` },
@@ -559,7 +560,7 @@ function itemCard(record) {
   }, ...face('trash', '지우기'));
   const open = (btn) => openEntry(record, btn);
   const edit = el('button', { class: 'btn btn-primary small cv-item-open', type: 'button', onClick: () => open(edit) }, '꾸미기');
-  const copy = el('button', { class: 'btn small', type: 'button', disabled: (S.list || []).length >= MAX_DESIGNS, onClick: async () => {
+  const copy = el('button', { class: 'btn small', type: 'button', disabled: homeEntries(S.list || [], groupsKnown).length >= MAX_DESIGNS, onClick: async () => {
     copy.disabled = true;
     try {
       const made = await putDesign({ ...copyRecord(await getDesign(record.id) || record), updatedAt: Date.now() });
