@@ -1,5 +1,10 @@
 # 온바탕 — 생각을 펼치는 따뜻한 디자인 공간
 
+## v0.68.0 · 발표처럼 트는 재생기 (2026-10-23)
+
+- `app/player.js` 의 `mountPlayer(stage, { slides, aspect, onChange })` · `app/player.css`(`.ob-player`): 편집기 · 저장소 없이 발표 화면과 같은 움직임으로 그림을 틉니다. 전환 효과(이어 움직이기 포함) · 조합 효과 · 누를 때 나오기 · 강조 · 머무는 동안 계속 움직이기 · 영상 장면(파일을 받을 수 있을 때) · 유튜브. `next()` 는 누를 때 나오는 것 → 아직 틀지 않은 유튜브 → 다음 장 차례, `prev()` · `go(n)` · `destroy()`.
+- 가이랩 공유 링크(보는 쪽)가 이것을 씁니다. 새 기능 안내 "공유 링크도 발표처럼 움직여요".
+
 ## v0.67.0 · 투표 결과를 장으로 남기기 (2026-10-23)
 
 - 발표 화면이 `showAudience.open` 에 `savePoll({ question, options, counts })` 를 더 줍니다. 결과 장(`app/poll-result.js` 의 `pollResultPage`: 질문 · 칸마다 막대와 몇 명 · 몇 % · 참여 수와 날짜, `source.kind: 'result'`, `origin` 은 투표하던 장)을 지금 장 다음에 넣고 그 장으로 갑니다. 활동 결과 장과 같은 길(`commitActivityDocument`)로 저장해서, PPT 전체 자료에서도 쪽 순서에 들어갑니다. 장이 가득 찼거나 결과가 고르지 않으면 알아듣게 거절합니다.
