@@ -149,6 +149,40 @@ function notesBodyText(notes){
   return cleanNotes(body.map(sp=>all(sp,'txBody',NS.p).map(extractText).join('\n')).join('\n').replace(/\n+$/,''));
 }
 const paragraphText=p=>children(p).map(n=>n.localName==='br'?'\n':n.localName==='tab'?'\t':all(n,'t').map(t=>t.textContent).join('')).join('');
+/**
+ * 글상자의 부분 서식(src/runs.js 의 구간): 문단의 글 조각(a:r · a:fld)마다 굵게 · 기울임 · 밑줄 · 색을 적는다.
+ * 가져온 글(final)에는 문단 앞에 목록 기호가 붙어 있을 수 있어, 문단 글을 차례로 찾아 자리를 맞춘다(못 맞추면 구간 없이 둔다).
+ * 조각에 적지 않은 굵게 · 기울임 · 밑줄은 목록 모양(styles 의 그 단계 defRPr)을, 거기도 없으면 "아님"을 따른다. 적지 않은 색은 글상자의 기본 글자색(plain)이다.
+ * 돌려주는 것: { runs, mixed } (mixed: 조각마다 글자 크기나 글꼴이 달랐는지 — 그것은 첫 글자에 맞춘다)
+ */
+function textRuns(body,final,styles=[],warn=()=>{},plain='#222222'){
+  const runs=[],sizes=new Set(),faces=new Set();let cursor=0;
+  for(const p of children(body).filter(n=>n.localName==='p'&&n.namespaceURI===NS.a)){
+    const content=paragraphText(p);
+    if(!content){cursor+=1;continue;}
+    const at=final.indexOf(content,cursor);
+    if(at<0)return {runs:[],mixed:sizes.size>1||faces.size>1};
+    const pPr=direct(p,'pPr'),level=Math.max(0,Math.min(8,Number(attr(pPr,'lvl'))||0));
+    const defaults=[direct(pPr,'defRPr'),...styles.map(style=>direct(direct(style,`lvl${level+1}pPr`),'defRPr'))].filter(Boolean);
+    const inherited=key=>{for(const node of defaults){const v=attr(node,key);if(v)return v;}return '';};
+    let off=0;
+    for(const node of children(p)){
+      if(node.localName==='br'||node.localName==='tab'){off+=1;continue;}
+      if(node.localName!=='r'&&node.localName!=='fld')continue;
+      const piece=all(node,'t').map(t=>t.textContent).join(''),rPr=direct(node,'rPr');
+      if(!piece)continue;
+      if(attr(rPr,'sz'))sizes.add(attr(rPr,'sz'));
+      const face=attr(direct(rPr,'ea'),'typeface')||attr(direct(rPr,'latin'),'typeface');if(face)faces.add(face);
+      const flag=key=>['1','true'].includes(attr(rPr,key)||inherited(key));
+      const under=(attr(rPr,'u')||inherited('u'))&&(attr(rPr,'u')||inherited('u'))!=='none';
+      const fill=direct(rPr,'solidFill');
+      runs.push({s:at+off,e:at+off+piece.length,b:flag('b'),i:flag('i'),u:!!under,c:fill?color(fill,plain,()=>{}):plain});
+      off+=piece.length;
+    }
+    cursor=at+content.length+1;
+  }
+  return {runs,mixed:sizes.size>1||faces.size>1};
+}
 /** extractText with each paragraph's list marker (its own or inherited) written in front, since the editor has no lists. */
 function bulletedText(body,styles=[]){
   const counters=new Map();
@@ -315,11 +349,12 @@ function tableItems(object,tbl,{meta,size,matrix,warn,fonts}){
     const l=margin('marL',91440)*g.scaleX,rr=margin('marR',91440)*g.scaleX,t=margin('marT',45720)*g.scaleY,b=margin('marB',45720)*g.scaleY;
     const innerW=Math.max(width*0.2,width-l-rr),innerH=Math.max(height*0.2,height-t-b),cx=left+l+innerW/2,cy=top+t+innerH/2;
     for(const node of [...all(body,'latin'),...all(body,'ea')]){const font=attr(node,'typeface');if(font&&!font.startsWith('+')&&font.length<=240&&!/[\u0000-\u001f]/.test(font))fonts.add(font);}
-    if(all(body,'rPr').length>1)warn('RICH_TEXT_FLATTENED','문단 안의 여러 서식은 첫 글자 서식으로 통일했어요.');
+    const rich=textRuns(body,value,[],warn);
+    if(rich.mixed)warn('RICH_TEXT_FLATTENED','문단 안의 다른 글자 크기 · 글꼴은 첫 글자에 맞췄어요. 굵게 · 기울임 · 밑줄 · 색은 그대로 옮겼어요.');
     const textFill=direct(first,'solidFill');
     items.push({...meta(`cell-text:${r}:${c}`),t:'text',x:pct(cx,size.width),y:pct(cy,size.height),w:pct(innerW,size.width),h:pct(innerH,size.height),rot:0,
       size:fontSize,font:'gothic',color:color(textFill,'#222222',warn),bold:yes(attr(first,'b')),italic:yes(attr(first,'i')),under:attr(first,'u')==='sng',
-      align:{l:'l',ctr:'c',r:'r'}[attr(paragraph,'algn')]||'l',valign:({ctr:'middle',b:'bottom'})[attr(props,'anchor')]||'top',lh:1.2,nowrap:false,hangingPunct:false,text:value});
+      align:{l:'l',ctr:'c',r:'r'}[attr(paragraph,'algn')]||'l',valign:({ctr:'middle',b:'bottom'})[attr(props,'anchor')]||'top',lh:1.2,nowrap:false,hangingPunct:false,text:value,...(rich.runs.length?{runs:rich.runs}:{})});
   }
   warn('TABLE_AS_SHAPES','표를 칸마다 네모와 글상자로 옮겼어요. 칸을 더하거나 합치는 표 편집은 아직 없어요.');
   return items;
@@ -618,7 +653,6 @@ async function pageData(context,path,pageNumber){
         if(typeface)warn('SYSTEM_FONT_REQUIRED','원본 글꼴 이름을 보존했어요. 기기에 글꼴이 없으면 대체 글꼴로 표시됩니다.');
         else warn('FONT_SUBSTITUTION','원본 글꼴을 포함하지 않아 온바탕 기본 글꼴로 표시해요.');
         warn('TEXT_LAYOUT_APPROXIMATE','문단 간격·줄바꿈·글상자 여백은 원본과 다를 수 있어요.');
-        if(runs.length>1)warn('RICH_TEXT_FLATTENED','문단 안의 여러 서식은 첫 글자 서식으로 통일했어요.');
         const placeholder=all(object,'ph',NS.p)[0],placeholderType=attr(placeholder,'type');
         const masterStyle=direct(masterTextStyles,['title','ctrTitle'].includes(placeholderType)?'titleStyle':placeholderType==='body'?'bodyStyle':'otherStyle',NS.p);
         const styles=[direct(body,'lstStyle'),masterStyle,defaultTextStyle];
@@ -635,7 +669,10 @@ async function pageData(context,path,pageNumber){
         const style={t:'text',rot:g.rot,size:fontSize,font:'gothic',...(typeface?{typeface}:{}),color:color(textFill,'#222222',warn),bold:['1','true'].includes(attr(first,'b')),italic:['1','true'].includes(attr(first,'i')),under:attr(first,'u')==='sng',align};
         // Keep the original text box and its geometry. Paragraph splitting cannot
         // infer automatic wrapping and can introduce overlaps even when no text is lost.
-        items.push({...meta('text'),...style,...frame,text:listed});
+        // 부분 서식: 조각마다 다른 굵게 · 기울임 · 밑줄 · 색은 구간으로 옮긴다(글자 크기 · 글꼴은 첫 글자에 맞춘다).
+        const rich=textRuns(body,listed,listStyles,warn,color(direct(direct(paragraph,'defRPr'),'solidFill')||direct(direct(object,'style',NS.p),'fontRef'),'#222222',()=>{}));
+        if(rich.mixed)warn('RICH_TEXT_FLATTENED','문단 안의 다른 글자 크기 · 글꼴은 첫 글자에 맞췄어요. 굵게 · 기울임 · 밑줄 · 색은 그대로 옮겼어요.');
+        items.push({...meta('text'),...style,...frame,text:listed,...(rich.runs.length?{runs:rich.runs}:{})});
       }
     }catch(error){if(error instanceof PptxConversionError)reject(error.code,error.message);else throw error;}
   }
