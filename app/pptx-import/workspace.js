@@ -62,6 +62,15 @@ export function mountImportWorkspace({root, services, onClose, onOpenDocument, o
       busyView.node.querySelector('.oi-cover-stop')?.focus({preventScroll:true});
       return;
     }
+    // 쪽을 고르는 동안 PPT 화면을 준비하는 것은 위에 한 줄로만 알린다(큰 로딩 표시는 아래 미리보기 한 곳에만 둔다).
+    if(!state.busy&&state.previewPreparing){
+      if(busyView?.slim&&loading.contains(busyView.node))return;
+      const text=element('span','PPT 화면을 준비하고 있어요',{class:'oi-busy-slim-title'}),more=element('span','쪽을 고르면서 기다려도 돼요.',{class:'oi-busy-slim-detail'});
+      const node=element('div',undefined,{class:'oi-busy-slim'});node.append(element('span','',{class:'oi-busy-slim-dot','aria-hidden':'true'}),text,more);
+      busyView={node,slim:true,update({detail}={}){if(detail)more.textContent=detail;}};
+      loading.replaceChildren(node);
+      return;
+    }
     const title=state.busy==='inspecting'?'PPT를 펼쳐보고 있어요':'PPT 화면을 준비하고 있어요';
     busyView=onbatangLoading({title,detail:state.busy==='saving'?`${state.selected.size}쪽을 순서대로 저장해요. 원본은 그대로 보관돼요.`:'슬라이드와 글꼴을 확인해요. 원본 파일은 바뀌지 않아요.',compact:state.step!==1});
     loading.replaceChildren(busyView.node);

@@ -94,3 +94,5 @@
 @keyframes oi-cover-pulse{50%{box-shadow:0 0 0 4px #e5af70,0 8px 20px rgba(229,175,112,.5)}}
 @media(max-width:560px){.oi-cover-panel{padding:18px 14px}.oi-cover-cell{width:60px}.oi-cover-count strong{font-size:1.8rem}}
 @media(prefers-reduced-motion:reduce){.oi-cover,.oi-cover-now-frame::after,.oi-cover-scan,.oi-cover-fill::after,.oi-cover-cell[data-state="now"]{animation:none}.oi-cover-fill{transition:none}}
+/* 쪽을 고르는 동안 PPT 화면 준비: 한 줄 상태(큰 로딩 표시는 아래 미리보기에만) */
+.oi-loading-region:has(>.oi-busy-slim){padding:8px 26px}.oi-busy-slim{display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap;min-height:34px;padding:6px 14px;border-radius:999px;background:#eef4f1;color:#2b4a40;font-size:.9rem}.oi-busy-slim-title{font-weight:800}.oi-busy-slim-detail{color:#5d6f68}.oi-busy-slim-dot{flex:none;width:10px;height:10px;border-radius:50%;background:#2a7563;animation:oi-busy-pulse 1.2s ease-in-out infinite}@keyframes oi-busy-pulse{50%{opacity:.25;transform:scale(.7)}}@media(prefers-reduced-motion:reduce){.oi-busy-slim-dot{animation:none}}@media(max-width:680px){.oi-loading-region:has(>.oi-busy-slim){padding:6px 16px}}

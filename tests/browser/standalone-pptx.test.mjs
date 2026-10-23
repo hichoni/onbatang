@@ -290,6 +290,23 @@ test('direct eyedropper, four named palettes, undo, cancel, stale selection and 
  const arrowTop=await page.locator('.cv-slide-scroll').evaluateAll(nodes=>nodes.map(n=>n.getBoundingClientRect().top));assert.equal(arrowTop[0],arrowTop[1],'both scroll arrows stay on one row');
 });
 
+test('while PPT pictures are prepared on the page step, only the large preview shows a loader; the top is one slim line',options,async t=>{
+ const {page,entry}=await setup(t);
+ await enterImport(page,entry);
+ let release;const gate=new Promise(resolve=>{release=resolve;});
+ await page.route('**/vendor/preview-frame.html',async route=>{await gate;await route.continue();});
+ await page.locator('[data-inline-import]').getByLabel('PPTX 파일 선택',{exact:true}).setInputFiles(fixture('self-authored-21-pages.pptx'));
+ await page.waitForFunction(()=>document.querySelectorAll('[data-page-select]').length===21,null,{timeout:120000});
+ const slim=page.locator('[data-import-loading]:not([hidden]) .oi-busy-slim');await slim.waitFor();
+ assert.match(await slim.innerText(),/PPT 화면을 준비하고 있어요/);
+ assert.equal(await page.locator('[data-import-loading] [data-onbatang-loading]').count(),0,'no second big loader above the pages');
+ assert.ok((await slim.boundingBox()).height<60,'one slim line');
+ if(process.env.IMPORT_SHOT)await page.screenshot({path:process.env.IMPORT_SHOT});
+ release();
+ await page.waitForFunction(()=>document.querySelector('[data-import-save]')?.disabled===false,null,{timeout:120000});
+ assert.equal(await page.locator('[data-import-loading]:not([hidden])').count(),0);
+});
+
 test('symbol assembly loading and whole editor rail preserve every split page, failed-save edits, reload and whole PPTX downloads',options,async t=>{
  const {page,context,entry,base,checkIsolation}=await setup(t);
  await enterImport(page,entry);
