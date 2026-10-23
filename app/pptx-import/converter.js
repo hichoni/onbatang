@@ -156,6 +156,8 @@ const paragraphText=p=>children(p).map(n=>n.localName==='br'?'\n':n.localName===
  * 돌려주는 것: { runs, mixed } (mixed: 조각마다 글자 크기나 글꼴이 달랐는지 — 그것은 첫 글자에 맞춘다)
  */
 function textRuns(body,final,styles=[],warn=()=>{},plain='#222222'){
+  // 색을 읽을 때 테마 색(warn 에 딸린 colorMap · themeColors)은 쓰고, 알림은 글상자 색을 읽을 때 이미 냈으니 다시 내지 않는다.
+  const quiet=Object.assign(()=>{},{colorMap:warn.colorMap,themeColors:warn.themeColors});
   const runs=[],sizes=new Set(),faces=new Set();let cursor=0;
   for(const p of children(body).filter(n=>n.localName==='p'&&n.namespaceURI===NS.a)){
     const content=paragraphText(p);
@@ -176,7 +178,7 @@ function textRuns(body,final,styles=[],warn=()=>{},plain='#222222'){
       const flag=key=>['1','true'].includes(attr(rPr,key)||inherited(key));
       const under=(attr(rPr,'u')||inherited('u'))&&(attr(rPr,'u')||inherited('u'))!=='none';
       const fill=direct(rPr,'solidFill');
-      runs.push({s:at+off,e:at+off+piece.length,b:flag('b'),i:flag('i'),u:!!under,c:fill?color(fill,plain,()=>{}):plain});
+      runs.push({s:at+off,e:at+off+piece.length,b:flag('b'),i:flag('i'),u:!!under,c:fill?color(fill,plain,quiet):plain});
       off+=piece.length;
     }
     cursor=at+content.length+1;
@@ -670,7 +672,7 @@ async function pageData(context,path,pageNumber){
         // Keep the original text box and its geometry. Paragraph splitting cannot
         // infer automatic wrapping and can introduce overlaps even when no text is lost.
         // 부분 서식: 조각마다 다른 굵게 · 기울임 · 밑줄 · 색은 구간으로 옮긴다(글자 크기 · 글꼴은 첫 글자에 맞춘다).
-        const rich=textRuns(body,listed,listStyles,warn,color(direct(direct(paragraph,'defRPr'),'solidFill')||direct(direct(object,'style',NS.p),'fontRef'),'#222222',()=>{}));
+        const rich=textRuns(body,listed,listStyles,warn,color(direct(direct(paragraph,'defRPr'),'solidFill')||direct(direct(object,'style',NS.p),'fontRef'),'#222222',Object.assign(()=>{},{colorMap:warn.colorMap,themeColors:warn.themeColors})));
         if(rich.mixed)warn('RICH_TEXT_FLATTENED','문단 안의 다른 글자 크기 · 글꼴은 첫 글자에 맞췄어요. 굵게 · 기울임 · 밑줄 · 색은 그대로 옮겼어요.');
         items.push({...meta('text'),...style,...frame,text:listed,...(rich.runs.length?{runs:rich.runs}:{})});
       }
