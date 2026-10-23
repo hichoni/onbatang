@@ -15,6 +15,9 @@ import { ENTERS, COMBOS, TRANSITIONS, EMPHASES, IDLES, EXITS, SPEEDS, DELAYS, ST
 import { searchStickers } from './stickers.js';
 import { ART_PACKS, artSvg, artColorable, artReady, loadArt, searchArt } from './art.js';
 import { designView, itemView, placeItem, paintCard, shapeThumb } from './render.js';
+import { styleRuns, runsAll, dropRunKey, shiftRuns } from './runs.js';
+// 부분 서식으로 입힐 수 있는 것: 도구 막대의 값 이름 → 구간의 열쇠(runs.js)
+const RUN_KEYS = [['bold', 'b'], ['italic', 'i'], ['under', 'u'], ['color', 'c']];
 import { layoutLinks, relink, LINK_LINE, LINK_SHAPES, LINK_LABEL_MAX, linkSvg, linkHandle, dragLinkHandle, linkLabelSize, linkLabelT, linkEnds, endSpot, pieceNear, boxOfItem } from './links.js';
 import { sceneView, scenePlayer, keepScene, probeVideo, ACCEPT_VIDEOS } from './scene.js';
 import { icon } from './icons.js';
@@ -159,6 +162,9 @@ export function createEditor({
   const uploadTabsId = newId('u');
   const uploadHelpOpen = {photo: false, ppt: false, youtube: false};
   let editing = -1;           // 카드 위에서 바로 글을 고치는 중인 글상자의 번호
+  // 글을 고치면서 고른 글자 구간 { i: 글상자 번호, s, e, text }. 도구 막대의 굵게 · 기울임 · 밑줄 · 글자 색은 이 구간에만 입힌다.
+  // 도구 막대를 누르면 글 고치기가 먼저 끝나므로 구간을 따로 기억해 둔다. 카드의 다른 곳을 누르거나 다른 조각을 고르면 잊는다.
+  let textRange = null;
   let typed = false;          // 이번에 고치기 시작한 뒤 기록을 남겼는지(처음 한 번만 남긴다)
   let cut = null;             // 배경 제거 작업(openCut 의 job): 방식(AI · 단색) · 막대 값 · 붓질 · 미리보기
   let armed = null;           // 한 번 눌러 둔 템플릿(이미 꾸민 카드에서는 한 번 더 눌러야 바뀐다)
@@ -865,6 +871,7 @@ export function createEditor({
     endEdit();
     stopDrag();
     if (i >= 0) stopPreview();           // 미리 보느라 숨겨 둔 요소를 고르는 일이 없게
+    textRange = null;                    // 다른 조각을 고르면 고른 글자 구간은 잊는다
     sel = i;
     many = [];
     pop = null;
@@ -929,9 +936,13 @@ export function createEditor({
   // 한 번에 끝나는 바꾸기(색·글꼴·모양 등): 기록 → 바꾸기 → 알리기.
   function change(patch, { keepPop = true } = {}) {
     if (!cur()) return;
+    if (rangeChange(patch)) return;
     endEdit();
     stopDrag();
-    const next = cleanItem({ ...cur(), ...patch }, { keepSpaces: true });
+    let merged = { ...cur(), ...patch };
+    // 글상자 전체의 굵게 · 기울임 · 밑줄 · 색을 바꾸면 그 서식의 부분 서식은 지운다(전체가 정말 그렇게 되게).
+    if (merged.t === 'text' && merged.runs?.length) for (const [key, k] of RUN_KEYS) if (key in patch) merged = { ...merged, runs: dropRunKey(merged, k) };
+    const next = cleanItem(merged, { keepSpaces: true });
     if (!next) return;
     remember();
     put(next, { rebuild: true });
@@ -940,6 +951,58 @@ export function createEditor({
     onChange();
     keepKeys();
   }
+  // 고른 글자 구간에만 서식을 입힌다(굵게 · 기울임 · 밑줄은 구간이 모두 그러면 풀고 아니면 입힌다, 색은 그 색으로).
+  // 입힌 뒤에는 글 고치기로 돌아가 같은 구간을 다시 골라 둔다(이어서 색도 바꿀 수 있게). 구간이 없으면 false.
+  function rangeChange(patch) {
+    const it = cur(), keys = Object.keys(patch), pair = RUN_KEYS.find(([key]) => key === keys[0]);
+    const r = textRange;
+    if (!it || it.t !== 'text' || keys.length !== 1 || !pair || !r || r.i !== sel || r.text !== it.text || !(r.e > r.s)) return false;
+    const [, k] = pair, value = k === 'c' ? patch.color : !runsAll(it, r.s, r.e, k);
+    endEdit();
+    stopDrag();
+    const next = cleanItem({ ...it, runs: styleRuns(it, r.s, r.e, { [k]: value }) }, { keepSpaces: true });
+    if (!next) return true;
+    remember();
+    put(next, { rebuild: true });
+    renderUi();
+    onChange();
+    startEdit();
+    pickText(nodes[sel], r.s, r.e);
+    textRange = { ...r, text: next.text };
+    return true;
+  }
+  // 글상자 안의 s ~ e 글자를 고른다(글자 자리는 글의 위치, 서식 조각 <span> 을 건너 센다).
+  function pickText(node, s, e) {
+    if (!node) return;
+    const spot = (at) => {
+      const walk = document.createTreeWalker(node, 4);
+      for (let t = walk.nextNode(); t; t = walk.nextNode()) { if (at <= t.data.length) return [t, at]; at -= t.data.length; }
+      return [node, node.childNodes.length];
+    };
+    const range = document.createRange();
+    range.setStart(...spot(s));
+    range.setEnd(...spot(e));
+    const pick = window.getSelection();
+    pick.removeAllRanges();
+    pick.addRange(range);
+  }
+  // 지금 고른 글자 구간을 기억한다(글을 고치는 중에 그 글상자 안을 고른 것만).
+  // 고른 것이 바뀐 알림(selectionchange)은 늦게 올 수 있어서, 단추 · 글쇠를 누르는 그때에도 지금 고른 것을 읽는다.
+  function readRange() {
+    if (editing < 0) return;
+    const node = nodes[editing], pick = window.getSelection();
+    if (!node || !pick?.rangeCount) return;
+    const range = pick.getRangeAt(0);
+    if (!node.contains(range.startContainer) || !node.contains(range.endContainer)) return;
+    if (range.collapsed) { textRange = null; return; }
+    const before = document.createRange();
+    before.setStart(node, 0);
+    before.setEnd(range.startContainer, range.startOffset);
+    const s = before.toString().length, e = s + range.toString().length;
+    textRange = { i: editing, s, e, text: items()[editing]?.text };
+  }
+  document.addEventListener('selectionchange', readRange);
+  bar.addEventListener('pointerdown', readRange, true);
   // 도구 막대를 다시 그리면 방금 누른 단추가 사라져서 글자판이 갈 곳을 잃는다. 그때는 꾸미기 판으로 돌려 화살표·Delete 가 계속 듣게 한다.
   function keepKeys() {
     const at = document.activeElement;
@@ -1644,8 +1707,9 @@ export function createEditor({
     const limit = textLimit(it);
     if (text.length > limit) notify(`글상자 하나에는 ${limit}자까지 쓸 수 있어요.`);
     const list = items().slice();
-    list[editing] = cleanItem({ ...it, text }, { keepSpaces: true });
+    list[editing] = cleanItem({ ...it, text, ...(it.runs?.length ? { runs: shiftRuns(it.text, text, it.runs, it) } : {}) }, { keepSpaces: true });
     card.items = list;
+    if (textRange?.i === editing) textRange = { ...textRange, text: list[editing].text };
     syncSel();
     onChange();
   });
@@ -1732,6 +1796,7 @@ export function createEditor({
     }
     if (e.target.closest?.('.fe-empty-go, .fe-grow')) return;   // 빈 장의 빠른 시작 · 이어서 하나 더 단추는 그냥 누른다  // 빈 장의 빠른 시작 단추는 그냥 누른다(고르기 · 끌기를 시작하지 않는다)
     if (editing >= 0 && nodes[editing]?.contains(e.target)) return;   // 글을 고치는 중에는 글 안을 눌러 자리를 옮길 수 있게 둔다
+    textRange = null;                               // 카드의 다른 곳을 누르면 고른 글자 구간은 잊는다
     endEdit();
     stopPreview();                                  // 미리 보던 움직임은 끝낸다(숨겨 둔 요소가 있으면 다시 보인다)
     // 손가락·펜은 오른쪽 누르기가 없으니, 움직이지 않고 길게 누르고 있으면 메뉴를 연다.
@@ -2037,6 +2102,13 @@ export function createEditor({
     if(cropJob){cropKey(e);return;}
     if (editing >= 0) {
       if (e.key === 'Escape') { e.preventDefault(); endEdit(); focusStage(); }
+      // 고른 글자만 굵게 · 기울임 · 밑줄(Ctrl+B · I · U). 고르지 않았으면 글상자 전체.
+      else if ((e.ctrlKey || e.metaKey) && !e.altKey && ['KeyB', 'KeyI', 'KeyU'].includes(e.code) && cur()?.t === 'text') {
+        e.preventDefault();
+        readRange();
+        const key = { KeyB: 'bold', KeyI: 'italic', KeyU: 'under' }[e.code];
+        change({ [key]: !cur()[key] });
+      }
       return;                                       // 글을 고치는 중에는 글자판이 글로 간다
     }
     // 글쇠의 자리(e.code)로 견준다. 한글 입력 상태에서는 e.key 가 'ㅋ' 처럼 와서 Ctrl+Z 를 놓친다.

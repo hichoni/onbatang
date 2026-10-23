@@ -19,6 +19,7 @@ import { metadata, newId, fail, validatePageInput, isSlideItem, itemTextLimit, p
 export { cleanAlt, ALT_LIMIT };
 import { cleanActivity } from './activity.js';
 import { cleanCrop } from './crop.js';
+import { cleanRuns } from './runs.js';
 import { LINK_HEADS, LINK_LINE, LINK_SIDES, LINK_BEND, LINK_SHAPES, LINK_LABEL_MAX, LINK_LABEL_AT, LINK_LABEL_SIZES, LINK_LABEL_STYLES, LINK_POS, CURVE_BEND, layoutLinks } from './links.js';
 
 export { SHAPE_GROUPS };
@@ -199,6 +200,7 @@ const position = (value, fallback) => num(value, 0, 100, fallback, 10000);
 // 숫자로 적힌 값인가(없는 값·빈 글·글자는 아니다). "정하지 않음"과 0 을 가려야 하는 값에 쓴다.
 const given = (v) => (typeof v === 'number' || (typeof v === 'string' && v.trim() !== '')) && Number.isFinite(Number(v));
 
+const withRuns = (text, runs, base) => { const list = Array.isArray(runs) && runs.length ? cleanRuns(text, runs, base) : []; return list.length ? { runs: list } : {}; };
 /** '#rrggbb' 만 색으로 받는다(소문자로). 아니면 fallback. */
 export function cleanColor(raw, fallback = '#1d2433') {
   const s = String(raw ?? '').trim().toLowerCase();
@@ -291,6 +293,8 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
       under: it.under === true,
       align: ALIGNS.includes(it.align) ? it.align : 'c',
       bgc: it.bgc ? cleanColor(it.bgc, '') : '',
+      // 부분 서식: 글의 한 구간만 굵게 · 기울임 · 밑줄 · 다른 색(runs.js). 있을 때만 적는다.
+      ...withRuns(text, it.runs, { bold: it.bold === true, italic: it.italic === true, under: it.under === true, color: cleanColor(it.color) }),
     };
   }
   if (it.t === 'emoji') {

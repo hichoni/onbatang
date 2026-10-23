@@ -5,6 +5,7 @@ import {cleanDesign, settings, fontList, backgroundOf, hangsPunctuation} from '.
 import {designToBlob, designSheet} from '../src/export.js';
 import {itemView, paintCard} from '../src/render.js';
 import {sceneFrame} from '../src/scene.js';
+import {runPieces} from '../src/runs.js';
 import { linkEnds, linkControl, linkCorners, linkLabelAt, linkLabelSize } from '../src/links.js';
 
 export const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
@@ -134,18 +135,24 @@ function nativeText(item, box, id, size, warn) {
   if (!Number.isFinite(requestedSize) || requestedSize < 100 || requestedSize > 400000) fail('UNSUPPORTED_FONT_SIZE', 'PowerPoint에서 편집할 글자 크기는 1~4000pt여야 해요. 글자 크기를 바꾸거나 그림 PPTX로 내보내 주세요.', {elementId: item.id, pointSize: requestedSize / 100});
   const family = typeface(item, warn), fontSize = Math.round(requestedSize);
   warn('FONT_NOT_EMBEDDED', '글자는 편집할 수 있으며, 받는 기기에 글꼴이 없으면 다른 글꼴로 보일 수 있어요.', {font: family});
-  const style = `lang="ko-KR" sz="${fontSize}" b="${item.bold ? 1 : 0}" i="${item.italic ? 1 : 0}"${item.under ? ' u="sng"' : ''}`;
+  const styleOf = (b, i, u) => `lang="ko-KR" sz="${fontSize}" b="${b ? 1 : 0}" i="${i ? 1 : 0}"${u ? ' u="sng"' : ''}`;
+  const style = styleOf(item.bold, item.italic, item.under);
   // 글 테두리(a:ln)와 그림자(a:outerShdw). 화면의 테두리는 글자 크기의 약 9%라 PowerPoint 에서도 그 굵기로 맞춘다.
   const outline = item.stroke ? `<a:ln w="${Math.round(requestedSize / 100 * 12700 * .09)}">${solid(item.stroke, item.op)}</a:ln>` : '';
   const shadow = item.shadow ? '<a:effectLst><a:outerShdw blurRad="50800" dist="25400" dir="5400000" algn="t" rotWithShape="0"><a:srgbClr val="000000"><a:alpha val="50000"/></a:srgbClr></a:outerShdw></a:effectLst>' : '';
-  const properties = `<a:rPr ${style}>${outline}${solid(item.color, item.op)}${shadow}<a:latin typeface="${xml(family)}"/><a:ea typeface="${xml(family)}"/><a:cs typeface="${xml(family)}"/></a:rPr>`;
+  // 부분 서식(runs): 구간마다 굵게 · 기울임 · 밑줄 · 색이 다른 a:r 로 나눈다.
+  const propsOf = (run = null) => `<a:rPr ${run ? styleOf(run.b ?? item.bold, run.i ?? item.italic, run.u ?? item.under) : style}>${outline}${solid(run?.c || item.color, item.op)}${shadow}<a:latin typeface="${xml(family)}"/><a:ea typeface="${xml(family)}"/><a:cs typeface="${xml(family)}"/></a:rPr>`;
+  const properties = propsOf();
+  const lines = [[]];
+  for (const piece of runPieces(item.text, item.runs)) piece.text.split('\n').forEach((part, k) => { if (k) lines.push([]); if (part) lines[lines.length - 1].push({ text: part, run: piece.run }); });
+  const runsXml = (pieces) => (pieces.length ? pieces : [{ text: '', run: null }]).map(({ text, run }) => `<a:r>${run ? propsOf(run) : properties}<a:t xml:space="preserve">${xml(text)}</a:t></a:r>`).join('');
   const inset = item.bgc ? Math.round(item.size * size.width / 100 * .5) : 0;
   // CSS line-height multiplies the font size. DrawingML percentages multiply
   // the font's normal line metrics instead, making otherwise identical text taller.
   // Exact points preserve the authored baseline distance without shrinking text
   // to an explicit frame whose visible overflow may be intentional in the editor.
   const lineSpacing = Math.round(requestedSize * (item.lh || 1.25));
-  const paragraphs = item.text.split('\n').map(line => `<a:p><a:pPr algn="${{l: 'l', c: 'ctr', r: 'r'}[item.align] || 'ctr'}" hangingPunct="${hangsPunctuation(item) ? 1 : 0}"><a:lnSpc><a:spcPts val="${lineSpacing}"/></a:lnSpc><a:spcBef><a:spcPts val="0"/></a:spcBef><a:spcAft><a:spcPts val="0"/></a:spcAft></a:pPr><a:r>${properties}<a:t xml:space="preserve">${xml(line)}</a:t></a:r><a:endParaRPr ${style}/></a:p>`).join('');
+  const paragraphs = lines.map(pieces => `<a:p><a:pPr algn="${{l: 'l', c: 'ctr', r: 'r'}[item.align] || 'ctr'}" hangingPunct="${hangsPunctuation(item) ? 1 : 0}"><a:lnSpc><a:spcPts val="${lineSpacing}"/></a:lnSpc><a:spcBef><a:spcPts val="0"/></a:spcBef><a:spcAft><a:spcPts val="0"/></a:spcAft></a:pPr>${runsXml(pieces)}<a:endParaRPr ${style}/></a:p>`).join('');
   return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${xml(item.id || `글상자 ${id}`)}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr>${transform(box, item)}<a:prstGeom prst="${item.bgc ? 'roundRect' : 'rect'}"><a:avLst/></a:prstGeom>${item.bgc ? solid(item.bgc, item.op) : '<a:noFill/>'}<a:ln><a:noFill/></a:ln></p:spPr><p:txBody><a:bodyPr wrap="${item.nowrap ? 'none' : 'square'}" lIns="${inset}" rIns="${inset}" tIns="${Math.round(inset * .44)}" bIns="${Math.round(inset * .44)}" anchor="${{top: 't', middle: 'ctr', bottom: 'b'}[item.valign] || 't'}"><a:noAutofit/></a:bodyPr><a:lstStyle/>${paragraphs}</p:txBody></p:sp>`;
 }
 function picture(box, id, relation, name, item = {}, crop = '') {
