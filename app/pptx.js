@@ -317,11 +317,13 @@ export async function createPptx({slides, aspect = 16 / 9, size, title = '온바
     }
     const options = {aspect: slideSize.aspect, signal, pageNumber};
     if (design.video || design.pa || design.tr || design.items.some(item => (item.an && item.an !== 'none') || item.em || item.ex || item.aw || (item.lp && item.lp !== 'none'))) pageWarn('STATIC_EXPORT', '움직임과 소리는 포함하지 않고 현재 그림을 저장해요.');
+    // 웹사이트 장: PowerPoint 에는 사이트가 들어가지 않는다(표지 그림 · 주소만).
+    if (design.web) pageWarn('WEB_AS_PICTURE', `웹사이트 장은 표지 그림으로 저장해요. 주소: ${design.web.url}`);
     if (mode === 'image') await raster(await cancellable(renderSlide(design, options), signal), `슬라이드 ${pageNumber}`);
     else {
-      if (design.video || !/^#[a-f0-9]{6}$/i.test(backgroundOf(design.bg).bg)) {
-        if (!design.video) pageWarn('BACKGROUND_RASTERIZED', '꾸민 바탕은 모양을 보존한 그림으로 저장해요.');
-        await raster(await cancellable(renderSlide({...design, items: []}, options), signal), design.video ? '영상 첫 장면' : '슬라이드 바탕');
+      if (design.video || design.web || !/^#[a-f0-9]{6}$/i.test(backgroundOf(design.bg).bg)) {
+        if (!design.video && !design.web) pageWarn('BACKGROUND_RASTERIZED', '꾸민 바탕은 모양을 보존한 그림으로 저장해요.');
+        await raster(await cancellable(renderSlide({...design, items: []}, options), signal), design.video ? '영상 첫 장면' : design.web ? '웹사이트 표지' : '슬라이드 바탕');
       }
       for (let itemIndex = 0; itemIndex < design.items.length; itemIndex += 1) {
         abort(signal); const item = design.items[itemIndex], itemWarn = warn(pageNumber, item.id), id = shapes.length + 2;
@@ -334,7 +336,8 @@ export async function createPptx({slides, aspect = 16 / 9, size, title = '온바
           const c=item.crop,explicit=c?`<a:srcRect l="${Math.round(c.x*100000)}" t="${Math.round(c.y*100000)}" r="${Math.round((1-c.x-c.w)*100000)}" b="${Math.round((1-c.y-c.h)*100000)}"/>`:null;
           await raster(loaded, item.id || `사진 ${id}`, item, box, explicit??(crop ? `<a:srcRect ${horizontal ? `l="${crop}" r="${crop}"` : `t="${crop}" b="${crop}"`}/>` : ''));
         } else {
-          itemWarn('ELEMENT_RASTERIZED', '이 요소는 모양을 보존한 그림으로 저장해요.', {type: item.t, ...(item.shape ? {shape: item.shape} : {})});
+          if (item.t === 'web') itemWarn('WEB_AS_PICTURE', `웹사이트 상자는 표지 그림으로 저장해요. 주소: ${item.url}`);
+          else itemWarn('ELEMENT_RASTERIZED', '이 요소는 모양을 보존한 그림으로 저장해요.', {type: item.t, ...(item.shape ? {shape: item.shape} : {})});
           const rendered = await cancellable(renderItem(design, itemIndex, options), signal);
           await raster(rendered, item.id || `그림 ${id}`, {}, rasterBox(rendered, slideSize));
         }

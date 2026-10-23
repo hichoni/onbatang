@@ -494,6 +494,20 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"], body.mc-app :is(#app,.cv-a
 @media(max-width:640px){.cv-show-word{display:none}}      /* 휴대폰: 리모컨 · 질문 · 끝내기는 그림만(이름은 aria-label · title 에 있다) */
 @media(max-width:960px){.cv-show-bar{gap:6px;padding:8px;left:8px;right:8px;width:max-content;max-width:calc(100vw - 16px);margin:0 auto;transform:none;flex-wrap:wrap;justify-content:center;border-radius:18px}.cv-show-key{padding:8px 10px;min-height:44px}.cv-show-count{font-size:14px}}
 
+/* ---- 발표의 웹사이트 장(app.js 의 mountWeb): 장 위에 실제 사이트. 보기(view)에서는 눌러도 사이트가 아니라 발표가 받는다 ---- */
+.cv-show-web { position: absolute; inset: 0; z-index: 4; background: #fff; }
+.cv-show-web .fe-web-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #fff; }
+.cv-show-web[data-mode="view"] .fe-web-frame { pointer-events: none; }
+.cv-show-web[data-mode="use"] { cursor: auto; }
+.cv-show-web[data-mode="use"]::after { content: ''; position: absolute; inset: 0; border: 4px solid #4c6ef5; pointer-events: none; }
+.cv-web-pill { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 2; display: flex; align-items: center; gap: 6px; padding: 6px; border-radius: 999px; background: rgba(20, 24, 34, .8); color: #fff; cursor: default; transition: opacity .35s; }
+.cv-web-pill:empty { display: none; }
+@media (hover: hover) { .cv-show[data-calm] .cv-show-web[data-mode="view"] .cv-web-pill:not(:focus-within) { opacity: 0; } }
+.cv-web-status { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 1; display: grid; justify-items: center; gap: 10px; max-width: min(560px, 90vw); padding: 18px 22px; border-radius: 16px; background: rgba(20, 24, 34, .82); color: #fff; text-align: center; line-height: 1.5; }
+.cv-web-status[hidden] { display: none; }
+.cv-show-web:not([data-blocked]) .cv-web-status { top: auto; bottom: 90px; transform: translateX(-50%); padding: 8px 16px; border-radius: 999px; font-size: .92rem; }
+.cv-show-web[data-blocked] { background: transparent; }
+
 /* ---- 내려받기 창: 파일 종류 → 저장할 장 → 설정 → 내려받기 ----
    이 창만 본문을 스크롤한다. 짧은 화면에서도 제목 · 선택 요약 · 실행 단추를 함께 볼 수 있다. */
 .modal-backdrop.download-backdrop { z-index: 70; }

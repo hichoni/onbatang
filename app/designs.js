@@ -14,6 +14,7 @@ import { relink } from '../src/links.js';
 import { cleanActivity } from '../src/activity.js';
 import {cleanCrop} from '../src/crop.js';
 import {cleanRuns} from '../src/runs.js';
+import {designWeb} from '../src/web.js';
 export { SCHEMA_VERSION, DocumentError };
 
 export const RATIOS = [
@@ -114,7 +115,7 @@ export function slideVideo(slide) {
   return { video };
 }
 /** 장에 딸린 것 모두(움직임 · 영상 장면 · 발표자 노트). 슬라이드를 새로 짜 맞추는 곳({ bg, items } 를 만드는 곳)마다 함께 펼쳐 넣는다(빠뜨리면 저장하면서 사라진다). */
-export const slideExtra = (slide) => ({ ...metadata(slide, { identity: true }), ...slideMotion(slide), ...slideVideo(slide), ...slideNotes(slide), ...slideHidden(slide), ...slideTopic(slide), ...slideDur(slide), ...(slide?.activity === undefined ? {} : {activity:cleanActivity(slide.activity)}) });
+export const slideExtra = (slide) => ({ ...metadata(slide, { identity: true }), ...slideMotion(slide), ...slideVideo(slide), ...designWeb(slide), ...slideNotes(slide), ...slideHidden(slide), ...slideTopic(slide), ...slideDur(slide), ...(slide?.activity === undefined ? {} : {activity:cleanActivity(slide.activity)}) });
 export function withSlideMotion(slide, motion) {
   const { pa, tr, ...extra } = slideExtra(slide);
   return { bg: slide.bg, items: slide.items, ...extra, ...slideMotion(motion) };

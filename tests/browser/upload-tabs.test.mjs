@@ -61,8 +61,8 @@ async function assertSelected(page, name, focused = false) {
 
 test('material tabs default to photos, expose real ARIA panels, retain selection/focus through redraw and reset for a new editor', options, async t => {
   const f = await setup(t), {page} = f;
-  assert.match(await page.locator('.fe-panel-desc').textContent(), /사진·PPT·영상을 넣어요\./);
-  assert.equal(await page.locator('[data-upload-tab]').count(), 3); await assertSelected(page, 'photo');
+  assert.match(await page.locator('.fe-panel-desc').textContent(), /사진·PPT·영상·웹사이트를 넣어요\./);
+  assert.equal(await page.locator('[data-upload-tab]').count(), 4); await assertSelected(page, 'photo');
   assert.equal(await page.locator('[data-document-import]').count(), 0); assert.equal(await page.locator('.fe-yt-input').count(), 0);
   assert.match(await activePanel(page).textContent(), /아직 올린 사진이 없어요/);
   assert.equal(await page.locator('[data-upload-help=photo]').evaluate(node => node.open), false);
@@ -76,7 +76,8 @@ test('material tabs default to photos, expose real ARIA panels, retain selection
   assert.equal(await page.getByRole('button', {name: '사진 올리기', exact: true}).count(), 0);
   await page.keyboard.press('ArrowRight'); await assertSelected(page, 'video', true);
   await page.keyboard.press('Home'); await assertSelected(page, 'photo', true);
-  await page.keyboard.press('End'); await assertSelected(page, 'video', true);
+  await page.keyboard.press('End'); await assertSelected(page, 'web', true);
+  await page.keyboard.press('ArrowLeft'); await assertSelected(page, 'video', true);
   await page.keyboard.press('ArrowLeft'); await assertSelected(page, 'ppt', true);
   await page.evaluate(() => window.editor.refresh()); await assertSelected(page, 'ppt', true);
   await page.locator('.fe-tab[data-tab=text]').click(); await page.locator('.fe-tab[data-tab=upload]').click(); await assertSelected(page, 'ppt');
@@ -109,7 +110,7 @@ test('photo upload preserves its input/list through tab switches and asynchronou
 
 test('narrow material tabs keep PPT busy guards, show only selected content and support the two-tab embed without PPT import', options, async t => {
   const f = await setup(t, {width: 390}), {page} = f;
-  for (const mode of ['photo', 'ppt', 'video']) {
+  for (const mode of ['photo', 'ppt', 'video', 'web']) {
     await selected(page, mode).click(); await assertSelected(page, mode);
     assert.equal(await page.locator('.fe-panel').evaluate(node => node.scrollWidth <= node.clientWidth + 1), true);
     assert.equal(await page.locator('[data-upload-help]:visible').evaluate(node => node.open), false);
@@ -117,14 +118,14 @@ test('narrow material tabs keep PPT busy guards, show only selected content and 
   }
   await selected(page, 'ppt').click(); await page.evaluate(() => { window.holdImport = true; });
   await page.locator('[data-document-import]').click(); assert.equal(await page.locator('[data-document-import]').getAttribute('aria-busy'), 'true');
-  assert.equal(await page.locator('[data-upload-tab]:disabled').count(), 3);
+  assert.equal(await page.locator('[data-upload-tab]:disabled').count(), 4);
   await page.evaluate(() => window.editor.refresh()); assert.equal(await page.locator('[data-document-import]').isDisabled(), true);
   await page.evaluate(() => { window.holdImport = false; window.finishImport(); }); await page.waitForFunction(() => !document.querySelector('[data-document-import]').disabled);
   assert.equal(await page.locator('[data-upload-tab]:disabled').count(), 0); assert.equal(await page.evaluate(() => window.importCalls), 1);
   assert.deepEqual(f.errors, []); assert.deepEqual(f.external, []);
   const plain = await setup(t, {width: 390, documentImport: false, library: false});
-  assert.equal(await plain.page.locator('[data-upload-tab]').count(), 2); assert.equal(await selected(plain.page, 'ppt').count(), 0);
-  assert.match(await plain.page.locator('.fe-panel-desc').textContent(), /사진·영상을 넣어요\./);
-  await selected(plain.page, 'photo').focus(); await plain.page.keyboard.press('ArrowLeft'); await assertSelected(plain.page, 'video', true);
+  assert.equal(await plain.page.locator('[data-upload-tab]').count(), 3); assert.equal(await selected(plain.page, 'ppt').count(), 0);
+  assert.match(await plain.page.locator('.fe-panel-desc').textContent(), /사진·영상·웹사이트를 넣어요\./);
+  await selected(plain.page, 'photo').focus(); await plain.page.keyboard.press('ArrowLeft'); await assertSelected(plain.page, 'web', true);
   assert.deepEqual(plain.errors, []); assert.deepEqual(plain.external, []);
 });

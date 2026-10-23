@@ -161,7 +161,7 @@ export function validatePageInput(page, limits = DOCUMENT_LIMITS) {
   if (items.filter(x => x?.t === 'image').length > limits.photos) fail('PHOTO_LIMIT', 'items', page, { limit: limits.photos });
   const seen = new Set();
   for (const [i, item] of items.entries()) {
-    if (!isObject(item) || !['text', 'emoji', 'shape', 'art', 'yt', 'image', 'link'].includes(item.t)) fail('UNSUPPORTED_ELEMENT', `items.${i}`, page);
+    if (!isObject(item) || !['text', 'emoji', 'shape', 'art', 'yt', 'image', 'link', 'web'].includes(item.t)) fail('UNSUPPORTED_ELEMENT', `items.${i}`, page);
     if (item.id !== undefined) {
       if (!isId(item.id)) fail('INVALID_ID', `items.${i}.id`, page);
       if (seen.has(item.id)) fail('DUPLICATE_ID', `items.${i}.id`, page);
