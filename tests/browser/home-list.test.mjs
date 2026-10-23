@@ -22,11 +22,11 @@ const b=newRecord('1:1',2,Date.now()-3600000);b.name='나무 관찰';await putDe
 await startMinican({storage:'v73-home'});window.ready=true;
 </script>`;
 
-async function setup(t) {
+async function setup(t, html = fixture) {
   const server = createServer(async (req, res) => {
     try {
       const path = new URL(req.url, 'http://localhost').pathname;
-      if (path === '/fixture.html') { res.setHeader('Content-Type', 'text/html'); return res.end(fixture); }
+      if (path === '/fixture.html') { res.setHeader('Content-Type', 'text/html'); return res.end(html); }
       const f = resolve(root, '.' + decodeURIComponent(path));
       if (!f.startsWith(root + sep)) throw Error('path');
       res.setHeader('Content-Type', ({'.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.png': 'image/png'})[extname(f)] || 'application/octet-stream');
@@ -116,5 +116,24 @@ test('the show bar and pointer fade after the mouse rests and come back when it 
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.waitForTimeout(3200);
   assert.equal(await page.evaluate(() => document.querySelector('.cv-show').hasAttribute('data-calm')), false);
+  assert.deepEqual(errors, []);
+});
+
+// 한도는 칸 수로 센다: 파트가 많은 PPT 하나는 한 칸이라 새 그림을 막지 않고, 직접 만든 그림이 한도만큼 차면 막는다.
+const crowd = (parts, mine) => fixture.replace("for(const [n,pages] of [[1,2],[2,2],[3,3]])await putDesign(part(n,pages));",
+  `for(let n=1;n<=${parts};n++)await putDesign(migrateRecord({...part(1,1),id:'dp'+String(n).padStart(23,'0'),name:'메이커 캠프 · '+n,slides:[{id:'pp'+String(n).padStart(20,'0'),items:[]}]}));
+   for(let n=1;n<=${mine};n++){const r=newRecord('1:1',n+10,Date.now()-n*1000);r.name='내 그림 '+n;await putDesign(r);}`);
+test('the design limit counts a many-part PPT as one card', options, async t => {
+  const {page, errors} = await setup(t, crowd(70, 3));
+  assert.match(await page.locator('.cv-mine h2').textContent(), /내 그림 6개/);
+  assert.equal(await page.locator('.cv-hero .cv-new-btn').isDisabled(), false, 'a 70-part PPT does not fill the list');
+  assert.equal(await page.locator('.cv-hero-full').count(), 0);
+  assert.deepEqual(errors, []);
+});
+test('sixty cards fill the list and say so', options, async t => {
+  const {page, errors} = await setup(t, crowd(0, 58));
+  assert.match(await page.locator('.cv-mine h2').textContent(), /내 그림 60개/);
+  assert.equal(await page.locator('.cv-hero .cv-new-btn').isDisabled(), true);
+  assert.match(await page.locator('.cv-hero-full').textContent(), /60개까지 저장돼요\(PPT 하나는 파트가 여럿이어도 1개\)/);
   assert.deepEqual(errors, []);
 });
