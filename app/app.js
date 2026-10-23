@@ -19,6 +19,8 @@ import {cleanGaiActivity,gaiAppCover,gaiAppResult} from '../src/gai-app.js';
 import {mountGaiApp} from './gai-app.js';
 import {createShowTools} from './show-tools.js';
 import {spokenNotes} from './show-keys.js';
+import {webFrame} from '../src/render.js';
+import {blockedSite, webHost} from '../src/web.js';
 import {PRINT_LAYOUTS,printHtml} from './print.js';
 import {encodeGif,GIF_LIMITS} from './gif.js';
 import {findText,replaceText} from './find-replace.js';
@@ -903,7 +905,7 @@ function slideView(design, aspect, sceneEdge = 640) {
 }
 // 띠의 작은 그림에 붙이는 이름: 몇 번째 장인지 + 영상 장면 · 움직임이 있는지.
 function slideLabel(i, design) {
-  const marks = [design.topic ? `주제 ${design.topic}` : '', design.dur ? `리허설 ${design.dur}초` : '', design.hidden ? '발표에서 숨김' : '', hasVideo(design) ? '영상 있음' : '', hasMotion(design) ? '움직임 있음' : ''].filter(Boolean);
+  const marks = [design.topic ? `주제 ${design.topic}` : '', design.dur ? `리허설 ${design.dur}초` : '', design.hidden ? '발표에서 숨김' : '', hasVideo(design) ? '영상 있음' : '', design.web ? '웹사이트' : '', hasMotion(design) ? '움직임 있음' : ''].filter(Boolean);
   return `${i + 1}번째 장${marks.length ? ` (${marks.join(' · ')})` : ''}`;
 }
 function renderStrip(O) {
@@ -1797,8 +1799,55 @@ async function present(O) {
     if (leaving) drop(leaving);
     leaving = null;
   };
+  // ---------- 웹사이트 장: 장 위에 실제 사이트를 연다 ----------
+  // 보기(view): 사이트가 보이기만 하고 누르거나 → 를 치면 다음 장. 조작(use): 사이트를 직접 누르고 쓴다(파란 테두리).
+  // 조작 중에도 위의 ◀ ▶ 와 휴대폰 리모컨으로 넘긴다. 마우스가 사이트 밖으로 나오면 글쇠를 발표로 돌려받아 → · 프레젠터가 다시 듣는다.
+  // 사이트가 다른 화면 안에 넣는 것을 막아 두었으면(잘 알려진 곳) 사이트 대신 "새 창으로 열기"를 크게 보인다.
+  let web = null;
+  const dropWeb = () => { clearTimeout(web?.slow); web?.host.remove(); web = null; };
+  const webMode = (mode) => {
+    if (!web?.frame) return;
+    web.mode = mode;
+    web.host.dataset.mode = mode;
+    paintWebPill();
+    if (mode === 'view' && document.activeElement === web.frame) overlay.focus({ preventScroll: true });
+  };
+  const webKey = (label, title, onClick, data) => el('button', { class: 'cv-show-key', type: 'button', title, 'aria-label': title, dataset: data, onClick: (e) => { e.stopPropagation(); onClick(); } }, label);
+  const openSite = (url) => { try { window.open(url, '_blank', 'noopener'); } catch (error) { console.warn(error); } };
+  const paintWebPill = () => {
+    if (!web) return;
+    const open = webKey([ic('screen'), el('span', { class: 'cv-show-word', text: '새 창' })], '이 사이트를 새 창으로 열기', () => openSite(web.url), { webOpen: '' });
+    web.pill.replaceChildren(...(web.mode === 'use'
+      ? [webKey(ic('left'), '앞 장', () => go(-1), { webPrev: '' }), webKey('발표로 돌아가기', '사이트 조작을 마치고 발표로 돌아가기 (Esc)', () => webMode('view'), { webView: '' }), webKey(ic('right'), '다음 장', () => go(1), { webNext: '' }), open]
+      : [webKey([ic('move'), el('span', { text: '사이트 조작하기' })], '이 사이트를 직접 누르고 써요', () => webMode('use'), { webUse: '' }), open]));
+  };
+  // 사이트 위에 마우스가 있는 동안에는 이 화면(발표)에 마우스 알림이 오지 않는다: 알림이 오면 마우스가 사이트 밖(위 · 아래 막대 등)에 있는 것이다.
+  const takeKeys = () => { if (web?.frame && document.activeElement === web.frame) overlay.focus({ preventScroll: true }); };
+  const mountWeb = (site) => {
+    const url = site.url, blocked = blockedSite(url);
+    const pill = el('div', { class: 'cv-web-pill', role: 'group', 'aria-label': '웹사이트' });
+    const status = el('div', { class: 'cv-web-status', role: 'status' });
+    const frame = blocked ? null : webFrame(site);
+    const host = el('section', { class: 'cv-show-web', dataset: { mode: 'view', showWeb: '' } }, ...(frame ? [frame] : []), status, pill);
+    web = { url, host, frame, pill, mode: 'view', slow: 0 };
+    if (blocked) {
+      host.dataset.blocked = '';
+      status.append(el('b', { text: `${blocked}은(는) 다른 화면 안에 넣는 것을 막아 두었어요` }), el('span', { text: '새 창으로 열어 보여 주고, 이 창으로 돌아와 이어서 발표해요.' }),
+        webKey([ic('screen'), el('span', { text: `${webHost(url)} 새 창으로 열기` })], '이 사이트를 새 창으로 열기', () => openSite(url), { webOpen: '' }));
+    } else {
+      status.append(el('span', { text: `${webHost(url)} 여는 중…` }));
+      frame.addEventListener('load', () => { if (web?.frame === frame) { clearTimeout(web.slow); status.hidden = true; } });
+      // 오래 걸리면(또는 사이트가 막아 둔 곳이면) 새 창으로 여는 길을 알려 준다.
+      web.slow = setTimeout(() => { if (web?.frame === frame && !status.hidden) status.replaceChildren(el('span', { text: '사이트가 열리지 않으면 위의 "새 창"으로 열어요.' })); }, 10000);
+      // 사이트 밖으로 마우스가 나오면 글쇠를 발표로 돌려받는다(사이트 안의 글쇠는 발표가 들을 수 없다).
+      frame.addEventListener('mouseleave', takeKeys);
+      paintWebPill();
+    }
+    overlay.insertBefore(host, stage.nextSibling);
+  };
   const draw = (dir = 0) => {
     pixel?.destroy();pixel=null;
+    dropWeb();
     settle();
     parts?.stop();             // 떠나는 장의 "계속 움직이기"를 멈춘다(흔적이 없다)
     tools?.changed();
@@ -1837,6 +1886,7 @@ async function present(O) {
       }});
       ease(host,[{opacity:0,transform:'scale(.965)'},{opacity:1,transform:'scale(1)'}],260);return;
     }
+    if (design.web) mountWeb(design.web);
     if (!dir || !old) {
       for (const n of [...stage.children]) drop(n);
       stage.append(view);
@@ -1896,6 +1946,8 @@ async function present(O) {
     if (!['Escape', 'PageDown', 'PageUp'].includes(e.key) && e.target?.closest?.('input, textarea, select, [contenteditable=""], [contenteditable="true"]')) return;
     // 아래 막대의 단추에 초점이 있을 때 스페이스 · 엔터는 그 단추를 누르는 글쇠다(다음 장으로 넘기지 않는다).
     if ((e.key === ' ' || e.key === 'Enter') && e.target?.closest?.('.cv-show-key')) { e.stopPropagation(); return; }
+    // 웹사이트를 조작하는 중의 Esc 는 발표를 끝내지 않고 보기로 돌아간다.
+    if (e.key === 'Escape' && web?.mode === 'use') { e.preventDefault(); e.stopPropagation(); webMode('view'); return; }
     // 유튜브를 틀었으면 스페이스 바는 멈추기 · 다시 틀기다(다음 장은 → · PageDown · 누르기).
     if (e.key === ' ' && tubeNow()) { e.preventDefault(); e.stopPropagation(); tubeNow().toggle(); return; }
     // 넘기기 · 번호로 가기 · 검은 화면 · 펜 · 전체 보기 · 발표자 화면 · K(영상) … 글쇠 약속은 show-keys.js 에 있다(HTML 수업과 같다).
@@ -1914,7 +1966,7 @@ async function present(O) {
   };
   function close() {
     if(savingActivity)return;
-    closed=true;pixel?.destroy();pixel=null;
+    closed=true;pixel?.destroy();pixel=null;dropWeb();
     try { remote?.close?.(); } catch (error) { console.warn(error); } remote = null;
     try { audience?.close?.(); } catch (error) { console.warn(error); } audience = null;
     tools?.destroy();tools=null;
@@ -1958,6 +2010,7 @@ async function present(O) {
   const audienceBtn = showAudience ? btn([ic('people'), word('질문 · 반응')], '학생이 QR 로 반응 · 질문을 보내요', openAudience) : null;
   if (audienceBtn) audienceBtn.dataset.showAudience = '';
   overlay.querySelector('.cv-show-bar').append(...tools.buttons, ...(remoteBtn ? [remoteBtn] : []), ...(audienceBtn ? [audienceBtn] : []), btn([ic('close'), word('끝내기')], '발표 끝내기 (Esc)', close));
+  overlay.addEventListener('pointermove', takeKeys);       // 웹사이트를 조작하다 마우스가 사이트 밖으로 나오면 글쇠를 돌려받는다
   document.body.append(overlay);
   document.body.classList.add('modal-open');
   draw();

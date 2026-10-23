@@ -1,3 +1,5 @@
 /* 발표처럼 트는 재생기(app/player.js): 장들을 한 칸에 겹쳐 두고(전환 효과가 두 장을 함께 그린다) 화면에 맞춘다. */
 .ob-player { display: grid; position: relative; overflow: hidden; width: min(100%, calc(var(--ob-player-height, 100dvh) * var(--ob-player-ratio, 1))); }
 .ob-player > .fe-card { grid-area: 1 / 1; width: 100%; }
+/* 웹사이트 장: 장 위의 실제 사이트는 누르고 쓸 수 있다 */
+.ob-player .fe-card > .fe-web-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #fff; pointer-events: auto; z-index: 3; }

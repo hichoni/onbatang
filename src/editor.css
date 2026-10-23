@@ -847,3 +847,19 @@
 
 /* 누를 때 트는 바탕 영상은 발표에서 첫 모습으로 기다린다(.fe-standby). 보는 사람 화면에는 아무 표시도 얹지 않는다: 기다린다는 표시는 발표 막대의 영상 단추에만 있다. */
 .fe-video-split { height: 1px; margin: 16px 0 6px; background: var(--fe-line, #dde2ef); }
+
+/* ---- 웹사이트 장의 표지(render.js 의 webCard): 발표 화면은 이 위에 실제 사이트를 연다 ---- */
+.fe-web { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 1.2cqw; padding: 6cqw; text-align: center;
+  background: linear-gradient(160deg, #eef3ff, #f7f9ff 55%, #eaf6f1); color: #24325a; pointer-events: none; }
+.fe-web-globe { width: 9cqw; height: 9cqw; color: #3f5bd8; }
+.fe-web-globe svg { width: 100%; height: 100%; display: block; }
+.fe-web-host { font-size: 4.6cqw; font-weight: 800; line-height: 1.2; overflow-wrap: anywhere; }
+.fe-web-url { max-width: 80cqw; font-size: 1.7cqw; color: #5a6690; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fe-web-note { margin-top: .6cqw; padding: .6cqw 1.8cqw; border-radius: 999px; background: #fff; box-shadow: 0 1px 4px rgba(36, 50, 90, .12); font-size: 1.6cqw; font-weight: 700; color: #3f5bd8; }
+/* 웹사이트 칸(editor.js 의 webPane): 지금 넣은 사이트 */
+.fe-web-row .fe-web-input { flex: 1 1 auto; min-width: 0; }
+.fe-web-now { display: grid; gap: 4px; margin-top: 10px; padding: 10px 12px; border: 1px solid var(--fe-line); border-radius: 10px; background: #f7f9ff; }
+.fe-web-now > b { font-size: 1rem; overflow-wrap: anywhere; }
+.fe-web-now > .fe-note { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fe-web-now .fe-row { flex-wrap: wrap; margin-top: 4px; }
+.fe-web-now a.fe-btn { text-decoration: none; }

@@ -7,6 +7,7 @@ import { sceneView } from './scene.js';
 import { ytThumb, ytEmbed, YT_ORIGIN } from './youtube.js';
 import { linkSvg } from './links.js';
 import { runPieces } from './runs.js';
+import { webHost } from './web.js';
 
 // 유튜브 영상의 재생 단추(유튜브의 빨간 단추 모양)
 const YT_PLAY = '<svg viewBox="0 0 68 48" aria-hidden="true" focusable="false"><path d="M66.5 7.7A8.5 8.5 0 0 0 60.5 1.7C55.2.3 34 .3 34 .3s-21.2 0-26.5 1.4A8.5 8.5 0 0 0 1.5 7.7C.1 13 .1 24 .1 24s0 11 1.4 16.3a8.5 8.5 0 0 0 6 6C12.8 47.7 34 47.7 34 47.7s21.2 0 26.5-1.4a8.5 8.5 0 0 0 6-6C67.9 35 67.9 24 67.9 24s0-11-1.4-16.3z" fill="#f03"/><path d="M45 24 27 14v20z" fill="#fff"/></svg>';
@@ -190,8 +191,32 @@ export function designView(design, { empty = '', sceneEdge = 640, sceneNote = tr
   const d = cleanDesign(design, { keepSpaces: true });
   return paintCard(el('div', { class: 'fe-card' },
     d.video ? sceneView(d.video, { edge: sceneEdge, note: sceneNote }) : null,
+    d.web ? webCard(d.web) : null,
     ...d.items.map(itemView),
-    !d.items.length && !d.video && empty ? el('div', { class: 'fe-empty', text: empty }) : null), d.bg);
+    !d.items.length && !d.video && !d.web && empty ? el('div', { class: 'fe-empty', text: empty }) : null), d.bg);
+}
+/**
+ * 웹사이트 장의 실제 사이트(발표 화면 · 공유 링크 재생기). 사이트가 이 화면을 다른 곳으로 옮기지 못하게(allow-top-navigation 없음) 묶어 둔다.
+ */
+export function webFrame(web) {
+  return el('iframe', {
+    class: 'fe-web-frame', src: web.url, title: `웹사이트: ${webHost(web.url)}`, loading: 'eager', referrerpolicy: 'strict-origin-when-cross-origin',
+    allow: 'fullscreen; autoplay; encrypted-media; picture-in-picture; clipboard-write',
+    sandbox: 'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads allow-presentation allow-pointer-lock',
+    allowfullscreen: true,
+  });
+}
+/**
+ * 웹사이트 장의 표지(꾸미기 판 · 작은 그림 · 그림 · PDF). 발표 화면은 이 위에 실제 사이트를 연다.
+ * 지구 그림 · 사이트 이름 · 주소 · 안내 한 줄. 카드 너비(cqw)를 따라 커지고 작아진다.
+ */
+export function webCard(web) {
+  const globe = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M2.8 12h18.4M12 2.8c2.6 2.6 3.9 5.6 3.9 9.2s-1.3 6.6-3.9 9.2M12 2.8C9.4 5.4 8.1 8.4 8.1 12s1.3 6.6 3.9 9.2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
+  return el('div', { class: 'fe-web', dataset: { web: web.url } },
+    el('span', { class: 'fe-web-globe', html: globe }),
+    el('b', { class: 'fe-web-host', text: webHost(web.url) }),
+    el('span', { class: 'fe-web-url', text: web.url }),
+    el('span', { class: 'fe-web-note', text: '발표할 때 이 장에 실제 사이트가 열려요' }));
 }
 
 /**

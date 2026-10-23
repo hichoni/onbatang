@@ -2,7 +2,7 @@
 // 전환 효과(이어 움직이기 포함) · 나타나기(조합 효과) · 누를 때 나오기 · 강조 · 머무는 동안 계속 움직이기 · 영상 장면(파일을 받을 수 있을 때) · 유튜브.
 // 편집기 · 저장소에 기대지 않는다. 넘기기는 next() · prev() · go(n): 누를 때 나오는 것이 남아 있으면 next() 가 그것부터 하나씩 나타나게 한다.
 // 모양은 player.css(.ob-player). 움직임을 줄여 달라고 해 둔 기기에서는 motion.js 가 움직이지 않고 바로 보여 준다.
-import { designView, youTubePlayers } from '../src/render.js';
+import { designView, youTubePlayers, webFrame } from '../src/render.js';
 import { playDesign, playTransition } from '../src/motion.js';
 import { scenePlayer } from '../src/scene.js';
 import { cleanDesign } from '../src/model.js';
@@ -21,6 +21,8 @@ export function mountPlayer(stage, { slides = [], aspect = 16 / 9, onChange = ()
   const cards = () => [...stage.querySelectorAll(':scope > .fe-card')];
   const view = (design) => {
     const card = designView(design, { sceneEdge: edge });
+    // 웹사이트 장: 표지 위에 실제 사이트를 연다(보는 사람이 직접 누르고 쓸 수 있다. 넘기기는 재생기 밖의 단추로).
+    if (design.web) card.append(webFrame(design.web));
     card.style.setProperty('--fe-ratio', String(aspect));
     card.style.setProperty('--fe-card-radius', '0');
     card.style.aspectRatio = String(aspect);

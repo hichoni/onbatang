@@ -14,7 +14,8 @@ import {
 import { ENTERS, COMBOS, TRANSITIONS, EMPHASES, IDLES, EXITS, SPEEDS, DELAYS, STILL, planMotion, playEnter, playEmphasis, playExit, playIdle, playDesign, playTransition, morphs, enterTime, emphasisTime, exitTime } from './motion.js';
 import { searchStickers } from './stickers.js';
 import { ART_PACKS, artSvg, artColorable, artReady, loadArt, searchArt } from './art.js';
-import { designView, itemView, placeItem, paintCard, shapeThumb } from './render.js';
+import { designView, itemView, placeItem, paintCard, shapeThumb, webCard } from './render.js';
+import { designWeb, embedOf, blockedSite, isYouTubePage, webHost } from './web.js';
 import { styleRuns, runsAll, dropRunKey, shiftRuns } from './runs.js';
 // 부분 서식으로 입힐 수 있는 것: 도구 막대의 값 이름 → 구간의 열쇠(runs.js)
 const RUN_KEYS = [['bold', 'b'], ['italic', 'i'], ['under', 'u'], ['color', 'c']];
@@ -297,7 +298,7 @@ export function createEditor({
   };
   const snap = () => JSON.stringify({
     items: card.items.map((it) => (it.t === 'image' && it.url.length > 200 ? { ...it, url: shotOf(it.url) } : it)), bg: card.bg, aspect: settings().aspect,
-    ...designMotion(card), ...designVideo(card),
+    ...designMotion(card), ...designVideo(card), ...designWeb(card),
   });
   // 디자인의 움직임(조합 효과 pa · 전환 효과 tr)을 바꿔 적는다. 정하지 않은 것은 칸째 지운다(저장되는 모양에 빈 값이 남지 않게).
   function setMotion(next) {
@@ -308,6 +309,11 @@ export function createEditor({
   function setVideo(next) {
     const v = designVideo(next);
     if (v.video) card.video = v.video; else delete card.video;
+  }
+  // 디자인의 웹사이트(web)를 바꿔 적는다. 없으면 칸째 지운다.
+  function setWeb(next) {
+    const w = designWeb(next);
+    if (w.web) card.web = w.web; else delete card.web;
   }
   function remember() {
     past.push(snap());
@@ -331,6 +337,7 @@ export function createEditor({
     card.bg = s.bg;
     setMotion(s);
     setVideo(s);
+    setWeb(s);
     stopPreview();
     sel = -1;
     many = [];
@@ -375,10 +382,12 @@ export function createEditor({
     // 바탕의 영상 장면은 떼었다 붙이지 않는다(떼면 틀던 영상이 멈추고 깜빡인다). 그 위의 것들만 새로 놓는다.
     syncScene();
     for (const n of [...cardEl.children]) if (n !== scene?.layer) n.remove();
+    // 웹사이트 장: 바탕에 그 사이트의 표지를 깐다(발표할 때 그 자리에 실제 사이트가 열린다).
+    if (card.web) cardEl.append(webCard(card.web));
     cardEl.append(...nodes,
       // 비어 있을 때만 보이는 안내(화면에만 있다: 디자인에도, 내보낸 그림에도 들어가지 않는다)
       // 빈 장에서는 무엇부터 할지 바로 고르는 단추를 함께 보인다(왼쪽 도구를 찾지 않아도 시작할 수 있게).
-      ...(nodes.length || card.video ? [] : [el('div', { class: 'fe-empty' },
+      ...(nodes.length || card.video || card.web ? [] : [el('div', { class: 'fe-empty' },
         el('b', { text: '무엇부터 놓을까요?' }),
         el('span', { text: '아래 단추를 누르거나, 도구 칸에서 골라요' }),
         el('div', { class: 'fe-empty-go', role: 'group', 'aria-label': '빠르게 시작하기' },
@@ -3793,9 +3802,64 @@ export function createEditor({
     if (!saveVideo) return yt;
     return [el('div', { class: 'fe-head', text: '이 장의 바탕 영상' }), ...videoBody(), el('div', { class: 'fe-video-split', 'aria-hidden': 'true' }), ...yt];
   }
+  // 웹사이트 칸: 이 장을 다른 사이트의 실제 화면으로(발표할 때 직접 누르고 쓸 수 있다). 주소는 그 사이트가 허락하는 퍼가기 주소로 바꿔 넣는다.
+  function webPane() {
+    const input = el('input', {
+      class: 'fe-search fe-web-input', type: 'url', inputmode: 'url', placeholder: 'https://…', 'aria-label': '웹사이트 주소', autocomplete: 'off', spellcheck: 'false',
+      value: card.web?.url || '', onKeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); setWebsite(input.value); } },
+    });
+    const blocked = card.web ? blockedSite(card.web.url) : '';
+    return [
+      el('div', { class: 'fe-head', text: '이 장을 웹사이트로' }),
+      el('p', { class: 'fe-note', text: '주소를 넣으면 발표할 때 이 장에 그 사이트가 그대로 열려요. 발표 중에 직접 누르고 써 볼 수 있어요. 이 장의 글 · 그림은 발표에서는 사이트에 가려져요(내려받은 그림 · PDF 에는 보여요).' }),
+      el('div', { class: 'fe-row fe-web-row' }, input, el('button', { class: 'fe-btn', type: 'button', dataset: { webSet: '' }, onClick: () => setWebsite(input.value) }, icon(card.web ? 'swap' : 'plus'), card.web ? '바꾸기' : '넣기')),
+      ...(card.web ? [
+        el('div', { class: 'fe-web-now', dataset: { webNow: '' } },
+          el('b', { text: webHost(card.web.url) }),
+          el('span', { class: 'fe-note', text: card.web.url }),
+          blocked ? el('p', { class: 'fe-note warn', text: `${blocked}은(는) 다른 화면 안에 넣는 것을 막아 두었어요. 발표할 때는 "새 창으로 열기" 단추로 열려요.` }) : null,
+          el('div', { class: 'fe-row' },
+            el('a', { class: 'fe-btn', href: card.web.url, target: '_blank', rel: 'noopener noreferrer' }, icon('screen'), '새 창으로 미리 보기'),
+            el('button', { class: 'fe-btn danger', type: 'button', dataset: { webRemove: '' }, onClick: removeWebsite }, icon('trash'), '웹사이트 빼기'))),
+      ] : []),
+      uploadHelp('web', '웹사이트 장 안내',
+        el('p', { class: 'fe-note', text: '발표할 때: 처음에는 보기만 돼요(누르거나 → 를 치면 다음 장). "사이트 조작하기"를 누르면 사이트를 직접 써요. 그동안에도 위의 ◀ ▶ 단추와 휴대폰 리모컨으로 넘길 수 있고, 마우스를 사이트 밖으로 내면 → · 프레젠터가 다시 들어요.' }),
+        el('p', { class: 'fe-note', text: '잘 되는 곳: 패들렛 · 캔바 공유 · 구글 프레젠테이션 · 문서 · 설문 · GeoGebra · PhET · 스크래치 · 워드월 같은 "퍼가기(임베드)" 주소. 구글 · 캔바 주소는 알아서 퍼가기 주소로 바꿔요.' }),
+        el('p', { class: 'fe-note', text: '안 되는 곳: 네이버 · 구글 검색 · 인스타그램처럼 다른 화면 안에 넣는 것을 막아 둔 사이트, 로그인해야 보이는 화면. 그런 곳은 발표에서 "새 창으로 열기"로 열어요. 유튜브는 "영상" 칸에서 넣어요.' })),
+    ];
+  }
+  function setWebsite(raw) {
+    if (!card) return;
+    if (isYouTubePage(embedOf(raw) || raw)) { if (addYouTube(raw)) notify('유튜브는 영상으로 넣었어요. 발표할 때 스페이스 바로 틀어요.', 4500); return; }
+    const url = embedOf(raw);
+    if (!url) { notify('https:// 로 시작하는 웹사이트 주소를 넣어 주세요.', 4000); return; }
+    if (card.web?.url === url) return;
+    endEdit();
+    stopDrag();
+    remember();
+    card.web = { url };
+    renderStage();
+    renderBar();
+    renderPanel();
+    onChange();
+    const blocked = blockedSite(url);
+    notify(blocked ? `${blocked}은(는) 다른 화면 안에 넣는 것을 막아 두었어요. 발표할 때는 "새 창으로 열기"로 열려요.` : '이 장을 웹사이트로 만들었어요. 발표할 때 실제 사이트가 열려요.', 5000);
+  }
+  function removeWebsite() {
+    if (!card?.web) return;
+    endEdit();
+    stopDrag();
+    remember();
+    delete card.web;
+    renderStage();
+    renderBar();
+    renderPanel();
+    onChange();
+    keepKeys();
+  }
   // 내 자료: 종류를 먼저 고르고, 고른 자료의 작업만 보여 준다.
   function uploadPane() {
-    const choices = [['photo', '사진'], ...(hasDocumentImport ? [['ppt', 'PPT']] : []), ['video', '영상']];
+    const choices = [['photo', '사진'], ...(hasDocumentImport ? [['ppt', 'PPT']] : []), ['video', '영상'], ['web', '웹사이트']];
     const choose = id => {
       if (importingDocument || !choices.some(([key]) => key === id)) return;
       uploadTab = id; armedFile = null; renderPanel({ top: true });
@@ -3812,7 +3876,7 @@ export function createEditor({
           if (next < 0) return; event.preventDefault(); choose(choices[next][0]);
         },
       }, name)));
-    const content = uploadTab === 'photo' ? (libraryOn() ? uploadBody() : directPhotoBody()) : uploadTab === 'ppt' ? pptUploadBody() : videoPane();
+    const content = uploadTab === 'photo' ? (libraryOn() ? uploadBody() : directPhotoBody()) : uploadTab === 'ppt' ? pptUploadBody() : uploadTab === 'web' ? webPane() : videoPane();
     return [tabs, ...choices.map(([id]) => el('div', {
       class: 'fe-upload-panel', role: 'tabpanel', id: `${uploadTabsId}-panel-${id}`, 'aria-labelledby': `${uploadTabsId}-tab-${id}`,
       dataset: { uploadPanel: id }, hidden: uploadTab !== id,
