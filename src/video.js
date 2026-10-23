@@ -22,7 +22,7 @@ import { itemView, paintCard } from './render.js';
 import { cleanDesign, fontFamilyOf } from './model.js';
 import { designSheet } from './export.js';
 import { transitionPose, clipInsets, TURN_DEPTH, tweenItem, contentChanged } from './motion.js';
-import { filmPlan, slidePoses, filmCells, packCells, DEFAULT_STAY, MAX_FILM_SECONDS } from './film.js';
+import { filmPlan, slidePoses, slideLoops, filmCells, packCells, DEFAULT_STAY, MAX_FILM_SECONDS } from './film.js';
 import { mp4Parts, webmParts } from './mux.js';
 import { sceneBlob } from './scene.js';
 import { openReel, videoInfo } from './reel.js';
@@ -188,7 +188,7 @@ async function buildTweens(before, design, turn, W, H) {
 async function buildSlide(design, slide, W, H, before = null) {
   // 움직이는 것이 없으면 잴 것도 없다: 통째로 한 칸이다(그림으로 내려받을 때와 같다).
   // 영상 장면이 있는 장은 요소들을 바탕과 따로 그려야 해서(그 사이에 영상이 들어간다) 잰다.
-  const boxes = slide.moves.length || slide.split?.length || design.video ? await measure(design, W, H) : null;
+  const boxes = slide.moves.length || slide.loops?.length || slide.split?.length || design.video ? await measure(design, W, H) : null;
   const cells = filmCells(design, slide, boxes, W, H);
   const sheets = packCells(cells);
   const canvases = [];
@@ -469,8 +469,8 @@ export function createFilm(designs, { width = 1920, height = 1080, stay = DEFAUL
       ctx.fillRect(0, 0, W, H);
       drawTurnSide(ctx, W, H, old, pose.old, depth);
       drawTurnSide(ctx, W, H, next, pose.next, depth);
-    } else if (local >= slide.settle && (!built.get(n).scene || local >= built.get(n).scene.start + built.get(n).scene.ms)) {
-      // 다 나온 뒤에는 한 번 그려 둔 것을 그대로 붙인다(영상 장면이 있는 장은 영상까지 다 튼 뒤에야 멈춘 모습이 된다)
+    } else if (local >= slide.settle && !slideLoops(slide) && (!built.get(n).scene || local >= built.get(n).scene.start + built.get(n).scene.ms)) {
+      // 다 나온 뒤에는 한 번 그려 둔 것을 그대로 붙인다(영상 장면이 있는 장은 영상까지 다 튼 뒤에야 멈춘 모습이 된다. 계속 움직이는 요소가 있는 장은 끝까지 프레임마다 그린다)
       ctx.drawImage(flat(1, n, Infinity), 0, 0);
     } else {
       drawSlide(ctx, W, H, built.get(n), local);

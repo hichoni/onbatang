@@ -8,7 +8,7 @@
 //   - 요소가 다 나온 뒤에도 읽을 틈(TAIL)은 남긴다. 그래서 요소가 많은 장은 머무는 시간보다 조금 길어진다.
 //   - 영상 장면(그 장의 바탕에 깐 영상)은 발표할 때처럼 그 장이 열리면(전환 효과가 끝나면) 틀기 시작해서, 쓰는 구간이 끝날 때까지 튼다.
 //     그래서 영상 장면이 있는 장은 적어도 그 영상의 길이만큼 이어진다. 끝난 뒤에는 마지막 모습에 잠깐 머문다.
-import { planMotion, enterPose, enterTime, emphasisPose, emphasisTime, transitionPose, matchItems, morphs, looksChanged } from './motion.js';
+import { planMotion, enterPose, enterTime, emphasisPose, emphasisTime, idlePose, idlePhase, transitionPose, matchItems, morphs, looksChanged } from './motion.js';
 
 /** 고를 수 있는 머무는 시간(초)과 기본값. */
 export const STAYS = [3, 5, 8];
@@ -34,7 +34,9 @@ const staySeconds = (stay) => (Number.isFinite(stay) ? Math.min(30, Math.max(1, 
  *     lead:   요소가 나오기 시작하는 때(ms. 이 장이 시작된 때부터)
  *     moves:  움직이는 요소들 [{ i(요소 번호), enter, mirror, start(시작하는 때), ms(길이), click(누를 때 나오던 것인지) }]
  *             강조 효과는 enter 대신 emphasis 가 있다(누를 때의 차례대로 저절로 한 번 움직인다)
- *     settle: 모든 요소가 다 나온 때
+ *     loops:  (계속 움직이는 요소가 있을 때만) [{ i, loop, start(되풀이를 시작하는 때), phase(한 바퀴의 어디에서 시작하는지) }]
+ *             나타난 요소는 그 직후부터 0 에서, 처음부터 보이는 요소는 장이 열릴 때 제 박자에서 시작한다(발표 화면과 같다)
+ *     settle: 모든 요소가 다 나온 때(계속 움직이기는 그 뒤에도 이어진다)
  *     ms:     이 장의 길이(다음 장이 시작되는 때)
  *     scene:  (영상 장면이 있는 장만) 바탕 영상을 트는 때 { start(트기 시작하는 때), ms(쓰는 구간의 길이) }
  *     split:  (이어 움직이기가 있을 때만) 따로 칸을 나눠 그려 둘 요소 번호들(옮겨 가는 요소)
@@ -70,10 +72,15 @@ export function filmPlan(designs, { stay = DEFAULT_STAY, scenes = true } = {}) {
         : { i: c.i, enter: c.enter, mirror: c.mirror, start: lead + plan.ms + step * (k + 1), ms: enterTime(c.enter), click: true }));
     }
     const settle = moves.reduce((m, v) => Math.max(m, v.start + v.ms), lead);
+    // 계속 움직이기: 나타나는 움직임(누를 때 것 포함)이 있으면 그것이 끝난 때부터 0 에서, 없으면(처음부터 보이거나 옮겨 온 요소) 장이 열릴 때 제 박자에서.
+    const loops = plan.loops.map((l) => {
+      const m = moves.find((v) => v.i === l.i && v.enter);
+      return m ? { i: l.i, loop: l.loop, start: m.start + m.ms, phase: 0 } : { i: l.i, loop: l.loop, start: lead, phase: idlePhase(l.i, l.loop) };
+    });
     const video = scenes && design?.video && design.video.out > design.video.in ? design.video : null;
     const scene = video ? { start: turn ? turn.ms : n === 0 ? FIRST_LEAD : 0, ms: Math.round((video.out - video.in) * 1000) } : null;
     const ms = Math.round(Math.max(lead + Math.max(stayMs, settle - lead + (moves.length ? TAIL : 0)), scene ? scene.start + scene.ms + SCENE_TAIL : 0));
-    return { turn, lead, moves, settle, ms, ...(scene ? { scene } : {}) };
+    return { turn, lead, moves, settle, ms, ...(loops.length ? { loops } : {}), ...(scene ? { scene } : {}) };
   });
   // 짝이 된 요소는 두 장 모두에서 제 칸(따로 그린 그림)이 있어야 옮겨 그릴 수 있다: split 에 적는다.
   slides.forEach((s, n) => {
@@ -92,6 +99,8 @@ export function morphPairs(before, after) {
 /**
  * 그 장이 시작된 지 local(ms) 이 지났을 때, 아직 제 모습이 아닌 요소들의 모습.
  * 돌려주는 것: Map(요소 번호 → enterPose 의 모습). 여기에 없는 요소는 제자리에 다 나와 있다.
+ * 계속 움직이는 요소는 그 순간의 되풀이 모습이다(나타나기·강조가 도는 동안은 그쪽이 앞선다: 화면에서 나중에 튼 움직임이 위에 보이는 것과 같다).
+ * local 이 Infinity 면(다 나온 모습을 그릴 때) 계속 움직이기도 제 모습이다.
  */
 export function slidePoses(slide, local) {
   const poses = new Map();
@@ -103,8 +112,17 @@ export function slidePoses(slide, local) {
     const pose = m.emphasis ? emphasisPose(m.emphasis, at) : enterPose(m.enter, at, { mirror: m.mirror });
     if (pose) poses.set(m.i, pose);
   }
+  if (Number.isFinite(local)) {
+    for (const l of slide?.loops || []) {
+      if (poses.has(l.i) || local < l.start) continue;
+      const pose = idlePose(l.loop, local - l.start + l.phase);
+      if (pose) poses.set(l.i, pose);
+    }
+  }
   return poses;
 }
+/** 그 장에 계속 움직이는 요소가 있는지(있으면 다 나온 뒤에도 프레임마다 새로 그려야 한다). */
+export const slideLoops = (slide) => !!slide?.loops?.length;
 
 /** 요소 그림들을 늘어놓는 큰 그림(sheet)의 한 변의 한도(px). */
 export const SHEET_MAX = 4096;
@@ -124,7 +142,7 @@ const HALF = SHEET_MAX / 2 - 8;  // 움직이는 요소의 칸은 그 요소의 
  */
 export function filmCells(design, slide, boxes, W, H) {
   const items = Array.isArray(design?.items) ? design.items : [];
-  const moving = new Set([...(slide?.moves || []).map((m) => m.i), ...(slide?.split || [])]);
+  const moving = new Set([...(slide?.moves || []).map((m) => m.i), ...(slide?.loops || []).map((l) => l.i), ...(slide?.split || [])]);
   const card = { x: 0, y: 0, w: W, h: H };
   const split = !!design?.video;
   if (!moving.size && !split) return [{ items: items.map((_, i) => i), bg: true, i: -1, box: card }];

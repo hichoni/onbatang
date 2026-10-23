@@ -11,7 +11,7 @@ import {
   designVideo, cleanVideo, trimVideo, videoSeconds, videoTime, VIDEO_FITS, MIN_VIDEO, rebaseItems, alignBoxes, distributeBoxes, clampShift, scaleItems, regroup, newGroupId,
   styleOf, applyStyle, LINE_SPACINGS, ALT_LIMIT,
 } from './model.js';
-import { ENTERS, COMBOS, TRANSITIONS, EMPHASES, STILL, planMotion, playEnter, playEmphasis, playDesign, playTransition, morphs } from './motion.js';
+import { ENTERS, COMBOS, TRANSITIONS, EMPHASES, IDLES, STILL, planMotion, playEnter, playEmphasis, playIdle, playDesign, playTransition, morphs } from './motion.js';
 import { searchStickers } from './stickers.js';
 import { ART_PACKS, artSvg, artColorable, artReady, loadArt, searchArt } from './art.js';
 import { designView, itemView, placeItem, paintCard, shapeThumb } from './render.js';
@@ -144,6 +144,7 @@ export function createEditor({
   let sel = -1;               // 고른 것의 번호(없으면 -1)
   let many = [];              // 여럿을 함께 골랐을 때 그 번호들(둘 이상일 때만. 그동안 sel 은 -1). 잠근 것은 넣지 않는다
   let preview = null;         // 꾸미기 판에서 미리 보는 움직임 { ctl, tr, timers }
+  let idleTry = null;         // 움직임 칸에서 골라 본 "계속 움직이기"(잠깐 틀고 멈춘다)
   let motionSel = -1;         // 움직임 칸을 마지막으로 그렸을 때 고른 요소
   let nodes = [];             // 카드 위의 요소들(card.items 와 같은 순서)
   let past = [];              // 실행 취소 기록
@@ -3237,8 +3238,9 @@ export function createEditor({
     view.style.setProperty('--fe-ratio', String(DEMO_RATIO));
     return view;
   };
-  /** 효과 하나를 고르는 단추. kind: 'enter'(요소 효과) · 'combo'(조합 효과) · 'tr'(전환 효과) · 'none'(없음) · 'follow'(장의 효과대로) */
-  const tileOf = (group, id) => panel.querySelector(`.fe-motions[data-group="${group}"] .fe-mo[data-motion="${id || 'none'}"]`);
+  /** 효과 하나를 고르는 단추. kind: 'enter'(요소 효과) · 'emph'(강조) · 'idle'(계속 움직이기) · 'combo'(조합 효과) · 'tr'(전환 효과) · 'none'(없음) · 'follow'(장의 효과대로) */
+  // "장의 효과대로"(id '')는 'follow', 없음 · 가만히는 'none' 이라는 표를 단다(둘이 한 칸에 함께 나올 때 가려낸다).
+  const tileOf = (group, id) => panel.querySelector(`.fe-motions[data-group="${group}"] .fe-mo[data-motion="${id || 'follow'}"]`) || panel.querySelector(`.fe-motions[data-group="${group}"] .fe-mo[data-motion="${id || 'none'}"]`);
   function motionTile({ group, name, hint = '', on, kind, id, onPick }) {
     const view = el('span', { class: 'fe-mo-view', 'aria-hidden': 'true' });
     let play = () => {};
@@ -3252,6 +3254,13 @@ export function createEditor({
       const c = demoCard(design);
       view.append(c);
       play = () => playEmphasis(c.firstElementChild, design.items[0], id);
+    } else if (kind === 'idle') {
+      // 계속 움직이기는 끝이 없으므로 본보기는 잠깐만 틀고 멈춘다(작은 칸이라 거리를 조금 크게).
+      const design = cleanDesign(DEMO.enter);
+      const c = demoCard(design);
+      view.append(c);
+      let anim = null;
+      play = () => { anim?.cancel(); anim = playIdle(c.firstElementChild, design.items[0], id, { scale: 1.6 }); if (anim) setTimeout(() => { anim?.cancel(); anim = null; }, 3600); };
     } else if (kind === 'combo') {
       const design = cleanDesign({ ...DEMO.combo, pa: id });
       const c = demoCard(design);
@@ -3279,7 +3288,7 @@ export function createEditor({
       setTimeout(() => { busy = false; }, 1600);
     };
     return el('button', {
-      class: `fe-mo${on ? ' on' : ''}`, type: 'button', 'aria-pressed': String(!!on), title: hint || name, dataset: { motion: id || 'none' },
+      class: `fe-mo${on ? ' on' : ''}`, type: 'button', 'aria-pressed': String(!!on), title: hint || name, dataset: { motion: id || (kind === 'follow' ? 'follow' : 'none') },
       // 고르면 칸이 다시 그려져 이 단추가 새것으로 바뀐다. 같은 자리의 새 단추에 초점을 돌려놓아 글쇠로 이어서 고를 수 있게 한다.
       onClick: () => { onPick(); tileOf(group, id)?.focus({ preventScroll: true }); },
       onPointerenter: run, onFocus: run,
@@ -3299,6 +3308,7 @@ export function createEditor({
   // 꾸미기 판에서 미리 보기. 틀던 것이 있으면 먼저 끝낸다(숨겨 둔 것도 다시 보이게).
   // 보는 동안에는 고른 테두리와 손잡이를 감춘다(움직임을 가리지 않게. 고른 것은 그대로 두어서 옆 칸의 "고른 요소"가 남는다).
   function stopPreview() {
+    idleTry?.cancel(); idleTry = null;
     if (!preview) return;
     for (const t of preview.timers) clearTimeout(t);
     preview.tr?.finish();
@@ -3332,7 +3342,8 @@ export function createEditor({
     stage.classList.add('fe-playing');
     const wait = start + planMotion(design).ms + 500;
     for (let n = 0; n < ctl.left(); n++) timers.push(setTimeout(() => { if (preview === mine) ctl.next(); }, wait + n * 800));
-    timers.push(setTimeout(() => { if (preview === mine) stopPreview(); }, wait + ctl.left() * 800 + 1200));
+    const linger = planMotion(design).loops.length ? 3500 : 0;      // 계속 움직이는 조각이 있으면 조금 더 보여 준다
+    timers.push(setTimeout(() => { if (preview === mine) stopPreview(); }, wait + ctl.left() * 800 + 1200 + linger));
     keepKeys();
   }
   function setCombo(id) {
@@ -3373,6 +3384,18 @@ export function createEditor({
     if ((cur()?.em || '') !== (id || '')) change({ em: id || undefined });
     if (id && nodes[sel]) { stopPreview(); showStage(); playEmphasis(nodes[sel], cur(), id); }
   }
+  // 계속 움직이기: 고르면 카드 위의 그 조각이 잠깐 되풀이해 움직여 보여 준다(발표가 아니니 몇 바퀴만).
+  function setIdle(id) {
+    if ((cur()?.lp || '') !== (id || '')) change({ lp: id || undefined });
+    idleTry?.cancel(); idleTry = null;
+    // "장의 효과대로"를 고르면 조합 효과가 붙여 주는 움직임을 틀어 본다.
+    const shown = id === '' ? planMotion(cleanDesign(card, { keepSpaces: true })).loops.find((l) => l.i === sel)?.loop : id;
+    if (shown && shown !== STILL && nodes[sel]) {
+      stopPreview(); showStage();
+      const mine = idleTry = playIdle(nodes[sel], cur(), shown);
+      if (mine) setTimeout(() => { if (idleTry === mine) { mine.cancel(); idleTry = null; } }, 5000);
+    }
+  }
 
   function tabBody() {
     if (tab === 'motion') {
@@ -3380,10 +3403,15 @@ export function createEditor({
       const waits = items().filter((k) => k.aw || k.em).length;
       // 고른 요소가 있으면 맨 위에 그 요소의 움직임이 나온다. 정하지 않은 요소는 장의 조합 효과를 따른다(조합 효과가 없으면 처음부터 보인다).
       const it = cur();
-      const mine = it && !it.lock ? motionPart('mine', [sel, itemLabel(it), it.an || '', !!it.aw, it.em || '', here.pa || ''].join('|'), () => {
+      const mine = it && !it.lock ? motionPart('mine', [sel, itemLabel(it), it.an || '', !!it.aw, it.em || '', it.lp || '', here.pa || ''].join('|'), () => {
         const follow = { id: '', name: here.pa ? '장의 효과대로' : '없음' };
         const choices = [follow, ...(here.pa ? [{ id: STILL, name: '가만히' }] : []), ...ENTERS];
         const now = it.an === STILL && !here.pa ? '' : it.an || '';
+        // 계속 움직이기도 같은 짜임: 장의 조합 효과가 저절로 붙여 주면 "장의 효과대로 · 가만히"가 앞에 온다.
+        const combo = COMBOS.find((c) => c.id === here.pa), autoLoops = !!combo?.loops, comboName = combo?.name || '';
+        const idleChoices = [{ id: '', name: autoLoops ? '장의 효과대로' : '없음' }, ...(autoLoops ? [{ id: STILL, name: '가만히' }] : []), ...IDLES];
+        const idleNow = it.lp === STILL && !autoLoops ? '' : it.lp || '';
+        const given = autoLoops && !it.lp ? planMotion(cleanDesign(card, { keepSpaces: true })).loops.find((l) => l.i === sel)?.loop || '' : '';
         return [
           el('div', { class: 'fe-head', text: `고른 조각 · ${itemLabel(it)}` }),
           el('div', { class: 'fe-grid two fe-motion-when', role: 'group', 'aria-label': '나타나는 때' },
@@ -3399,6 +3427,11 @@ export function createEditor({
             motionTile({ group: 'emph', name: '없음', on: !it.em, kind: 'none', onPick: () => setEmphasis('') }),
             ...EMPHASES.map((c) => motionTile({ group: 'emph', name: c.name, on: it.em === c.id, kind: 'emph', id: c.id, onPick: () => setEmphasis(c.id) }))),
           it.em ? el('p', { class: 'fe-note', text: it.aw ? '누르면 나타나고, 한 번 더 누르면 강조해요.' : '이미 보이는 조각이 발표하다가 누를 때 한 번 움직이고 제자리로 돌아와요. 누를 때 나오는 다른 조각과 위에서부터 차례로 이어져요.' }) : null,
+          el('div', { class: 'fe-head', text: '머무는 동안 계속 움직이기' }),
+          el('div', { class: 'fe-motions', role: 'group', 'aria-label': '고른 조각이 계속 움직이는 모양', dataset: { group: 'idle' } },
+            ...idleChoices.map((c) => motionTile({ group: 'idle', name: c.name, on: idleNow === c.id, kind: c.id && c.id !== STILL ? 'idle' : c.id === '' && autoLoops ? 'follow' : 'none', id: c.id, onPick: () => setIdle(c.id) }))),
+          given ? el('p', { class: 'fe-note', text: `이 조각은 장의 "${comboName}" 효과대로 "${IDLES.find((c) => c.id === given)?.name}" 움직여요. 다른 움직임을 고르거나 "가만히"로 멈출 수 있어요.` })
+            : IDLES.some((c) => c.id === it.lp) ? el('p', { class: 'fe-note', text: '다 나온 뒤에 그 장에 머무는 동안 숨 쉬듯 살며시 되풀이해 움직여요. 조각마다 박자가 조금씩 달라서 살아 있는 느낌이 나요. 내려받은 영상에도 들어가요.' }) : null,
         ];
       }) : [];
       const combos = motionPart('combo', here.pa || '', () => [
