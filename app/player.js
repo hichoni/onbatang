@@ -33,7 +33,8 @@ export function mountPlayer(stage, { slides = [], aspect = 16 / 9, onChange = ()
     card.remove();
   };
   const settle = () => { turning?.finish(); turning = null; if (leaving) drop(leaving); leaving = null; };
-  const tell = () => { try { onChange({ at, total: pages.length, left: parts?.left?.() || 0 }); } catch (error) { console.warn(error); } };
+  // left: 이 장에 남은 누를 것(누를 때 나오는 요소 + 기다리는 바탕 영상).
+  const tell = () => { try { onChange({ at, total: pages.length, left: (parts?.left?.() || 0) + (waiting ? 1 : 0) }); } catch (error) { console.warn(error); } };
   // 들어오는 장의 영상 장면 · 유튜브: 나가는 장의 것은 멈추고, delay 뒤에 튼다("장이 열리면 바로 틀기"로 정한 유튜브만 저절로).
   const startMedia = (card, design, delay) => {
     for (const t of timers) clearTimeout(t);
@@ -48,7 +49,7 @@ export function mountPlayer(stage, { slides = [], aspect = 16 / 9, onChange = ()
       else {
         waiting = { player: mine, layer, from: design.video.in };
         layer.classList.add('fe-standby');
-        mine.ready.then((ok) => { if (!ok && waiting?.player === mine) { waiting = null; layer.classList.remove('fe-standby'); } });
+        mine.ready.then((ok) => { if (!ok && waiting?.player === mine) { waiting = null; layer.classList.remove('fe-standby'); tell(); } });
       }
     }
     for (const p of tube) if (p.started) p.pause();
@@ -84,10 +85,10 @@ export function mountPlayer(stage, { slides = [], aspect = 16 / 9, onChange = ()
       if (!alive || !pages.length) return false;
       settle();
       parts?.finish();
-      if (waiting) { const w = waiting; waiting = null; w.layer.classList.remove('fe-standby'); w.player.play({ from: w.from }); return true; }
+      if (waiting) { const w = waiting; waiting = null; w.layer.classList.remove('fe-standby'); w.player.play({ from: w.from }); tell(); return true; }
       if (parts?.next()) { tell(); return true; }
-      const waiting = tube.find((p) => !p.started);
-      if (waiting) { waiting.play(); return true; }
+      const tubeWaiting = tube.find((p) => !p.started);
+      if (tubeWaiting) { tubeWaiting.play(); return true; }
       if (at >= pages.length - 1) return false;
       at++; draw(1); return true;
     },
