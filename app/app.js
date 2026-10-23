@@ -18,6 +18,7 @@ import {openLessonResults} from './lesson-results-ui.js';
 import {cleanGaiActivity,gaiAppCover,gaiAppResult} from '../src/gai-app.js';
 import {mountGaiApp} from './gai-app.js';
 import {createShowTools} from './show-tools.js';
+import {spokenNotes} from './show-keys.js';
 import {PRINT_LAYOUTS,printHtml} from './print.js';
 import {encodeGif,GIF_LIMITS} from './gif.js';
 import {findText,replaceText} from './find-replace.js';
@@ -39,7 +40,7 @@ import { fixWebmBlob } from './webm.js';
 import { createCamera, canRecord } from './camera.js';
 import {
   RATIOS, RATIO_KEY, NOTES_OPEN_KEY, MAX_DESIGNS, MAX_SLIDES, MAX_NAME, EXPORT_SIZES, DEFAULT_EXPORT, EXPORT_KEY, VIDEO_SIZES, DEFAULT_VIDEO, exportSize, ratioOf, newRecord, nextNumber,
-  isBlank, fileName, whenText, sortRecords, addSlide, copySlide, removeSlide, moveSlide,
+  isBlank, fileName, whenText, sortRecords, homeEntries, arrangeEntries, createdOf, HOME_SORTS, HOME_KINDS, addSlide, copySlide, removeSlide, moveSlide,
   libraryOf, dropPhoto, slideMotion, slideVideo, slideExtra, hasVideo, deckVideos, unusedVideos, cleanBrand,
   migrateRecord, aspectOf, canvasRatioOf, copyRecord, withSlideMotion,
 } from './designs.js';
@@ -476,11 +477,13 @@ function render() {
       track);
 
   // ② 내 그림: 불러온다 → 없으면 없다고 알리고 새로 만들게 한다. 그림은 이 기기에만 저장된다.
+  // 한 PPT 를 나눠 담은 파트들은 한 칸으로 묶어 보여 준다(homeEntries). 거르기 · 찾기 · 늘어놓기는 목록 위 막대에서.
+  const entries = loading ? [] : homeEntries(list, homeGroups(list));
   const arrive = wasLoading && !loading;
   wasLoading = loading;
   const mine = el('section', { class: `cv-mine${arrive ? ' cv-arrive' : ''}` },
     el('div', { class: 'cv-sec-head' },
-      el('h2', { text: loading || !list.length ? '내 그림' : `내 그림 ${list.length}장` }),
+      el('h2', { text: loading || !list.length ? '내 그림' : `내 그림 ${entries.length}개` }),
       loading ? null : el('div', { class: 'cv-account solo' },
         el('span', { class: 'cv-account-icon', 'aria-hidden': 'true' }, ic(sync ? 'cloud' : 'screen')),
         el('span', { class: 'cv-account-text' }, ...accountNote()))));
@@ -493,7 +496,15 @@ function render() {
       el('span', { class: 'muted', text: '새 그림을 만들면 여기에 저절로 저장돼요. 위의 틀로 시작해도 좋아요.' }),
       newBtn('btn-primary cv-empty-btn')));
   } else {
-    mine.append(el('div', { class: 'cv-list' }, ...list.map((r) => itemCard(r))));
+    const grid = el('div', { class: 'cv-list' });
+    const paint = () => {
+      const shown = arrangeEntries(entries, homeView);
+      grid.replaceChildren(...shown.flatMap((e) => (e.deck ? deckCards(e, paint) : [itemCard(e.records[0])])));
+      if (!shown.length) grid.append(el('p', { class: 'cv-list-none muted', role: 'status', text: '맞는 그림이 없어요. 찾는 말이나 거르기를 바꿔 보세요.' }));
+    };
+    if (entries.length > 1) mine.append(homeTools(paint));
+    mine.append(grid);
+    paint();
   }
   if (S.error) mine.append(el('p', { class: 'warn-box', text: S.error }));
   for (const issue of listDesignIssues()) mine.append(el('div', { class: 'warn-box', role: 'status' },
@@ -537,18 +548,11 @@ function itemCard(record) {
         return;
       }
       busy(true);
-      try {
-        await removeDesign(record.id);
-        if (pusher) pusher.cancel(record.id);
-        if (sync && syncsRecord(sync, record)) sync.drop(record.id).catch((ex) => { console.warn(ex); toast('계정에서는 지우지 못했어요. 새로 고침하면 다시 나타날 수 있어요.', 5000); });
-      } catch (ex) {
-        console.error(ex);
+      if (!await dropRecord(record)) {
         toast('지우지 못했어요. 새로 고침하고 다시 해 봐요.', 4000);
         busy(false);
         return;
       }
-      if (S.list) S.list = S.list.filter((r) => r.id !== record.id);
-      tidyVideos(record.id, [], deckVideos(record.slides));      // 그 그림에 딸린 영상 파일도 이 기기에서 지운다
       toast('그림을 지웠어요.');
       render();
     },
@@ -569,9 +573,88 @@ function itemCard(record) {
       pages > 1 ? el('span', { class: 'cv-pages', text: `${pages}장` }) : null),
     el('div', { class: 'cv-item-body' },
       el('span', { class: 'cv-item-name', text: record.name }),
-      el('span', { class: 'cv-item-when' }, el('span', { text: ratioOf(record.ratio).name }), el('span', { text: whenText(record.updatedAt) })),
+      el('span', { class: 'cv-item-when' }, el('span', { text: ratioOf(record.ratio).name }), whenText(record.updatedAt || createdOf(record)) ? el('span', { text: whenText(record.updatedAt || createdOf(record)) }) : null),
       el('div', { class: 'cv-item-row' }, edit, copy, del)));
   return card;
+}
+// ---------- 내 그림 목록: 묶기 · 거르기 · 찾기 · 늘어놓기 ----------
+const HOME_VIEW_KEY = 'onbatang-home-view-v1';
+const homeView = (() => {
+  try {
+    const v = JSON.parse(localStorage.getItem(HOME_VIEW_KEY) || '{}');
+    return { kind: HOME_KINDS.some(([id]) => id === v.kind) ? v.kind : 'all', sort: HOME_SORTS.some(([id]) => id === v.sort) ? v.sort : 'recent', query: '' };
+  } catch { return { kind: 'all', sort: 'recent', query: '' }; }
+})();
+const keepHomeView = () => { try { localStorage.setItem(HOME_VIEW_KEY, JSON.stringify({ kind: homeView.kind, sort: homeView.sort })); } catch { /* 기억하지 못하는 창 */ } };
+let openDeck = '';                 // 파트를 펼쳐 둔 PPT 묶음(한 번에 하나)
+// 호스트가 아는 PPT 묶음(가져온 한 번 = 한 묶음, materialNavigation.groups). 목록이 바뀔 때 한 번 묻고, 답이 오면 다시 그린다.
+let groupsFor = null, groupsKnown = [];
+function homeGroups(list) {
+  if (typeof materialNavigation?.groups !== 'function') return [];
+  if (groupsFor !== list) {
+    groupsFor = list;
+    Promise.resolve().then(() => materialNavigation.groups({ ids: list.map((r) => r.id) })).then((groups) => {
+      if (groupsFor !== list || JSON.stringify(groups || []) === JSON.stringify(groupsKnown)) return;
+      groupsKnown = Array.isArray(groups) ? groups : [];
+      if (!S.open && S.phase === 'home') render();
+    }, (error) => console.warn(error));
+  }
+  return groupsKnown;
+}
+function homeTools(paint) {
+  const seg = (items, now, pick, label) => el('div', { class: 'cv-seg cv-list-seg', role: 'group', 'aria-label': label }, ...items.map(([id, name]) => el('button', {
+    class: `cv-seg-btn${now === id ? ' on' : ''}`, type: 'button', 'aria-pressed': String(now === id), dataset: { homeKind: id },
+    onClick: (e) => { pick(id); for (const b of e.currentTarget.parentNode.children) { const on = b === e.currentTarget; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); } keepHomeView(); paint(); },
+  }, name)));
+  const find = el('input', { class: 'cv-list-find', type: 'search', placeholder: '이름으로 찾기', 'aria-label': '내 그림 이름으로 찾기', value: homeView.query,
+    onInput: (e) => { homeView.query = e.target.value; paint(); } });
+  const order = el('select', { class: 'cv-list-sort', 'aria-label': '늘어놓는 차례', dataset: { homeSort: '' },
+    onChange: (e) => { homeView.sort = e.target.value; keepHomeView(); paint(); } },
+    ...HOME_SORTS.map(([id, name]) => el('option', { value: id, selected: homeView.sort === id }, name)));
+  return el('div', { class: 'cv-list-tools' }, seg(HOME_KINDS, homeView.kind, (id) => { homeView.kind = id; }, '보여 줄 그림'), find, order);
+}
+// 한 PPT 의 파트들: 한 칸(첫 파트의 첫 장 · 모두 몇 쪽 · 파트 몇 개). 열면 첫 파트를 연다(전체 자료가 있으면 편집기가 모든 파트를 잇는다).
+// "파트 보기"를 누르면 바로 아래에 파트 칸들이 펼쳐진다. 지우기는 파트를 모두 이 기기(와 계정)에서 지운다.
+function deckCards(entry, paint) {
+  const first = entry.records[0], open = openDeck === entry.key;
+  const edit = el('button', { class: 'btn btn-primary small cv-item-open', type: 'button', onClick: () => openEntry(first, edit) }, '꾸미기');
+  const parts = el('button', { class: 'btn small cv-deck-parts', type: 'button', 'aria-expanded': String(open), onClick: () => { openDeck = open ? '' : entry.key; paint(); } }, open ? '파트 접기' : `파트 ${entry.records.length}개`);
+  const del = el('button', { class: 'cv-item-del', type: 'button', title: '이 PPT 의 파트 모두 지우기', onClick: async () => {
+    if (del.dataset.armed !== '1') {
+      del.dataset.armed = '1'; relabel(del, `${entry.records.length}개 파트 모두 지울까요?`); del.classList.add('armed'); card.classList.add('arming');
+      setTimeout(() => { if (del.isConnected) { del.dataset.armed = ''; relabel(del, '지우기'); del.classList.remove('armed'); card.classList.remove('arming'); } }, 4000);
+      return;
+    }
+    for (const b of [edit, parts, del]) b.disabled = true;
+    let gone = 0;
+    for (const record of entry.records) if (await dropRecord(record)) gone++;
+    toast(gone === entry.records.length ? `PPT 파트 ${gone}개를 지웠어요.` : `파트 ${gone}개만 지웠어요. 새로 고침하고 다시 해 봐요.`, 4000);
+    render();
+  } }, ...face('trash', '지우기'));
+  const when = whenText(entry.updatedAt || entry.createdAt);
+  const card = el('article', { class: 'cv-item cv-deck', dataset: { id: first.id, deck: entry.key } },
+    el('button', { class: 'cv-thumb', type: 'button', 'aria-label': `${entry.name} 열기`, onClick: () => openEntry(first, edit) }, thumb(first),
+      el('span', { class: 'cv-pages', text: `${entry.pages}장` }), el('span', { class: 'cv-deck-badge', text: 'PPT' })),
+    el('div', { class: 'cv-item-body' },
+      el('span', { class: 'cv-item-name', text: entry.name, title: entry.name }),
+      el('span', { class: 'cv-item-when' }, el('span', { text: `파트 ${entry.records.length}개` }), when ? el('span', { text: when }) : null),
+      el('div', { class: 'cv-item-row' }, edit, parts, del)));
+  if (!open) return [card];
+  return [card, el('div', { class: 'cv-deck-open', role: 'group', 'aria-label': `${entry.name} 파트` }, ...entry.records.map((r) => itemCard(r)))];
+}
+// 그림 하나를 이 기기(와 계정)에서 지운다. 지웠으면 true.
+async function dropRecord(record) {
+  try {
+    await removeDesign(record.id);
+    if (pusher) pusher.cancel(record.id);
+    if (sync && syncsRecord(sync, record)) sync.drop(record.id).catch((ex) => { console.warn(ex); toast('계정에서는 지우지 못했어요. 새로 고침하면 다시 나타날 수 있어요.', 5000); });
+  } catch (ex) {
+    console.error(ex);
+    return false;
+  }
+  if (S.list) S.list = S.list.filter((r) => r.id !== record.id);
+  tidyVideos(record.id, [], deckVideos(record.slides));      // 그 그림에 딸린 영상 파일도 이 기기에서 지운다
+  return true;
 }
 // 목록의 그림을 연다. 이 기기에 저장된 가장 새것을 읽는다(읽지 못하면 목록이 기억하는 것).
 async function openEntry(entry, btn) {
@@ -1567,7 +1650,7 @@ async function present(O) {
   // 휴대폰 리모컨(호스트 · 가이랩): 휴대폰에서 다음 · 앞 · 그 장으로 · 검은 화면을 보내고, 발표는 지금 장 · 발표자 노트를 알려 준다.
   let remote = null, remoteJob = null;
   const pageTitle = (k) => { const t = (slides[k]?.items || []).filter((it) => it.t === 'text' && String(it.text || '').trim()).sort((a, b) => (Number(a.y) || 0) - (Number(b.y) || 0))[0]; return t ? Array.from(String(t.text).replace(/\s+/g, ' ').trim()).slice(0, 60).join('') : ''; };
-  const remoteState = () => ({ at: i, total: slides.length, title: O.record.name, page: pageTitle(i), next: i + 1 < slides.length ? pageTitle(i + 1) : '', notes: String(slides[i]?.notes || '').slice(0, 2000) });
+  const remoteState = () => ({ at: i, total: slides.length, title: O.record.name, page: pageTitle(i), next: i + 1 < slides.length ? pageTitle(i + 1) : '', notes: spokenNotes(slides[i]?.notes).slice(0, 2000) });
   const tellRemote = () => { try { remote?.update?.(remoteState()); } catch (error) { console.warn(error); } };
   const remoteCommand = (cmd) => {
     if (closed || !cmd || typeof cmd !== 'object') return;
@@ -1634,8 +1717,11 @@ async function present(O) {
     const media = film || tubeNow() || tube[0] || null;
     filmBtn.hidden = !media;
     if (!media) return;
-    const title = media.playing ? '영상 멈추기' : '영상 틀기';
-    filmBtn.replaceChildren(ic(media.playing ? 'pause' : 'play'));
+    // 누를 때 트는 바탕 영상이 첫 모습으로 기다리는 동안: 보는 사람 화면에는 표시가 없고, 이 단추만 "다음을 누르면 재생"을 알린다.
+    const wait = !!film && filmWaiting === film;
+    filmBtn.classList.toggle('wait', wait);
+    const title = wait ? '영상 대기: 다음을 누르면 재생돼요' : media.playing ? '영상 멈추기' : '영상 틀기';
+    filmBtn.replaceChildren(ic(media.playing ? 'pause' : 'play'), ...(wait ? [el('span', { class: 'cv-show-word', text: '영상 대기' })] : []));
     filmBtn.title = `${title} (K)`;
     filmBtn.setAttribute('aria-label', title);
   };
@@ -1654,6 +1740,7 @@ async function present(O) {
     if (!mine) return false;
     mine.layer?.classList.remove('fe-standby');
     mine.play({ from: mine.from });
+    markFilm();
     return true;
   };
   // 지금 장의 영상을 준비하고, 장이 열리면 바로 트는 영상은 delay(ms) 뒤에 처음부터 튼다. 영상 장면이 없는 장이면 단추를 감춘다.
@@ -2908,6 +2995,8 @@ function readOpen() {
  * - importAction: 가져오기 연결 { label, open, editorLabel?, editorDescription?, editorMode?: 'inline', hideHome? }.
  *   inline이면 내 자료 안의 root/close/openDesign을 제공한다. open은 {requestClose,dispose}를 반환할 수 있다.
  * - materialAction: {label, accepts?(record), open({designId,slideIndex})} 현재 그림 저장 후 같은 편집기에서 전체 자료 작업을 여는 선택 연결.
+ * - materialNavigation: {load({designId}), reorder?, saveActivity?, saveResults?, groups?({ids})} PPT 전체 자료(여러 파트)를 한 편집기에서 잇는다.
+ *   groups 는 [{id, title, documents:[그림 id], createdAt}] 을 돌려준다(가져온 한 번 = 한 묶음): 첫 화면 내 그림이 그 파트들을 한 칸으로 묶는다.
  *   기본 모드는 기존 호스트 이동 계약을 유지한다. 파일 해석과 저장은 호스트가 맡는다.
  * - activityAuthoring: 명시적으로 true인 호스트만 활동/앱 제작·설정을 제공한다. 기존 활동 실행·결과 저장은 항상 유지한다.
  * - resume: true 면 새로 고침한 뒤 이 탭에서 꾸미던 그림 · 장을 다시 연다(공용 온바탕 첫 쪽이 켠다. 그림을 스스로 여는 들여 쓰는 곳은 끈 채로 둔다).

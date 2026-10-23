@@ -248,6 +248,77 @@ export function newRecord(ratio, n = 1, now = Date.now()) {
 export function sortRecords(list) {
   return list.slice().sort((a, b) => b.updatedAt - a.updatedAt || a.id.localeCompare(b.id));
 }
+/** 그림을 만든 때(ms): 새 그림의 id 에 들어 있는 시각(newDesignId). 알 수 없으면 0(가져온 PPT 파트 등). */
+export function createdOf(record) {
+  const m = /^d([a-z0-9]{6,10})[a-z0-9]{4}$/.exec(record?.id || '');
+  const ms = m ? parseInt(m[1], 36) : 0;
+  return ms > Date.UTC(2020, 0, 1) && ms < Date.now() + 864e5 ? ms : 0;
+}
+const PART_NAME = /^(.*\S)\s*·\s*(\d{1,3})$/;
+const isPpt = (record) => record?.source?.kind === 'pptx';
+/**
+ * 첫 화면 "내 그림"의 칸들. 한 PPT 를 나눠 담은 파트들(이름 끝이 " · 2" 처럼 번호)은 한 칸으로 묶는다.
+ * groups: 호스트가 아는 묶음 [{ id, title, documents: [그림 id…], createdAt? }](가져온 한 번 = 한 묶음). 없으면 같은 PPT 파일 · 같은 이름끼리 묶되,
+ *   같은 파트 번호가 또 나오면(같은 PPT 를 다시 가져온 것) 다른 묶음으로 나눈다.
+ * 돌려주는 것: [{ key, deck, records(파트 차례), name, pages, updatedAt, createdAt, ppt }]
+ */
+export function homeEntries(records, groups = []) {
+  const byId = new Map(records.map((r) => [r.id, r]));
+  const used = new Set();
+  const out = [];
+  const deck = (key, name, parts, createdAt = 0) => ({
+    key, deck: true, records: parts, name, ppt: true,
+    pages: parts.reduce((n, r) => n + r.slides.length, 0),
+    updatedAt: Math.max(...parts.map((r) => r.updatedAt || 0)),
+    createdAt: createdAt || parts.map((r) => r.updatedAt).filter((t) => t > 0).sort((a, b) => a - b)[0] || 0,
+  });
+  const partNo = (r) => Number(PART_NAME.exec(r.name)?.[2]) || 0;
+  for (const g of Array.isArray(groups) ? groups : []) {
+    const parts = (Array.isArray(g?.documents) ? g.documents : []).map((id) => byId.get(id)).filter((r) => r && !used.has(r.id));
+    if (parts.length < 2) continue;
+    for (const r of parts) used.add(r.id);
+    const title = String(g.title || PART_NAME.exec(parts[0].name)?.[1] || parts[0].name).trim();
+    const made = Number.isFinite(g.createdAt) ? g.createdAt : Date.parse(g.createdAt) || 0;
+    out.push(deck(`g:${g.id}`, title, parts.sort((a, b) => partNo(a) - partNo(b)), made));
+  }
+  // 호스트가 묶지 않은 PPT 파트: 같은 파일(sourceDocumentId) · 같은 이름(번호 앞)끼리
+  const loose = new Map();
+  for (const r of records) {
+    if (used.has(r.id) || !isPpt(r)) continue;
+    const m = PART_NAME.exec(r.name);
+    if (!m) continue;
+    const key = `${r.source.sourceDocumentId || ''}|${m[1]}`;
+    if (!loose.has(key)) loose.set(key, []);
+    loose.get(key).push(r);
+  }
+  for (const [key, list] of loose) {
+    const sets = [];
+    for (const r of list.slice().sort((a, b) => (a.updatedAt || 0) - (b.updatedAt || 0) || a.id.localeCompare(b.id))) {
+      const n = partNo(r);
+      let set = sets.find((v) => !v.some((x) => partNo(x) === n));
+      if (!set) sets.push(set = []);
+      set.push(r);
+    }
+    sets.forEach((set, k) => {
+      if (set.length < 2) return;
+      for (const r of set) used.add(r.id);
+      out.push(deck(`p:${key}:${k}`, PART_NAME.exec(set[0].name)[1], set.sort((a, b) => partNo(a) - partNo(b))));
+    });
+  }
+  for (const r of records) if (!used.has(r.id)) out.push({ key: `r:${r.id}`, deck: false, records: [r], name: r.name, pages: r.slides.length, updatedAt: r.updatedAt || 0, createdAt: createdOf(r), ppt: isPpt(r) });
+  return out;
+}
+export const HOME_SORTS = Object.freeze([['recent', '최근 고친 순'], ['made', '만든 순'], ['name', '이름 순']]);
+export const HOME_KINDS = Object.freeze([['all', '전체'], ['ppt', 'PPT'], ['mine', '직접 만든 것']]);
+const squash = (text) => String(text || '').toLocaleLowerCase('ko').replace(/\s+/g, '');
+/** 거르고(kind · 이름 찾기) 늘어놓는다(sort). 날짜를 모르는 것은 뒤로, 같으면 이름 차례. */
+export function arrangeEntries(entries, { kind = 'all', sort = 'recent', query = '' } = {}) {
+  const want = squash(query);
+  const kept = entries.filter((e) => (kind === 'ppt' ? e.ppt : kind === 'mine' ? !e.ppt : true) && (!want || squash(e.name).includes(want)));
+  const byName = (a, b) => a.name.localeCompare(b.name, 'ko', { numeric: true }) || a.key.localeCompare(b.key);
+  const when = (e) => (sort === 'made' ? e.createdAt || e.updatedAt : e.updatedAt || e.createdAt) || 0;
+  return kept.sort(sort === 'name' ? byName : (a, b) => when(b) - when(a) || byName(a, b));
+}
 /** 다음 "그림 n" 번호: 이미 있는 번호 가운데 가장 큰 것 + 1. */
 export function nextNumber(list) {
   const used = list.map((r) => /^그림 (\d+)$/.exec(r.name)).filter(Boolean).map((m) => Number(m[1]));

@@ -7,10 +7,9 @@ body{margin:0;background:#f0f4ef;color:#273f3a;font-family:system-ui,-apple-syst
 .lesson-show .lesson-slide{max-height:100dvh;border-radius:0;background:#000}
 .lesson-show .lesson-activity{width:100vw;height:calc(100dvh - 70px);overflow:auto;background:#f1f7f3;cursor:auto;display:flex;align-items:safe center;justify-content:center}
 .lesson-show:has(.lesson-activity) .lesson-stage{width:100vw}
-.lesson-show-bar{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);z-index:10;display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:999px;background:rgba(20,24,34,.72);color:#fff;opacity:.35;transition:opacity .2s;cursor:default}
-.lesson-show:hover .lesson-show-bar,.lesson-show-bar:focus-within{opacity:1}
+.lesson-show-bar{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);z-index:10;display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:999px;background:rgba(20,24,34,.72);color:#fff;transition:opacity .35s;cursor:default}
+@media(hover:hover){.lesson-show[data-calm]{cursor:none}.lesson-show[data-calm] .lesson-show-bar:not(:focus-within){opacity:0}}
 .lesson-show-count{min-width:4.2em;text-align:center;font-weight:800;font-variant-numeric:tabular-nums}
 .lesson-show-key{display:inline-flex;align-items:center;min-height:36px;padding:4px 12px;border:0;border-radius:999px;background:rgba(255,255,255,.16);color:#fff;font-weight:800;white-space:nowrap}
 .lesson-show-key:hover{background:rgba(255,255,255,.3)}.lesson-show-key[hidden]{display:none}
 @media(max-width:960px){.lesson-show-bar{left:8px;right:8px;width:max-content;margin:0 auto;transform:none;flex-wrap:wrap;justify-content:center;border-radius:18px;max-width:calc(100vw - 16px)}.lesson-show-key{min-height:44px;padding:8px 10px}}
-@media(pointer:coarse){.lesson-show-bar{opacity:.9}}
