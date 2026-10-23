@@ -8,7 +8,7 @@
 //   - 요소가 다 나온 뒤에도 읽을 틈(TAIL)은 남긴다. 그래서 요소가 많은 장은 머무는 시간보다 조금 길어진다.
 //   - 영상 장면(그 장의 바탕에 깐 영상)은 발표할 때처럼 그 장이 열리면(전환 효과가 끝나면) 틀기 시작해서, 쓰는 구간이 끝날 때까지 튼다.
 //     그래서 영상 장면이 있는 장은 적어도 그 영상의 길이만큼 이어진다. 끝난 뒤에는 마지막 모습에 잠깐 머문다.
-import { planMotion, enterPose, enterTime, emphasisPose, emphasisTime, idlePose, idlePhase, transitionPose, matchItems, morphs, looksChanged } from './motion.js';
+import { planMotion, enterPose, enterTime, emphasisPose, emphasisTime, exitPose, exitTime, idlePose, idlePhase, transitionPose, matchItems, morphs, looksChanged } from './motion.js';
 
 /** 고를 수 있는 머무는 시간(초)과 기본값. */
 export const STAYS = [3, 5, 8];
@@ -34,6 +34,8 @@ const staySeconds = (stay) => (Number.isFinite(stay) ? Math.min(30, Math.max(1, 
  *     lead:   요소가 나오기 시작하는 때(ms. 이 장이 시작된 때부터)
  *     moves:  움직이는 요소들 [{ i(요소 번호), enter, mirror, start(시작하는 때), ms(길이), click(누를 때 나오던 것인지) }]
  *             강조 효과는 enter 대신 emphasis 가 있다(누를 때의 차례대로 저절로 한 번 움직인다)
+ *             사라지는 효과는 enter 대신 exit 이 있다(그 차례에 사라지고, 그 뒤로는 그 장이 끝날 때까지 보이지 않는다)
+ *             길이 · 모습에는 요소의 빠르기(sp) · 글자 수(타자 치듯)가 들어간다(slide.items 로 그 요소를 안다. JSON 에는 남지 않는다)
  *     loops:  (계속 움직이는 요소가 있을 때만) [{ i, loop, start(되풀이를 시작하는 때), phase(한 바퀴의 어디에서 시작하는지) }]
  *             나타난 요소는 그 직후부터 0 에서, 처음부터 보이는 요소는 장이 열릴 때 제 박자에서 시작한다(발표 화면과 같다)
  *     settle: 모든 요소가 다 나온 때(계속 움직이기는 그 뒤에도 이어진다)
@@ -62,25 +64,32 @@ export function filmPlan(designs, { stay = DEFAULT_STAY, scenes = true } = {}) {
     const turn = pose ? { id: design.tr, ms: pose.ms, ...(pairs?.length ? { pairs } : {}), ...(changed.length ? { changed } : {}) } : null;
     const lead = turn ? turn.ms : n === 0 && plan.auto.length + plan.clicks.length ? FIRST_LEAD : 0;
     const arrived = new Set((pairs || []).map(([, j]) => j));
-    const moves = plan.auto.filter((a) => !arrived.has(a.i)).map((a) => ({ i: a.i, enter: a.enter, mirror: a.mirror, start: lead + a.delay, ms: enterTime(a.enter), click: false }));
+    const items = Array.isArray(design?.items) ? design.items : [];
+    const moves = plan.auto.filter((a) => !arrived.has(a.i)).map((a) => ({ i: a.i, enter: a.enter, mirror: a.mirror, start: lead + a.delay, ms: enterTime(a.enter, items[a.i]), click: false }));
     const count = plan.clicks.length;
     if (count) {
       const least = Math.max(STEP_LEAST, Math.min(STEP_MIN, CLICKS_MAX / count));
       const step = Math.round(Math.max(least, Math.min(STEP_MAX, (stayMs - plan.ms - TAIL) / count)));
-      plan.clicks.forEach((c, k) => moves.push(c.emphasis
-        ? { i: c.i, emphasis: c.emphasis, start: lead + plan.ms + step * (k + 1), ms: emphasisTime(c.emphasis), click: true }
-        : { i: c.i, enter: c.enter, mirror: c.mirror, start: lead + plan.ms + step * (k + 1), ms: enterTime(c.enter), click: true }));
+      plan.clicks.forEach((c, k) => {
+        const start = lead + plan.ms + step * (k + 1);
+        const it = items[c.i];
+        moves.push(c.emphasis ? { i: c.i, emphasis: c.emphasis, start, ms: emphasisTime(c.emphasis, it), click: true }
+          : c.exit ? { i: c.i, exit: c.exit, start, ms: exitTime(c.exit, it), click: true }
+            : { i: c.i, enter: c.enter, mirror: c.mirror, start, ms: enterTime(c.enter, it), click: true });
+      });
     }
     const settle = moves.reduce((m, v) => Math.max(m, v.start + v.ms), lead);
     // 계속 움직이기: 나타나는 움직임(누를 때 것 포함)이 있으면 그것이 끝난 때부터 0 에서, 없으면(처음부터 보이거나 옮겨 온 요소) 장이 열릴 때 제 박자에서.
     const loops = plan.loops.map((l) => {
       const m = moves.find((v) => v.i === l.i && v.enter);
-      return m ? { i: l.i, loop: l.loop, start: m.start + m.ms, phase: 0 } : { i: l.i, loop: l.loop, start: lead, phase: idlePhase(l.i, l.loop) };
+      return m ? { i: l.i, loop: l.loop, start: m.start + m.ms, phase: 0 } : { i: l.i, loop: l.loop, start: lead, phase: idlePhase(l.i, l.loop, items[l.i]) };
     });
     const video = scenes && design?.video && design.video.out > design.video.in ? design.video : null;
     const scene = video ? { start: turn ? turn.ms : n === 0 ? FIRST_LEAD : 0, ms: Math.round((video.out - video.in) * 1000) } : null;
     const ms = Math.round(Math.max(lead + Math.max(stayMs, settle - lead + (moves.length ? TAIL : 0)), scene ? scene.start + scene.ms + SCENE_TAIL : 0));
-    return { turn, lead, moves, settle, ms, ...(loops.length ? { loops } : {}), ...(scene ? { scene } : {}) };
+    const slide = { turn, lead, moves, settle, ms, ...(loops.length ? { loops } : {}), ...(scene ? { scene } : {}) };
+    Object.defineProperty(slide, 'items', { value: items, enumerable: false });
+    return slide;
   });
   // 짝이 된 요소는 두 장 모두에서 제 칸(따로 그린 그림)이 있어야 옮겨 그릴 수 있다: split 에 적는다.
   slides.forEach((s, n) => {
@@ -97,25 +106,32 @@ export function morphPairs(before, after) {
 }
 
 /**
- * 그 장이 시작된 지 local(ms) 이 지났을 때, 아직 제 모습이 아닌 요소들의 모습.
+ * 그 장이 시작된 지 local(ms) 이 지났을 때, 아직 제 모습이 아닌 요소들의 모습. measured: 타자 치듯에서 잰 글자 자리 Map(요소 번호 → stops. 없으면 어림한다).
  * 돌려주는 것: Map(요소 번호 → enterPose 의 모습). 여기에 없는 요소는 제자리에 다 나와 있다.
  * 계속 움직이는 요소는 그 순간의 되풀이 모습이다(나타나기·강조가 도는 동안은 그쪽이 앞선다: 화면에서 나중에 튼 움직임이 위에 보이는 것과 같다).
  * local 이 Infinity 면(다 나온 모습을 그릴 때) 계속 움직이기도 제 모습이다.
  */
-export function slidePoses(slide, local) {
+export function slidePoses(slide, local, measured = null) {
   const poses = new Map();
+  const items = slide?.items || [];
   for (const m of slide?.moves || []) {
     const at = local - m.start;
+    const item = items[m.i];
+    // 사라지는 효과: 차례가 오기 전에는 그대로, 끝난 뒤에는 사라진 모습으로 남는다.
+    if (m.exit) {
+      if (at >= 0) { const pose = exitPose(m.exit, Math.min(at, m.ms), { item }); if (pose) poses.set(m.i, pose); }
+      continue;
+    }
     if (at >= m.ms) continue;
     // 강조는 차례가 오기 전에는 제 모습이다(나타나기처럼 숨어 기다리지 않는다).
     if (m.emphasis && at < 0) continue;
-    const pose = m.emphasis ? emphasisPose(m.emphasis, at) : enterPose(m.enter, at, { mirror: m.mirror });
+    const pose = m.emphasis ? emphasisPose(m.emphasis, at, { item }) : enterPose(m.enter, at, { mirror: m.mirror, item, stops: measured?.get(m.i) });
     if (pose) poses.set(m.i, pose);
   }
   if (Number.isFinite(local)) {
     for (const l of slide?.loops || []) {
       if (poses.has(l.i) || local < l.start) continue;
-      const pose = idlePose(l.loop, local - l.start + l.phase);
+      const pose = idlePose(l.loop, local - l.start + l.phase, items[l.i]);
       if (pose) poses.set(l.i, pose);
     }
   }

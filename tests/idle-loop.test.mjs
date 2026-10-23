@@ -8,8 +8,8 @@ const text = (id, value, y, patch = {}) => ({id, t: 'text', text: value, x: 50, 
 const near = (a, b, eps = 1e-6) => Math.abs(a - b) < eps;
 
 test('계속 움직이기(lp) is a stored element value; unknown ids are dropped and it counts as motion', () => {
-  assert.deepEqual(IDLE_IDS, ['float', 'breathe', 'sway', 'bob', 'beat', 'spin', 'blink', 'drift']);
-  assert.equal(IDLES.length, 8);
+  assert.deepEqual(IDLE_IDS, ['float', 'breathe', 'sway', 'bob', 'beat', 'spin', 'blink', 'drift', 'zoomin', 'wave', 'jelly', 'pendulum']);
+  assert.equal(IDLES.length, 12);
   assert.ok(IDLES.every(e => typeof e.name === 'string' && e.name.length));
   const design = cleanDesign({id: 'ppage00001', bg: '#fff', items: [text('eaaaaaaa01', '위', 20, {lp: 'float'}), text('eaaaaaaa02', '아래', 80, {lp: 'nope'})]});
   assert.equal(design.items[0].lp, 'float');
@@ -24,7 +24,7 @@ test('every idle loop starts and ends at the element\'s own look so repeating ne
   for (const id of IDLE_IDS) {
     const k = idleKeyframes({rot: 10, op: 80}, id);
     assert.equal(k.ms, idleTime(id));
-    assert.ok(k.ms >= 1000 && k.ms <= 8000, `${id}: ${k.ms}`);
+    assert.ok(k.ms >= 1000 && k.ms <= (id === 'zoomin' ? 12000 : 8000), `${id}: ${k.ms}`);
     const rest = (ms) => { const p = idlePose(id, ms); return [p.x, p.y, p.k, ((p.r % 360) + 360) % 360, p.o]; };
     assert.deepEqual(rest(0), [0, 0, 1, 0, 1], id);
     // 한 바퀴가 끝나면 다시 처음(제 모습)이다(빙글빙글은 360도 = 제 모습).
@@ -35,9 +35,9 @@ test('every idle loop starts and ends at the element\'s own look so repeating ne
     for (const key of ['x', 'y', 'k', 'r', 'o']) assert.ok(near(a[key], b[key]), `${id}.${key}`);
     assert.equal(a.done, false);
     // 가운데 어딘가에서는 분명히 움직인다(세기는 작게).
-    const moved = Array.from({length: 50}, (_, n) => idlePose(id, (k.ms * (n + 0.5)) / 50)).some(p => !near(p.x, 0) || !near(p.y, 0) || !near(p.k, 1) || !near(p.r % 360, 0) || !near(p.o, 1));
+    const moved = Array.from({length: 50}, (_, n) => idlePose(id, (k.ms * (n + 0.5)) / 50)).some(p => !near(p.x, 0) || !near(p.y, 0) || !near(p.k, 1) || !near(p.kx, 1) || !near(p.ky, 1) || !near(p.r % 360, 0) || !near(p.o, 1));
     assert.ok(moved, id);
-    assert.ok(Array.from({length: 50}, (_, n) => idlePose(id, (k.ms * n) / 50)).every(p => Math.abs(p.x) <= 3 && Math.abs(p.y) <= 3 && p.k <= 1.1 && p.o >= 0.4), `${id} is too strong`);
+    assert.ok(Array.from({length: 50}, (_, n) => idlePose(id, (k.ms * n) / 50)).every(p => Math.abs(p.x) <= 3 && Math.abs(p.y) <= 3 && p.k <= 1.1 && Math.abs(p.kx - 1) <= 0.1 && Math.abs(p.ky - 1) <= 0.1 && p.o >= 0.4), `${id} is too strong`);
   }
   assert.equal(idleKeyframes({}, 'nope'), null);
   assert.equal(idlePose('nope', 10), null);

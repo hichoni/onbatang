@@ -13,7 +13,7 @@
 import { SHAPE_ASSETS, SHAPE_GROUPS, shapeAsset } from './shapes.js';
 import { isArtId, artColorable, artAspect, artPack, artName } from './art.js';
 import { isYouTubeId, ytStart, ytTime } from './youtube.js';
-import { ENTER_IDS, COMBO_IDS, TRANSITION_IDS, EMPHASIS_IDS, IDLE_IDS, STILL } from './motion.js';
+import { ENTER_IDS, COMBO_IDS, TRANSITION_IDS, EMPHASIS_IDS, IDLE_IDS, EXIT_IDS, SPEED_IDS, DELAY_MAX, STILL } from './motion.js';
 import { metadata, newId, fail, validatePageInput, isSlideItem, itemTextLimit, pageLimits, slideNotes, slideHidden, slideTopic, slideDur, cleanAlt, ALT_LIMIT } from './document.js';
 export { cleanAlt, ALT_LIMIT };
 import { cleanActivity } from './activity.js';
@@ -262,6 +262,9 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
   if (it.aw === true) base.aw = true;
   if (EMPHASIS_IDS.includes(it.em)) base.em = it.em;          // 강조 효과: 누를 때 한 번 움직인다
   if (IDLE_IDS.includes(it.lp) || it.lp === STILL) base.lp = it.lp;   // 계속 움직이기: 다 나온 뒤 장에 머무는 동안 되풀이해 움직인다('none' = 조합 효과가 있어도 가만히)
+  if (EXIT_IDS.includes(it.ex)) base.ex = it.ex;              // 사라지는 효과: 누를 때 사라진다(나타나기 · 강조 다음 차례)
+  if (SPEED_IDS.includes(it.sp)) base.sp = it.sp;             // 빠르기: 그 요소의 모든 움직임을 빠르게 · 느리게
+  if (Number.isFinite(it.dl) && Math.round(Math.min(DELAY_MAX, it.dl) * 10) > 0) base.dl = Math.round(Math.min(DELAY_MAX, it.dl) * 10) / 10;   // 늦추기(초, 0.1 단위): 장이 열릴 때 제 차례보다 늦게
   const flip = { fx: it.fx === true, fy: it.fy === true };                 // 좌우·상하 뒤집기
   if (it.t === 'text') {
     const text = clip(keepSpaces ? String(it.text ?? '') : lines(it.text), textLimit(it));
