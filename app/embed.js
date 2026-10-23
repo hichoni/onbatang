@@ -2,10 +2,10 @@
 //
 //   <script src="(온바탕 주소)/app/embed.js"></script>    공용 온바탕은 onbatang.web.app
 //   const result = await Onbatang.open({ ratio: '9:16', title: '우리 앱 화면', tools: 'simple', png: { width: 1080 } });
-//   if (result) { result.png /* Blob(image/png, 첫 장) */; result.record /* 원본(다시 고칠 때 record 로 넘긴다) */ }
+//   if (result) { result.png /* Blob(image/png, 첫 장) */; result.record /* 원본(다시 고칠 때 record 로 넘긴다) */; result.pngs /* png: { pages: 'all' } 이면 모든 장의 Blob */ }
 //
 // open(options): 화면 위(또는 options.container 안)에 iframe 을 띄우고, 끝나면 지운다. 닫기를 누르면 null.
-//   ratio '1:1' · '4:5' · '16:9' · '9:16'(기본) · template(틀 이름, 선택) · record(다시 고칠 원본, 선택) · title · tools 'simple' | 'full' · png { width }
+//   ratio '1:1' · '4:5' · '16:9' · '9:16'(기본) · template(틀 이름, 선택) · record(다시 고칠 원본, 선택) · title · tools 'simple' | 'full' · png { width, pages: 'first' | 'all' }
 // 신호는 그 iframe 과 온바탕 주소의 것만 받는다. 온바탕은 바깥에 저장하지 않는다(받은 그림을 둘 곳은 부른 앱이 정한다).
 (function () {
   'use strict';
@@ -47,7 +47,7 @@
         if (event.source !== frame.contentWindow || event.origin !== page.origin) return;
         var data = event.data || {};
         if (data.type === 'onba:ready') frame.contentWindow.postMessage(init, page.origin);
-        else if (data.type === 'onba:save') finish({ png: data.png, record: data.record });
+        else if (data.type === 'onba:save') finish({ png: data.png, record: data.record, pngs: Array.isArray(data.pngs) ? data.pngs : [data.png] });
         else if (data.type === 'onba:close') finish(null);
         else if (data.type === 'onba:error') finish(null, new Error(String(data.message || '온바탕을 열지 못했어요.')));
       }
