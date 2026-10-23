@@ -21,7 +21,7 @@ import { el } from './dom.js';
 import { itemView, paintCard } from './render.js';
 import { cleanDesign, fontFamilyOf } from './model.js';
 import { designSheet } from './export.js';
-import { transitionPose, clipInsets, TURN_DEPTH, tweenItem, contentChanged } from './motion.js';
+import { transitionPose, clipInsets, typePoints, measureType, TURN_DEPTH, tweenItem, contentChanged } from './motion.js';
 import { filmPlan, slidePoses, slideLoops, filmCells, packCells, DEFAULT_STAY, MAX_FILM_SECONDS } from './film.js';
 import { mp4Parts, webmParts } from './mux.js';
 import { sceneBlob } from './scene.js';
@@ -96,8 +96,8 @@ async function documentFonts(design) {
 }
 
 // 요소들이 카드 위에서 차지하는 자리를 잰다(px). 화면 밖에 그 크기의 카드를 잠깐 놓고 읽는다.
-// 돌려주는 것: 요소마다 { x, y, w, h(돌리고 뒤집은 뒤의 바깥 네모) · bw, bh(돌리기 전 제 칸의 크기) }
-async function measure(design, W, H) {
+// 돌려주는 것: 요소마다 { x, y, w, h(돌리고 뒤집은 뒤의 바깥 네모) · bw, bh(돌리기 전 제 칸의 크기) · stops(typed 에 든 요소만: 타자 치듯의 글자 자리) }
+async function measure(design, W, H, typed = null) {
   const card = paintCard(el('div', { class: 'fe-card', 'aria-hidden': 'true' }, ...design.items.map(itemView)), design.bg);
   card.style.setProperty('--fe-ratio', String(W / H));
   card.style.setProperty('--fe-card-radius', '0');
@@ -106,9 +106,10 @@ async function measure(design, W, H) {
   try {
     await documentFonts(design);
     const base = card.getBoundingClientRect();
-    return [...card.children].map((node) => {
+    return [...card.children].map((node, i) => {
       const r = node.getBoundingClientRect();
-      return { x: r.left - base.left, y: r.top - base.top, w: r.width, h: r.height, bw: node.offsetWidth, bh: node.offsetHeight };
+      const stops = typed?.has(i) ? measureType(node) : null;
+      return { x: r.left - base.left, y: r.top - base.top, w: r.width, h: r.height, bw: node.offsetWidth, bh: node.offsetHeight, ...(stops ? { stops } : {}) };
     });
   } finally {
     card.remove();
@@ -188,7 +189,10 @@ async function buildTweens(before, design, turn, W, H) {
 async function buildSlide(design, slide, W, H, before = null) {
   // 움직이는 것이 없으면 잴 것도 없다: 통째로 한 칸이다(그림으로 내려받을 때와 같다).
   // 영상 장면이 있는 장은 요소들을 바탕과 따로 그려야 해서(그 사이에 영상이 들어간다) 잰다.
-  const boxes = slide.moves.length || slide.loops?.length || slide.split?.length || design.video ? await measure(design, W, H) : null;
+  const typed = new Set(slide.moves.filter((m) => m.enter === 'type').map((m) => m.i));
+  const boxes = slide.moves.length || slide.loops?.length || slide.split?.length || design.video ? await measure(design, W, H, typed) : null;
+  // 타자 치듯: 화면처럼 글자가 놓인 자리까지 연다(잰 자리. 잴 수 없었으면 어림한다).
+  const stops = new Map([...typed].filter((i) => boxes?.[i]?.stops).map((i) => [i, boxes[i].stops]));
   const cells = filmCells(design, slide, boxes, W, H);
   const sheets = packCells(cells);
   const canvases = [];
@@ -211,7 +215,7 @@ async function buildSlide(design, slide, W, H, before = null) {
   // 영상 장면: 시간표에 트는 때가 적혀 있을 때만(멈춘 그림으로 담는 길에서는 적혀 있지 않다) 릴을 연다.
   const scene = slide.scene && design.video ? await openScene(design.video, slide.scene) : null;
   const tweens = slide.turn?.pairs && before ? await buildTweens(before, design, slide.turn, W, H) : null;
-  return { slide, layers, canvases, missingFonts: [...missingFonts], scene, tweens };
+  return { slide, layers, canvases, missingFonts: [...missingFonts], scene, tweens, stops };
 }
 function freeSlide(built) {
   for (const c of [...(built?.canvases || []), ...(built?.tweens?.canvases || [])]) { c.width = 0; c.height = 0; }
@@ -241,7 +245,7 @@ function drawScene(ctx, W, H, scene, local) {
 
 // 한 장을 그 순간(local)의 모습으로 그린다. local 이 Infinity 면 모두 다 나온 모습이다.
 function drawSlide(ctx, W, H, built, local, skip = null) {
-  const poses = slidePoses(built.slide, local);
+  const poses = slidePoses(built.slide, local, built.stops);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.globalAlpha = 1;
   ctx.clearRect(0, 0, W, H);
@@ -254,25 +258,42 @@ function drawSlide(ctx, W, H, built, local, skip = null) {
       if (L.bg && built.scene) drawScene(ctx, W, H, built.scene, local);
       continue;
     }
-    if (p.o <= 0.001 || p.clip >= 99.999) continue;
+    if (p.o <= 0.001 || p.clip >= 99.999 || (p.stops && p.tk <= 0)) continue;
     const dx = (p.x / 100) * W;
     const dy = (p.y / 100) * W;      // 세로로 옮기는 거리도 카드 "너비"를 따른다(화면에서 cqw 로 옮기는 것과 같다)
+    const kx = p.kx ?? 1;
+    const ky = p.ky ?? 1;
+    if (Math.abs(kx) < 0.001 || Math.abs(ky) < 0.001) continue;     // 납작하게 접힌 순간(뒤집히며 · 펼치기의 처음)
     ctx.save();
     ctx.globalAlpha = Math.min(1, p.o);
-    if (p.clip > 0) {
-      // 가리개는 요소의 제 방향(기울기 · 뒤집기 · 크기)을 따라간다. 그 방향으로 좌표를 돌려 놓고 네모를 잘라 둔다.
-      const [top, right, bottom, left] = clipInsets(p.clip, L.fx);
+    // 흐림: 카드 너비의 b% (화면의 blur(b cqw) 와 같다).
+    if (p.b > 0.005) ctx.filter = `blur(${((p.b / 100) * W).toFixed(2)}px)`;
+    const typing = p.stops && p.tk < p.stops.length;
+    if (p.clip > 0 || typing) {
+      // 가리개는 요소의 제 방향(기울기 · 뒤집기 · 크기)을 따라간다. 그 방향으로 좌표를 돌려 놓고 네모(타자 치듯은 여섯 점의 다각형)를 잘라 둔다.
       ctx.translate(L.cx + dx, L.cy + dy);
       ctx.rotate((L.rot + p.r) * RAD);
-      ctx.scale(p.k * (L.fx ? -1 : 1), p.k * (L.fy ? -1 : 1));
+      ctx.scale(p.k * kx * (L.fx ? -1 : 1), p.k * ky * (L.fy ? -1 : 1));
       ctx.beginPath();
-      ctx.rect(-L.bw / 2 + (left / 100) * L.bw, -L.bh / 2 + (top / 100) * L.bh, L.bw * (1 - (left + right) / 100), L.bh * (1 - (top + bottom) / 100));
+      if (typing) {
+        typePoints(p.stops, p.tk).forEach(([x, y], n) => ctx[n ? 'lineTo' : 'moveTo'](-L.bw / 2 + (x / 100) * L.bw, -L.bh / 2 + (y / 100) * L.bh));
+        ctx.closePath();
+      } else {
+        const [top, right, bottom, left] = clipInsets(p.clip, L.fx, p.side, L.fy);
+        ctx.rect(-L.bw / 2 + (left / 100) * L.bw, -L.bh / 2 + (top / 100) * L.bh, L.bw * (1 - (left + right) / 100), L.bh * (1 - (top + bottom) / 100));
+      }
       ctx.clip();
       ctx.setTransform(1, 0, 0, 1, 0, 0);
     }
     // 그려 둔 그림은 이미 제자리에 기울고 뒤집힌 모습이다. 가운데 점을 붙들고 더 옮기고 · 돌리고 · 키우기만 한다.
+    // 가로 · 세로만 늘이기(kx · ky)는 요소의 제 방향으로 한다: 요소의 기울기만큼 돌려 놓고 늘인 뒤 되돌린다(화면의 scale 과 같은 쪽).
     ctx.translate(L.cx + dx, L.cy + dy);
     ctx.rotate(p.r * RAD);
+    if (kx !== 1 || ky !== 1) {
+      ctx.rotate(L.rot * RAD);
+      ctx.scale(kx, ky);
+      ctx.rotate(-L.rot * RAD);
+    }
     ctx.scale(p.k, p.k);
     ctx.translate(-L.cx, -L.cy);
     ctx.drawImage(L.img, L.sx, L.sy, L.w, L.h, L.ox, L.oy, L.w, L.h);
@@ -303,6 +324,7 @@ function drawTurnSide(ctx, W, H, img, pose, depth) {
   if (pose.o <= 0.001) return;
   ctx.save();
   ctx.globalAlpha = Math.min(1, pose.o);
+  if (pose.b > 0.005) ctx.filter = `blur(${((pose.b / 100) * W).toFixed(2)}px)`;
   if (pose.inset) {
     const [top, right, bottom, left] = pose.inset;
     ctx.beginPath();
@@ -317,7 +339,7 @@ function drawTurnSide(ctx, W, H, img, pose, depth) {
   }
   if (pose.turn) drawTurned(ctx, W, H, img, pose.turn, depth);
   else {
-    ctx.translate(W / 2 + (pose.x / 100) * W, H / 2);
+    ctx.translate(W / 2 + (pose.x / 100) * W, H / 2 + ((pose.y || 0) / 100) * H);
     ctx.scale(pose.k, pose.k);
     ctx.drawImage(img, -W / 2, -H / 2);
   }

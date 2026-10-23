@@ -11,7 +11,7 @@ import {
   designVideo, cleanVideo, trimVideo, videoSeconds, videoTime, VIDEO_FITS, MIN_VIDEO, rebaseItems, alignBoxes, distributeBoxes, clampShift, scaleItems, regroup, newGroupId,
   styleOf, applyStyle, LINE_SPACINGS, ALT_LIMIT,
 } from './model.js';
-import { ENTERS, COMBOS, TRANSITIONS, EMPHASES, IDLES, STILL, planMotion, playEnter, playEmphasis, playIdle, playDesign, playTransition, morphs } from './motion.js';
+import { ENTERS, COMBOS, TRANSITIONS, EMPHASES, IDLES, EXITS, SPEEDS, DELAYS, STILL, planMotion, playEnter, playEmphasis, playExit, playIdle, playDesign, playTransition, morphs, enterTime, emphasisTime, exitTime } from './motion.js';
 import { searchStickers } from './stickers.js';
 import { ART_PACKS, artSvg, artColorable, artReady, loadArt, searchArt } from './art.js';
 import { designView, itemView, placeItem, paintCard, shapeThumb } from './render.js';
@@ -3238,7 +3238,7 @@ export function createEditor({
     view.style.setProperty('--fe-ratio', String(DEMO_RATIO));
     return view;
   };
-  /** 효과 하나를 고르는 단추. kind: 'enter'(요소 효과) · 'emph'(강조) · 'idle'(계속 움직이기) · 'combo'(조합 효과) · 'tr'(전환 효과) · 'none'(없음) · 'follow'(장의 효과대로) */
+  /** 효과 하나를 고르는 단추. kind: 'enter'(요소 효과) · 'emph'(강조) · 'exit'(사라지기) · 'idle'(계속 움직이기) · 'combo'(조합 효과) · 'tr'(전환 효과) · 'none'(없음) · 'follow'(장의 효과대로) */
   // "장의 효과대로"(id '')는 'follow', 없음 · 가만히는 'none' 이라는 표를 단다(둘이 한 칸에 함께 나올 때 가려낸다).
   const tileOf = (group, id) => panel.querySelector(`.fe-motions[data-group="${group}"] .fe-mo[data-motion="${id || 'follow'}"]`) || panel.querySelector(`.fe-motions[data-group="${group}"] .fe-mo[data-motion="${id || 'none'}"]`);
   function motionTile({ group, name, hint = '', on, kind, id, onPick }) {
@@ -3254,6 +3254,12 @@ export function createEditor({
       const c = demoCard(design);
       view.append(c);
       play = () => playEmphasis(c.firstElementChild, design.items[0], id);
+    } else if (kind === 'exit') {
+      // 사라지기: 사라진 뒤 잠깐 있다가 다시 보이게 한다(본보기가 빈 칸으로 남지 않게).
+      const design = cleanDesign(DEMO.enter);
+      const c = demoCard(design);
+      view.append(c);
+      play = () => { const n = c.firstElementChild; playExit(n, design.items[0], id); setTimeout(() => { n.style.visibility = ''; }, 1400); };
     } else if (kind === 'idle') {
       // 계속 움직이기는 끝이 없으므로 본보기는 잠깐만 틀고 멈춘다(작은 칸이라 거리를 조금 크게).
       const design = cleanDesign(DEMO.enter);
@@ -3312,7 +3318,7 @@ export function createEditor({
     if (!preview) return;
     for (const t of preview.timers) clearTimeout(t);
     preview.tr?.finish();
-    preview.ctl?.reveal();
+    preview.ctl?.restore();
     preview = null;
     stage.classList.remove('fe-playing');
   }
@@ -3384,6 +3390,20 @@ export function createEditor({
     if ((cur()?.em || '') !== (id || '')) change({ em: id || undefined });
     if (id && nodes[sel]) { stopPreview(); showStage(); playEmphasis(nodes[sel], cur(), id); }
   }
+  // 사라지기: 고르면 카드 위의 그 조각이 사라져 보이고, 조금 뒤에 다시 보인다(꾸미는 중이니까).
+  function setExit(id) {
+    if ((cur()?.ex || '') !== (id || '')) change({ ex: id || undefined });
+    const n = nodes[sel];
+    if (id && n) { stopPreview(); showStage(); playExit(n, cur(), id); setTimeout(() => { if (n.isConnected) n.style.visibility = ''; }, 1600); }
+  }
+  // 빠르기 · 늦추기: 고르면 그 조각의 나타나기를 다시 틀어 본다.
+  function setSpeed(id) {
+    if ((cur()?.sp || '') !== (id || '')) change({ sp: id || undefined });
+    previewItem();
+  }
+  function setDelay(sec) {
+    if ((cur()?.dl || 0) !== sec) change({ dl: sec || undefined });
+  }
   // 계속 움직이기: 고르면 카드 위의 그 조각이 잠깐 되풀이해 움직여 보여 준다(발표가 아니니 몇 바퀴만).
   function setIdle(id) {
     if ((cur()?.lp || '') !== (id || '')) change({ lp: id || undefined });
@@ -3397,13 +3417,43 @@ export function createEditor({
     }
   }
 
+  // 이 장의 움직임 차례(시간표): 장이 열릴 때 나오는 것은 언제부터 얼마 동안인지 막대로, 누를 때 하는 것은 누르는 차례대로 적는다.
+  // 줄을 누르면 그 조각을 고른다(그 조각의 움직임을 바로 고칠 수 있게).
+  function motionTimeline() {
+    const design = cleanDesign(card, { keepSpaces: true });
+    const plan = planMotion(design);
+    if (!plan.auto.length && !plan.clicks.length) return [];
+    const list = design.items;
+    const nameOf = (defs, id) => defs.find((d) => d.id === id)?.name || '';
+    const total = Math.max(1, plan.ms);
+    const sec = (ms) => `${(Math.round(ms / 100) / 10).toFixed(1)}초`;
+    const row = (i, body, extra = {}) => el('li', { class: `fe-tl-row${i === sel ? ' on' : ''}` },
+      el('button', { type: 'button', class: 'fe-tl-pick', title: '이 조각 고르기', onClick: () => select(i), dataset: { timeline: String(i) }, ...extra }, ...body));
+    const autoRows = [...plan.auto].sort((a, b) => a.delay - b.delay || a.i - b.i).map((a) => {
+      const ms = enterTime(a.enter, list[a.i]);
+      const bar = el('span', { class: 'fe-tl-track', 'aria-hidden': 'true' }, el('span', { class: 'fe-tl-bar', style: `left:${(a.delay / total) * 100}%;width:${Math.max(2, (ms / total) * 100)}%` }));
+      return row(a.i, [el('b', { text: itemLabel(list[a.i]) }), el('small', { text: `${nameOf(ENTERS, a.enter)} · ${sec(a.delay)}부터 ${sec(ms)}` }), bar]);
+    });
+    const clickRows = plan.clicks.map((c, n) => {
+      const what = c.emphasis ? `강조 · ${nameOf(EMPHASES, c.emphasis)} ${sec(emphasisTime(c.emphasis, list[c.i]))}`
+        : c.exit ? `사라지기 · ${nameOf(EXITS, c.exit)} ${sec(exitTime(c.exit, list[c.i]))}` : `나타나기 · ${nameOf(ENTERS, c.enter)} ${sec(enterTime(c.enter, list[c.i]))}`;
+      return row(c.i, [el('span', { class: 'fe-tl-step', text: `누름 ${n + 1}` }), el('b', { text: itemLabel(list[c.i]) }), el('small', { text: what })]);
+    });
+    const loopNote = plan.loops.length ? el('p', { class: 'fe-note', text: `머무는 동안 계속 움직이는 조각: ${plan.loops.map((l) => `${itemLabel(list[l.i])}(${nameOf(IDLES, l.loop)})`).slice(0, 6).join(', ')}${plan.loops.length > 6 ? ` 외 ${plan.loops.length - 6}개` : ''}` }) : null;
+    return [
+      el('div', { class: 'fe-head', text: `이 장의 움직임 차례${plan.ms ? ` · ${sec(plan.ms)}` : ''}` }),
+      el('ol', { class: 'fe-timeline', 'aria-label': '이 장의 움직임 차례' }, ...autoRows, ...clickRows),
+      loopNote,
+    ];
+  }
+
   function tabBody() {
     if (tab === 'motion') {
       const here = designMotion(card);
-      const waits = items().filter((k) => k.aw || k.em).length;
+      const waits = items().filter((k) => k.aw || k.em || k.ex).length;
       // 고른 요소가 있으면 맨 위에 그 요소의 움직임이 나온다. 정하지 않은 요소는 장의 조합 효과를 따른다(조합 효과가 없으면 처음부터 보인다).
       const it = cur();
-      const mine = it && !it.lock ? motionPart('mine', [sel, itemLabel(it), it.an || '', !!it.aw, it.em || '', it.lp || '', here.pa || ''].join('|'), () => {
+      const mine = it && !it.lock ? motionPart('mine', [sel, itemLabel(it), it.an || '', !!it.aw, it.em || '', it.lp || '', it.ex || '', it.sp || '', it.dl || 0, here.pa || ''].join('|'), () => {
         const follow = { id: '', name: here.pa ? '장의 효과대로' : '없음' };
         const choices = [follow, ...(here.pa ? [{ id: STILL, name: '가만히' }] : []), ...ENTERS];
         const now = it.an === STILL && !here.pa ? '' : it.an || '';
@@ -3427,6 +3477,17 @@ export function createEditor({
             motionTile({ group: 'emph', name: '없음', on: !it.em, kind: 'none', onPick: () => setEmphasis('') }),
             ...EMPHASES.map((c) => motionTile({ group: 'emph', name: c.name, on: it.em === c.id, kind: 'emph', id: c.id, onPick: () => setEmphasis(c.id) }))),
           it.em ? el('p', { class: 'fe-note', text: it.aw ? '누르면 나타나고, 한 번 더 누르면 강조해요.' : '이미 보이는 조각이 발표하다가 누를 때 한 번 움직이고 제자리로 돌아와요. 누를 때 나오는 다른 조각과 위에서부터 차례로 이어져요.' }) : null,
+          el('div', { class: 'fe-head', text: '누를 때 사라지기' }),
+          el('div', { class: 'fe-motions', role: 'group', 'aria-label': '고른 조각이 사라지는 모양', dataset: { group: 'exit' } },
+            motionTile({ group: 'exit', name: '없음', on: !it.ex, kind: 'none', onPick: () => setExit('') }),
+            ...EXITS.map((c) => motionTile({ group: 'exit', name: c.name, on: it.ex === c.id, kind: 'exit', id: c.id, onPick: () => setExit(c.id) }))),
+          it.ex ? el('p', { class: 'fe-note', text: `발표하다가 누르면 사라져요${it.aw || it.em ? '(나타나기 · 강조 다음 차례)' : ''}. 다음 설명으로 넘어가기 전에 앞 것을 치울 때 좋아요. 내려받은 영상에서도 사라져요.` }) : null,
+          el('div', { class: 'fe-head', text: '빠르기 · 늦추기' }),
+          el('div', { class: 'fe-grid three fe-motion-speed', role: 'group', 'aria-label': '고른 조각의 빠르기' },
+            ...SPEEDS.map((s) => pbtn(s.name, () => setSpeed(s.id), { 'aria-pressed': String((it.sp || '') === s.id), class: `fe-btn${(it.sp || '') === s.id ? ' on' : ''}`, dataset: { speed: s.id || 'normal' } }))),
+          it.aw ? null : el('div', { class: 'fe-chips fe-motion-delay', role: 'group', 'aria-label': '장이 열린 뒤 늦게 나오기' },
+            ...DELAYS.map((d) => pbtn(d ? `${d}초 늦게` : '늦추지 않기', () => setDelay(d), { 'aria-pressed': String((it.dl || 0) === d), class: `fe-chip${(it.dl || 0) === d ? ' on' : ''}`, dataset: { delay: String(d) } }))),
+          it.sp || it.dl ? el('p', { class: 'fe-note', text: [it.sp ? `나타나기 · 강조 · 사라지기 · 계속 움직이기가 모두 ${SPEEDS.find((s) => s.id === it.sp)?.name} 움직여요.` : '', it.dl && !it.aw ? `장이 열리고 제 차례보다 ${it.dl}초 늦게 나와요. 여러 조각을 서로 다른 때에 나오게 하면 모션그래픽처럼 짜 맞출 수 있어요.` : ''].filter(Boolean).join(' ') }) : null,
           el('div', { class: 'fe-head', text: '머무는 동안 계속 움직이기' }),
           el('div', { class: 'fe-motions', role: 'group', 'aria-label': '고른 조각이 계속 움직이는 모양', dataset: { group: 'idle' } },
             ...idleChoices.map((c) => motionTile({ group: 'idle', name: c.name, on: idleNow === c.id, kind: c.id && c.id !== STILL ? 'idle' : c.id === '' && autoLoops ? 'follow' : 'none', id: c.id, onPick: () => setIdle(c.id) }))),
@@ -3467,7 +3528,7 @@ export function createEditor({
       }, ALL) : null;
       const hint = it?.lock ? '잠근 조각은 잠금을 풀면 움직임을 정할 수 있어요. ' : it ? '' : '조각을 하나 고르면 그 조각만 다르게 움직이게 할 수 있어요. ';
       return [
-        ...mine, ...combos, ...turns,
+        ...mine, ...motionTimeline(), ...combos, ...turns,
         el('div', { class: 'fe-row fe-motion-go' },
           el('button', { class: 'fe-btn primary', type: 'button', onClick: () => previewPage() }, icon('play'), '이 장 미리 보기'), all),
         hint || waits ? el('p', { class: 'fe-note', text: `${hint}${waits ? `이 장에는 누를 때 나오거나 강조하는 요소가 ${waits}개 있어요.` : ''}`.trim() }) : null,

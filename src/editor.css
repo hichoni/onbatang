@@ -833,3 +833,14 @@
 .fe-outline-start .fe-ic { flex: none; width: 22px; height: 22px; color: var(--fe-primary); }
 .fe-outline-start span { display: grid; gap: 2px; }
 .fe-outline-start small { color: var(--fe-muted, #5c6370); font-size: .8em; }
+
+/* ---- 움직임 차례(시간표) ---- */
+.fe-timeline { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 4px; }
+.fe-tl-row { margin: 0; }
+.fe-tl-pick { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "step name" "step what" "track track"; column-gap: 8px; row-gap: 2px; align-items: center; width: 100%; padding: 6px 8px; border: 1px solid var(--fe-line, #dfe3ee); border-radius: 10px; background: var(--fe-card-bg, #fff); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.fe-tl-row.on .fe-tl-pick { border-color: var(--fe-primary); box-shadow: 0 0 0 2px color-mix(in srgb, var(--fe-primary) 25%, transparent); }
+.fe-tl-pick b { grid-area: name; font-size: .85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fe-tl-pick small { grid-area: what; font-size: .75rem; opacity: .75; }
+.fe-tl-step { grid-area: step; padding: 2px 7px; border-radius: 999px; background: var(--fe-primary); color: #fff; font-size: .72rem; font-weight: 800; white-space: nowrap; }
+.fe-tl-track { grid-area: track; position: relative; display: block; height: 6px; border-radius: 999px; background: color-mix(in srgb, currentColor 10%, transparent); overflow: hidden; }
+.fe-tl-bar { position: absolute; top: 0; bottom: 0; border-radius: 999px; background: var(--fe-primary); }
