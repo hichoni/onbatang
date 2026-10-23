@@ -336,7 +336,8 @@ export async function createPptx({slides, aspect = 16 / 9, size, title = '온바
           const c=item.crop,explicit=c?`<a:srcRect l="${Math.round(c.x*100000)}" t="${Math.round(c.y*100000)}" r="${Math.round((1-c.x-c.w)*100000)}" b="${Math.round((1-c.y-c.h)*100000)}"/>`:null;
           await raster(loaded, item.id || `사진 ${id}`, item, box, explicit??(crop ? `<a:srcRect ${horizontal ? `l="${crop}" r="${crop}"` : `t="${crop}" b="${crop}"`}/>` : ''));
         } else {
-          itemWarn('ELEMENT_RASTERIZED', '이 요소는 모양을 보존한 그림으로 저장해요.', {type: item.t, ...(item.shape ? {shape: item.shape} : {})});
+          if (item.t === 'web') itemWarn('WEB_AS_PICTURE', `웹사이트 상자는 표지 그림으로 저장해요. 주소: ${item.url}`);
+          else itemWarn('ELEMENT_RASTERIZED', '이 요소는 모양을 보존한 그림으로 저장해요.', {type: item.t, ...(item.shape ? {shape: item.shape} : {})});
           const rendered = await cancellable(renderItem(design, itemIndex, options), signal);
           await raster(rendered, item.id || `그림 ${id}`, {}, rasterBox(rendered, slideSize));
         }

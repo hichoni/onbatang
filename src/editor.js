@@ -6,7 +6,7 @@ import { el, toast } from './dom.js';
 import { newId, cleanNotes, NOTES_LIMIT, cleanTopic } from './document.js';
 import {
   COLORS, SHAPES, SHAPE_GROUPS, MASKS, OPACITY, TEXT_PRESETS, settings, configure, reshapeItems, backgroundOf, fontList, fontFamilyOf, layoutList, textLimit, clip, DEFAULT_FONT,
-  cleanBg, cleanItems, cleanDesign, emptyDesign, cleanItem, cleanImg, moveLayer, newPresetText, newEmoji, newShape, newArt, newYouTube, newPhoto, moveItem, rotateItem,
+  cleanBg, cleanItems, cleanDesign, emptyDesign, cleanItem, cleanImg, moveLayer, newPresetText, newEmoji, newShape, newArt, newYouTube, newWebBox, newPhoto, moveItem, rotateItem,
   designMotion, reorder, duplicateItem, pasteItem, itemLabel, sizeOf, resizeTo, sizeRange, alignItem, coverItem, layoutItems, EDGE, canEdge, canRound, cornerOf, THICK, isLine, thickOf, thicken,
   designVideo, cleanVideo, trimVideo, videoSeconds, videoTime, VIDEO_FITS, MIN_VIDEO, rebaseItems, alignBoxes, distributeBoxes, clampShift, scaleItems, regroup, newGroupId,
   styleOf, applyStyle, LINE_SPACINGS, ALT_LIMIT,
@@ -36,7 +36,7 @@ const TABS = [
   ['layout', 'template', '틀', '만들어 둔 틀을 눌러 시작해요. 글을 눌러 내 글로 바꿔요.'],
   ['text', 'text', '글', '넣은 글은 두 번 눌러 고쳐요.'],
   ['element', 'shapes', '꾸미기', '도형과 그림 조각을 눌러 놓아요. 색과 크기는 위 도구에서 바꿔요.'],
-  ['upload', 'upload', '내 자료', '사진·영상을 넣어요.'],
+  ['upload', 'upload', '내 자료', '사진·영상·웹사이트를 넣어요.'],
   ['bg', 'palette', '바탕색', '이 장의 바탕색을 골라요.'],
   ['layer', 'layers', '겹 순서', '앞에 보이는 조각부터 차례로 나와요.'],
 ];
@@ -185,7 +185,7 @@ export function createEditor({
   let lastSelId = '';         // 마지막으로 onSelect 에 알린 이름표
   const limits = { ...VIDEO_LIMITS, ...(videoLimits && typeof videoLimits === 'object' ? videoLimits : {}) };
   const hasDocumentImport = typeof documentImport?.open === 'function' && typeof documentImport.label === 'string' && !!documentImport.label.trim();
-  const tabsHere = () => tabList().map(row => row[0] === 'upload' ? [...row.slice(0, 3), hasDocumentImport ? '사진·PPT·영상을 넣어요.' : '사진·영상을 넣어요.'] : row);
+  const tabsHere = () => tabList().map(row => row[0] === 'upload' ? [...row.slice(0, 3), hasDocumentImport ? '사진·PPT·영상·웹사이트를 넣어요.' : '사진·영상·웹사이트를 넣어요.'] : row);
   // 영상 칸(내 자료 → 영상)을 보고 있는지. 바탕 영상의 상태가 바뀌면 칸을 다시 그린다.
   const videoOpen = () => tab === 'upload' && uploadTab === 'video';
 
@@ -1411,7 +1411,7 @@ export function createEditor({
           row('toBack', '맨 뒤로', '', () => order('bottom', { keepOpen: false }), { disabled: sel === 0 }),
         ],
         // 글상자는 뒤집지 않는다(도구 막대와 같은 기준)
-        it.t === 'text' || it.t === 'yt' ? [] : [
+        it.t === 'text' || it.t === 'yt' || it.t === 'web' ? [] : [
           row('flipH', '좌우 뒤집기', '', () => change({ fx: !cur().fx }, { keepPop: false })),
           row('flipV', '상하 뒤집기', '', () => change({ fy: !cur().fy }, { keepPop: false })),
         ],
@@ -2726,6 +2726,11 @@ export function createEditor({
         pick('thick', '굵기', 'lthick', { title: '선의 굵기' }),
         pick('right', '화살표', 'arrow', { title: '선 꾸미기: 모양 모음 · 화살표 머리 · 점선 · 곧게/둥글게/꺾어서 · 붙는 곳' }),
         pick('text', '선 위 글', 'llabel', { title: '선 위에 짧은 글 붙이기 (예: 예 · 아니오 · 다음). 선을 두 번 눌러도 돼요' }));
+    } else if (it.t === 'web') {
+      // 웹사이트 상자: 발표할 때 그 자리에서 사이트가 열린다. 주소를 바꾸고, 새 창에서 미리 본다.
+      own.push(
+        pick('link', webHost(it.url), 'webaddr', { title: '웹사이트 주소 바꾸기' }),
+        tb(lab('screen', '새 창으로 보기'), () => window.open(it.url, '_blank', 'noopener'), { title: '새 탭에서 이 사이트를 열어요', name: '새 창으로 보기', cls: 'web-open' }));
     } else if (it.t === 'yt') {
       // 유튜브 영상: 발표할 때 누르면 그 자리에서 틀어진다. 시작 시각을 정하고, 유튜브에서 미리 볼 수 있다.
       own.push(
@@ -2748,7 +2753,7 @@ export function createEditor({
       el('span', { class: 'fe-sep' }),
       group('배치',
         it.t === 'text' || it.t === 'link' ? null : pick('resize', '크기', 'size', { title: '조각의 크기 (가로세로 비율은 그대로)' }),      // 텍스트는 − 숫자 + 로 바꾼다
-        it.t === 'text' || it.t === 'yt' || it.t === 'link' ? null : pick('flipH', '뒤집기', 'flip', { title: '좌우·상하 뒤집기, 바로 세우기' }),
+        it.t === 'text' || it.t === 'yt' || it.t === 'web' || it.t === 'link' ? null : pick('flipH', '뒤집기', 'flip', { title: '좌우·상하 뒤집기, 바로 세우기' }),
         pick('layers', '위치', 'pos', { title: '겹치는 순서와 페이지 정렬' })),
       el('span', { class: 'fe-sep' }),
       group('작업',
@@ -2790,7 +2795,7 @@ export function createEditor({
     if (pop === 'color' && canEdge(it)) {
       body = [el('div', { class: 'fe-poshead', text: '채우기 색' }),
         swatches(it.hollow ? '' : it.color, fillWith, { none: true, noneName: '채우기 없음 (테두리만)', label: '채우기 색' })];
-    } else if (pop === 'color' && it.t !== 'image' && it.t !== 'emoji' && it.t !== 'yt' && (it.t !== 'art' || it.color)) {
+    } else if (pop === 'color' && it.t !== 'image' && it.t !== 'emoji' && it.t !== 'yt' && it.t !== 'web' && (it.t !== 'art' || it.color)) {
       const label = it.t === 'text' ? '글자 색' : it.t === 'art' ? '그림 색' : it.t === 'link' ? '선 색' : '도형 색';
       body = [el('div', { class: 'fe-poshead', text: label }), swatches(it.color, (hex) => change({ color: hex }), { label })];
     } else if (pop === 'edge' && canEdge(it)) {
@@ -2902,9 +2907,15 @@ export function createEditor({
     } else if (pop === 'op') {
       body = [slider('투명도', it.op, { ...OPACITY, step: 5 }, (c, v) => ({ ...c, op: v }), '%'),
         el('p', { class: 'fe-note', text: '100% 는 또렷하고, 낮출수록 뒤가 비쳐 보여요.' })];
+    } else if (pop === 'webaddr' && it.t === 'web') {
+      const input = el('input', { class: 'fe-search fe-web-input', type: 'url', inputmode: 'url', value: it.url, 'aria-label': '웹사이트 주소', autocomplete: 'off', spellcheck: 'false' });
+      const apply = () => { const url = embedOf(input.value); if (!url || isYouTubePage(url)) { notify('https:// 로 시작하는 웹사이트 주소를 넣어 주세요.', 4000); return; } change({ url }); const b = blockedSite(url); if (b) notify(`${b}은(는) 다른 화면 안에 넣는 것을 막아 두어서 발표에서는 "새 창"으로 열어요.`, 5000); };
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); apply(); } });
+      body = [el('div', { class: 'fe-poshead', text: '웹사이트 주소' }), el('div', { class: 'fe-row' }, input, pbtn('바꾸기', apply)),
+        el('p', { class: 'fe-note', text: '발표할 때 이 상자 안에서 사이트를 바로 누르고 써요. 상자 밖을 누르거나 → 를 치면 다음 장으로 가요.' })];
     } else if (pop === 'ytstart' && it.t === 'yt') {
       body = ytStartBody(it);
-    } else if (pop === 'flip' && it.t !== 'text' && it.t !== 'yt') {
+    } else if (pop === 'flip' && it.t !== 'text' && it.t !== 'yt' && it.t !== 'web') {
       body = [
         el('div', { class: 'fe-poshead', text: '뒤집기' }),
         el('div', { class: 'fe-grid two' },
@@ -3812,7 +3823,9 @@ export function createEditor({
     return [
       el('div', { class: 'fe-head', text: '이 장을 웹사이트로' }),
       el('p', { class: 'fe-note', text: '주소를 넣으면 발표할 때 이 장에 그 사이트가 그대로 열려요. 발표 중에 직접 누르고 써 볼 수 있어요. 이 장의 글 · 그림은 발표에서는 사이트에 가려져요(내려받은 그림 · PDF 에는 보여요).' }),
-      el('div', { class: 'fe-row fe-web-row' }, input, el('button', { class: 'fe-btn', type: 'button', dataset: { webSet: '' }, onClick: () => setWebsite(input.value) }, icon(card.web ? 'swap' : 'plus'), card.web ? '바꾸기' : '넣기')),
+      el('div', { class: 'fe-row fe-web-row' }, input, el('button', { class: 'fe-btn', type: 'button', dataset: { webSet: '' }, title: '이 장 전체를 그 사이트로', onClick: () => setWebsite(input.value) }, icon(card.web ? 'swap' : 'plus'), card.web ? '바꾸기' : '장 전체로')),
+      el('button', { class: 'fe-btn fe-web-box-add', type: 'button', dataset: { webBox: '' }, onClick: () => addWebBox(input.value) }, icon('plus'), '장 안에 상자로 넣기'),
+      el('p', { class: 'fe-note', text: '"장 전체로"는 장 하나를 사이트로 채우고, "상자로 넣기"는 장 안의 한 자리에 사이트를 넣어요(옆에 글 · 그림을 함께 둘 수 있어요). 상자는 끌어서 옮기고 크기를 바꿔요.' }),
       ...(card.web ? [
         el('div', { class: 'fe-web-now', dataset: { webNow: '' } },
           el('b', { text: webHost(card.web.url) }),
@@ -3823,7 +3836,7 @@ export function createEditor({
             el('button', { class: 'fe-btn danger', type: 'button', dataset: { webRemove: '' }, onClick: removeWebsite }, icon('trash'), '웹사이트 빼기'))),
       ] : []),
       uploadHelp('web', '웹사이트 장 안내',
-        el('p', { class: 'fe-note', text: '발표할 때: 처음에는 보기만 돼요(누르거나 → 를 치면 다음 장). "사이트 조작하기"를 누르면 사이트를 직접 써요. 그동안에도 위의 ◀ ▶ 단추와 휴대폰 리모컨으로 넘길 수 있고, 마우스를 사이트 밖으로 내면 → · 프레젠터가 다시 들어요.' }),
+        el('p', { class: 'fe-note', text: '발표할 때: 처음에는 보기만 돼요(누르거나 → 를 치면 다음 장). 위의 "사이트 둘러보기"를 누르면 사이트를 직접 써요. 다 보면 "둘러보기 끝내기"를 누르고 평소처럼 넘겨요. 둘러보는 중에도 위의 ◀ ▶ 와 휴대폰 리모컨으로 넘길 수 있어요.' }),
         el('p', { class: 'fe-note', text: '잘 되는 곳: 패들렛 · 캔바 공유 · 구글 프레젠테이션 · 문서 · 설문 · GeoGebra · PhET · 스크래치 · 워드월 같은 "퍼가기(임베드)" 주소. 구글 · 캔바 주소는 알아서 퍼가기 주소로 바꿔요.' }),
         el('p', { class: 'fe-note', text: '안 되는 곳: 네이버 · 구글 검색 · 인스타그램처럼 다른 화면 안에 넣는 것을 막아 둔 사이트, 로그인해야 보이는 화면. 그런 곳은 발표에서 "새 창으로 열기"로 열어요. 유튜브는 "영상" 칸에서 넣어요.' })),
     ];
@@ -3844,6 +3857,18 @@ export function createEditor({
     onChange();
     const blocked = blockedSite(url);
     notify(blocked ? `${blocked}은(는) 다른 화면 안에 넣는 것을 막아 두었어요. 발표할 때는 "새 창으로 열기"로 열려요.` : '이 장을 웹사이트로 만들었어요. 발표할 때 실제 사이트가 열려요.', 5000);
+  }
+  // 장 안에 웹사이트 상자를 놓는다(발표할 때 그 자리에 실제 사이트가 열리고, 바로 누르고 쓸 수 있다).
+  function addWebBox(raw) {
+    if (!card) return;
+    if (isYouTubePage(embedOf(raw) || raw)) { if (addYouTube(raw)) notify('유튜브는 영상으로 넣었어요. 발표할 때 스페이스 바로 틀어요.', 4500); return; }
+    const url = embedOf(raw);
+    if (!url) { notify('https:// 로 시작하는 웹사이트 주소를 넣어 주세요.', 4000); return; }
+    const box = newWebBox(url);
+    if (!box) return;
+    add(box);
+    const blocked = blockedSite(url);
+    notify(blocked ? `${blocked}은(는) 다른 화면 안에 넣는 것을 막아 두어서 발표에서는 "새 창"으로 열어요.` : '웹사이트 상자를 넣었어요. 발표할 때 그 자리에서 사이트를 바로 쓸 수 있어요.', 5000);
   }
   function removeWebsite() {
     if (!card?.web) return;

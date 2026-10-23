@@ -19,7 +19,7 @@ import {cleanGaiActivity,gaiAppCover,gaiAppResult} from '../src/gai-app.js';
 import {mountGaiApp} from './gai-app.js';
 import {createShowTools} from './show-tools.js';
 import {spokenNotes} from './show-keys.js';
-import {webFrame} from '../src/render.js';
+import {webFrame, liveWebBoxes} from '../src/render.js';
 import {blockedSite, webHost} from '../src/web.js';
 import {PRINT_LAYOUTS,printHtml} from './print.js';
 import {encodeGif,GIF_LIMITS} from './gif.js';
@@ -1800,8 +1800,8 @@ async function present(O) {
     leaving = null;
   };
   // ---------- 웹사이트 장: 장 위에 실제 사이트를 연다 ----------
-  // 보기(view): 사이트가 보이기만 하고 누르거나 → 를 치면 다음 장. 조작(use): 사이트를 직접 누르고 쓴다(파란 테두리).
-  // 조작 중에도 위의 ◀ ▶ 와 휴대폰 리모컨으로 넘긴다. 마우스가 사이트 밖으로 나오면 글쇠를 발표로 돌려받아 → · 프레젠터가 다시 듣는다.
+  // 보기(view): 사이트가 보이기만 하고 누르거나 → 를 치면 다음 장. 둘러보기(use): 사이트를 직접 누르고 쓴다(파란 테두리).
+  // 둘러보기 중에도 위의 ◀ ▶ 와 휴대폰 리모컨으로 넘긴다. 마우스가 사이트 밖으로 나오면 글쇠를 발표로 돌려받아 → · 프레젠터가 다시 듣는다.
   // 사이트가 다른 화면 안에 넣는 것을 막아 두었으면(잘 알려진 곳) 사이트 대신 "새 창으로 열기"를 크게 보인다.
   let web = null;
   const dropWeb = () => { clearTimeout(web?.slow); web?.host.remove(); web = null; };
@@ -1810,7 +1810,8 @@ async function present(O) {
     web.mode = mode;
     web.host.dataset.mode = mode;
     paintWebPill();
-    if (mode === 'view' && document.activeElement === web.frame) overlay.focus({ preventScroll: true });
+    // 둘러보기를 끝내면 글쇠를 발표로 돌려받는다(눌렀던 단추는 다시 그리며 사라지므로 늘 발표에 초점을 둔다).
+    if (mode === 'view') overlay.focus({ preventScroll: true });
   };
   const webKey = (label, title, onClick, data) => el('button', { class: 'cv-show-key', type: 'button', title, 'aria-label': title, dataset: data, onClick: (e) => { e.stopPropagation(); onClick(); } }, label);
   const openSite = (url) => { try { window.open(url, '_blank', 'noopener'); } catch (error) { console.warn(error); } };
@@ -1818,11 +1819,12 @@ async function present(O) {
     if (!web) return;
     const open = webKey([ic('screen'), el('span', { class: 'cv-show-word', text: '새 창' })], '이 사이트를 새 창으로 열기', () => openSite(web.url), { webOpen: '' });
     web.pill.replaceChildren(...(web.mode === 'use'
-      ? [webKey(ic('left'), '앞 장', () => go(-1), { webPrev: '' }), webKey('발표로 돌아가기', '사이트 조작을 마치고 발표로 돌아가기 (Esc)', () => webMode('view'), { webView: '' }), webKey(ic('right'), '다음 장', () => go(1), { webNext: '' }), open]
-      : [webKey([ic('move'), el('span', { text: '사이트 조작하기' })], '이 사이트를 직접 누르고 써요', () => webMode('use'), { webUse: '' }), open]));
+      ? [webKey(ic('left'), '앞 장', () => go(-1), { webPrev: '' }), webKey('둘러보기 끝내기', '사이트 둘러보기를 끝내고 발표로 돌아가기 (Esc)', () => webMode('view'), { webView: '' }), webKey(ic('right'), '다음 장', () => go(1), { webNext: '' }), open]
+      : [webKey([ic('move'), el('span', { text: '사이트 둘러보기' })], '이 사이트를 직접 누르고 써요 (끝내면 다시 넘길 수 있어요)', () => webMode('use'), { webUse: '' }), open]));
   };
   // 사이트 위에 마우스가 있는 동안에는 이 화면(발표)에 마우스 알림이 오지 않는다: 알림이 오면 마우스가 사이트 밖(위 · 아래 막대 등)에 있는 것이다.
-  const takeKeys = () => { if (web?.frame && document.activeElement === web.frame) overlay.focus({ preventScroll: true }); };
+  // 장 전체 사이트 · 웹사이트 상자 · 유튜브 모두: 글쇠를 가져간 사이트 밖으로 마우스가 나오면 발표가 돌려받는다.
+  const takeKeys = () => { const at = document.activeElement; if (at?.tagName === 'IFRAME' && overlay.contains(at)) overlay.focus({ preventScroll: true }); };
   const mountWeb = (site) => {
     const url = site.url, blocked = blockedSite(url);
     const pill = el('div', { class: 'cv-web-pill', role: 'group', 'aria-label': '웹사이트' });
@@ -1887,6 +1889,7 @@ async function present(O) {
       ease(host,[{opacity:0,transform:'scale(.965)'},{opacity:1,transform:'scale(1)'}],260);return;
     }
     if (design.web) mountWeb(design.web);
+    liveWebBoxes(view);                       // 장 안의 웹사이트 상자: 그 자리에 실제 사이트(바로 누르고 쓴다. 상자 밖을 누르면 다음 장)
     if (!dir || !old) {
       for (const n of [...stage.children]) drop(n);
       stage.append(view);
@@ -1946,7 +1949,7 @@ async function present(O) {
     if (!['Escape', 'PageDown', 'PageUp'].includes(e.key) && e.target?.closest?.('input, textarea, select, [contenteditable=""], [contenteditable="true"]')) return;
     // 아래 막대의 단추에 초점이 있을 때 스페이스 · 엔터는 그 단추를 누르는 글쇠다(다음 장으로 넘기지 않는다).
     if ((e.key === ' ' || e.key === 'Enter') && e.target?.closest?.('.cv-show-key')) { e.stopPropagation(); return; }
-    // 웹사이트를 조작하는 중의 Esc 는 발표를 끝내지 않고 보기로 돌아간다.
+    // 웹사이트를 둘러보는 중의 Esc 는 발표를 끝내지 않고 보기로 돌아간다.
     if (e.key === 'Escape' && web?.mode === 'use') { e.preventDefault(); e.stopPropagation(); webMode('view'); return; }
     // 유튜브를 틀었으면 스페이스 바는 멈추기 · 다시 틀기다(다음 장은 → · PageDown · 누르기).
     if (e.key === ' ' && tubeNow()) { e.preventDefault(); e.stopPropagation(); tubeNow().toggle(); return; }

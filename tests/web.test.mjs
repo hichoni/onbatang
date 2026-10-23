@@ -41,3 +41,17 @@ test('a web slide survives cleaning, saving and reopening; a bad address is drop
   assert.deepEqual(again.slides[0].web, { url: 'https://phet.colorado.edu/ko/' });
   assert.equal(again.slides[1].web, undefined);
 });
+
+test('a website box is a piece with a place and size; https only; it survives saving', async () => {
+  const { newWebBox, cleanItem, itemLabel } = await import('../src/model.js');
+  const box = newWebBox('https://padlet.com/a/b');
+  assert.equal(box.t, 'web'); assert.equal(box.url, 'https://padlet.com/a/b'); assert.ok(box.w > 0 && box.h > 0);
+  assert.equal(newWebBox('http://padlet.com'), null);
+  assert.equal(cleanItem({ t: 'web', x: 50, y: 50, url: 'javascript:alert(1)' }), null);
+  assert.equal(itemLabel(box), '웹사이트: padlet.com');
+  const record = newRecord('16:9');
+  record.slides = [{ items: [{ ...box, id: 'eweb0000001' }] }];
+  const again = migrateRecord(JSON.parse(JSON.stringify(migrateRecord(record))));
+  assert.equal(again.slides[0].items[0].t, 'web');
+  assert.equal(again.slides[0].items[0].url, 'https://padlet.com/a/b');
+});

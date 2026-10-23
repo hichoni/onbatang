@@ -53,7 +53,7 @@ test('new blank editor is durably saved before import, restores upload on reject
  await page.locator('.cv-hero .cv-new-btn').click();await stopTour(page);
  assert.equal(await page.locator('.fe-quick').filter({hasText:'내 자료'}).count(),1);
  await page.locator('.fe-tab[data-tab="upload"]').click();
- assert.match(await page.locator('.fe-panel').textContent(),/사진·PPT·영상을 넣어요/);
+ assert.match(await page.locator('.fe-panel').textContent(),/사진·PPT·영상·웹사이트를 넣어요/);
  await choosePpt(page);
  assert.equal(await importButton(page).textContent(),'내 PPT 올리기');
  await importButton(page).click();

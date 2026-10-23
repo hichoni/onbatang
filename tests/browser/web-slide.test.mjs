@@ -16,7 +16,7 @@ import {startMinican} from '/app/app.js';import {newRecord} from '/app/designs.j
 setStorageName('v75-web');try{localStorage.setItem('onbatang-tour-seen-v1:editor','1');localStorage.setItem('onbatang-tour-seen-v1:news-0.45','1');}catch{}
 const r=newRecord('16:9');r.name='웹사이트 장';r.slides=[{items:[{id:'etitle00001',t:'text',text:'첫 장',x:50,y:50,w:60,size:6}]},{items:[{id:'etitle00002',t:'text',text:'둘째 장',x:50,y:50,w:60,size:6}]},{items:[],web:{url:'https://m.naver.com/'}}];
 await putDesign(r);window.readSaved=()=>getDesign(r.id);
-await startMinican({storage:'v75-web'});window.ready=true;
+window.remoteCalls=0;await startMinican({storage:'v75-web',showRemote:{open:async({command})=>{window.remoteCommand=command;window.remoteCalls++;return {update(){},close(){}};}}});window.ready=true;
 </script>`;
 
 async function setup(t, html = fixture) {
@@ -56,6 +56,15 @@ async function until(page, check, ms = 8000) {
   for (;;) { const v = await saved(page); if (check(v)) return v; if (Date.now() > end) throw Error('not saved: ' + JSON.stringify(v)); await page.waitForTimeout(150); }
 }
 const count = (page) => page.locator('.cv-show-count').textContent();
+// 웹사이트 상자가 다 나타난 뒤에 만진다(나타나는 동안에는 숨겨져 있어 누른 것이 발표로 간다).
+async function boxReady(page) {
+  await page.waitForFunction(() => { const box = document.querySelector('.cv-show-stage .fi-web.live'); if (!box) return false; const style = getComputedStyle(box); return style.visibility === 'visible' && Number(style.opacity) === 1 && !box.getAnimations().length; });
+}
+// "사이트 둘러보기"를 누르고, 정말 둘러보기가 된 뒤에 사이트를 만진다(보기에서 사이트를 누르면 다음 장으로 넘어가므로).
+async function useSite(page) {
+  await page.locator('[data-web-use]').click();
+  await page.waitForFunction(() => document.querySelector('[data-show-web]')?.dataset.mode === 'use' && getComputedStyle(document.querySelector('[data-show-web] iframe')).pointerEvents === 'auto');
+}
 
 test('a website slide: cover in the editor, the live site in the show, view/use modes and the keyboard handed back', options, async t => {
   const {page, errors} = await setup(t);
@@ -86,7 +95,7 @@ test('a website slide: cover in the editor, the live site in the show, view/use 
   await page.keyboard.press('ArrowLeft');
   await web.waitFor();
   // 조작: 사이트를 직접 누르고, 글쇠도 사이트로 간다(발표는 넘어가지 않는다)
-  await page.locator('[data-web-use]').click();
+  await useSite(page);
   assert.equal(await web.getAttribute('data-mode'), 'use');
   await site.locator('#b').click();
   assert.equal(await site.locator('#out').textContent(), '눌렀어요');
@@ -103,11 +112,11 @@ test('a website slide: cover in the editor, the live site in the show, view/use 
   // 위의 ◀ 단추로 돌아오고, 조작 중 Esc 는 발표를 끝내지 않고 보기로
   await page.keyboard.press('ArrowLeft');
   await web.waitFor();
-  await page.locator('[data-web-use]').click();
+  await useSite(page);
   await page.keyboard.press('Escape');
   assert.equal(await web.getAttribute('data-mode'), 'view');
   assert.equal(await page.locator('.cv-show').count(), 1);
-  await page.locator('[data-web-use]').click();
+  await useSite(page);
   await page.locator('[data-web-next]').click();
   await page.waitForFunction(() => document.querySelector('.cv-show-count')?.textContent.startsWith('2 /'));
   // 막아 둔 잘 알려진 사이트: 사이트 대신 "새 창으로 열기"
@@ -124,5 +133,102 @@ test('a website slide: cover in the editor, the live site in the show, view/use 
   await page.locator('[data-web-remove]').click();
   await until(page, (s) => !s[0].web);
   assert.equal(await page.locator('.cv-canvas .fe-web').count(), 0);
+  assert.deepEqual(errors, []);
+});
+
+test('browse the site, finish browsing, then the slide moves on as usual; the phone remote moves on even while browsing', options, async t => {
+  const {page, errors} = await setup(t);
+  await page.locator('.cv-item .cv-thumb').first().click();
+  await page.locator('.cv-canvas .fe-stage').waitFor();
+  await page.locator('.fe-tab[data-tab="upload"]').click();
+  await page.locator('[data-upload-tab="web"]').click();
+  await page.locator('.fe-web-input').fill('https://site.test/app');
+  await page.locator('[data-web-set]').click();
+  await until(page, (s) => s[0].web?.url === 'https://site.test/app');
+  await page.locator('.cv-show-btn').click();
+  const web = page.locator('[data-show-web]'), site = page.frameLocator('[data-show-web] iframe');
+  await site.locator('#b').waitFor();
+  assert.equal(await page.locator('[data-web-use]').innerText(), '사이트 둘러보기');
+  // 1) 둘러보기 → 사이트를 누르고 글을 친다(글쇠는 사이트로) → 둘러보기 끝내기 → → 로 다음 장
+  await useSite(page);
+  await site.locator('#b').click();
+  await site.locator('#t').fill('안녕');
+  await page.keyboard.press('ArrowRight');
+  assert.match(await count(page), /^1 \//, 'while browsing, keys belong to the site');
+  await page.locator('[data-web-view]').click();
+  assert.equal(await web.getAttribute('data-mode'), 'view');
+  assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('cv-show')), true, 'the show has the keyboard again');
+  await page.keyboard.press('ArrowRight');
+  await page.waitForFunction(() => document.querySelector('.cv-show-count')?.textContent.startsWith('2 /'));
+  // 2) 돌아와서 둘러보기를 끝낸 뒤 화면을 한 번 누르면 다음 장 · 프레젠터의 PageDown 도
+  await page.keyboard.press('ArrowLeft');
+  await web.waitFor();
+  await useSite(page);
+  await site.locator('#b').click();
+  await page.locator('[data-web-view]').click();
+  await page.mouse.click(640, 500);
+  await page.waitForFunction(() => document.querySelector('.cv-show-count')?.textContent.startsWith('2 /'));
+  await page.keyboard.press('PageUp');
+  await web.waitFor();
+  await page.keyboard.press('PageDown');
+  await page.waitForFunction(() => document.querySelector('.cv-show-count')?.textContent.startsWith('2 /'));
+  // 3) 휴대폰 리모컨: 둘러보는 중(사이트에 글쇠가 가 있어도) "다음"을 누르면 그냥 넘어가고, "앞"으로 돌아오면 다시 보기로 열린다
+  await page.locator('[data-show-remote]').click();
+  await page.waitForFunction(() => typeof window.remoteCommand === 'function');
+  await page.evaluate(() => window.remoteCommand({action: 'prev'}));
+  await web.waitFor();
+  await useSite(page);
+  await site.locator('#t').click();
+  await site.locator('#t').type('abc');
+  assert.equal(await page.evaluate(() => document.activeElement?.tagName), 'IFRAME');
+  await page.evaluate(() => window.remoteCommand({action: 'next'}));
+  await page.waitForFunction(() => document.querySelector('.cv-show-count')?.textContent.startsWith('2 /'));
+  assert.equal(await page.locator('[data-show-web]').count(), 0);
+  await page.keyboard.press('ArrowRight');
+  await page.waitForFunction(() => document.querySelector('.cv-show-count')?.textContent.startsWith('3 /'), null, {timeout: 5000});
+  await page.evaluate(() => window.remoteCommand({action: 'prev'}));
+  await page.evaluate(() => window.remoteCommand({action: 'prev'}));
+  await web.waitFor();
+  assert.equal(await web.getAttribute('data-mode'), 'view', 'coming back opens in view mode');
+  assert.deepEqual(errors, []);
+});
+
+test('a website box inside a slide: placed in the editor, used right away in the show; outside the box the slide moves on', options, async t => {
+  const {page, errors} = await setup(t);
+  await page.locator('.cv-item .cv-thumb').first().click();
+  await page.locator('.cv-canvas .fe-stage').waitFor();
+  await page.locator('.fe-tab[data-tab="upload"]').click();
+  await page.locator('[data-upload-tab="web"]').click();
+  await page.locator('.fe-web-input').fill('site.test/box');
+  await page.locator('[data-web-box]').click();
+  await page.locator('.fe-stage .fi-web').waitFor();
+  const items = await until(page, (s) => s[0].items.some((it) => it.t === 'web'));
+  const box = items[0].items.find((it) => it.t === 'web');
+  assert.equal(box.url, 'https://site.test/box');
+  assert.equal(items[0].web, undefined, 'a box does not turn the whole slide into the site');
+  // 상자를 옆으로 옮기고 작게: 발표에서 상자 밖을 누를 자리가 생긴다
+  if (process.env.WEB_SHOT) await page.screenshot({path: process.env.WEB_SHOT + '-box-editor.png'});
+  await page.locator('.cv-show-btn').click();
+  const site = page.frameLocator('.cv-show-stage .fi-web.live iframe');
+  await site.locator('#b').waitFor();
+  await boxReady(page);
+  // 상자 안: 모드 없이 바로 누르고 친다(글쇠는 사이트로)
+  await site.locator('#b').click();
+  assert.equal(await site.locator('#out').textContent(), '눌렀어요');
+  await site.locator('#t').click();
+  await page.keyboard.press('ArrowRight');
+  assert.match(await count(page), /^1 \//);
+  if (process.env.WEB_SHOT) await page.screenshot({path: process.env.WEB_SHOT + '-box-show.png'});
+  // 상자 밖으로 마우스를 옮기면 글쇠를 돌려받는다 → 다음 장
+  await page.mouse.move(8, 400);
+  await page.waitForFunction(() => document.activeElement?.tagName !== 'IFRAME');
+  await page.keyboard.press('ArrowRight');
+  await page.waitForFunction(() => document.querySelector('.cv-show-count')?.textContent.startsWith('2 /'));
+  // 돌아와서 상자 밖을 누르면 다음 장
+  await page.keyboard.press('ArrowLeft');
+  await site.locator('#b').waitFor();
+  await boxReady(page);
+  await page.mouse.click(8, 400);
+  await page.waitForFunction(() => document.querySelector('.cv-show-count')?.textContent.startsWith('2 /'));
   assert.deepEqual(errors, []);
 });

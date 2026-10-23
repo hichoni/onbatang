@@ -20,7 +20,7 @@ export { cleanAlt, ALT_LIMIT };
 import { cleanActivity } from './activity.js';
 import { cleanCrop } from './crop.js';
 import { cleanRuns } from './runs.js';
-import { designWeb } from './web.js';
+import { designWeb, cleanWebUrl, webHost } from './web.js';
 import { LINK_HEADS, LINK_LINE, LINK_SIDES, LINK_BEND, LINK_SHAPES, LINK_LABEL_MAX, LINK_LABEL_AT, LINK_LABEL_SIZES, LINK_LABEL_STYLES, LINK_POS, CURVE_BEND, layoutLinks } from './links.js';
 
 export { SHAPE_GROUPS };
@@ -337,6 +337,12 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
     if (it.auto === true) out.auto = true;          // 발표할 때 장이 열리면 바로 튼다(아니면 스페이스 바를 누를 때)
     return out;
   }
+  if (it.t === 'web') {
+    // 웹사이트 상자(web.js): 장 안의 한 자리에 다른 사이트를 연다. 주소만 저장한다(https). 뒤집지 않는다.
+    const url = cleanWebUrl(it.url);
+    if (!url) return null;
+    return { t: 'web', ...base, w: num(it.w, SIZE.min, SIZE.max, 56), h: num(it.h, 0.6, SIZE.max, 56), url };
+  }
   if (it.t === 'link') {
     // 연결선(links.js): 잇는 두 조각의 이름표와 꾸밈만 저장한다. 자리(x·y·w·h·pts·vh)는 cleanItems 가 두 조각에서 다시 계산한다.
     const isRef = (v) => typeof v === 'string' && /^[a-z][a-z0-9]{5,31}$/.test(v);
@@ -544,6 +550,10 @@ export function newYouTube(id, { start = 0, ...extra } = {}) {
   if (!isYouTubeId(id)) return null;
   return cleanItem({ t: 'yt', x: 50, y: 50, yt: id, start, w: 60, h: tall(60 * 9 / 16), ...extra });
 }
+/** 웹사이트 상자: 카드 너비의 56% 로, 16:10 쯤의 비율로 가운데에 놓는다. 주소가 https 가 아니면 null. */
+export function newWebBox(url, extra = {}) {
+  return cleanItem({ t: 'web', x: 50, y: 50, url, w: 56, h: tall(56 * 10 / 16), ...extra });
+}
 /** 선의 굵기(카드 너비를 100 으로 본 값). 막대는 1~15 단계이고 한 단계가 step 이다. */
 export const THICK = { min: 0.8, max: 6.4, step: 0.4 };
 /** 선인가(선·점선): 높이가 곧 굵기라서, 도구 막대에 "굵기"가 나온다. */
@@ -716,6 +726,7 @@ export function itemLabel(it) {
   if (it.t === 'shape') return `도형: ${SHAPES.find((s) => s.id === it.shape)?.name || '네모'}`;
   if (it.t === 'art') return `그림: ${artName(it.art) || it.art.slice(3)}`;
   if (it.t === 'yt') return `유튜브 영상${it.start ? ` (${ytTime(it.start)}부터)` : ''}`;
+  if (it.t === 'web') return `웹사이트: ${webHost(it.url)}`;
   if (it.t === 'link') return `연결선${it.head === 'none' ? '' : ' (화살표)'}${it.label ? ` "${it.label}"` : ''}`;
   return '사진';
 }
@@ -907,9 +918,9 @@ export function reshapeItems(items, from, to, { fit = false } = {}) {
     if (fit) {
       next = { ...it, x: (left + s * (it.x / 100)) * 100, y: (top + s * (it.y / 100) / a) * b * 100, w: it.w * s };
       if (it.t === 'text') next.size = it.size * s;
-      if (it.t === 'shape' || it.t === 'image' || it.t === 'art' || it.t === 'yt' || it.t==='text'&&given(it.h)) next.h = it.h * k * s;
+      if (it.t === 'shape' || it.t === 'image' || it.t === 'art' || it.t === 'yt' || it.t === 'web' || it.t==='text'&&given(it.h)) next.h = it.h * k * s;
       if (it.line) next.line = it.line * s;      // 테두리도 같은 비율로 가늘어진다(둥글기는 % 라 그대로)
-    } else if (it.t === 'shape' || it.t === 'image' || it.t === 'art' || it.t === 'yt' || it.t==='text'&&given(it.h)) {
+    } else if (it.t === 'shape' || it.t === 'image' || it.t === 'art' || it.t === 'yt' || it.t === 'web' || it.t==='text'&&given(it.h)) {
       next = { ...it, h: it.h * k };
     }
     if (next === it) return it;

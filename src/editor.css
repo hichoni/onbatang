@@ -863,3 +863,13 @@
 .fe-web-now > .fe-note { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fe-web-now .fe-row { flex-wrap: wrap; margin-top: 4px; }
 .fe-web-now a.fe-btn { text-decoration: none; }
+/* 웹사이트 상자(render.js 의 itemView 'web'): 꾸미기 판에는 표지, 발표에는 그 안에 실제 사이트(.live) */
+.fi-web { overflow: hidden; border-radius: .8cqw; background: linear-gradient(160deg, #eef3ff, #f7f9ff 60%, #eaf6f1); box-shadow: inset 0 0 0 .18cqw #c9d4f5; color: #24325a; }
+.fi-web-cover { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: .5cqw; padding: 4%; text-align: center; font-size: 1.6cqw; line-height: 1.25; }
+.fi-web-cover b { font-size: 2.4cqw; overflow-wrap: anywhere; }
+.fi-web-cover > span:last-child { color: #3f5bd8; font-weight: 700; }
+.fi-web-globe { width: 4.5cqw; height: 4.5cqw; color: #3f5bd8; }
+.fi-web-globe svg { width: 100%; height: 100%; display: block; }
+.fi-web.live { pointer-events: auto; }
+.fi-web.live .fe-web-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #fff; }
+.fi-web.live.blocked .fi-web-open { position: absolute; left: 50%; bottom: 8%; transform: translateX(-50%); padding: .6cqw 1.4cqw; border: 0; border-radius: 999px; background: #3f5bd8; color: #fff; font: inherit; font-size: 1.5cqw; font-weight: 800; cursor: pointer; white-space: nowrap; }
