@@ -2,7 +2,7 @@
 // 온바탕 안의 발표와 내려받은 HTML 수업이 같은 도구를 쓴다. 쪽을 그리고 넘기는 일은 쓰는 쪽이 하고, 이 모듈은 그 위에 얹힌다.
 // 모양(CSS)은 이 모듈이 들고 다닌다: 내려받은 HTML 과 발표자 화면 창에도 같은 모양이 따라가게(바깥 파일을 부르지 않는다).
 import { el } from '../src/dom.js';
-import { showAction, pageIndex, swipeStep, showClock, autoDelay, SHOW_KEYS } from './show-keys.js';
+import { showAction, pageIndex, swipeStep, showClock, autoDelay, spokenNotes, SHOW_KEYS } from './show-keys.js';
 import { topicGroups } from '../src/document.js';
 
 const STYLE_ID = 'onbatang-show-tools-style';
@@ -398,6 +398,22 @@ export function createShowTools(root, opts) {
     if (value) digitTimer = setTimeout(() => { state.digits = ''; digits.style.display = 'none'; }, 2500);
   }
 
+  // ---------- 발표 막대 숨기기 ----------
+  // 파워포인트 · 구글 슬라이드처럼: 아래 막대와 마우스 화살표는 마우스를 움직일 때만 나타나고, 잠시 가만히 두면 사라진다(root 의 data-calm).
+  // 막대 위에 마우스가 있거나 막대 단추에 초점이 있으면 그대로 둔다. 펜 · 레이저로 그리는 동안에는 아래쪽으로 가져갈 때만 막대가 나온다.
+  // 프레젠터(리모컨) 글쇠로는 나타나지 않는다. 모양은 쓰는 쪽 CSS 가 정한다(마우스가 있는 화면에서만 감춘다).
+  let calmTimer = 0;
+  const calmBar = () => root.querySelector('.cv-show-bar, .lesson-show-bar');
+  const calm = () => { const bar = calmBar(); if (bar?.matches(':hover') || bar?.matches(':focus-within')) { wake(); return; } root.dataset.calm = ''; };
+  function wake() { delete root.dataset.calm; clearTimeout(calmTimer); calmTimer = setTimeout(calm, 2500); }
+  const onMove = (e) => {
+    if (e.pointerType === 'touch') return;
+    if (tool && !e.target?.closest?.('.cv-show-bar, .lesson-show-bar') && e.clientY < (doc.defaultView.innerHeight || 0) - 140) return;
+    wake();
+  };
+  root.addEventListener('pointermove', onMove);
+  wake();
+
   // ---------- 손가락으로 넘기기 ----------
   root.addEventListener('pointerdown', (e) => { swipe = e.pointerType === 'touch' && !tool && !panel ? [e.clientX, e.clientY] : null; });
   root.addEventListener('pointerup', (e) => {
@@ -509,7 +525,7 @@ export function createShowTools(root, opts) {
   }
   function renderPresenter() {
     if (!presenter || presenter.win.closed) { presenter = null; return; }
-    const i = opts.index(), n = opts.total(), label = opts.label(i), text = opts.notes(i);
+    const i = opts.index(), n = opts.total(), label = opts.label(i), text = spokenNotes(opts.notes(i));
     // 지금 쪽이 든 주제(앞쪽으로 가며 가장 가까운 주제 이름)
     let topic = '';
     for (let k = i; k >= 0 && !topic; k--) topic = opts.topic?.(k) || '';
@@ -537,6 +553,7 @@ export function createShowTools(root, opts) {
     },
     destroy() {
       clearTimeout(digitTimer);
+      clearTimeout(calmTimer); root.removeEventListener('pointermove', onMove); delete root.dataset.calm;
       stopCamera();
       autoOn = false; clearTimeout(autoTimer);
       toggleRehearse(true);

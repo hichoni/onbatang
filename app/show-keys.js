@@ -74,3 +74,20 @@ export function showClock(ms) {
   const total = Math.max(0, Math.floor((Number(ms) || 0) / 1000)), h = Math.floor(total / 3600), m = Math.floor(total / 60) % 60, s = total % 60;
   return h ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`;
 }
+
+// 발표할 때 보여 줄 발표자 노트: PPT 를 만든 도구가 노트 끝에 적어 둔 출처 메모 줄은 뺀다(편집 화면의 노트는 그대로다).
+//   "시각 자료: …" 줄 · 값이 내 컴퓨터 파일 자리(C:/… · /Users/… · file:…)인 "자료: …" 같은 줄 · 파일 자리만 있는 줄.
+const LOCAL_PATH = /^(?:[a-z]:[\\/]|\\\\|file:|~?\/(?:users|home|tmp|var|private)\/)/i;
+const NOTE_LABEL = /^\s*[-*•·]?\s*([^:：]{1,12})\s*[:：]\s*(.*)$/;
+export function spokenNotes(text) {
+  const lines = String(text || '').split('\n').filter((line) => {
+    const plain = line.trim();
+    if (LOCAL_PATH.test(plain)) return false;
+    const m = NOTE_LABEL.exec(line);
+    if (!m) return true;
+    const label = m[1].replace(/\s+/g, '');
+    if (label === '시각자료') return false;
+    return !LOCAL_PATH.test(m[2].trim());
+  });
+  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}

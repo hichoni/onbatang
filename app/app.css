@@ -221,6 +221,21 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"], body.mc-app :is(#app,.cv-a
   .cv-start-view, .cv-item { transition: none; }
 }
 .cv-mine .warn-box { margin: 10px 0 0; }
+/* 내 그림 목록 위 막대: 거르기(전체 · PPT · 직접 만든 것) · 이름 찾기 · 늘어놓는 차례 */
+.cv-list-tools { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; margin: 0 0 14px; }
+.cv-list-seg { background: var(--cv-desk); }
+.cv-list-seg .cv-seg-btn { color: var(--muted); }
+.cv-list-seg .cv-seg-btn:hover { color: var(--cv-ink); }
+.cv-list-seg .cv-seg-btn.on { background: #fff; color: var(--cv-ink); box-shadow: 0 1px 3px rgba(23, 28, 68, .14); }
+.cv-list-find { flex: 1 1 180px; min-width: 0; max-width: 320px; min-height: 36px; padding: 6px 12px; border: 1px solid var(--cv-line); border-radius: 999px; background: #fff; font: inherit; font-size: .9rem; }
+.cv-list-sort { min-height: 36px; padding: 6px 10px; border: 1px solid var(--cv-line); border-radius: 999px; background: #fff; font: inherit; font-size: .9rem; color: var(--cv-ink); margin-left: auto; }
+.cv-list-find:focus-visible, .cv-list-sort:focus-visible { outline: 3px solid var(--primary); outline-offset: 1px; }
+.cv-list-none { grid-column: 1 / -1; margin: 8px 0; }
+/* 한 PPT 의 파트들은 한 칸: 뒤에 장이 겹쳐 있는 모양 · PPT 표 · 펼치면 그 아래 줄에 파트 칸들 */
+.cv-deck { box-shadow: 4px 4px 0 -1px #fff, 4px 4px 0 0 var(--cv-line), 8px 8px 0 -1px #fff, 8px 8px 0 0 var(--cv-line); margin: 0 8px 8px 0; }
+.cv-deck:hover, .cv-deck:focus-within { box-shadow: 4px 4px 0 -1px #fff, 4px 4px 0 0 #b4bde8, 8px 8px 0 -1px #fff, 8px 8px 0 0 #b4bde8, var(--cv-shadow); }
+.cv-deck-badge { position: absolute; left: 8px; top: 8px; padding: 1px 8px; border-radius: 6px; background: #d24726; color: #fff; font-size: var(--cv-fs-xs); font-weight: 800; letter-spacing: .02em; }
+.cv-deck-open { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; padding: 12px; border-radius: var(--cv-r-l); background: var(--cv-desk); }
 .cv-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(204px, 1fr)); gap: 16px; }
 .cv-item { display: grid; align-content: start; border: 1px solid var(--cv-line); border-radius: var(--cv-r-l); background: #fff; overflow: hidden; transition: border-color .15s ease, box-shadow .15s ease; }
 .cv-item:hover, .cv-item:focus-within { border-color: #b4bde8; box-shadow: var(--cv-shadow); }.cv-thumb { position: relative; display: grid; place-items: center; width: 100%; aspect-ratio: 4 / 3; padding: 14px; border: 0; background: var(--cv-desk); cursor: pointer; overflow: hidden; }
@@ -463,17 +478,21 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"], body.mc-app :is(#app,.cv-a
 .cv-show-stage .fe-card { grid-area: 1 / 1; width: 100%; pointer-events: none; }
 .cv-show-bar {
   position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 999px;
-  background: rgba(20, 24, 34, .72); color: #fff; opacity: .35; transition: opacity .2s; cursor: default; z-index: 10;
+  background: rgba(20, 24, 34, .72); color: #fff; transition: opacity .35s; cursor: default; z-index: 10;
 }
-.cv-show:hover .cv-show-bar, .cv-show-bar:focus-within { opacity: 1; }
+/* 마우스를 가만히 두면 막대와 화살표가 사라진다(show-tools.js 의 data-calm). 손가락으로 쓰는 화면은 늘 보인다. */
+@media (hover: hover) {
+  .cv-show[data-calm] { cursor: none; }
+  .cv-show[data-calm] .cv-show-bar:not(:focus-within) { opacity: 0; }
+}
 .cv-show-count { min-width: 4.2em; text-align: center; font-weight: 800; font-variant-numeric: tabular-nums; }
 .cv-show-key { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 4px 12px; border: 0; border-radius: 999px; background: rgba(255, 255, 255, .16); color: #fff; font: inherit; font-weight: 800; cursor: pointer; }
 .cv-show-key:hover { background: rgba(255, 255, 255, .3); }
-.cv-show-key[hidden] { display: none; }      /* 영상 장면이 없는 장에서는 영상 단추를 감춘다 */
+.cv-show-key[hidden] { display: none; }
+.cv-show-film.wait { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .55); }      /* 누를 때 트는 영상이 기다리는 중 */      /* 영상 장면이 없는 장에서는 영상 단추를 감춘다 */
 .cv-show-key,.cv-show-count{white-space:nowrap;flex-shrink:0}
 @media(max-width:640px){.cv-show-word{display:none}}      /* 휴대폰: 리모컨 · 질문 · 끝내기는 그림만(이름은 aria-label · title 에 있다) */
 @media(max-width:960px){.cv-show-bar{gap:6px;padding:8px;left:8px;right:8px;width:max-content;max-width:calc(100vw - 16px);margin:0 auto;transform:none;flex-wrap:wrap;justify-content:center;border-radius:18px}.cv-show-key{padding:8px 10px;min-height:44px}.cv-show-count{font-size:14px}}
-@media (pointer: coarse) { .cv-show-bar { opacity: .9; } }
 
 /* ---- 내려받기 창: 파일 종류 → 저장할 장 → 설정 → 내려받기 ----
    이 창만 본문을 스크롤한다. 짧은 화면에서도 제목 · 선택 요약 · 실행 단추를 함께 볼 수 있다. */

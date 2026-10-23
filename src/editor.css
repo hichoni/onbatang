@@ -845,10 +845,5 @@
 .fe-tl-track { grid-area: track; position: relative; display: block; height: 6px; border-radius: 999px; background: color-mix(in srgb, currentColor 10%, transparent); overflow: hidden; }
 .fe-tl-bar { position: absolute; top: 0; bottom: 0; border-radius: 999px; background: var(--fe-primary); }
 
-/* ---- 누를 때 트는 바탕 영상: 발표에서 첫 모습으로 기다리는 동안 가운데에 틀기 표시(동그라미 + 세모) ---- */
-.fe-scene.fe-standby::before, .fe-scene.fe-standby::after { content: ''; position: absolute; left: 50%; top: 50%; pointer-events: none; z-index: 1; animation: fe-standby-in .4s ease-out both; }
-.fe-scene.fe-standby::before { width: 12cqw; height: 12cqw; transform: translate(-50%, -50%); border-radius: 50%; background: rgba(0, 0, 0, .45); box-shadow: 0 4px 24px rgba(0, 0, 0, .3); }
-.fe-scene.fe-standby::after { width: 0; height: 0; transform: translate(-35%, -50%); border-style: solid; border-width: 2.6cqw 0 2.6cqw 4.2cqw; border-color: transparent transparent transparent #fff; }
-@keyframes fe-standby-in { from { opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .fe-scene.fe-standby::before, .fe-scene.fe-standby::after { animation: none; } }
+/* 누를 때 트는 바탕 영상은 발표에서 첫 모습으로 기다린다(.fe-standby). 보는 사람 화면에는 아무 표시도 얹지 않는다: 기다린다는 표시는 발표 막대의 영상 단추에만 있다. */
 .fe-video-split { height: 1px; margin: 16px 0 6px; background: var(--fe-line, #dde2ef); }

@@ -64,6 +64,9 @@ test('a background video waits on its first frame in the show and plays on the n
   await page.locator('.cv-show-btn').click();
   await page.locator('.cv-show').waitFor();
   await page.locator('.cv-show-stage .fe-scene.fe-standby').waitFor();
+  // The audience sees no play mark on the slide; only the bar's video key says it is waiting.
+  assert.deepEqual(await page.evaluate(() => { const s = document.querySelector('.cv-show-stage .fe-scene.fe-standby'); return [getComputedStyle(s, '::before').content, getComputedStyle(s, '::after').content]; }), ['none', 'none']);
+  assert.equal(await page.locator('.cv-show-film.wait').count(), 1);
   await page.waitForFunction(() => document.querySelector('.cv-show-stage .fe-scene-live')?.readyState >= 1);
   await page.waitForTimeout(700);
   const still = await live(page);
@@ -72,6 +75,7 @@ test('a background video waits on its first frame in the show and plays on the n
   await page.keyboard.press('ArrowRight');
   await page.waitForFunction(() => { const v = document.querySelector('.cv-show-stage .fe-scene-live'); return v && !v.paused && v.currentTime > 0; }, null, {timeout: 10000});
   assert.equal(await page.locator('.cv-show-stage .fe-scene.fe-standby').count(), 0);
+  assert.equal(await page.locator('.cv-show-film.wait').count(), 0);
   assert.equal(await page.locator('.cv-show-count').textContent(), '1 / 2', 'the press started the video, it did not turn the slide');
   await page.keyboard.press('ArrowRight');
   await page.waitForFunction(() => document.querySelector('.cv-show-count')?.textContent === '2 / 2');

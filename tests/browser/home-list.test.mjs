@@ -1,0 +1,120 @@
+// 내 그림 목록(브라우저): 한 PPT 를 나눠 담은 파트들은 한 칸(PPT · 모두 몇 장 · 파트 몇 개)으로 묶이고, 펼치면 파트 칸이 보인다.
+// 거르기(전체 · PPT · 직접 만든 것) · 이름 찾기 · 늘어놓는 차례(최근 고친 · 만든 · 이름)를 고르면 목록이 바뀌고, 고른 것은 기억한다.
+// 발표: 아래 막대와 화살표는 마우스를 가만히 두면 사라지고 움직이면 나온다. MINICAN_PLAYWRIGHT_PATH 가 없으면 건너뛴다.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createServer} from 'node:http';
+import {readFile} from 'node:fs/promises';
+import {fileURLToPath, pathToFileURL} from 'node:url';
+import {resolve, extname, sep} from 'node:path';
+
+const root = resolve(fileURLToPath(new URL('../../', import.meta.url)));
+const options = {skip: !process.env.MINICAN_PLAYWRIGHT_PATH, timeout: 120000};
+const fixture = `<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/src/editor.css"><link rel="stylesheet" href="/app/app.css"><body class="mc-app"><main id="app"></main><script type="module">
+import {startMinican} from '/app/app.js';import {newRecord,migrateRecord} from '/app/designs.js';import {putDesign,setStorageName} from '/app/store.js';
+setStorageName('v73-home');try{localStorage.setItem('onbatang-tour-seen-v1:editor','1');localStorage.setItem('onbatang-tour-seen-v1:news-0.45','1');}catch{}
+const sha='a'.repeat(64),asset='a'+sha.slice(0,24),src={kind:'pptx',sourceDocumentId:'s'+sha.slice(0,24),assetId:asset,filename:'캠프.pptx',sha256:sha};
+const part=(n,pages)=>migrateRecord({id:'d'+String(n).repeat(24).slice(0,24),schemaVersion:1,revision:0,name:'메이커 캠프 · '+n,size:{width:1280,height:720,unit:'px'},source:src,assetRefs:[asset],assets:[{id:asset,kind:'source',mimeType:'application/vnd.openxmlformats-officedocument.presentationml.presentation',sha256:sha}],
+  slides:Array.from({length:pages},(_,k)=>({id:'p'+n+'x'+k+'0000000',bg:'#ffffff',items:[{id:'e'+n+'x'+k+'0000000',t:'text',text:'파트 '+n+' · '+(k+1),x:50,y:50,w:60,size:6}]})),updatedAt:0});
+for(const [n,pages] of [[1,2],[2,2],[3,3]])await putDesign(part(n,pages));
+const a=newRecord('16:9',1,Date.now()-86400000);a.name='가을 소풍';a.slides=[{items:[{id:'etxt0000001',t:'text',text:'가을',x:50,y:50,w:50,size:6}]},{items:[]}];await putDesign(a);
+const b=newRecord('1:1',2,Date.now()-3600000);b.name='나무 관찰';await putDesign(b);
+await startMinican({storage:'v73-home'});window.ready=true;
+</script>`;
+
+async function setup(t) {
+  const server = createServer(async (req, res) => {
+    try {
+      const path = new URL(req.url, 'http://localhost').pathname;
+      if (path === '/fixture.html') { res.setHeader('Content-Type', 'text/html'); return res.end(fixture); }
+      const f = resolve(root, '.' + decodeURIComponent(path));
+      if (!f.startsWith(root + sep)) throw Error('path');
+      res.setHeader('Content-Type', ({'.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.png': 'image/png'})[extname(f)] || 'application/octet-stream');
+      res.end(await readFile(f));
+    } catch { res.writeHead(404); res.end(); }
+  });
+  await new Promise(done => server.listen(0, '127.0.0.1', done));
+  t.after(() => new Promise(done => server.close(done)));
+  const {chromium} = await import(pathToFileURL(process.env.MINICAN_PLAYWRIGHT_PATH).href);
+  const browser = await chromium.launch({channel: process.env.MINICAN_BROWSER || 'msedge', headless: true});
+  t.after(() => browser.close());
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  const context = await browser.newContext({viewport: {width: 1280, height: 800}});
+  await context.route('**/*', route => /^https?:/.test(route.request().url()) && !route.request().url().startsWith(origin + '/') ? route.abort() : route.continue());
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', e => errors.push(String(e)));
+  await page.goto(origin + '/fixture.html');
+  await page.waitForFunction(() => window.ready);
+  await page.locator('.cv-list .cv-item').first().waitFor();
+  return {page, errors, origin};
+}
+const names = (page) => page.locator('.cv-list > .cv-item .cv-item-name').allTextContents();
+
+test('the parts of one PPT are one card; filter, search and sort change the list and are remembered', options, async t => {
+  const {page, errors, origin} = await setup(t);
+  assert.match(await page.locator('.cv-mine h2').textContent(), /내 그림 3개/);
+  const deck = page.locator('.cv-deck');
+  assert.equal(await deck.count(), 1);
+  assert.equal(await deck.locator('.cv-item-name').textContent(), '메이커 캠프');
+  assert.equal(await deck.locator('.cv-pages').textContent(), '7장');
+  assert.match(await deck.locator('.cv-item-when').textContent(), /파트 3개/);
+  if (process.env.HOME_SHOT) await page.screenshot({path: process.env.HOME_SHOT + '-list.png', fullPage: true});
+  // 파트 보기: 그 아래 줄에 파트 칸 셋
+  await deck.locator('.cv-deck-parts').click();
+  assert.deepEqual(await page.locator('.cv-deck-open .cv-item-name').allTextContents(), ['메이커 캠프 · 1', '메이커 캠프 · 2', '메이커 캠프 · 3']);
+  if (process.env.HOME_SHOT) await page.screenshot({path: process.env.HOME_SHOT + '-parts.png', fullPage: true});
+  await deck.locator('.cv-deck-parts').click();
+  assert.equal(await page.locator('.cv-deck-open').count(), 0);
+  // 거르기
+  await page.locator('.cv-list-seg [data-home-kind="ppt"]').click();
+  assert.deepEqual(await names(page), ['메이커 캠프']);
+  await page.locator('.cv-list-seg [data-home-kind="mine"]').click();
+  assert.deepEqual(await names(page), ['나무 관찰', '가을 소풍'], 'recently edited first');
+  // 이름 순 · 찾기
+  await page.locator('.cv-list-sort').selectOption('name');
+  assert.deepEqual(await names(page), ['가을 소풍', '나무 관찰']);
+  await page.locator('.cv-list-seg [data-home-kind="all"]').click();
+  await page.locator('.cv-list-find').fill('나무');
+  assert.deepEqual(await names(page), ['나무 관찰']);
+  await page.locator('.cv-list-find').fill('없는 이름');
+  assert.match(await page.locator('.cv-list-none').textContent(), /맞는 그림이 없어요/);
+  await page.locator('.cv-list-find').fill('');
+  // 고른 차례는 다시 열어도 그대로(찾는 말은 비운다)
+  await page.goto(origin + '/fixture.html');
+  await page.waitForFunction(() => window.ready);
+  await page.locator('.cv-list .cv-item').first().waitFor();
+  assert.equal(await page.locator('.cv-list-sort').inputValue(), 'name');
+  // 묶음 칸을 열면 첫 파트가 열린다
+  await page.locator('.cv-deck .cv-item-open').click();
+  await page.locator('.cv-canvas .fe-stage').waitFor();
+  assert.equal(await page.locator('input.cv-name').inputValue(), '메이커 캠프 · 1');
+  assert.deepEqual(errors, []);
+});
+
+test('the show bar and pointer fade after the mouse rests and come back when it moves', options, async t => {
+  const {page, errors} = await setup(t);
+  await page.locator('.cv-list > .cv-item', {hasText: '가을 소풍'}).locator('.cv-item-open').click();
+  await page.locator('.cv-canvas .fe-stage').waitFor();
+  await page.locator('.cv-show-btn').click();
+  await page.locator('.cv-show').waitFor();
+  const opacity = () => page.evaluate(() => getComputedStyle(document.querySelector('.cv-show-bar')).opacity);
+  await page.mouse.move(640, 300);
+  await page.waitForTimeout(400);
+  assert.equal(await opacity(), '1', 'shown while the mouse moves');
+  await page.waitForFunction(() => document.querySelector('.cv-show')?.hasAttribute('data-calm'), null, {timeout: 6000});
+  await page.waitForTimeout(500);
+  assert.equal(await opacity(), '0', 'hidden after the mouse rests');
+  assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.cv-show')).cursor), 'none');
+  // 리모컨 글쇠로 넘겨도 다시 나오지 않는다
+  await page.keyboard.press('ArrowRight');
+  assert.ok(await page.evaluate(() => document.querySelector('.cv-show').hasAttribute('data-calm')));
+  await page.mouse.move(600, 320);
+  await page.waitForFunction(() => !document.querySelector('.cv-show').hasAttribute('data-calm'));
+  // 막대 위에 마우스가 있으면 사라지지 않는다
+  const box = await page.locator('.cv-show-bar').boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.waitForTimeout(3200);
+  assert.equal(await page.evaluate(() => document.querySelector('.cv-show').hasAttribute('data-calm')), false);
+  assert.deepEqual(errors, []);
+});
