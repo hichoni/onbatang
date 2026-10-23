@@ -13,6 +13,7 @@ import { SCHEMA_VERSION, DOCUMENT_LIMITS, DocumentError, fail, isId, newId, lega
 import { relink } from '../src/links.js';
 import { cleanActivity } from '../src/activity.js';
 import {cleanCrop} from '../src/crop.js';
+import {cleanRuns} from '../src/runs.js';
 export { SCHEMA_VERSION, DocumentError };
 
 export const RATIOS = [
@@ -148,7 +149,8 @@ const cleanSlide = (d, index, documentId) => {
     const out = {};
     for (const k of ITEM_FIELDS) if (['string', 'number', 'boolean'].includes(typeof item[k])) out[k] = item[k];
     const crop=item.t==='image'?cleanCrop(item.crop):null;
-    return { ...out, ...(crop?{crop}:{}), ...(item.layout==='slide'?{layout:'slide'}:{}), ...metadata({ ...item, id: item.id ?? legacyId('e', `${documentId}:${pageId}:${i}`) }, { identity: true }) };
+    const runs=item.t==='text'&&Array.isArray(item.runs)&&item.runs.length?cleanRuns(String(item.text??''),item.runs,item):[];
+    return { ...out, ...(crop?{crop}:{}), ...(runs.length?{runs}:{}), ...(item.layout==='slide'?{layout:'slide'}:{}), ...metadata({ ...item, id: item.id ?? legacyId('e', `${documentId}:${pageId}:${i}`) }, { identity: true }) };
   }) };
 };
 /**

@@ -87,6 +87,11 @@ async function documentFonts(design) {
     if (!family) continue;
     const font = `${it.italic ? 'italic ' : ''}${it.bold ? 900 : 500} 16px "${family}"`;
     wants.set(font, (wants.get(font) || '') + it.text);
+    // 부분 서식으로 굵게 · 기울임을 바꾼 구간의 글꼴도 받아 둔다.
+    for (const r of it.runs || []) {
+      const piece = `${(r.i ?? it.italic) ? 'italic ' : ''}${(r.b ?? it.bold) ? 900 : 500} 16px "${family}"`;
+      wants.set(piece, (wants.get(piece) || '') + it.text.slice(r.s, r.e));
+    }
   }
   if (!wants.size) return;
   await Promise.race([

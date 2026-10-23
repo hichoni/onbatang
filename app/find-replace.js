@@ -2,6 +2,7 @@
 // 잠긴 요소는 건너뛴다(캔바와 같다). 바꾼 글이 그 요소의 글자 한도를 넘으면 그 요소는 바꾸지 않고 센다.
 import { cleanNotes } from '../src/document.js';
 import { LINK_LABEL_MAX } from '../src/links.js';
+import { shiftRuns } from '../src/runs.js';
 
 // 요소에서 찾을 글이 든 칸: 글상자는 text, 연결선은 선 위의 글(label)
 const fieldOf = (it) => (it?.lock ? null : it?.t === 'text' ? 'text' : it?.t === 'link' && typeof it.label === 'string' ? 'label' : null);
@@ -49,7 +50,15 @@ export function replaceText(slides, { find = '', replace = '', caseSensitive = f
       }
       if (text.length > limit(it)) { skipped++; return it; }
       count += hits; changed = true;
-      return { ...it, text };
+      if (!it.runs?.length) return { ...it, text };
+      // 부분 서식: 찾은 곳을 뒤에서부터 하나씩 바꾸며 구간을 맞춘다(바꾼 글은 찾은 글의 첫 글자 서식을 따른다).
+      let now = it[key], runs = it.runs;
+      for (const m of [...it[key].matchAll(new RegExp(re.source, re.flags.includes('g') ? re.flags : re.flags + 'g'))].reverse()) {
+        const after = now.slice(0, m.index) + replace + now.slice(m.index + m[0].length);
+        runs = shiftRuns(now, after, runs, { ...it, text: now });
+        now = after;
+      }
+      return { ...it, text, runs };
     });
     let out = changed ? { ...slide, items } : slide;
     const hits = notes ? countIn(slide?.notes, re) : 0;

@@ -6,6 +6,7 @@ import { artSvg, loadArt, artReady } from './art.js';
 import { sceneView } from './scene.js';
 import { ytThumb, ytEmbed, YT_ORIGIN } from './youtube.js';
 import { linkSvg } from './links.js';
+import { runPieces } from './runs.js';
 
 // 유튜브 영상의 재생 단추(유튜브의 빨간 단추 모양)
 const YT_PLAY = '<svg viewBox="0 0 68 48" aria-hidden="true" focusable="false"><path d="M66.5 7.7A8.5 8.5 0 0 0 60.5 1.7C55.2.3 34 .3 34 .3s-21.2 0-26.5 1.4A8.5 8.5 0 0 0 1.5 7.7C.1 13 .1 24 .1 24s0 11 1.4 16.3a8.5 8.5 0 0 0 6 6C12.8 47.7 34 47.7 34 47.7s21.2 0 26.5-1.4a8.5 8.5 0 0 0 6-6C67.9 35 67.9 24 67.9 24s0-11-1.4-16.3z" fill="#f03"/><path d="M45 24 27 14v20z" fill="#fff"/></svg>';
@@ -27,7 +28,8 @@ export function itemView(item) {
     node.style.color = item.color;
     if (item.bgc) node.style.background = item.bgc;
     node.style.textShadow = textShadow(item);
-    if (!item.nowrap && hangsPunctuation(item)) hangParagraphEnds(node, item.text);
+    if (item.runs?.length) paintRuns(node, item);
+    else if (!item.nowrap && hangsPunctuation(item)) hangParagraphEnds(node, item.text);
   } else if (item.t === 'link') {
     // 연결선: 두 조각 사이의 선(links.js 가 계산한 자리). 선 둘레만 눌린다(빈 네모는 밑의 조각을 가리지 않는다).
     node = el('div', { class: `fi fi-link${item.dash ? ' dash' : ''}`, html: linkSvg(item) });
@@ -63,6 +65,25 @@ export function itemView(item) {
 // just that glyph's advance from line fitting, without changing text, font size
 // or the stored frame. One flow wrapper keeps fixed-height flex text a single
 // flex item; literal newlines still separate the authored paragraphs.
+// 부분 서식(runs): 서식이 다른 구간만 <span> 으로 감싼다. 굵기는 글상자의 굵기와 같은 단계로(가져온 PPT 글은 700, 그 밖은 900).
+// 문장 끝 문장부호 내어 쓰기는 부분 서식이 없는 글에만 한다.
+export function paintRuns(node, item) {
+  const heavy = item.source?.kind === 'pptx' || item.layout === 'slide' ? '700' : '900';
+  const light = item.source?.kind === 'pptx' || item.layout === 'slide' ? '400' : '500';
+  // 밑줄은 자식이 지울 수 없다(부모의 밑줄이 자식에게도 그어진다). 밑줄 친 글상자의 한 구간만 밑줄을 뺐으면 조각마다 긋는다.
+  const each = item.under && item.runs.some((r) => r.u === false);
+  if (each) node.style.textDecorationLine = 'none';
+  node.replaceChildren(...runPieces(item.text, item.runs).map(({ text, run }) => {
+    if (!run && !each) return document.createTextNode(text);
+    const span = el('span', { class: 'fi-run', text });
+    if (run?.b !== undefined) span.style.fontWeight = run.b ? heavy : light;
+    if (run?.i !== undefined) span.style.fontStyle = run.i ? 'italic' : 'normal';
+    const under = run?.u ?? (each ? item.under : undefined);
+    if (under) { span.style.textDecorationLine = 'underline'; span.style.textUnderlineOffset = '.12em'; }
+    if (run?.c) span.style.color = run.c;
+    return span;
+  }));
+}
 function hangParagraphEnds(node, text) {
   const paragraphs = text.split('\n');
   if (!paragraphs.some(line => /[!?,.;:、。，．！？；：]$/.test(line))) return;
