@@ -1,10 +1,10 @@
 {
   "date": "2026-10-23",
   "product": {
-    "gaiVersion": "0.118.0",
-    "productCommit": "e138239570bbfbe96c5dc8e51bac8c538ba409ec",
-    "commonVersion": "0.72.0",
-    "commonProductCommit": "764523ecdfa3f73c242041ef5b0a3bfe22a2d9b7",
+    "gaiVersion": "0.118.1",
+    "productCommit": "2ab73b3ad8de4c75ec618b64c8bd36359a456343",
+    "commonVersion": "0.72.1",
+    "commonProductCommit": "3b97c6d672e458a77ef6d655f3d1d0101e353048",
     "embeddedFilesVerified": 187
   },
   "implementation": {
@@ -18,7 +18,8 @@
   "local": {
     "unit": {
       "passed": 685,
-      "failed": 0
+      "failed": 0,
+      "basis": "v0.118.0 / common0.72.0"
     },
     "browserFixture": {
       "passed": 2,
@@ -28,7 +29,18 @@
     "build": "passed",
     "commonUnit": {
       "passed": 292,
-      "failed": 0
+      "failed": 0,
+      "basis": "common0.72.1"
+    },
+    "finalFocused": {
+      "passed": 16,
+      "failed": 0,
+      "basis": "v0.118.1 / common0.72.1"
+    },
+    "commonSavingCoverBrowser": {
+      "passed": 1,
+      "failed": 0,
+      "accountData": false
     }
   },
   "live": {
@@ -80,7 +92,17 @@
       "answerPreserved": true,
       "newRoomOrSubmissionCreated": false
     },
-    "publicCommonVersionVerified": "0.72.0"
+    "publicCommonVersionVerified": "0.72.1",
+    "postTimerUpdateReopen": {
+      "gaiVersion": "0.118.1",
+      "commonVersion": "0.72.1",
+      "mainRouteReady": true,
+      "page": "28/28",
+      "fullRailVisible": true,
+      "pngExactMatch": true,
+      "answerPreserved": true,
+      "newRoomOrSubmissionCreated": false
+    }
   },
   "preservation": {
     "originalPptSha256": "c165d32bda450cec385e5bc916351c75d72b6acc69abdea5931d2d473f10d12d",
