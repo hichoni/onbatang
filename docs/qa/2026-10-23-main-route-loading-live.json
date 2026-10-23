@@ -1,11 +1,11 @@
 {
   "date": "2026-10-23",
   "product": {
-    "gaiVersion": "0.117.4",
-    "productCommit": "513721287a22769a72aa4e199fe36957e53a279b",
-    "commonVersion": "0.71.0",
-    "commonProductCommit": "94c336f8a300892a823307864e698a8f6c3e476c",
-    "embeddedFilesVerified": 186
+    "gaiVersion": "0.118.0",
+    "productCommit": "e138239570bbfbe96c5dc8e51bac8c538ba409ec",
+    "commonVersion": "0.72.0",
+    "commonProductCommit": "764523ecdfa3f73c242041ef5b0a3bfe22a2d9b7",
+    "embeddedFilesVerified": 187
   },
   "implementation": {
     "boundedPaintIndependentReadiness": true,
@@ -25,7 +25,11 @@
       "failed": 0,
       "accountData": false
     },
-    "build": "passed"
+    "build": "passed",
+    "commonUnit": {
+      "passed": 292,
+      "failed": 0
+    }
   },
   "live": {
     "gaiMainRouteOnly": true,
@@ -65,7 +69,18 @@
     },
     "physicalDevices": 1,
     "freshChromeRestore": "unconfirmed - browser connection ended after restore was requested",
-    "conflictingIabRestores": "blocked with existing drafts and fixed revisions preserved"
+    "conflictingIabRestores": "blocked with existing drafts and fixed revisions preserved",
+    "postCommonUpdateReopen": {
+      "gaiVersion": "0.118.0",
+      "commonVersion": "0.72.0",
+      "mainRouteReady": true,
+      "page": "28/28",
+      "fullRailVisible": true,
+      "pngExactMatch": true,
+      "answerPreserved": true,
+      "newRoomOrSubmissionCreated": false
+    },
+    "publicCommonVersionVerified": "0.72.0"
   },
   "preservation": {
     "originalPptSha256": "c165d32bda450cec385e5bc916351c75d72b6acc69abdea5931d2d473f10d12d",
