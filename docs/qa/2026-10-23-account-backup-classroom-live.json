@@ -1,0 +1,108 @@
+{
+  "date": "2026-10-23",
+  "timezone": "Asia/Seoul",
+  "scope": "real-account-whole-ppt-backup-restore-classroom-results",
+  "release": {
+    "gai": "0.116.0",
+    "gaiProductCommit": "f5cae56add1ec9dda7219c022718f12764d10e3a",
+    "common": "0.71.0",
+    "commonProductCommit": "94c336f8a300892a823307864e698a8f6c3e476c",
+    "sharedGitBlobs": 186,
+    "fullWriteScenario": {
+      "gai": "0.115.0",
+      "common": "0.70.0"
+    },
+    "latestReadbackPassed": true
+  },
+  "local": {
+    "mainFastForwarded": true,
+    "priorChangesBackedUpAndReapplied": true,
+    "originalChangeHashesPreserved": true,
+    "gaiUnit": {
+      "passed": 677,
+      "failed": 0,
+      "concurrency": 4
+    },
+    "commonUnit": {
+      "passed": 291,
+      "failed": 0
+    },
+    "previousCommonUnit": {
+      "passed": 281,
+      "failed": 0
+    },
+    "overlappingCountsNotSummed": true,
+    "officialCommonSync": "PASS"
+  },
+  "live": {
+    "environment": "existing-production",
+    "teacher": "existing-authenticated-owner",
+    "newTeacherAccounts": 0,
+    "source": "in-app-browser-storage",
+    "destination": "independent-Edge-profile-storage",
+    "physicalComputers": 1,
+    "physicalDeviceValidation": false,
+    "sourcePptPages": 19,
+    "sourceMaterialPages": 26,
+    "parts": 11,
+    "firstWholeBackupCompleted": true,
+    "integrityPreviewPassed": true,
+    "restoreCompleted": true,
+    "existingResultPngsByteIdentical": true,
+    "lessonMinutes": 45,
+    "lessonStages": 5,
+    "newRooms": 1,
+    "oldRoomPreservedByUiCounts": true,
+    "joinedBrowserParticipants": 3,
+    "actualPointerAppInputs": 2,
+    "submissions": 2,
+    "pixelCounts": [
+      3,
+      2
+    ],
+    "appKeyboardValidation": "INCOMPLETE",
+    "studentReloadRejoinPreservedOwnSubmission": true,
+    "pauseAndResumeObserved": true,
+    "newRoomEnded": true,
+    "resultServerRevision": 1,
+    "selectedPngsMatchSubmissions": true,
+    "resultImportedAfterPage": 26,
+    "materialPagesAfter": 27,
+    "finalFixedAnchorRevision": 21,
+    "teacherAnswerReedited": true,
+    "latestWholeBackupCompleted": true,
+    "fullPageReloadReopen": true,
+    "duplicateImportBlocked": true,
+    "reopenedPngsMatchSubmissions": true,
+    "fixedSnapshotIndependentlyReviewed": true,
+    "originalUserWorkRestored": true
+  },
+  "boundaries": {
+    "paidQaUsed": false,
+    "additionalAiRequests": 0,
+    "productionSchemaSqlAuthRlsBucketWorkflowChanged": false,
+    "normalAuthorizedProductionDataWrites": true,
+    "sourceFileOverwritten": false,
+    "privateEvidenceCommitted": false
+  },
+  "limitations": [
+    "same physical PC; isolated browser stores are not a second physical device",
+    "IAB student joined but could not forward isolated-app input; two pointer submissions were completed in Edge/Chrome",
+    "Edge background main-route iframe stayed about:blank; direct production editor URL used",
+    "physical phones/tablets/Chromebook/new PC and 35-student load not tested",
+    "second app, latest background video/sharing, desktop PowerPoint not re-audited in this scenario"
+  ],
+  "preservation": {
+    "originalPptSha256": "c165d32bda450cec385e5bc916351c75d72b6acc69abdea5931d2d473f10d12d",
+    "communityConfigSha256": "fd6cb8f7ed1543197ed259d6c03ea0c338c06c7bf25df08e50639c57722e1a83",
+    "releaseTimesSha256": "44d8598a92748630d057a1ed91c1b31e3ae8d6dc2041c9827fc26ded875ddcef",
+    "gaiDraftPr": 76,
+    "commonDraftPr": 1
+  },
+  "ci": {
+    "githubVerify": "NOT_STARTED_BILLING_LIMIT",
+    "checkRun": 120405924361
+  },
+  "privateEvidenceDirectory": "work/qa-account-backup-2026-10-23/",
+  "finalScreenshot": "07-latest-071-result-reopened.png"
+}
