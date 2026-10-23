@@ -53,11 +53,14 @@ export function savingCover({doc = document, pages = [], thumbOf = () => null, o
   let showing = null;
   let working = [];
   // 한 묶음에 여러 장이 있으면 큰 미리보기가 그 장들을 차례로 넘겨 보여 준다(판이 걷히면 멈춘다).
+  // 화면에 붙어 있지 않으면 멈춘다(걷혔거나, 세 번 볼 동안 끝내 붙지 않았으면). 이 타이머 하나로 프로그램이 끝나지 않는 일이 없게 한다(unref).
+  let idle = 0;
   const turner = setInterval(() => {
-    if (!node.isConnected && node.dataset.seen) { clearInterval(turner); return; }
-    if (node.isConnected) node.dataset.seen = '1';
+    if (!node.isConnected) { if (node.dataset.seen || ++idle >= 3) clearInterval(turner); return; }
+    node.dataset.seen = '1';
     if (working.length > 1) show(working[(working.indexOf(showing) + 1) % working.length]);
   }, 1300);
+  turner?.unref?.();
   const show = (n) => {
     if (n === showing || !cells.has(n)) return;
     showing = n;
