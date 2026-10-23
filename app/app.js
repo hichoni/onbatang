@@ -1446,19 +1446,39 @@ function changeSlides(O, change) {
   touched(O);
 }
 
-/** 움직임 칸의 "모든 장에 똑같이": 지금 장의 조합 효과와 전환 효과를 다른 장들에도 적는다(요소 하나하나의 효과는 그대로 둔다). */
-function applyMotionAll(O, motion) {
-  if (O.closed) return;
-  const others = O.slides.length - 1;
+/** 움직임 칸의 "모든 장에 똑같이": 지금 장의 조합 효과와 전환 효과를 다른 장들에도 적는다(요소 하나하나의 효과는 그대로 둔다).
+ * 여러 파트로 된 PPT 전체 자료이면 다른 파트의 장들에도 적고, 그 파트들을 이 기기(와 계정)에 저장한다. */
+async function applyMotionAll(O, motion) {
+  if (O.closed || O.motionAll) return;
+  const parts = O.materialDeck ? O.materialDeck.documents.filter((row) => row.id !== O.record.id) : [];
+  const others = O.slides.length - 1 + parts.reduce((n, row) => n + row.slides.length, 0);
   if (others < 1) { toast('아직 한 장뿐이에요. 새 장을 더하면 이 장의 움직임을 이어받아요.', 3500); return; }
   const same = slideMotion(motion);
   O.slides = O.slides.map((d, i) => (i === O.at ? d : withSlideMotion(d, same)));
   // 다른 장까지 바꿨으므로 실행 취소로는 지금 장만 되돌아가 어긋난다. 되돌리기 기록을 비운다(모양을 바꿀 때와 같다).
   O.editor.forget();
-  renderStrip(O);
   touched(O);
   const nameOf = (list, id) => list.find((k) => k.id === id)?.name || '없음';
-  toast(`다른 ${others}장도 맞췄어요. 조합 효과: ${nameOf(COMBOS, same.pa)} · 전환 효과: ${nameOf(TRANSITIONS, same.tr)}`, 4000);
+  let missed = 0;
+  if (parts.length) {
+    O.motionAll = true;
+    try {
+      for (const row of parts) {
+        try {
+          // 이 기기에 있는 그 파트의 가장 새 초안에 적는다(다른 창에서 고친 것도 잃지 않게).
+          const fresh = migrateRecord((await getDesign(row.id)) || row);
+          const saved = await putDesign({ ...fresh, revision: (fresh.revision || 0) + 1, slides: fresh.slides.map((d) => withSlideMotion(d, same)), updatedAt: Date.now(), synced: false });
+          // 전체 자료가 들고 있는 그 파트도 저장한 것으로 바꾼다(다른 파트에 활동을 넣을 때 맞춰 보는 기준).
+          if (!O.closed && O.materialDeck) O.materialDeck.documents = O.materialDeck.documents.map((r) => (r.id === saved.id ? saved : r));
+          upsert(saved);
+          if (accountFor(saved)) pusher.queue(saved);
+          if (typeof shareAction?.saved === 'function') { try { shareAction.saved(saved); } catch (error) { console.warn(error); } }
+        } catch (error) { console.warn(error); missed += row.slides.length; }
+      }
+    } finally { O.motionAll = false; }
+  }
+  if (!O.closed) renderStrip(O);
+  toast(missed ? `다른 ${others - missed}장은 맞췄지만 ${missed}장은 저장하지 못했어요. 다시 눌러 주세요.` : `다른 ${others}장도 맞췄어요${parts.length ? `(다른 파트 ${parts.length}개 포함)` : ''}. 조합 효과: ${nameOf(COMBOS, same.pa)} · 전환 효과: ${nameOf(TRANSITIONS, same.tr)}`, 4500);
 }
 
 // Activities are local, typed page data. Both hosts use the same runtime and
