@@ -251,3 +251,21 @@ test('tables become editable cells: one box per cell with its fill and border, i
  const inspection=await inspectPptx(repack(chart));
  assert.equal(inspection.pages[0].canImport,false);assert.ok(inspection.pages[0].warnings.some(w=>w.code==='UNSUPPORTED_ELEMENT'));
 });
+
+test('rich text: a word in another weight, slant, underline or colour comes in as a styled range of the same text box',async()=>{
+ // Regression: "[선택]" in a camp schedule cell was red and bold, but the whole cell came in with the first letter's style only.
+ const parts=unzipSync(await baseBytes()),name='ppt/slides/slide1.xml';
+ const r=(rPr,text)=>`<a:r><a:rPr lang="ko-KR" sz="2400"${rPr}</a:r>`.replace('</a:r>',`<a:t>${text}</a:t></a:r>`);
+ const red='><a:solidFill><a:srgbClr val="E03131"/></a:solidFill></a:rPr>';
+ const body=`<a:p><a:pPr><a:buFontTx/><a:buChar char="-"/></a:pPr>${r(' b="1"'+red,'[선택]')}${r('/>',' 도전! ')}${r(' i="1"/>','우리')}<a:br><a:rPr lang="ko-KR"/></a:br>${r(' u="sng"/>','아침')}</a:p><a:p>${r('/>','휴식')}</a:p>`;
+ parts[name]=enc.encode(dec.decode(parts[name]).replace(/<a:p>.*<\/a:p>/s,body));
+ const converted=await convertPptx(repack(parts),{selectedPages:[1]});
+ const item=converted.document.slides[0].items.find(i=>i.t==='text');
+ assert.equal(item.text,'- [선택] 도전! 우리\n아침\n휴식');
+ assert.equal(item.bold,true,'the box takes the first piece');
+ const slice=x=>x.runs.map(run=>[x.text.slice(run.s,run.e),run]);
+ const runs=Object.fromEntries(slice(cleanDesign({items:[item]},{keepSpaces:true}).items[0]).map(([text,run])=>[text,Object.fromEntries(Object.entries(run).filter(([k])=>!['s','e'].includes(k)))]));
+ assert.deepEqual(runs,{' 도전! ':{b:false,c:'#222222'},'우리':{b:false,i:true,c:'#222222'},'아침':{b:false,u:true,c:'#222222'},'휴식':{b:false,c:'#222222'}},'"[선택]" keeps the box style (bold, red); the rest are plain and in the default colour');
+ assert.equal(cleanDesign({items:[item]},{keepSpaces:true}).items[0].color,'#e03131');
+ assert.ok(!converted.report.warnings.some(w=>w.code==='RICH_TEXT_FLATTENED'),'only weight/slant/underline/colour differ, nothing was flattened');
+});
