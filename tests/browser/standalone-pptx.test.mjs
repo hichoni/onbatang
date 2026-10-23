@@ -8,7 +8,13 @@ import {resolve,extname,sep} from 'node:path';
 import {unzipSync} from 'fflate';
 // 공용 첫 쪽은 새로 고치면 꾸미던 그림을 다시 연다(v0.42). 목록에서 다시 여는 것을 보려고 그때는 내 그림으로 나간다.
 const reloadToList=async page=>{await page.reload();await page.waitForFunction(()=>!document.getElementById('onba-splash'));if(await page.evaluate(()=>document.body.classList.contains('cv-editing'))){await page.locator('.cv-back').click();await page.locator('.cv-home-title').waitFor();}};
-
+// 목록에서 그 이름의 그림을 연다. 한 PPT 의 파트들은 한 칸으로 묶여 있으므로, 칸에 없으면 그 PPT 칸의 "파트 N개"를 펼친 뒤 연다.
+const openListed=async(page,name,how='click')=>{
+ await page.locator('.cv-list .cv-item').first().waitFor();
+ const direct=page.getByRole('button',{name:name+' 열기',exact:true});
+ if(!await direct.count())await page.locator('.cv-deck',{hasText:name.replace(/\s*·\s*\d+$/,'')}).first().locator('.cv-deck-parts')[how]();
+ await direct[how]();
+};
 const root=resolve(fileURLToPath(new URL('../../',import.meta.url)));
 const fixture=name=>resolve(root,'tools/fixtures/pptx',name);
 const sha256=bytes=>createHash('sha256').update(bytes).digest('hex');
@@ -91,7 +97,7 @@ for(const [label,width,height] of [['small-phone',320,568],['phone',390,844],['p
   await palette.locator('.fe-palette-slots button').nth(3).tap();await palette.getByLabel('팔레트 이름').fill('터치 수업 색');await palette.getByLabel('팔레트 이름').press('Tab');
   const color=await page.locator('.cv-side').getByLabel('배경 색 직접 고르기').inputValue();await palette.getByRole('button',{name:'현재 색 담기',exact:true}).tap();
   assert.ok((await palette.locator('.fe-palette-color').first().boundingBox()).height>=44);assert.ok((await palette.locator('.fe-palette-remove').first().boundingBox()).height>=44);
-  const name=await page.locator('.cv-name').inputValue();await page.locator('.cv-back').tap();await page.locator('.cv-home-title').waitFor();await page.reload();await page.getByRole('button',{name:name+' 열기',exact:true}).tap();
+  const name=await page.locator('.cv-name').inputValue();await page.locator('.cv-back').tap();await page.locator('.cv-home-title').waitFor();await page.reload();await openListed(page,name,'tap');
   await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);assert.match(await page.locator('[data-material-page="0"]').getAttribute('aria-label'),/원본 2쪽/);
   if(!await page.locator('.fe-tab[data-tab=bg][aria-selected=true]').count()||await page.locator('.cv-app.folded').count())await page.locator('.fe-tab[data-tab=bg]').tap();assert.equal(await page.locator('.cv-side').getByLabel('팔레트 이름').inputValue(),'터치 수업 색');assert.equal(await page.locator('.cv-side .fe-palette-colors').first().getByRole('button',{name:color+' 적용',exact:true}).count(),1);
   for(const mode of ['editable','image']){
@@ -168,7 +174,7 @@ test('large horizontal filmstrip reorders across parts, preserves fixed original
  await page.locator('[data-material-page="0"]').dragTo(page.locator('[data-material-page="2"]'),{targetPosition:{x:150,y:30}});
  await page.waitForFunction(()=>document.querySelector('[data-material-page="0"]')?.getAttribute('aria-label')?.includes('원본 2쪽'));
  const ordered=await readLibrary(page,base),name=await page.locator('.cv-name').inputValue();
- await reloadToList(page);await page.getByRole('button',{name:name+' 열기',exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);
+ await reloadToList(page);await openListed(page,name);await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);
  assert.equal(Math.round((await page.locator('.cv-strip').boundingBox()).height),180);
  assert.match(await page.locator('[data-material-page="19"]').getAttribute('aria-label'),/원본 21쪽/);
  await page.locator('.cv-down-btn').click();const dialog=page.getByRole('dialog',{name:'내려받기',exact:true});await dialog.locator('[data-type=pptx]').click();await dialog.locator('[data-scope=all]').click();await dialog.locator('[data-pptx=editable]').click();
@@ -200,7 +206,7 @@ test('short Chromebook workspace folds/resizes its tray and keeps whole-PPT navi
  box=await grip.boundingBox();await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2,box.y+box.height/2-110,{steps:8});await page.mouse.up();
  assert.ok(Number(await grip.getAttribute('aria-valuenow'))>=104,'dragging up restores and resizes the tray');
  const after=await readLibrary(page,base);assert.deepEqual(after.originals,original.originals);assert.deepEqual(after.sources,original.sources);assert.deepEqual(after.graphs[0].pages.map(v=>v.page.id),ids);
- await grip.press('Home');const name=await page.locator('.cv-name').inputValue();await reloadToList(page);await page.getByRole('button',{name:name+' 열기',exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);
+ await grip.press('Home');const name=await page.locator('.cv-name').inputValue();await reloadToList(page);await openListed(page,name);await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);
  assert.equal(await page.getByRole('button',{name:'슬라이드 목록 펼치기'}).getAttribute('aria-expanded'),'false','device preference survives full reload');
  await mkdir(resolve(root,'work'),{recursive:true});await page.screenshot({path:resolve(root,'work/slide-tray-chromebook-collapsed.png'),fullPage:true});
  await page.getByRole('button',{name:'슬라이드 목록 펼치기'}).click();await page.screenshot({path:resolve(root,'work/slide-tray-chromebook-expanded.png'),fullPage:true});await checkIsolation();
