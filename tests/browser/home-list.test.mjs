@@ -137,3 +137,26 @@ test('sixty cards fill the list and say so', options, async t => {
   assert.match(await page.locator('.cv-hero-full').textContent(), /60개까지 저장돼요\(PPT 하나는 파트가 여럿이어도 1개\)/);
   assert.deepEqual(errors, []);
 });
+
+// "모든 장에 똑같이"(움직임 칸): 여러 파트로 된 PPT 전체 자료이면 다른 파트의 장들에도 전환 효과가 적히고 이 기기에 저장된다.
+const deckFixture = fixture.replace("await startMinican({storage:'v73-home'});",
+  `const {getDesign}=await import('/app/store.js');const ids=['d'+'1'.repeat(24),'d'+'2'.repeat(24),'d'+'3'.repeat(24)];window.readPart=id=>getDesign(id);window.partIds=ids;
+   await startMinican({storage:'v73-home',materialNavigation:{load:async()=>{const documents=[];for(const id of ids)documents.push(await getDesign(id));return {title:'메이커 캠프',documents,materialRef:{id:'mdeck0000000000000000001',documentId:ids[0],revision:0},pageOrder:documents.flatMap(d=>d.slides.map(p=>p.id))};}}});`);
+test('motion "same on every slide" reaches the other parts of a whole PPT', options, async t => {
+  const {page, errors} = await setup(t, deckFixture);
+  await page.locator('.cv-deck .cv-item-open').click();
+  await page.locator('.cv-canvas .fe-stage').waitFor();
+  await page.waitForFunction(() => document.querySelectorAll('[data-material-page]').length === 7);
+  await page.locator('.fe-tab[data-tab="motion"]').click();
+  await page.locator('[data-group="tr"] [data-motion="zoomblur"]').click();
+  const all = page.locator('.fe-motion-all');
+  await all.click();
+  await all.click();
+  await page.waitForFunction(async () => { const parts = await Promise.all(window.partIds.slice(1).map((id) => window.readPart(id))); return parts.every((r) => r.slides.every((p) => p.tr === 'zoomblur')); }, null, {timeout: 10000});
+  assert.match(await page.locator('#toast').textContent(), /다른 6장도 맞췄어요\(다른 파트 2개 포함\)/);
+  // 다른 파트로 가도 그 효과가 그대로다
+  await page.locator('[data-material-page]').nth(6).click();
+  await page.waitForFunction(() => document.querySelector('input.cv-name')?.value === '메이커 캠프 · 3');
+  assert.equal(await page.locator('[data-group="tr"] .fe-mo.on').getAttribute('data-motion'), 'zoomblur');
+  assert.deepEqual(errors, []);
+});
