@@ -154,12 +154,14 @@ const face = (icon, text) => [ic(icon), el('span', { class: 'cv-lbl', text })];
 const labelOf = (btn) => (btn.querySelector('.cv-lbl') || btn).textContent;
 const relabel = (btn, text) => { (btn.querySelector('.cv-lbl') || btn).textContent = text; };
 
+// 계정이 바탕 영상 파일도 옮겨 주면(sync.videoMB: 영상 한 개의 크기 한도 MB) 안내 글이 그것을 알린다. 아니면 0.
+const videoMB = () => (Number.isFinite(sync?.videoMB) && sync.videoMB > 0 ? Math.round(sync.videoMB) : 0);
 /** 첫 화면의 저장 안내(계정이 있으면 계정 상태). */
 function accountNote() {
   if (!sync) return [el('b', { text: '이 기기에 저장돼요.' }), ' 완성한 그림은 내려받아 두세요.'];
   if (S.account === 'bad') return [el('b', { text: '계정에 연결하지 못했어요.' }), ' 이 기기에는 저장돼요. 새로 고침하면 다시 맞춰요.'];
   if (S.account === 'syncing') return [el('b', { text: '계정과 맞추는 중이에요…' })];
-  return [el('b', { text: '내 계정에 저장돼요.' }), ' 다른 기기에서도 열려요. 바탕에 깐 영상은 이 기기에만 있어요.'];
+  return [el('b', { text: '내 계정에 저장돼요.' }), videoMB() ? ` 다른 기기에서도 움직임까지 그대로 열려요. 바탕 영상도 한 개 ${videoMB()}MB까지 함께 올라가요.` : ' 다른 기기에서도 열려요. 바탕에 깐 영상은 이 기기에만 있어요.'];
 }
 // ---------- 시작 ----------
 /** 내 그림들을 이 기기에서 다시 모은다. */
@@ -502,7 +504,7 @@ function render() {
     } }, '원본 내려받기')));
 
   app.replaceChildren(hero, el('div', { class: 'cv-home' }, templates, mine,
-    el('p', { class: 'cv-note', text: `${sync ? '그림은 이 기기에 먼저 저장한 뒤 내 계정에도 저장돼요. 바탕에 깐 영상만 이 기기에 남아요.' : '그림은 이 기기(이 브라우저)에만 저장돼요(서버로 올라가지 않아요). 다른 기기에서는 보이지 않으니, 다 만든 그림은 내려받아 두세요.'} 그림의 모양(정사각형·세로·가로·길게)은 꾸미는 화면에서 언제든 바꿀 수 있어요.` }),
+    el('p', { class: 'cv-note', text: `${sync ? `그림은 이 기기에 먼저 저장한 뒤 내 계정에도 저장돼요. ${videoMB() ? `바탕 영상도 한 개 ${videoMB()}MB까지 올라가요(더 큰 영상은 이 기기에만 있어요).` : '바탕에 깐 영상만 이 기기에 남아요.'}` : '그림은 이 기기(이 브라우저)에만 저장돼요(서버로 올라가지 않아요). 다른 기기에서는 보이지 않으니, 다 만든 그림은 내려받아 두세요.'} 그림의 모양(정사각형·세로·가로·길게)은 꾸미는 화면에서 언제든 바꿀 수 있어요.` }),
     // 지금 쓰는 온바탕의 버전: 맨 아래에 작고 옅게(새 배포가 들어왔는지 알 수 있게).
     el('p', { class: 'cv-version', dataset: { onbatangVersion: ONBATANG_VERSION }, text: `온바탕 v${ONBATANG_VERSION}` })));
   homeRail = mountStartRail(track, previous, next);
@@ -632,7 +634,7 @@ function openDesign(record, isNew) {
     // 저장하지 못하면 오류가 나고, 편집기가 영상을 넣지 않은 채 알린다(저장되지 않은 영상을 그림에 적어 두지 않는다).
     saveVideo: embedMode ? null : (made) => saveVideo({ blob: made.blob, design: O.record.id, seconds: made.seconds }),
     createCamera: !embedMode && canRecord() ? createCamera : null,
-    videoNote: '영상 파일은 이 기기에만 저장돼요. 다른 기기에서 이 그림을 열면 영상 자리가 비어 보여요.',
+    videoNote: videoMB() && accountFor(record) ? `영상 파일도 내 계정에 올라가요(한 개 ${videoMB()}MB까지). 더 큰 영상은 이 기기에만 있으니 유튜브 주소로 넣으면 어디서나 틀어져요.` : '영상 파일은 이 기기에만 저장돼요. 다른 기기에서 이 그림을 열면 영상 자리가 비어 보여요.',
     videoHint: canFilmScenes() ? '영상은 "발표"할 때와 영상으로 내려받을 때 소리와 함께 틀어져요. 그림으로 내려받으면 첫 모습이 나와요.' : '',
     onRemoveUpload: (img) => {
       const next = dropPhoto(O.slides, img.url);
@@ -2886,7 +2888,8 @@ function readOpen() {
  * - onView(view): 화면이 바뀔 때('home' · 'edit') 알려 준다(들여 쓰는 곳이 둘레를 맞출 때 쓴다)
  * - brand: 들여 쓰는 곳의 표시 { name, logo }. 꾸미는 화면 위 막대 맨 앞에 작게 보인다(없으면 표시하지 않는다)
  * - onBrandClick(): 표시를 누르면 기기 저장과 계정 올리기를 마친 뒤 부른다. 저장하지 못하면 이동하지 않는다
- * - sync: 계정 저장 { pull, push, drop, accepts? }(sync.js). accepts(record)는 선택적인 기기 전용 자료 제외 정책이다.
+ * - sync: 계정 저장 { pull, push, drop, accepts?, videoMB? }(sync.js). accepts(record)는 선택적인 기기 전용 자료 제외 정책이다.
+ *   videoMB: 계정이 바탕 영상 파일도 옮겨 줄 때 한 개의 크기 한도(MB). 첫 화면 · 영상 칸의 안내 글이 그것을 알린다.
  * - importAction: 가져오기 연결 { label, open, editorLabel?, editorDescription?, editorMode?: 'inline', hideHome? }.
  *   inline이면 내 자료 안의 root/close/openDesign을 제공한다. open은 {requestClose,dispose}를 반환할 수 있다.
  * - materialAction: {label, accepts?(record), open({designId,slideIndex})} 현재 그림 저장 후 같은 편집기에서 전체 자료 작업을 여는 선택 연결.
