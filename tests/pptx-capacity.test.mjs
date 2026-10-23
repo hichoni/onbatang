@@ -34,7 +34,11 @@ test('slide capacities stay bounded while ordinary text and pictures retain thei
   assert.throws(()=>validatePageInput({items:[{t:'text',text:'가'.repeat(121)}]}),{code:'TEXT_LIMIT'});
   assert.throws(()=>validatePageInput({items:Array.from({length:11},()=>({...image,layout:undefined}))}),{code:'PHOTO_LIMIT'});
   validatePageInput({items:Array.from({length:40},()=>({...image}))});
-  assert.throws(()=>validatePageInput({items:Array.from({length:41},()=>({...image}))}),{code:'ITEM_LIMIT'});
+  assert.throws(()=>validatePageInput({items:Array.from({length:41},()=>({...image}))}),{code:'PHOTO_LIMIT'});
+  // 표의 칸마다 네모 · 글이 생기므로 가져온 장은 요소 160개까지(사진은 40장까지).
+  const cell={t:'shape',layout:'slide',shape:'rect',w:5,h:5};
+  validatePageInput({items:Array.from({length:160},()=>({...cell}))});
+  assert.throws(()=>validatePageInput({items:Array.from({length:161},()=>({...cell}))}),{code:'ITEM_LIMIT'});
   const mixed={items:[imported,{t:'text',text:'가'.repeat(121)}]};
   assert.throws(()=>validatePageInput(mixed),{code:'TEXT_LIMIT'});
   const empty={t:'shape',layout:'slide',shape:'rect',op:0,w:20,h:20};

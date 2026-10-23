@@ -185,3 +185,33 @@ test('the PPT preview frame swaps symbol-font bullets before drawing',async()=>{
  assert.match(source,/import \{bulletChar\} from '\.\/bullets\.js';/);
  assert.match(source,/if\(node\.localName==='buChar'\)\{[^\n]*shown=bulletChar\(char,face\);/);
 });
+
+test('tables become editable cells: one box per cell with its fill and border, its text in place, merged cells as one, covered cells skipped',async()=>{
+ // Regression: a teacher's camp PPT had 9 schedule/roster tables; every table slide fell back to a slide image and the import stopped.
+ const parts=unzipSync(await baseBytes()),name='ppt/slides/slide1.xml';
+ const line='<a:solidFill><a:srgbClr val="DDDCE5"/></a:solidFill>';
+ const cell=(text,fill,extra='',attrs='')=>`<a:tc${attrs}><a:txBody><a:bodyPr/><a:lstStyle/><a:p><a:pPr algn="ctr"/><a:r><a:rPr lang="ko-KR" sz="1800" b="1"><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></a:rPr><a:t>${text}</a:t></a:r></a:p></a:txBody><a:tcPr anchor="ctr"><a:lnL w="9525">${line}</a:lnL><a:lnB w="9525">${line}</a:lnB>${fill?`<a:solidFill><a:srgbClr val="${fill}"/></a:solidFill>`:''}${extra}</a:tcPr></a:tc>`;
+ const table=`<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="900" name="표"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="914400" y="914400"/><a:ext cx="3657600" cy="1828800"/></p:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table"><a:tbl><a:tblPr/><a:tblGrid><a:gridCol w="1219200"/><a:gridCol w="2438400"/></a:tblGrid>`
+  +`<a:tr h="914400">${cell('시간','767491')}${cell('프로그램','767491')}</a:tr>`
+  +`<a:tr h="914400">${cell('개회식 · 점심','F4F2F7','',' gridSpan="2"')}<a:tc hMerge="1"><a:txBody><a:bodyPr/><a:lstStyle/><a:p><a:endParaRPr lang="ko-KR"/></a:p></a:txBody><a:tcPr/></a:tc></a:tr></a:tbl></a:graphicData></a:graphic></p:graphicFrame>`;
+ parts[name]=enc.encode(dec.decode(parts[name]).replace('</p:spTree>',table+'</p:spTree>'));
+ const converted=await convertPptx(repack(parts),{selectedPages:[1]}),items=converted.document.slides[0].items;
+ const mine=items.filter(item=>item.source?.objectId==='900'),boxes=mine.filter(i=>i.t==='shape'),words=mine.filter(i=>i.t==='text');
+ assert.equal(boxes.length,3,'two header cells and one merged cell; the covered cell is skipped');
+ assert.deepEqual(words.map(w=>w.text),['시간','프로그램','개회식 · 점심']);
+ assert.deepEqual(boxes.map(b=>b.color),['#767491','#767491','#f4f2f7']);
+ assert.ok(boxes.every(b=>b.lc==='#dddce5'&&b.line>0),'cell borders keep their colour');
+ const [first,second,merged]=boxes;
+ assert.ok(Math.abs(merged.w-(first.w+second.w))<0.01,'the merged cell spans both columns');
+ assert.ok(Math.abs(second.w-first.w*2)<0.01,'column widths follow the grid');
+ assert.ok(Math.abs(merged.y-first.y-first.h)<0.01,'rows stack');
+ assert.deepEqual(words.map(w=>[w.align,w.valign,w.bold,w.color]),[['c','middle',true,'#ffffff'],['c','middle',true,'#ffffff'],['c','middle',true,'#ffffff']]);
+ assert.ok(!converted.report.warnings.some(w=>w.code==='UNSUPPORTED_ELEMENT'));
+ assert.ok(converted.report.warnings.some(w=>w.code==='TABLE_AS_SHAPES'));
+ // Survives cleaning (the editor's limits for imported slides)
+ assert.equal(cleanDesign(converted.document.slides[0],{keepSpaces:true}).items.filter(i=>i.source?.objectId==='900').length,6);
+ // A chart frame is still refused (only the page, not the whole file).
+ const chart=unzipSync(await baseBytes());chart[name]=enc.encode(dec.decode(chart[name]).replace('</p:spTree>','<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="901" name="차트"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="0" y="0"/><a:ext cx="100" cy="100"/></p:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"/></a:graphic></p:graphicFrame></p:spTree>'));
+ const inspection=await inspectPptx(repack(chart));
+ assert.equal(inspection.pages[0].canImport,false);assert.ok(inspection.pages[0].warnings.some(w=>w.code==='UNSUPPORTED_ELEMENT'));
+});

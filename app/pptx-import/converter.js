@@ -244,6 +244,61 @@ function geometry(properties,size,warn,{line=false,matrix=IDENTITY}={}){
   return {x,y,w,h,rot:Math.round(rot),fx,fy,left,top,width,height,scaleX,scaleY};
 }
 const position=g=>({x:g.x,y:g.y,w:g.w,h:g.h,rot:g.rot,fx:g.fx,fy:g.fy});
+// 표(a:tbl): 칸마다 네모(채움 · 테두리)와 글상자 하나로 옮긴다. 합친 칸(gridSpan · rowSpan)은 하나로, 덮인 칸(hMerge · vMerge)은 건너뛴다.
+// 칸의 높이는 원본 행 높이를 표 틀의 크기에 맞춰 나눈다(글이 넘쳐 늘어난 행도 틀 크기에는 들어 있다).
+function tableItems(object,tbl,{meta,size,matrix,warn,fonts}){
+  const frame=direct(object,'xfrm',NS.p);
+  if(!frame)fail('INHERITED_GEOMETRY','틀에서 물려받은 위치는 아직 가져올 수 없어요.');
+  const g=geometry({childNodes:[{nodeType:1,localName:'xfrm',namespaceURI:NS.a,childNodes:frame.childNodes,getAttribute:key=>frame.getAttribute(key)}]},size,warn,{matrix});
+  if(g.rot||g.fx||g.fy)fail('UNSUPPORTED_TABLE_ROTATION','돌리거나 뒤집은 표는 아직 가져올 수 없어요.');
+  const cols=children(direct(tbl,'tblGrid')).filter(n=>n.localName==='gridCol').map(n=>Number(attr(n,'w')));
+  const rows=children(tbl).filter(n=>n.localName==='tr'&&n.namespaceURI===NS.a),heights=rows.map(r=>Number(attr(r,'h')));
+  if(!cols.length||!rows.length||cols.length>40||rows.length>60||[...cols,...heights].some(v=>!Number.isSafeInteger(v)||v<=0))fail('INVALID_TABLE','표의 칸 정보를 읽을 수 없어요.');
+  const sumW=cols.reduce((a,b)=>a+b,0),sumH=heights.reduce((a,b)=>a+b,0),sx=g.width/sumW,sy=g.height/sumH;
+  const before=(list,end)=>list.slice(0,end).reduce((a,b)=>a+b,0),span=(list,from,n)=>list.slice(from,from+n).reduce((a,b)=>a+b,0);
+  const yes=v=>['1','true'].includes(v),cells=[];
+  rows.forEach((row,r)=>children(row).filter(n=>n.localName==='tc'&&n.namespaceURI===NS.a).forEach((tc,c)=>{
+    if(c>=cols.length)fail('INVALID_TABLE','표의 칸 수가 열 수보다 많아요.');
+    if(yes(attr(tc,'hMerge'))||yes(attr(tc,'vMerge')))return;
+    const w=Math.max(1,Math.min(cols.length-c,Number(attr(tc,'gridSpan'))||1)),h=Math.max(1,Math.min(rows.length-r,Number(attr(tc,'rowSpan'))||1));
+    cells.push({tc,r,c,left:g.left+before(cols,c)*sx,top:g.top+before(heights,r)*sy,width:span(cols,c,w)*sx,height:span(heights,r,h)*sy});
+  }));
+  const pct=(v,total)=>v/total*100,items=[];
+  const styled=cells.some(({tc})=>{const p=direct(tc,'tcPr');return direct(p,'solidFill')||['lnL','lnR','lnT','lnB'].some(k=>visibleLine(direct(p,k)));});
+  if(!styled)warn('TABLE_STYLE_APPROXIMATE','표 스타일은 흰 칸과 옅은 테두리로 옮겼어요. 색은 원본과 다를 수 있어요.');
+  for(const {tc,r,c,left,top,width,height} of cells){
+    const props=direct(tc,'tcPr'),solid=direct(props,'solidFill');
+    if(direct(props,'gradFill')||direct(props,'pattFill')||direct(props,'blipFill'))warn('TABLE_FILL_APPROXIMATE','그라데이션 · 그림으로 채운 칸은 단색으로 옮겼어요.');
+    const edges=['lnL','lnR','lnT','lnB'].map(k=>direct(props,k)).filter(visibleLine).sort((a,b)=>Number(attr(b,'w')||12700)-Number(attr(a,'w')||12700));
+    const box={x:pct(left+width/2,size.width),y:pct(top+height/2,size.height),w:pct(width,size.width),h:pct(height,size.height),rot:0,fx:false,fy:false};
+    if(box.x<0||box.x>100||box.y<0||box.y>100||box.w<0.01||box.w>140||box.h<0.01||box.h>140)fail('UNSUPPORTED_GEOMETRY','표 칸의 배치가 편집 범위를 벗어났어요.');
+    if(solid||edges.length||!styled){
+      const shape={...meta(`cell:${r}:${c}`),t:'shape',...box,shape:'rect',color:solid?color(solid,'#ffffff',warn):'#ffffff'};
+      if(edges.length){shape.line=Math.max(0.01,Math.min(4,lineWidth(edges[0],size)*g.scaleX));shape.lc=color(direct(edges[0],'solidFill'),'#222222',warn);if(!solid&&styled)shape.hollow=true;}
+      else if(!styled){shape.line=0.06;shape.lc='#c9ced6';}
+      if(edges.length>1&&new Set(edges.map(e=>attr(e,'w')+color(direct(e,'solidFill'),'#222222',()=>{}))).size>1)warn('TABLE_BORDER_APPROXIMATE','칸마다 다른 테두리는 가장 굵은 테두리 하나로 옮겼어요.');
+      items.push(shape);
+    }
+    const body=direct(tc,'txBody'),value=body?extractText(body):'';
+    if(!value.trim())continue;
+    if(value.length>SLIDE_LIMITS.text)fail('TEXT_LIMIT',`한 칸의 글이 ${SLIDE_LIMITS.text}자를 넘어요.`);
+    const first=all(body,'rPr')[0]||all(body,'endParaRPr')[0],paragraph=direct(children(body).find(n=>n.localName==='p'),'pPr');
+    const points=Number(attr(first,'sz')||1800)/100;
+    if(!Number.isFinite(points)||points<=0)fail('INVALID_TEXT_SIZE','글자 크기가 올바르지 않아요.');
+    const wanted=points*g.scaleY/(size.width/12700)*100,fontSize=Math.max(0.1,Math.min(30,wanted));
+    const margin=(key,fallback)=>{const raw=attr(props,key);return /^\d+$/.test(raw)?Number(raw):fallback;};
+    const l=margin('marL',91440)*g.scaleX,rr=margin('marR',91440)*g.scaleX,t=margin('marT',45720)*g.scaleY,b=margin('marB',45720)*g.scaleY;
+    const innerW=Math.max(width*0.2,width-l-rr),innerH=Math.max(height*0.2,height-t-b),cx=left+l+innerW/2,cy=top+t+innerH/2;
+    for(const node of [...all(body,'latin'),...all(body,'ea')]){const font=attr(node,'typeface');if(font&&!font.startsWith('+')&&font.length<=240&&!/[\u0000-\u001f]/.test(font))fonts.add(font);}
+    if(all(body,'rPr').length>1)warn('RICH_TEXT_FLATTENED','문단 안의 여러 서식은 첫 글자 서식으로 통일했어요.');
+    const textFill=direct(first,'solidFill');
+    items.push({...meta(`cell-text:${r}:${c}`),t:'text',x:pct(cx,size.width),y:pct(cy,size.height),w:pct(innerW,size.width),h:pct(innerH,size.height),rot:0,
+      size:fontSize,font:'gothic',color:color(textFill,'#222222',warn),bold:yes(attr(first,'b')),italic:yes(attr(first,'i')),under:attr(first,'u')==='sng',
+      align:{l:'l',ctr:'c',r:'r'}[attr(paragraph,'algn')]||'l',valign:({ctr:'middle',b:'bottom'})[attr(props,'anchor')]||'top',lh:1.2,nowrap:false,hangingPunct:false,text:value});
+  }
+  warn('TABLE_AS_SHAPES','표를 칸마다 네모와 글상자로 옮겼어요. 칸을 더하거나 합치는 표 편집은 아직 없어요.');
+  return items;
+}
 function visibleLine(line){
   if(!line||direct(line,'noFill')||attr(line,'w')==='0')return false;
   return !!attr(line,'w')||children(line).some(node=>node.localName!=='extLst');
@@ -442,12 +497,13 @@ async function pageData(context,path,pageNumber){
     if(object.namespaceURI!==NS.p){reject('UNSUPPORTED_ELEMENT','지원하지 않는 슬라이드 요소가 있어요.');continue;}
     if(['nvGrpSpPr','grpSpPr'].includes(object.localName))continue;
     try{
-      if(!['sp','pic','cxnSp'].includes(object.localName))fail('UNSUPPORTED_ELEMENT','표·차트 등은 아직 가져올 수 없어요.');
+      if(!['sp','pic','cxnSp'].includes(object.localName)&&!(object.localName==='graphicFrame'&&all(object,'tbl').length))fail('UNSUPPORTED_ELEMENT','차트 · 다이어그램 등은 아직 가져올 수 없어요.');
       const identity=all(object,'cNvPr',NS.p)[0],objectId=attr(identity,'id');
       if(!/^\d{1,10}$/.test(objectId)||Number(objectId)>4294967295||seen.has(objectId))fail('DUPLICATE_OBJECT_ID','요소 이름표가 없거나 중복되었어요.');seen.add(objectId);
       if(['1','true'].includes(attr(identity,'hidden')))fail('UNSUPPORTED_HIDDEN_OBJECT','숨긴 요소가 있는 장은 아직 가져올 수 없어요.');
       const origin={kind:'pptx',sourceDocumentId:source.sourceDocumentId,assetId:source.assetId,pageNumber,objectId,sha256:source.sha256};
       const meta=role=>({id:legacyId('e',`${source.sha256}:${pageNumber}:${objectId}:${role}`),layout:'slide',source:origin,assetRefs:[source.assetId]});
+      if(object.localName==='graphicFrame'){items.push(...tableItems(object,all(object,'tbl')[0],{meta,size,matrix,warn,fonts}));continue;}
       const props=direct(object,'spPr',NS.p),preset=attr(direct(props,'prstGeom'),'prst'),g=geometry(props,size,warn,{line:preset==='line'&&object.localName!=='pic',matrix});
       if(all(object,'effectLst').some(n=>children(n).length)||all(object,'effectDag').length)warn('EFFECTS_OMITTED','그림자·광택 효과는 가져오지 않아요.');
       if(all(object,'hlinkClick').length||all(object,'hlinkMouseOver').length)warn('LINK_OMITTED','클릭·마우스 링크 동작은 제외하고 내용을 가져옵니다.');

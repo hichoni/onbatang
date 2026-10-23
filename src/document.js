@@ -3,7 +3,8 @@ export const SCHEMA_VERSION = 1;
 export const DOCUMENT_LIMITS = Object.freeze({ pages: 20, items: 40, photos: 10, text: 120, assets: 256 });
 // Imported slides keep authored text boxes and pictures as individual elements.
 // The public marker also works after a guest projection removes provenance.
-export const SLIDE_LIMITS = Object.freeze({ items: 40, photos: 40, text: 4096 });
+// PPT 에서 가져온 장(slide 배치 요소)은 표의 칸마다 네모와 글이 하나씩 생기므로 요소를 더 많이 둔다.
+export const SLIDE_LIMITS = Object.freeze({ items: 160, photos: 40, text: 4096 });
 // Speaker notes are plain text for the presenter only: never drawn on the slide.
 export const NOTES_LIMIT = 5000;
 /** 발표자 노트. 글이 아니거나 비어 있으면 ''(저장하지 않는다). 너무 긴 것은 자르고 조종 문자는 뺀다(줄바꿈·탭은 둔다). */
