@@ -1745,6 +1745,8 @@ async function present(O) {
   const onKey = (e) => {
     // 앱·그림판 안에서 치는 글쇠는 앱의 것이다. 프레젠터의 넘기기(PageDown · PageUp)와 Esc 만 발표가 듣는다.
     if(e.target?.closest?.('.cv-show-activity')&&!['Escape','PageDown','PageUp'].includes(e.key))return;
+    // 발표 위에 호스트가 띄운 칸(가이랩 투표 만들기 같은)의 글 칸에서 치는 글쇠는 그 칸의 것이다. 프레젠터의 넘기기와 Esc 만 발표가 듣는다.
+    if (!['Escape', 'PageDown', 'PageUp'].includes(e.key) && e.target?.closest?.('input, textarea, select, [contenteditable=""], [contenteditable="true"]')) return;
     // 아래 막대의 단추에 초점이 있을 때 스페이스 · 엔터는 그 단추를 누르는 글쇠다(다음 장으로 넘기지 않는다).
     if ((e.key === ' ' || e.key === 'Enter') && e.target?.closest?.('.cv-show-key')) { e.stopPropagation(); return; }
     // 유튜브를 틀었으면 스페이스 바는 멈추기 · 다시 틀기다(다음 장은 → · PageDown · 누르기).

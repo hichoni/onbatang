@@ -79,6 +79,15 @@ test('a host phone remote and a host audience panel: buttons in the show bar, st
   assert.deepEqual(await page.evaluate(() => [window.audience.first, window.audience.root]), [{at: 2, total: 3, title: '리모컨 발표'}, true]);
   await page.evaluate(() => window.command({action: 'prev'}));
   await page.waitForFunction(() => window.audience.updates.at(-1).at === 1);
+  // Typing in a text box the host puts on the show (가이랩 투표 칸) stays in that box: space and arrows do not turn slides.
+  await page.evaluate(() => { const box = document.createElement('input'); box.className = 'host-box'; document.querySelector('.cv-show').append(box); box.focus(); });
+  await page.keyboard.type('1 번 ');
+  await page.keyboard.press('ArrowRight');
+  assert.equal(await count.textContent(), '2 / 3');
+  assert.equal(await page.locator('.host-box').inputValue(), '1 번 ');
+  // A presenter clicker (PageDown) still turns the slide.
+  await page.keyboard.press('PageDown'); assert.equal(await count.textContent(), '3 / 3');
+  await page.keyboard.press('PageUp'); assert.equal(await count.textContent(), '2 / 3');
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => window.remoteClosed === 1 && window.audience.closed === 1);
   assert.equal(await page.locator('.cv-show').count(), 0);
