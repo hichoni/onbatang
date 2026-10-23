@@ -14,7 +14,7 @@ import { cleanDesign } from '../src/model.js';
  */
 export function mountPlayer(stage, { slides = [], aspect = 16 / 9, onChange = () => {}, edge = 1920 } = {}) {
   const pages = slides.map((s) => cleanDesign(s, { keepSpaces: true }));
-  let at = 0, parts = null, turning = null, leaving = null, film = null, tube = [], timers = [], alive = true;
+  let at = 0, parts = null, turning = null, leaving = null, film = null, waiting = null, tube = [], timers = [], alive = true;
   const shown = new WeakMap(), films = new WeakMap(), tubes = new WeakMap();
   stage.classList.add('ob-player');
   stage.style.setProperty('--ob-player-ratio', String(aspect));
@@ -38,12 +38,18 @@ export function mountPlayer(stage, { slides = [], aspect = 16 / 9, onChange = ()
   const startMedia = (card, design, delay) => {
     for (const t of timers) clearTimeout(t);
     timers = [];
-    film?.pause(); film = null;
+    film?.pause(); film = null; waiting = null;
     const layer = design.video ? card.querySelector(':scope > .fe-scene') : null;
     if (layer) {
       const mine = film = scenePlayer(layer, design.video);
       films.set(card, mine);
-      timers.push(setTimeout(() => { if (film === mine) mine.play({ from: design.video.in }); }, delay));
+      // 장이 열리면 바로 트는 영상만 저절로. 아니면 첫 모습으로 기다리다가 next() 에서 튼다(발표 화면과 같다).
+      if (design.video.auto) timers.push(setTimeout(() => { if (film === mine) mine.play({ from: design.video.in }); }, delay));
+      else {
+        waiting = { player: mine, layer, from: design.video.in };
+        layer.classList.add('fe-standby');
+        mine.ready.then((ok) => { if (!ok && waiting?.player === mine) { waiting = null; layer.classList.remove('fe-standby'); } });
+      }
     }
     for (const p of tube) if (p.started) p.pause();
     tube = youTubePlayers(card);
@@ -78,6 +84,7 @@ export function mountPlayer(stage, { slides = [], aspect = 16 / 9, onChange = ()
       if (!alive || !pages.length) return false;
       settle();
       parts?.finish();
+      if (waiting) { const w = waiting; waiting = null; w.layer.classList.remove('fe-standby'); w.player.play({ from: w.from }); return true; }
       if (parts?.next()) { tell(); return true; }
       const waiting = tube.find((p) => !p.started);
       if (waiting) { waiting.play(); return true; }

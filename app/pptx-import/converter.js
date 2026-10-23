@@ -245,6 +245,19 @@ function geometry(properties,size,warn,{line=false,matrix=IDENTITY}={}){
 }
 const position=g=>({x:g.x,y:g.y,w:g.w,h:g.h,rot:g.rot,fx:g.fx,fy:g.fy});
 const MEDIA_TYPES={mp4:'video/mp4',m4v:'video/mp4',mov:'video/quicktime',webm:'video/webm',mp3:'audio/mpeg',m4a:'audio/mp4',wav:'audio/wav'};
+// PowerPoint 의 "자동으로" 트는 영상: 그 요소를 트는 명령(playFrom)이 장이 열릴 때 시작하는 묶음(evt="onBegin") 안에 있다.
+// 그렇지 않으면(명령이 없거나 "클릭할 때") 누를 때 튼다.
+function autoPlays(root,objectId){
+  for(const cmd of all(root,'cmd',NS.p)){
+    if(!/^playFrom/.test(attr(cmd,'cmd')||''))continue;
+    if(attr(all(cmd,'spTgt',NS.p)[0],'spid')!==String(objectId))continue;
+    for(let node=cmd.parentNode;node&&node!==root;node=node.parentNode){
+      const conds=direct(node,'stCondLst',NS.p);
+      if(conds&&children(conds).some(c=>c.localName==='cond'&&attr(c,'evt')==='onBegin'))return true;
+    }
+  }
+  return false;
+}
 /** 그림 요소에 딸린 영상 · 소리 { kind, path, mime, bytes(이 파일 안에 있을 때만) }. 없으면 null. */
 function mediaOf(object,pageRels,files){
   const nvPr=direct(direct(object,'nvPicPr',NS.p),'nvPr',NS.p);if(!nvPr)return null;
@@ -539,7 +552,7 @@ async function pageData(context,path,pageNumber){
         else if(clip?.kind==='video'){
           // 장을 거의 다 덮는 영상은 바탕 영상으로(그 위의 글 · 도형은 영상 위에 그대로 놓인다). 작은 영상은 표지 그림으로 남긴다.
           const full=g.w>=96&&g.h>=96&&Math.abs(g.x-50)<=3&&Math.abs(g.y-50)<=3&&!g.rot;
-          if(full&&clip.bytes){media.push({kind:'video',path:clip.path,mime:clip.mime,posterId:picture.id,bytes:clip.bytes});warn('VIDEO_AS_SCENE','장을 채운 영상은 이 장의 바탕 영상으로 가져와요. 영상 파일은 이 기기에 저장돼요.');}
+          if(full&&clip.bytes){media.push({kind:'video',path:clip.path,mime:clip.mime,posterId:picture.id,bytes:clip.bytes,...(autoPlays(root,objectId)?{auto:true}:{})});warn('VIDEO_AS_SCENE','장을 채운 영상은 이 장의 바탕 영상으로 가져와요. 영상 파일은 이 기기에 저장돼요.');}
           else warn('VIDEO_AS_POSTER',clip.bytes?'장 일부에 놓인 영상은 표지 그림으로 가져왔어요. "바탕 영상"에서 영상을 다시 넣을 수 있어요.':'밖에 있는 영상이라 표지 그림만 가져왔어요. "바탕 영상"에서 영상을 넣을 수 있어요.');
         }
         continue;

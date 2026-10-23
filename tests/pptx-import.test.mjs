@@ -213,6 +213,13 @@ test('video slides: a slide-filling video becomes that slide\'s background video
  assert.ok(codes(1).includes('VIDEO_AS_SCENE')&&codes(1).includes('AUDIO_OMITTED'));
  assert.ok(codes(2).includes('VIDEO_AS_POSTER'));
  assert.equal(converted.document.slides[1].items.filter(i=>i.source?.objectId==='802').length,1);
+ assert.equal(clip.auto,undefined,'without PowerPoint timing the video waits for a click');
+ // PowerPoint "자동으로": the playFrom command sits in a group that starts with the slide (evt="onBegin").
+ const timing=`<p:timing><p:tnLst><p:par><p:cTn id="1" dur="indefinite" restart="never" nodeType="tmRoot"><p:childTnLst><p:seq concurrent="1" nextAc="seek"><p:cTn id="2" dur="indefinite" nodeType="mainSeq"><p:childTnLst><p:par><p:cTn id="3" fill="hold"><p:stCondLst><p:cond delay="indefinite"/><p:cond evt="onBegin" delay="0"><p:tn val="2"/></p:cond></p:stCondLst><p:childTnLst><p:par><p:cTn id="4" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst><p:par><p:cTn id="5" presetID="1" presetClass="mediacall" nodeType="afterEffect"><p:childTnLst><p:cmd type="call" cmd="playFrom(0.0)"><p:cBhvr><p:cTn id="6" dur="1" fill="hold"/><p:tgtEl><p:spTgt spid="801"/></p:tgtEl></p:cBhvr></p:cmd></p:childTnLst></p:cTn></p:par></p:childTnLst></p:cTn></p:par></p:childTnLst></p:cTn></p:par></p:childTnLst></p:cTn></p:seq></p:childTnLst></p:cTn></p:par></p:tnLst></p:timing>`;
+ parts[name]=enc.encode(dec.decode(parts[name]).replace('</p:cSld>','</p:cSld>'+timing));
+ assert.equal((await convertPptx(repack(parts),{selectedPages:[1]})).media[0].auto,true);
+ parts[name]=enc.encode(dec.decode(parts[name]).replace('<p:cond evt="onBegin" delay="0"><p:tn val="2"/></p:cond>',''));
+ assert.equal((await convertPptx(repack(parts),{selectedPages:[1]})).media[0].auto,undefined,'"클릭할 때" stays a click');
 });
 
 test('tables become editable cells: one box per cell with its fill and border, its text in place, merged cells as one, covered cells skipped',async()=>{

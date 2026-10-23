@@ -74,9 +74,9 @@ test('material tabs default to photos, expose real ARIA panels, retain selection
   assert.match(await activePanel(page).textContent(), /PPT를 온바탕으로/); assert.match(await activePanel(page).textContent(), /원본 비율로 자동 맞춤/);
   assert.equal(await page.locator('[data-upload-help=ppt]').evaluate(node => node.open), false);
   assert.equal(await page.getByRole('button', {name: '사진 올리기', exact: true}).count(), 0);
-  await page.keyboard.press('ArrowRight'); await assertSelected(page, 'youtube', true);
+  await page.keyboard.press('ArrowRight'); await assertSelected(page, 'video', true);
   await page.keyboard.press('Home'); await assertSelected(page, 'photo', true);
-  await page.keyboard.press('End'); await assertSelected(page, 'youtube', true);
+  await page.keyboard.press('End'); await assertSelected(page, 'video', true);
   await page.keyboard.press('ArrowLeft'); await assertSelected(page, 'ppt', true);
   await page.evaluate(() => window.editor.refresh()); await assertSelected(page, 'ppt', true);
   await page.locator('.fe-tab[data-tab=text]').click(); await page.locator('.fe-tab[data-tab=upload]').click(); await assertSelected(page, 'ppt');
@@ -92,10 +92,10 @@ test('photo upload preserves its input/list through tab switches and asynchronou
   await page.locator('.fe-panel input[type=file]').first().setInputFiles({name: 'self-authored.png', mimeType: 'image/png', buffer: Buffer.from(image, 'base64')});
   await page.waitForFunction(() => typeof window.finishUpload === 'function');
   await selected(page, 'ppt').click(); assert.equal(await page.locator('[data-document-import]').isDisabled(), true);
-  await selected(page, 'youtube').click(); await page.getByLabel('유튜브 영상 주소', {exact: true}).fill('https://youtu.be/abcdefghijk');
+  await selected(page, 'video').click(); await page.getByLabel('유튜브 영상 주소', {exact: true}).fill('https://youtu.be/abcdefghijk');
   await page.evaluate(() => { window.typedInput = document.activeElement; window.holdUpload = false; window.finishUpload(); });
   await page.waitForFunction(() => window.editor.getUploads().length === 1);
-  await assertSelected(page, 'youtube'); assert.equal(await page.getByLabel('유튜브 영상 주소', {exact: true}).inputValue(), 'https://youtu.be/abcdefghijk');
+  await assertSelected(page, 'video'); assert.equal(await page.getByLabel('유튜브 영상 주소', {exact: true}).inputValue(), 'https://youtu.be/abcdefghijk');
   assert.equal(await page.evaluate(() => document.activeElement === window.typedInput), true, 'an asynchronously inserted photo must not steal the newer video-input focus');
   assert.equal(await page.evaluate(() => document.querySelector('.fe-panel input[type=file]') === window.photoInput), true);
   await page.keyboard.press('Enter');
@@ -109,7 +109,7 @@ test('photo upload preserves its input/list through tab switches and asynchronou
 
 test('narrow material tabs keep PPT busy guards, show only selected content and support the two-tab embed without PPT import', options, async t => {
   const f = await setup(t, {width: 390}), {page} = f;
-  for (const mode of ['photo', 'ppt', 'youtube']) {
+  for (const mode of ['photo', 'ppt', 'video']) {
     await selected(page, mode).click(); await assertSelected(page, mode);
     assert.equal(await page.locator('.fe-panel').evaluate(node => node.scrollWidth <= node.clientWidth + 1), true);
     assert.equal(await page.locator('[data-upload-help]:visible').evaluate(node => node.open), false);
@@ -125,6 +125,6 @@ test('narrow material tabs keep PPT busy guards, show only selected content and 
   const plain = await setup(t, {width: 390, documentImport: false, library: false});
   assert.equal(await plain.page.locator('[data-upload-tab]').count(), 2); assert.equal(await selected(plain.page, 'ppt').count(), 0);
   assert.match(await plain.page.locator('.fe-panel-desc').textContent(), /사진·영상을 넣어요\./);
-  await selected(plain.page, 'photo').focus(); await plain.page.keyboard.press('ArrowLeft'); await assertSelected(plain.page, 'youtube', true);
+  await selected(plain.page, 'photo').focus(); await plain.page.keyboard.press('ArrowLeft'); await assertSelected(plain.page, 'video', true);
   assert.deepEqual(plain.errors, []); assert.deepEqual(plain.external, []);
 });

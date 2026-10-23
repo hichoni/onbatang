@@ -49,7 +49,7 @@ test('a host share button: in the bar, flushes before opening, goTo opens a slid
   assert.deepEqual(await page.evaluate(() => window.opened[0].slides), 2);
   await page.waitForFunction(() => window.saved.length > 0);
   await page.evaluate(() => window.goTo(1, {upload: 'youtube'}));
-  await page.locator('.fe-upload-tab.on[data-upload-tab="youtube"]').waitFor();
+  await page.locator('.fe-upload-tab.on[data-upload-tab="video"]').waitFor();
   assert.deepEqual(errors, []);
 });
 

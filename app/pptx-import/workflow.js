@@ -131,7 +131,7 @@ export function createPptxImportWorkflow({imports,convert=convertPptx,applyFonts
        try{
         const video=await keepVideo({blob:new Blob([m.bytes],{type:m.mime}),design:document.id,pageNumber:m.pageNumber});
         if(!video?.src){videoNotes.push(m.pageNumber);continue;}
-        slide.video={src:video.src,dur:video.dur,fit:'cover'};
+        slide.video={src:video.src,dur:video.dur,fit:'cover',...(m.auto?{auto:true}:{})};      // PPT 에서 "자동으로"였던 것만 저절로. 아니면 누를 때 튼다
         slide.items=slide.items.filter(item=>item.id!==m.posterId);
        }catch(error){if(error?.code==='CANCELLED')throw error;videoNotes.push(m.pageNumber);}
       }
