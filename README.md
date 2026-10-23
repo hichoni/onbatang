@@ -1,5 +1,9 @@
 # 온바탕 — 생각을 펼치는 따뜻한 디자인 공간
 
+## v0.67.0 · 투표 결과를 장으로 남기기 (2026-10-23)
+
+- 발표 화면이 `showAudience.open` 에 `savePoll({ question, options, counts })` 를 더 줍니다. 결과 장(`app/poll-result.js` 의 `pollResultPage`: 질문 · 칸마다 막대와 몇 명 · 몇 % · 참여 수와 날짜, `source.kind: 'result'`, `origin` 은 투표하던 장)을 지금 장 다음에 넣고 그 장으로 갑니다. 활동 결과 장과 같은 길(`commitActivityDocument`)로 저장해서, PPT 전체 자료에서도 쪽 순서에 들어갑니다. 장이 가득 찼거나 결과가 고르지 않으면 알아듣게 거절합니다.
+
 ## v0.66.0 · 발표 위 칸의 글쇠 (2026-10-23)
 
 - 발표 위에 호스트가 띄운 칸(가이랩의 실시간 투표 만들기)의 글 칸(`input` · `textarea` · `select` · 고칠 수 있는 글)에서 치는 글쇠는 그 칸의 것입니다. 스페이스 · 화살표 · 글자 글쇠가 장을 넘기거나 발표 도구를 켜지 않습니다. 프레젠터의 넘기기(PageDown · PageUp)와 Esc 는 그대로 발표가 듣습니다.

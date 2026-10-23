@@ -20,8 +20,8 @@ record.slides=[{id:'premote001',bg:'#ffffff',notes:'첫 장에서 물어보기',
 await putDesign(record);
 window.updates=[];window.opened=0;window.remoteClosed=0;
 window.audience={opened:0,updates:[],closed:0};
-await startMinican({storage:'remote-fixture',showAudience:{open:async({state,root})=>{window.audience.opened++;window.audience.first=state();window.audience.root=root.classList.contains('cv-show');return {update:(s)=>window.audience.updates.push(s),close:()=>{window.audience.closed++;}};}},showRemote:{open:async({state,command})=>{window.opened++;window.command=command;window.firstState=state();return {update:(s)=>window.updates.push(s),close:()=>{window.remoteClosed++;}};}}});
-await openSavedDesign(record.id);window.ready=true;
+await startMinican({storage:'remote-fixture',showAudience:{open:async({state,root,savePoll})=>{window.audience.opened++;window.audience.savePoll=savePoll;window.audience.first=state();window.audience.root=root.classList.contains('cv-show');return {update:(s)=>window.audience.updates.push(s),close:()=>{window.audience.closed++;}};}},showRemote:{open:async({state,command})=>{window.opened++;window.command=command;window.firstState=state();return {update:(s)=>window.updates.push(s),close:()=>{window.remoteClosed++;}};}}});
+await openSavedDesign(record.id);window.recordId=record.id;window.ready=true;
 </script>`;
 
 test('a host phone remote and a host audience panel: buttons in the show bar, state on every turn, remote commands, both closed with the show', options, async t => {
@@ -88,8 +88,18 @@ test('a host phone remote and a host audience panel: buttons in the show bar, st
   // A presenter clicker (PageDown) still turns the slide.
   await page.keyboard.press('PageDown'); assert.equal(await count.textContent(), '3 / 3');
   await page.keyboard.press('PageUp'); assert.equal(await count.textContent(), '2 / 3');
+  // 투표 결과를 다음 장으로: 지금 장(2장) 다음에 "결과" 장이 들어가고 그 장으로 간다. 이 기기에 저장된다. 고르지 못한 결과는 막는다.
+  const saved = await page.evaluate(() => window.audience.savePoll({question: '지구는 둥글까요?', options: ['O', 'X'], counts: [3, 1]}));
+  assert.deepEqual(saved, {at: 2, total: 4});
+  assert.equal(await count.textContent(), '3 / 4');
+  assert.match(await page.locator('.cv-show-stage').innerText(), /지구는 둥글까요\?[\s\S]*3명 · 75%[\s\S]*1명 · 25%[\s\S]*4명 참여/);
+  const kept = await page.evaluate(async () => (await (await import('/app/store.js')).getDesign(window.recordId)).slides.map(p => [p.id.slice(0, 8), p.source?.kind || '', p.origin?.pageId || '']));
+  assert.equal(kept.length, 4); assert.deepEqual(kept[2].slice(1), ['result', 'premote002']);
+  await assert.rejects(page.evaluate(() => window.audience.savePoll({options: ['O'], counts: [1]})), /투표 결과를 확인/);
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => window.remoteClosed === 1 && window.audience.closed === 1);
+  // 발표를 끝내도 결과 장은 그림에 남는다(띠에 4장).
+  assert.equal(await page.locator('.cv-slide[data-slide]').count(), 4);
   assert.equal(await page.locator('.cv-show').count(), 0);
   assert.deepEqual(errors, []);
 });
