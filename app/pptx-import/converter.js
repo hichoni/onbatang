@@ -244,6 +244,18 @@ function geometry(properties,size,warn,{line=false,matrix=IDENTITY}={}){
   return {x,y,w,h,rot:Math.round(rot),fx,fy,left,top,width,height,scaleX,scaleY};
 }
 const position=g=>({x:g.x,y:g.y,w:g.w,h:g.h,rot:g.rot,fx:g.fx,fy:g.fy});
+const MEDIA_TYPES={mp4:'video/mp4',m4v:'video/mp4',mov:'video/quicktime',webm:'video/webm',mp3:'audio/mpeg',m4a:'audio/mp4',wav:'audio/wav'};
+/** 그림 요소에 딸린 영상 · 소리 { kind, path, mime, bytes(이 파일 안에 있을 때만) }. 없으면 null. */
+function mediaOf(object,pageRels,files){
+  const nvPr=direct(direct(object,'nvPicPr',NS.p),'nvPr',NS.p);if(!nvPr)return null;
+  const video=direct(nvPr,'videoFile'),audio=direct(nvPr,'audioFile')||direct(nvPr,'wavAudioFile'),embedded=all(nvPr,'media',P14)[0];
+  if(!video&&!audio&&!embedded)return null;
+  const ids=[embedded?.getAttributeNS(NS.r,'embed'),(video||audio)?.getAttributeNS(NS.r,'link'),(video||audio)?.getAttributeNS(NS.r,'embed')].filter(Boolean);
+  const rel=ids.map(id=>pageRels.get(id)).find(r=>r&&!r.external&&files[r.target]);
+  const path=rel?.target||'',ext=path.slice(path.lastIndexOf('.')+1).toLowerCase(),mime=MEDIA_TYPES[ext]||'';
+  const kind=audio||mime.startsWith('audio/')?'audio':'video';
+  return {kind,path,mime,...(rel&&mime.startsWith('video/')?{bytes:files[rel.target]}:{})};
+}
 // 표(a:tbl): 칸마다 네모(채움 · 테두리)와 글상자 하나로 옮긴다. 합친 칸(gridSpan · rowSpan)은 하나로, 덮인 칸(hMerge · vMerge)은 건너뛴다.
 // 칸의 높이는 원본 행 높이를 표 틀의 크기에 맞춰 나눈다(글이 넘쳐 늘어난 행도 틀 크기에는 들어 있다).
 function tableItems(object,tbl,{meta,size,matrix,warn,fonts}){
@@ -452,6 +464,8 @@ async function pageData(context,path,pageNumber){
   const {xml,files,rels,size,source,fonts,defaultTextStyle}=context,doc=xml(path),root=doc.documentElement,warnings=[],fontUsage=[];
   const warn=(code,message)=>{if(!warnings.some(w=>w.code===code))warnings.push(warning(code,message,pageNumber));};
   let canImport=true;const reject=(code,message)=>{canImport=false;warn(code,message);};
+  // 영상 · 소리: 그 그림(표지)은 그대로 가져오고, 장을 꽉 채운 영상은 그 장의 바탕 영상으로 쓴다(media. 파일을 저장하는 일은 workflow 가 한다).
+  const media=[];
   if(root.namespaceURI!==NS.p||root.localName!=='sld')fail('INVALID_SLIDE','슬라이드 XML이 올바르지 않아요.',{pageNumber});
   const text=rawSlideText(doc),cSld=direct(root,'cSld',NS.p),tree=direct(cSld,'spTree',NS.p),items=[],seen=new Set();
   if(!tree)reject('INVALID_SLIDE','슬라이드 요소 목록이 없어요.');
@@ -462,7 +476,7 @@ async function pageData(context,path,pageNumber){
   const pageRels=rels.get(path)||new Map();let notesText='',speakerNotes='',inheritedBackground,theme,masterTextStyles;
   for(const rel of pageRels.values()){
     if(rel.external){if(rel.type==='hyperlink')warn('EXTERNAL_LINK_OMITTED','외부 하이퍼링크 동작은 제외하고 내용을 가져옵니다.');else reject('EXTERNAL_RESOURCE','외부 파일을 불러와야 하는 장은 가져올 수 없어요.');continue;}
-    if(['video','audio','media','oleObject','chart','diagramData','diagramDrawing'].includes(rel.type))reject('UNSUPPORTED_MEDIA','영상·소리·차트·개체가 있는 장은 아직 가져올 수 없어요.');
+    if(['oleObject','chart','diagramData','diagramDrawing'].includes(rel.type))reject('UNSUPPORTED_MEDIA','차트·개체가 있는 장은 아직 가져올 수 없어요.');
     if(rel.type==='notesSlide'){const notesDoc=xml(rel.target);notesText=rawSlideText(notesDoc);speakerNotes=notesBodyText(notesDoc);}
     if(rel.type==='hyperlink')warn('LINK_OMITTED','슬라이드 링크 동작은 제외하고 내용을 가져옵니다.');
     if(rel.type==='slideLayout'){
@@ -518,7 +532,17 @@ async function pageData(context,path,pageNumber){
         if(g.w<0.1||g.h<0.1||g.w>300*Math.max(1,size.height/size.width)||g.h>300*Math.max(1,size.width/size.height))fail('UNSUPPORTED_GEOMETRY','그림 크기가 편집 범위를 벗어났어요.');
         const {bytes,mime}=await rasterPicture(files[rel.target],rel.target,{crop:['l','t','r','b'].map(k=>Number(attr(crop,k)||0)/100000),mask:preset==='ellipse'?'ellipse':null,aspect:g.width/g.height},warn);
         const alt=cleanAlt(attr(identity,'descr'));
-        items.push({...meta('image'),t:'image',...position(g),url:`data:${mime};base64,${base64(bytes)}`,...(alt?{alt}:{})});continue;
+        const picture={...meta('image'),t:'image',...position(g),url:`data:${mime};base64,${base64(bytes)}`,...(alt?{alt}:{})};
+        items.push(picture);
+        const clip=mediaOf(object,pageRels,files);
+        if(clip?.kind==='audio')warn('AUDIO_OMITTED','소리는 가져오지 않고 그 아이콘 그림만 가져와요. 원본 PPT는 보관됩니다.');
+        else if(clip?.kind==='video'){
+          // 장을 거의 다 덮는 영상은 바탕 영상으로(그 위의 글 · 도형은 영상 위에 그대로 놓인다). 작은 영상은 표지 그림으로 남긴다.
+          const full=g.w>=96&&g.h>=96&&Math.abs(g.x-50)<=3&&Math.abs(g.y-50)<=3&&!g.rot;
+          if(full&&clip.bytes){media.push({kind:'video',path:clip.path,mime:clip.mime,posterId:picture.id,bytes:clip.bytes});warn('VIDEO_AS_SCENE','장을 채운 영상은 이 장의 바탕 영상으로 가져와요. 영상 파일은 이 기기에 저장돼요.');}
+          else warn('VIDEO_AS_POSTER',clip.bytes?'장 일부에 놓인 영상은 표지 그림으로 가져왔어요. "바탕 영상"에서 영상을 다시 넣을 수 있어요.':'밖에 있는 영상이라 표지 그림만 가져왔어요. "바탕 영상"에서 영상을 넣을 수 있어요.');
+        }
+        continue;
       }
       const body=direct(object,'txBody',NS.p),value=body?extractText(body):'',solid=direct(props,'solidFill'),line=direct(props,'ln'),noFill=direct(props,'noFill');
       const shapes={rect:'rect',roundRect:'round',ellipse:'circle',triangle:'tri',diamond:'diamond',rightArrow:'arrow',leftArrow:'arrow',wedgeRectCallout:'bubble'},custom=direct(props,'custGeom'),capsule=custom&&customCapsule(custom,g),stroke=visibleLine(line);
@@ -617,6 +641,7 @@ async function pageData(context,path,pageNumber){
   }
   if(itemBytes>PPTX_LIMITS.documentBytes-4096)reject('DOCUMENT_SIZE_LIMIT','이 장의 편집 데이터가 저장 한도를 넘어요.');
   return {pageNumber,title:text.split('\n').find(v=>v.trim())?.slice(0,80)||`${pageNumber}쪽`,text,notesText,fontUsage,warnings,canImport,estimatedBytes:itemBytes+1024,
+    ...(canImport&&media.length?{media}:{}),
     slide:{id:legacyId('p',`${source.sha256}:${pageNumber}`),bg,...slideNotes({notes:speakerNotes}),...(hidden?{hidden:true}:{}),source:{kind:'pptx',sourceDocumentId:source.sourceDocumentId,assetId:source.assetId,pageNumber,sha256:source.sha256},assetRefs:[source.assetId],items:canImport?items:[]}};
 }
 
@@ -646,7 +671,7 @@ async function readPptx(file,options={}){
     progress(options,'slides',i,slideIds.length);const node=slideIds[i],rel=mainRels.get(relationId(node));
     if(node.namespaceURI!==NS.p||node.localName!=='sldId'||!rel||rel.type!=='slide'||targets.has(rel.target))fail('INVALID_SLIDE_ORDER','원본 쪽 순서나 연결이 올바르지 않아요.');
     targets.add(rel.target);const page=await pageData({xml,files,rels,size,source,fonts,defaultTextStyle:direct(root,'defaultTextStyle',NS.p)},rel.target,i+1);
-    if(!retain||Array.isArray(selected)&&!selected.includes(i+1))delete page.slide;
+    if(!retain||Array.isArray(selected)&&!selected.includes(i+1)){if(page.media?.length)page.videos=page.media.length;delete page.slide;delete page.media;}
     pages.push(page);
   }
   // PowerPoint 의 구역(p14:sectionLst) → 주제: 구역의 첫 장에 구역 이름을 주제로 붙인다.
@@ -657,7 +682,8 @@ async function readPptx(file,options={}){
   progress(options,'complete',pages.length,pages.length);
   return {pageCount:pages.length,pages,source,originalSize:size,warnings,converter:{name:'onbatang-ooxml-browser',version:PPTX_CONVERTER_VERSION,fonts:[...fonts].sort()}};
 }
-const inspectionOf=parsed=>({...parsed,pages:parsed.pages.map(({slide,...page})=>page)});
+// 살펴보기에는 영상의 바이트를 싣지 않는다(쪽마다 영상이 있는지만 남긴다).
+const inspectionOf=parsed=>({...parsed,pages:parsed.pages.map(({slide,media,...page})=>(media?.length?{...page,videos:media.length}:page))});
 export async function inspectPptx(file,options={}){return inspectionOf(await readPptx(file,{...options,inspectionOnly:true}));}
 export async function convertPptx(file,options={}){
   const parsed=await readPptx(file,options),selected=options.selectedPages??parsed.pages.map(p=>p.pageNumber);
@@ -673,5 +699,7 @@ export async function convertPptx(file,options={}){
     assets:[{id:source.assetId,kind:'source',mimeType:PPTX_MIME,sha256:source.sha256,byteLength:source.byteLength}],slides:pages.map(p=>p.slide)};
   const record=importConvertedDocument({report,document}).record;
   if(new TextEncoder().encode(JSON.stringify(record)).length>PPTX_LIMITS.documentBytes)fail('DOCUMENT_SIZE_LIMIT','선택한 쪽의 편집 데이터가 512KB 저장 한도를 넘어요. 쪽을 나누어 가져와 주세요.',{inspection:inspectionOf(parsed)});
-  return {report,document:record};
+  // 바탕 영상으로 쓸 영상 파일들(쪽 번호와 함께). 문서에는 싣지 않는다: 부르는 쪽이 저장하고 그 열쇠를 장에 적는다.
+  const media=pages.flatMap(p=>(p.media||[]).map(m=>({...m,pageNumber:p.pageNumber})));
+  return {report,document:record,...(media.length?{media}:{})};
 }

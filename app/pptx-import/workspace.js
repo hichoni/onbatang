@@ -1,5 +1,6 @@
 import {designView} from '../../src/render.js';
 import {onbatangLoading} from '../loading.js';
+import {savingCover} from './saving-cover.js';
 
 const copy = value => value == null ? value : structuredClone(value);
 const errorText = error => error?.message || error?.code || '작업을 마치지 못했어요.';
@@ -51,7 +52,17 @@ export function mountImportWorkspace({root, services, onClose, onOpenDocument, o
     const visible=state.tab==='import'&&(!!state.busy||state.previewPreparing);
     loading.hidden=!visible;body.setAttribute('aria-busy',String(visible));if(status.dataset.error!=='true')status.hidden=visible;   // 진행 중에는 아래 카드 한 곳에만 보인다
     if(!visible){busyView=null;loading.replaceChildren();return;}
-    const title=state.busy==='saving'?'슬라이드를 온바탕에 담고 있어요':state.busy==='inspecting'?'PPT를 펼쳐보고 있어요':'PPT 화면을 준비하고 있어요';
+    // 담는 동안에는 화면 전체를 덮는 판(지금 담는 장 · 진행 · 고른 장들의 띠)으로 보여 준다.
+    loading.classList.toggle('is-cover',state.busy==='saving');
+    if(state.busy==='saving'){
+      if(busyView?.cover&&loading.contains(busyView.node))return;      // 다시 그려도 판(과 그 진행)은 그대로
+      const thumbOf=n=>{const view=body.querySelector(`[data-page-number="${n}"] .oi-thumbnail > :not(.oi-preview-empty):not(.onba-loading)`);return view?view.cloneNode(true):null;};
+      busyView={...savingCover({doc,pages:selectedPages(),thumbOf,onCancel:cancelWork}),cover:true};
+      loading.replaceChildren(busyView.node);
+      busyView.node.querySelector('.oi-cover-stop')?.focus({preventScroll:true});
+      return;
+    }
+    const title=state.busy==='inspecting'?'PPT를 펼쳐보고 있어요':'PPT 화면을 준비하고 있어요';
     busyView=onbatangLoading({title,detail:state.busy==='saving'?`${state.selected.size}쪽을 순서대로 저장해요. 원본은 그대로 보관돼요.`:'슬라이드와 글꼴을 확인해요. 원본 파일은 바뀌지 않아요.',compact:state.step!==1});
     loading.replaceChildren(busyView.node);
   }
@@ -271,7 +282,7 @@ export function mountImportWorkspace({root, services, onClose, onOpenDocument, o
     if (state.tab !== 'import' || state.step !== 2) return;
     footerNote.replaceChildren(element('strong', `${state.selected.size}쪽 선택`), element('span', '선택한 쪽을 모두 가져와요. 큰 자료는 여러 파트로 자동 저장합니다.'));
     footerActions.replaceChildren();
-    if (state.busy === 'saving') { footerActions.append(button('저장 취소', cancelWork, {'data-import-cancel': ''})); return; }
+    if (state.busy === 'saving') return;   // 멈추기는 화면을 덮는 판(saving-cover.js)에 있다
     footerActions.append(button('이전', () => { state.step = 1; render(); }));
     const save = button(state.previewPreparing ? '미리보기 준비 중…' : `${state.selected.size}쪽 가져오기`, saveAll, {class: 'oi-primary', 'data-import-save': ''}); save.disabled = !state.selected.size || !!state.busy || state.previewPreparing; footerActions.append(save);
   }
@@ -371,7 +382,7 @@ export function mountImportWorkspace({root, services, onClose, onOpenDocument, o
     else section.append(list);
     body.append(section);
     footerNote.textContent = complete ? '보관함에서 전체 자료를 다시 열어 편집하거나 내려받을 수 있어요.' : '이미 저장된 파트는 그대로 유지하고 남은 작업을 다시 시도합니다.';
-    if (state.busy === 'saving') { footerActions.append(button('저장 취소', cancelWork, {'data-import-cancel': ''})); return; }
+    if (state.busy === 'saving') return;   // 멈추기는 화면을 덮는 판(saving-cover.js)에 있다
     footerActions.append(button('슬라이드 확인', () => { if (state.busy === 'saving') return; state.step = 2; render(); }));
     if (!complete) footerActions.append(button('이어서 다시 시도', saveAll, {class: 'oi-primary', 'data-import-retry': ''}));
     else footerActions.append(button('기기 보관함 보기', () => showTab('library'), {class: 'oi-primary'}));

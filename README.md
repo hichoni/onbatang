@@ -1,5 +1,12 @@
 # 온바탕 — 생각을 펼치는 따뜻한 디자인 공간
 
+## v0.72.0 · PPT 영상 장 · 담는 동안 화면 (2026-10-23)
+
+- PPT 가져오기가 영상 · 소리가 든 장을 막지 않습니다. 장을 거의 다 덮는 영상(`a:videoFile` · `p14:media`)은 그 장의 **바탕 영상**으로 가져오고(converter 가 `media` 로 영상 바이트를 돌려주면 workflow 가 `probeVideo` · `saveVideo` 로 이 기기에 저장해 `slide.video` 를 적고 표지 그림을 뺍니다), 작은 영상은 표지 그림, 소리는 아이콘 그림만 가져옵니다(`VIDEO_AS_SCENE` · `VIDEO_AS_POSTER` · `AUDIO_OMITTED` · `VIDEO_NOT_SAVED`).
+- 사용자 보고: 영상만 있는 5쪽이 검은 그림으로만 들어오던 것(원본이 검은 바탕 + 재생 전 숨김 영상).
+- 미리 막기: "그림 그대로"로 고른 쪽의 PPT 화면이 한 가지 색뿐이면(`blankPicture`) 글 · 도형으로 가져올 수 있는 쪽은 그렇게 바꾸고(`BLANK_IMAGE_SWITCHED`), 아니면 알립니다(`BLANK_IMAGE`).
+- 담는 동안 화면 전체를 덮는 판(`app/pptx-import/saving-cover.js`, `.oi-cover`): 지금 담는 장의 큰 미리보기(묶음 안의 장을 차례로 넘기고 빛이 훑고 지나감) · 몇 쪽째 · 굵은 진행 막대 · 고른 장들의 띠(담긴 장 ✓ · 담는 중 빛남 · 남은 장 흐림) · 멈추기. workflow 의 진행 알림에 `current`(지금 다루는 쪽들)를 더했습니다.
+
 ## v0.71.0 · 모션그래픽 움직임 (2026-10-23)
 
 - 움직임의 모습 값이 늘었습니다(`src/motion.js`): 가로 · 세로만 늘이기(`kx` · `ky`, 요소의 제 방향), 흐림(`b`, 카드 너비의 %, 화면은 `filter: blur(cqw)` · 영상은 `ctx.filter`), 가리개의 쪽(`side`: 오른쪽 · 왼쪽 · 위 · 아래 · 가운데에서 좌우 · 위아래, 뒤집은 요소는 반대쪽), 계단 빠르기(`steps(n, end)`, `easeFn` 도 같은 계단).

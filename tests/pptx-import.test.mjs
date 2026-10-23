@@ -81,7 +81,7 @@ test('Canva-style packages with Microsoft relationship kinds, repeated Ids and m
  const inspection=await inspectPptx(repack(parts));assert.equal(inspection.pageCount,2);assert.ok(inspection.pages.every(page=>page.canImport));
  assert.deepEqual(texts((await convertPptx(repack(parts))).document),texts((await convertPptx(fileOf(original))).document));
  const media=unzipSync(original);media[slideRels]=enc.encode(dec.decode(media[slideRels]).replace('</Relationships>',ms('media','canvaVideo','../media/clip.mp4')+'</Relationships>'));media['ppt/media/clip.mp4']=new Uint8Array(8);
- const withMedia=await inspectPptx(repack(media));assert.equal(withMedia.pages[0].canImport,false);assert.equal(withMedia.pages[1].canImport,true);
+ const withMedia=await inspectPptx(repack(media));assert.equal(withMedia.pages[0].canImport,true,'a media file that no picture uses does not block the page');assert.equal(withMedia.pages[1].canImport,true);
  const broken=unzipSync(original);broken[slideRels]=enc.encode(dec.decode(broken[slideRels]).replace('</Relationships>','<Relationship Id="bad" Type="not a uri" Target="x.xml"/></Relationships>'));
  await assert.rejects(inspectPptx(repack(broken)),{code:'INVALID_RELATIONSHIP'});
 });
@@ -184,6 +184,35 @@ test('the PPT preview frame swaps symbol-font bullets before drawing',async()=>{
  const source=await readFile(new URL('../app/pptx-import/preview-frame.js',import.meta.url),'utf8');
  assert.match(source,/import \{bulletChar\} from '\.\/bullets\.js';/);
  assert.match(source,/if\(node\.localName==='buChar'\)\{[^\n]*shown=bulletChar\(char,face\);/);
+});
+
+test('video slides: a slide-filling video becomes that slide\'s background video (poster dropped later), a small one stays as its poster, sound keeps only its icon',async()=>{
+ // Regression: page 5 of a teacher's camp PPT was a full-slide video on black; it could only come in as a black slide image.
+ const parts=unzipSync(await baseBytes()),name='ppt/slides/slide1.xml',rels='ppt/slides/_rels/slide1.xml.rels';
+ const poster=Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA7ljmRAAAAEElEQVR4nGNocFCAIwacHADRZwqBZaYHGAAAAABJRU5ErkJggg==','base64'));
+ parts['ppt/media/poster.png']=poster;parts['ppt/media/clip.mp4']=new Uint8Array([0,0,0,24,102,116,121,112,109,112,52,50]);parts['ppt/media/sound.mp3']=new Uint8Array(16);
+ const rel=(id,type,target)=>`<Relationship Id="${id}" Type="${type}" Target="${target}"/>`,R='http://schemas.openxmlformats.org/officeDocument/2006/relationships/',M='http://schemas.microsoft.com/office/2007/relationships/media';
+ parts[rels]=enc.encode(dec.decode(parts[rels]).replace('</Relationships>',rel('rP',R+'image','../media/poster.png')+rel('rV',R+'video','../media/clip.mp4')+rel('rM',M,'../media/clip.mp4')+rel('rA',R+'audio','../media/sound.mp3')+'</Relationships>'));
+ const pic=(id,{x,y,cx,cy},nv)=>`<p:pic><p:nvPicPr><p:cNvPr id="${id}" name="영상 ${id}"/><p:cNvPicPr/><p:nvPr>${nv}</p:nvPr></p:nvPicPr><p:blipFill><a:blip r:embed="rP"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic>`;
+ const video='<a:videoFile r:link="rV"/><p:extLst><p:ext uri="{DAA4B4D4-6D71-4841-9C94-3DE7FCFB9230}"><p14:media xmlns:p14="http://schemas.microsoft.com/office/powerpoint/2010/main" r:embed="rM"/></p:ext></p:extLst>';
+ const full=pic(801,{x:0,y:0,cx:9144000,cy:6858000},video),small=pic(802,{x:914400,y:914400,cx:1828800,cy:1371600},video),sound=pic(803,{x:0,y:0,cx:457200,cy:342900},'<a:audioFile r:link="rA"/>');
+ const slide=dec.decode(parts[name]),slide2='ppt/slides/slide2.xml';
+ parts[name]=enc.encode(slide.replace('</p:spTree>',full+sound+'</p:spTree>'));
+ const rels2='ppt/slides/_rels/slide2.xml.rels';parts[rels2]=enc.encode(dec.decode(parts[rels2]).replace('</Relationships>',rel('rP',R+'image','../media/poster.png')+rel('rV',R+'video','../media/clip.mp4')+rel('rM',M,'../media/clip.mp4')+'</Relationships>'));
+ parts[slide2]=enc.encode(dec.decode(parts[slide2]).replace('</p:spTree>',small+'</p:spTree>'));
+ const inspection=await inspectPptx(repack(parts));
+ assert.deepEqual(inspection.pages.map(p=>p.canImport),[true,true]);
+ assert.equal(inspection.pages[0].videos,1);assert.equal(Object.hasOwn(inspection.pages[0],'media'),false,'inspection carries no video bytes');
+ const converted=await convertPptx(repack(parts));
+ assert.equal(converted.media.length,1);
+ const [clip]=converted.media,first=converted.document.slides[0];
+ assert.deepEqual([clip.pageNumber,clip.mime,clip.bytes.length],[1,'video/mp4',12]);
+ assert.ok(first.items.some(i=>i.id===clip.posterId&&i.t==='image'),'the poster is kept until the video is stored');
+ assert.equal(first.items.filter(i=>i.source?.objectId==='803').length,1,'the sound icon stays as a picture');
+ const codes=n=>converted.report.warnings.filter(w=>w.pageNumber===n).map(w=>w.code);
+ assert.ok(codes(1).includes('VIDEO_AS_SCENE')&&codes(1).includes('AUDIO_OMITTED'));
+ assert.ok(codes(2).includes('VIDEO_AS_POSTER'));
+ assert.equal(converted.document.slides[1].items.filter(i=>i.source?.objectId==='802').length,1);
 });
 
 test('tables become editable cells: one box per cell with its fill and border, its text in place, merged cells as one, covered cells skipped',async()=>{
