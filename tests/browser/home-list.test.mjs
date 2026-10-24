@@ -213,3 +213,23 @@ test('a PPT synced from another device still shows every page; fixed-material ac
   assert.equal(await page.evaluate(() => window.reordered || false), false);
   assert.deepEqual(errors, []);
 });
+
+// 다른 파트의 장으로 넘길 때 계정에 올리기를 기다리지 않는다(이 기기에만 바로 저장하고 넘어간다).
+const slowSyncFixture = deckFixture.replace("await startMinican({storage:'v73-home',", "window.pushes=0;await startMinican({storage:'v73-home',sync:{pull:async()=>({records:[],deleted:[]}),push:()=>{window.pushes++;return new Promise(()=>{});},drop:async()=>{}},");
+test('moving to a page in another part saves on this device and goes on without waiting for the account', options, async t => {
+  const {page, errors} = await setup(t, slowSyncFixture);
+  await page.locator('.cv-deck .cv-item-open').click();
+  await page.waitForFunction(() => document.querySelectorAll('[data-material-page]').length === 7);
+  await page.locator('.cv-canvas .fe-stage').click({position: {x: 30, y: 30}});
+  await page.locator('[data-material-add]').click();          // 고친 것이 있는 채로 넘긴다
+  await page.waitForFunction(() => document.querySelectorAll('[data-material-page]').length === 8);
+  const started = Date.now();
+  await page.locator('[data-material-page="6"]').click();
+  await page.waitForFunction(() => document.querySelector('input.cv-name')?.value === '메이커 캠프 · 3', null, {timeout: 4000});
+  assert.ok(Date.now() - started < 4000, 'did not wait for the stuck account upload');
+  await page.waitForFunction(async () => (await window.readPart(window.partIds[0])).slides.length === 3, null, {timeout: 5000});
+  // 다음 장 · 앞 장도 바로바로
+  await page.locator('[data-material-page="1"]').click();
+  await page.waitForFunction(() => document.querySelector('input.cv-name')?.value === '메이커 캠프 · 1', null, {timeout: 4000});
+  assert.deepEqual(errors, []);
+});

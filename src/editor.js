@@ -3449,7 +3449,8 @@ export function createEditor({
     if (!id && card.items.some((it) => it.an === STILL)) card.items = card.items.map((it) => (it.an === STILL ? cleanItem({ ...it, an: undefined }, { keepSpaces: true }) : it));
     onChange();
     renderPanel();
-    previewPage({ transition: false });
+    // 장 넘김(전환)이 있으면 함께: 장이 넘어온 뒤에 조각들이 움직인다.
+    previewPage({ transition: !!card.tr });
   }
   function setTransition(id) {
     const play = () => {
@@ -3464,7 +3465,8 @@ export function createEditor({
     setMotion({ ...designMotion(card), tr: id });
     onChange();
     renderPanel();
-    play();
+    // 조각들의 움직임(조합 · 조각 효과)이 있으면 장이 넘어온 뒤에 이어서 함께 보여 준다.
+    if (id && planMotion(cleanDesign(card, { keepSpaces: true })).auto.length) previewPage(); else play();
   }
   // 고른 요소의 움직임. 이미 그 값이면 기록을 남기지 않는다(효과는 다시 틀어 보여 준다).
   function setEnter(id) {
@@ -3583,14 +3585,21 @@ export function createEditor({
             : IDLES.some((c) => c.id === it.lp) ? el('p', { class: 'fe-note', text: '다 나온 뒤에 그 장에 머무는 동안 숨 쉬듯 살며시 되풀이해 움직여요. 조각마다 박자가 조금씩 달라서 살아 있는 느낌이 나요. 내려받은 영상에도 들어가요.' }) : null,
         ];
       }) : [];
-      const combos = motionPart('combo', here.pa || '', () => [
+      // 장 넘김(전환)과 조각들의 움직임(조합)은 함께 쓴다: 장이 넘어온 뒤에 조각들이 움직인다. 같은 칸 안에서는 하나만 고른다.
+      const both = here.tr && here.pa ? el('div', { class: 'fe-motion-both', dataset: { motionBoth: '' } },
+        el('span', { text: `이 장: ${TRANSITIONS.find((t) => t.id === here.tr)?.name || ''} 로 넘어온 뒤 → ${COMBOS.find((c) => c.id === here.pa)?.name || ''}` }),
+        el('button', { class: 'btn btn-ghost', type: 'button', onClick: () => previewPage() }, '함께 미리 보기')) : null;
+      const combos = motionPart('combo', `${here.pa || ''}|${here.tr || ''}`, () => [
+        both,
         el('div', { class: 'fe-head', text: '조각들이 나오는 모양 · 조합 효과' }),
+        el('p', { class: 'fe-note', text: '한 장에 하나만 골라요(다른 것을 누르면 바뀌어요). 아래 장 넘김 효과와는 함께 써져요.' }),
         el('div', { class: 'fe-motions', role: 'group', 'aria-label': '조합 효과', dataset: { group: 'combo' } },
           motionTile({ group: 'combo', name: '없음', on: !here.pa, kind: 'none', onPick: () => setCombo('') }),
           ...COMBOS.map((c) => motionTile({ group: 'combo', name: c.name, hint: c.hint, on: here.pa === c.id, kind: 'combo', id: c.id, onPick: () => setCombo(c.id) }))),
       ]);
       const turns = motionPart('tr', here.tr || '', () => [
         el('div', { class: 'fe-head', text: '장이 넘어오는 모양 · 전환 효과' }),
+        el('p', { class: 'fe-note', text: '장 넘김은 한 장에 하나만 골라요(다른 것을 누르면 바뀌어요). 위 조합 효과와는 함께 써져요: 장이 넘어온 뒤에 조각들이 움직여요.' }),
         el('div', { class: 'fe-motions', role: 'group', 'aria-label': '전환 효과', dataset: { group: 'tr' } },
           motionTile({ group: 'tr', name: '없음', on: !here.tr, kind: 'none', onPick: () => setTransition('') }),
           ...TRANSITIONS.map((t) => motionTile({ group: 'tr', name: t.name, on: here.tr === t.id, kind: 'tr', id: t.id, onPick: () => setTransition(t.id) }))),

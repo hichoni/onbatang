@@ -347,6 +347,7 @@ export function mountImportWorkspace({root, services, onClose, onOpenDocument, o
     try {
       const result = await services.saveAll({file: state.file, inspection: state.inspection, selectedPages: selectedPages(), importModes: copy(state.modes),
         fontPlan: copy(state.fontPlan), retry: state.retry, signal: actionController.signal, onProgress: progress => {
+          if (!disposed && job === generation && progress.phase === 'waiting') { say(progress.message); busyView?.update({detail: progress.message}); return; }
           if (!disposed && job === generation) {const detail=progress.message || `${progress.resumed?`끊겼던 가져오기를 이어서 해요(앞서 저장한 ${progress.resumed}쪽은 그대로) · `:''}${progress.completed || 0} / ${progress.total || state.selected.size}쪽 저장 완료`;say(detail);busyView?.update({...progress,detail});}
         }});
       if (disposed || job !== generation) return;

@@ -60,7 +60,25 @@ export function createImportUiServices({imports, fonts = ONBATANG_FONTS, fontSer
     },
     async saveAll({retry, ...options}) {
       configure({fonts: fonts});
-      return workflow.saveAll({...options, previewSession: session, retryToken: retry?.retryToken || retry});
+      // PPT 화면 그리기는 창이 보일 때만 제대로 돈다(가려진 탭에서는 브라우저가 그리기를 멈춰 시간 초과로 미리보기가 닫혔다).
+      // 그래서 창이 가려져 있으면 다시 보일 때까지 기다리고, 미리보기가 닫혔거나(시간 초과) 아직 열리지 않았으면 다시 열어 그 쪽을 그린다.
+      const visible = () => typeof document === 'undefined' || !document.hidden ? Promise.resolve() : new Promise(resolve => {
+        try { options.onProgress?.({phase: 'waiting', message: '창이 가려져 있어 잠시 멈췄어요. 이 창을 다시 보면 이어서 가져와요.'}); } catch { /* 표시는 저장을 막지 않는다 */ }
+        const go = () => { if (!document.hidden) { document.removeEventListener('visibilitychange', go); resolve(); } };
+        document.addEventListener('visibilitychange', go);
+      });
+      const live = {renderPage: async (pageNumber, opts) => {
+        await visible();
+        try { if (!session) throw Object.assign(new Error('PREVIEW_NOT_OPEN'), {code: 'PREVIEW_NOT_OPEN'}); return await session.renderPage(pageNumber, opts); }
+        catch (error) {
+          if (!['PREVIEW_DISPOSED', 'PREVIEW_TIMEOUT', 'PREVIEW_NOT_OPEN'].includes(error?.code) || options.signal?.aborted) throw error;
+          await visible();
+          const next = await renderer.open(options.file, {inspection: options.inspection, signal: options.signal});
+          session?.dispose(); session = next;
+          return session.renderPage(pageNumber, opts);
+        }
+      }};
+      return workflow.saveAll({...options, previewSession: live, retryToken: retry?.retryToken || retry});
     },
     fonts: {
       candidates: getImportFontRegistry(),
