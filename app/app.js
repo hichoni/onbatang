@@ -1042,7 +1042,22 @@ async function loadMaterialNavigation(O) {
   }catch(error){O.materialLoadError=error;if(!O.closed&&S.open===O)toast('PPT 전체 목록을 열지 못했어요. 현재 편집과 저장 자료는 유지돼요. 내 자료에서 다시 열어주세요.',5000);}
   finally{loading.finish();}
 }
-function materialPages(O){return orderPages(O.materialDeck.documents.flatMap(record=>(record.id===O.record.id?currentSlides(O):record.slides).map((page,index)=>({record,page,index}))),O.materialDeck.pageOrder);}
+function materialPages(O){
+  const pages=O.materialDeck.documents.flatMap(record=>(record.id===O.record.id?currentSlides(O):record.slides).map((page,index)=>({record,page,index})));
+  return orderPages(pages,withNewPages(O.materialDeck.pageOrder,O.materialDeck.documents.map(record=>record.id===O.record.id?currentSlides(O):record.slides)));
+}
+// 전체 자료에 새로 더하거나 복제한 장(고정본의 쪽 차례에 아직 없는 장)은 맨 끝이 아니라 그 파트에서 바로 앞 장의 뒤에 둔다
+// (파트의 첫 장이면 그 파트의 다음 장 앞에). 쪽 차례(pageOrder)를 바꾸지 않고 보이는 차례만 정한다.
+function withNewPages(order,parts){
+  if(!Array.isArray(order))return order;
+  const known=new Set(parts.flatMap(slides=>slides.map(page=>page.id))),ids=order.filter(id=>known.has(id));
+  for(const slides of parts)slides.forEach((page,k)=>{
+    if(ids.includes(page.id))return;
+    const before=k>0?ids.indexOf(slides[k-1].id):-1,after=slides.slice(k+1).map(next=>ids.indexOf(next.id)).find(at=>at>=0);
+    ids.splice(before>=0?before+1:after??ids.length,0,page.id);
+  });
+  return ids;
+}
 function renderMaterialNavigation(O,left=0) {
   if(!O.materialDeck)return;
   const pages=materialPages(O);
@@ -1066,6 +1081,13 @@ function renderMaterialNavigation(O,left=0) {
    if(node.materialRendered!==value.page){node.querySelector('.cv-slide-view').replaceChildren(slideView(value.page,aspectOf(value.record),240));node.materialRendered=value.page;}
    return node;
   });
+  // 새 장 더하기: 지금 장 바로 뒤에(그 파트 안에). 파트가 꽉 찼으면 막는다.
+  const full=O.slides.length>=MAX_SLIDES;
+  O.materialAdd||=el('button',{class:'cv-slide add',type:'button','aria-label':'새 장 더하기',dataset:{materialAdd:''},
+    onClick:()=>changeSlides(O,(slides,at)=>addSlide(slides,at,slides[at]?.bg,slides[at]))},
+    el('span',{class:'cv-slide-plus','aria-hidden':'true'},ic('plus')),el('span',{class:'cv-slide-add-text',text:'새 장'}));
+  O.materialAdd.disabled=full;O.materialAdd.title=full?`이 파트는 ${MAX_SLIDES}장까지예요. 다른 파트의 장을 고르고 더해요`:'지금 장 바로 뒤에 새 장 더하기';
+  nodes.push(O.materialAdd);
   if(nodes.length!==rail.children.length||nodes.some((node,i)=>rail.children[i]!==node)){
    O.stripDrag?.destroy();rail.replaceChildren(...nodes);
    // Rebind only when the page set/order changes, never on selection.
@@ -2845,15 +2867,15 @@ async function makePptx(O, {all, mode}) {
     if (controller.signal.aborted || O.closed) return;
     const slides = structuredClone(currentSlides(O));let selected=all?slides:[slides[O.at]];
     if(all&&O.materialDeck){
-      selected=[];
+      selected=[];const parts=[];
       for(const row of O.materialDeck.documents){
         const draft=row.id===O.record.id?{...O.record,slides}:await getDesign(row.id);
         if(!draft)throw Error('다른 쪽을 불러오지 못했어요. 전체 자료를 다시 열어주세요.');
         if(Math.abs(aspectOf(draft)-aspectOf(O.record))>.001)throw Error('슬라이드 비율이 서로 달라요. 원본과 편집 자료는 보존돼요.');
-        selected.push(...structuredClone(draft.slides));
+        selected.push(...structuredClone(draft.slides));parts.push(draft.slides);
       }
       progress.max=selected.length;
-      selected=orderPages(selected,O.materialDeck.pageOrder);
+      selected=orderPages(selected,withNewPages(O.materialDeck.pageOrder,parts));
     }
     const result = await createPptx({slides: selected, aspect: aspectOf(O.record), size: O.record.size,
       title: O.record.name || '온바탕', mode, signal: controller.signal,
