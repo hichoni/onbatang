@@ -148,3 +148,40 @@ test('타자 치듯 in the show opens up to where each character really sits, al
   await page.keyboard.press('Escape');
   assert.deepEqual(errors, []);
 });
+
+test('임팩트: new combo, effects and transitions are picked in the panel, saved, and really play in the show', options, async t => {
+  const {page, errors} = await setup(t, [
+    {id: 'pmogr00010', bg: '#16324f', items: [text('etitle0010', '임팩트!', {size: 10, color: '#ffffff'}), text('ebody00010', '끼익 미끄러져 서는 글', {y: 60, color: '#ffffff'}), shape('ecircle010', {x: 75})]},
+    {id: 'pmogr00011', bg: '#f2c14e', items: [text('enext00011', '둘째 장', {size: 9})]},
+  ]);
+  await page.locator('.fe-tab[data-tab="motion"]').click();
+  await page.locator('.fe-motions[data-group="combo"] .fe-mo[data-motion="impact"]').click();
+  await saved(page, r => r.slides[0].pa === 'impact');
+  assert.match(await page.locator('.fe-timeline').textContent(), /확 박히기[\s\S]*끼익 멈추기/);
+  // 둘째 장에 회오리 전환, 첫 장의 동그라미에 강조 · 사라지기.
+  await page.locator('.cv-slide').nth(1).click();
+  await page.locator('.fe-motions[data-group="tr"] .fe-mo[data-motion="spin"]').click();
+  await saved(page, r => r.slides[1].tr === 'spin');
+  await page.locator('.cv-slide').nth(0).click();
+  await page.locator('.cv-canvas .fe-card .fi-shape').click();
+  await page.locator('.fe-motions[data-group="emph"] .fe-mo[data-motion="boom"]').click();
+  await page.locator('.fe-motions[data-group="exit"] .fe-mo[data-motion="blast"]').click();
+  await saved(page, r => r.slides[0].items[2].em === 'boom' && r.slides[0].items[2].ex === 'blast');
+  // 저장된 그림에 모두 남아 있다(새 값을 정리하며 버리지 않는다).
+  const after = await page.evaluate(() => window.readSaved());
+  assert.deepEqual([after.slides[0].pa, after.slides[1].tr, after.slides[0].items[2].em, after.slides[0].items[2].ex], ['impact', 'spin', 'boom', 'blast']);
+  await page.locator('.cv-show-btn').click(); await page.locator('.cv-show').waitFor();
+  await page.waitForTimeout(80);
+  const [shock] = await page.evaluate(() => document.querySelector('.cv-show-stage .fi-text').getAnimations().map((a) => a.effect.getKeyframes()));
+  assert.match(shock[0].transform, /scale\(3\.2, 3\.2\)/); assert.match(shock[0].filter, /^blur\(/);
+  await page.waitForTimeout(1500);
+  for (let n = 0; n < 2; n++) { await page.keyboard.press('ArrowRight'); await page.waitForTimeout(700); }   // 강조 · 사라지기
+  await page.keyboard.press('ArrowRight');
+  await page.waitForTimeout(300);
+  const turning = await page.evaluate(() => [...document.querySelectorAll('.cv-show-stage, .cv-show-stage *')].flatMap((n) => n.getAnimations()).map((a) => a.effect.getKeyframes()[0].transform || '').filter((v) => v.includes('rotate(')));
+  assert.ok(turning.some((v) => /rotate\(-200deg\)/.test(v)), `the next slide spins in: ${turning}`);
+  await page.screenshot({path: resolve(root, 'work/impact-spin.png')});
+  await page.waitForFunction(() => document.querySelector('.cv-show-count')?.textContent === '2 / 2');
+  await page.keyboard.press('Escape');
+  assert.deepEqual(errors, []);
+});
