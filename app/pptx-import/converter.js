@@ -717,7 +717,7 @@ async function readPptx(file,options={}){
   const source={filename,sha256,byteLength:bytes.length,assetId:'a'+sha256.slice(0,24),sourceDocumentId:'s'+sha256.slice(0,24)};
   const list=direct(root,'sldIdLst',NS.p),slideIds=children(list),mainRels=rels.get(main.target)||new Map();
   if(!slideIds.length||slideIds.length>PPTX_LIMITS.pages)fail('PAGE_COUNT_LIMIT',`검사할 수 있는 원본은 ${PPTX_LIMITS.pages}쪽까지예요.`);
-  const selected=options.selectedPages,retain=!options.inspectionOnly&&(selected===undefined?slideIds.length<=DOCUMENT_LIMITS.pages:Array.isArray(selected)&&selected.length<=DOCUMENT_LIMITS.pages);
+  const selected=options.selectedPages,retain=options.previewAll===true||!options.inspectionOnly&&(selected===undefined?slideIds.length<=DOCUMENT_LIMITS.pages:Array.isArray(selected)&&selected.length<=DOCUMENT_LIMITS.pages);
   const pages=[],targets=new Set(),fonts=new Set();
   for(let i=0;i<slideIds.length;i++){
     progress(options,'slides',i,slideIds.length);const node=slideIds[i],rel=mainRels.get(relationId(node));
@@ -737,6 +737,17 @@ async function readPptx(file,options={}){
 // 살펴보기에는 영상의 바이트를 싣지 않는다(쪽마다 영상이 있는지만 남긴다).
 const inspectionOf=parsed=>({...parsed,pages:parsed.pages.map(({slide,media,...page})=>(media?.length?{...page,videos:media.length}:page))});
 export async function inspectPptx(file,options={}){return inspectionOf(await readPptx(file,{...options,inspectionOnly:true}));}
+/**
+ * 고르는 화면의 작은 그림용: 파일을 한 번만 읽어 모든 쪽의 편집 모습을 돌려준다(쪽마다 따로 읽으면 쪽마다 파일 전체를 다시 푼다).
+ * 저장하지 않으므로 문서 크기 한도는 보지 않는다. 가져올 수 없는 쪽은 slide 가 null 이다.
+ * 돌려주는 것: { size(px), pages: [{ pageNumber, slide }] }
+ */
+export async function previewPptx(file,options={}){
+  const parsed=await readPptx(file,{...options,previewAll:true});
+  const {source}=parsed;
+  return {size:{width:parsed.originalSize.width/9525,height:parsed.originalSize.height/9525,unit:'px'},originalSize:parsed.originalSize,
+    source:{kind:'pptx',sourceDocumentId:source.sourceDocumentId,assetId:source.assetId,filename:source.filename,sha256:source.sha256},assets:[{id:source.assetId,kind:'source',mimeType:PPTX_MIME,sha256:source.sha256,byteLength:source.byteLength}],pages:parsed.pages.map(p=>({pageNumber:p.pageNumber,slide:p.canImport&&p.slide?p.slide:null}))};
+}
 export async function convertPptx(file,options={}){
   const parsed=await readPptx(file,options),selected=options.selectedPages??parsed.pages.map(p=>p.pageNumber);
   if(!Array.isArray(selected)||!selected.length||selected.some(n=>!Number.isSafeInteger(n)||n<1||n>parsed.pageCount)||new Set(selected).size!==selected.length)fail('INVALID_PAGE_SELECTION','가져올 쪽 번호를 확인해 주세요.');

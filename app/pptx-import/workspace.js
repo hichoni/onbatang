@@ -326,7 +326,8 @@ export function mountImportWorkspace({root, services, onClose, onOpenDocument, o
     }
   }
   async function loadThumbnail(item, host) {
-    const job = generation, view = imageAvailable(item.pageNumber) ? 'pptx' : 'editable';
+    // 작은 그림은 편집 모습으로 먼저(파일을 한 번 읽어 모든 쪽을 함께 만든다). 편집으로 가져올 수 없는 쪽만 PPT 화면으로 그린다.
+    const job = generation, view = item.canImport || !imageAvailable(item.pageNumber) ? 'editable' : 'pptx';
     if (!services.previewPage || (!item.canImport && view === 'editable')) { host.replaceChildren(element('span', '확인 필요', {class: 'oi-preview-empty'})); return; }
     try {
       const result = await previewData(item.pageNumber, view, 'thumbnail', state.fontPlan, actionController?.signal);

@@ -28,8 +28,9 @@ export function createPptxClient({workerFactory=()=>new Worker(new URL('./vendor
       worker.postMessage({id,method,file,options:{selectedPages}});
     }catch(cause){finish(error('WORKER_UNAVAILABLE','이 환경에서는 PPT 변환 작업을 시작할 수 없어요.',{reason:String(cause.message||cause)}));}
   });
-  return {inspectPptx:(file,options)=>run('inspect',file,options),convertPptx:(file,options)=>run('convert',file,options)};
+  return {inspectPptx:(file,options)=>run('inspect',file,options),convertPptx:(file,options)=>run('convert',file,options),previewPptx:(file,options)=>run('preview',file,options)};
 }
 const client=createPptxClient();
 export const inspectPptx=(file,options)=>client.inspectPptx(file,options);
 export const convertPptx=(file,options)=>client.convertPptx(file,options);
+export const previewPptx=(file,options)=>client.previewPptx(file,options);
