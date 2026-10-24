@@ -160,3 +160,33 @@ test('motion "same on every slide" reaches the other parts of a whole PPT', opti
   assert.equal(await page.locator('[data-group="tr"] .fe-mo.on').getAttribute('data-motion'), 'zoomblur');
   assert.deepEqual(errors, []);
 });
+
+test('a whole PPT has its "새 장" button: the new slide lands right after the current one, and a copy too', options, async t => {
+  const {page, errors} = await setup(t, deckFixture);
+  await page.locator('.cv-deck .cv-item-open').click();
+  await page.waitForFunction(() => document.querySelectorAll('[data-material-page]').length === 7);
+  const add = page.locator('[data-material-add]');
+  assert.equal(await add.isEnabled(), true);
+  // 두 번째 쪽(첫 파트의 끝 장)을 골라 새 장을 더한다 → 3쪽에 빈 장, 그 뒤는 그대로
+  await page.locator('[data-material-page="1"]').click();
+  await add.click();
+  await page.waitForFunction(() => document.querySelectorAll('[data-material-page]').length === 8);
+  assert.match(await page.locator('[data-material-count]').innerText(), /^3 \/ 8쪽/);
+  assert.equal(await page.locator('[data-material-page="2"]').getAttribute('aria-pressed'), 'true');
+  assert.equal(await page.locator('.cv-canvas .fe-stage .fi').count(), 0, 'a blank slide');
+  // 다음 쪽은 원래 3쪽(둘째 파트의 첫 장)
+  await page.locator('[data-material-page="3"]').click();
+  await page.waitForFunction(() => document.querySelector('input.cv-name')?.value === '메이커 캠프 · 2');
+  assert.match(await page.locator('.cv-canvas .fe-stage').innerText(), /파트 2 · 1/);
+  // 오른쪽 누르기 메뉴의 "새 장 더하기"도 켜져 있다
+  await page.locator('.cv-canvas').click({button: 'right', position: {x: 6, y: 6}});
+  const menuAdd = page.getByRole('menuitem', {name: /새 장 더하기/});
+  if (await menuAdd.count()) assert.equal(await menuAdd.isDisabled(), false);
+  await page.keyboard.press('Escape');
+  // 복제도 그 장 바로 뒤에
+  await page.evaluate(() => document.querySelectorAll('.cv-slide-tool')[2].click());   // 오른쪽 누르기 메뉴의 "이 장 복제"가 누르는 단추
+  await page.waitForFunction(() => document.querySelectorAll('[data-material-page]').length === 9);
+  assert.match(await page.locator('[data-material-count]').innerText(), /^5 \/ 9쪽/);
+  assert.match(await page.locator('.cv-canvas .fe-stage').innerText(), /파트 2 · 1/);
+  assert.deepEqual(errors, []);
+});
