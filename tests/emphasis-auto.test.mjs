@@ -11,8 +11,8 @@ import {showAction, autoDelay, AUTO_SECONDS, SHOW_KEYS} from '../app/show-keys.j
 const text = (id, value, y, patch = {}) => ({id, t: 'text', text: value, x: 50, y, w: 50, size: 5, ...patch});
 
 test('emphasis is a stored element value that adds a click step after any reveal, in reading order', () => {
-  assert.deepEqual(EMPHASIS_IDS, ['pulse', 'shake', 'grow', 'spin', 'flash', 'jump', 'squash', 'tada', 'focus']);
-  assert.equal(EMPHASES.length, 9);
+  assert.deepEqual(EMPHASIS_IDS, ['pulse', 'shake', 'grow', 'spin', 'flash', 'jump', 'squash', 'tada', 'focus', 'rubber', 'wobble', 'boom', 'flip', 'swing']);
+  assert.equal(EMPHASES.length, 14);
   const design = cleanDesign({id: 'ppage00001', bg: '#fff', items: [text('eaaaaaaa01', '아래', 80, {em: 'shake'}), text('eaaaaaaa02', '위', 20, {aw: true, em: 'pulse'}), text('eaaaaaaa03', '가운데', 50, {em: 'nope'})]});
   assert.equal(design.items[0].em, 'shake');
   assert.equal(Object.hasOwn(design.items[2], 'em'), false);

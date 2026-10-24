@@ -171,6 +171,19 @@ const ENTER_DEFS = {
   type: { name: '타자 치듯', ms: 800, ease: 'linear', perItem: typeOf, frames: [{ tk: 0 }, { tk: 1 }] },
   // 지지직: 화면이 튀듯 흔들리며 켜진다(디지털 느낌).
   glitch: { name: '지지직', ms: 700, ease: 'linear', frames: [{ o: 0 }, { at: 0.1, o: 1, x: -1.5, kx: 1.08 }, { at: 0.2, x: 1.2, o: 0.4 }, { at: 0.3, x: -0.6, o: 1, kx: 0.96 }, { at: 0.45, x: 0.8, kx: 1.06 }, { at: 0.6, x: 0, kx: 1 }, {}] },
+  // ---- 임팩트 ----
+  // 확 박히기: 화면 앞에서 크고 흐릿하게 날아와 쾅 박히며 살짝 튕긴다(제목 · 숫자에 힘을 줄 때).
+  shock: { name: '확 박히기', ms: 620, ease: 'linear', frames: [{ o: 0, k: 3.2, b: 1.6, ease: 'cubic-bezier(.5, 0, .9, .4)' }, { at: 0.48, k: 0.88, o: 1, b: 0, ease: 'ease-out' }, { at: 0.7, k: 1.06, ease: 'ease-in-out' }, { at: 0.86, k: 0.98 }, {}] },
+  // 소용돌이: 한가운데에서 빙빙 돌며 커져 나온다.
+  vortex: { name: '소용돌이', ms: 950, ease: SNAP, frames: [{ o: 0, k: 0, r: -540 }, { at: 0.35, o: 1 }, { at: 0.8, k: 1.08, r: 8 }, {}] },
+  // 뒤에서 튀어나오기: 화면 저 안쪽에서 튀어나와 앞으로 쑥 나왔다가 선다.
+  burst: { name: '뒤에서 튀어나오기', ms: 680, ease: 'linear', frames: [{ o: 0, k: 0.1, y: 6, b: 0.8, ease: 'cubic-bezier(.2, .8, .3, 1)' }, { at: 0.6, o: 1, k: 1.16, y: -0.6, b: 0, ease: 'ease-in-out' }, { at: 0.82, k: 0.97, y: 0 }, {}] },
+  // 끼익 멈추기: 옆에서 미끄러지듯 달려와 앞으로 쏠리며 멈춘다.
+  skid: { name: '끼익 멈추기', ms: 820, ease: 'linear', frames: [{ o: 0, x: -42, kx: 1.35, r: -7, b: 0.5, ease: 'cubic-bezier(.15, .8, .3, 1)' }, { at: 0.55, o: 1, x: 2.2, kx: 0.9, r: 3, b: 0, ease: 'ease-in-out' }, { at: 0.78, x: -0.7, kx: 1.03, r: -1 }, {}] },
+  // 쾅 내려찍기: 위에서 아주 빠르게 떨어져 찍히고 납작해졌다가 튀어 선다(쾅 내려앉기보다 세다).
+  smash: { name: '쾅 내려찍기', ms: 700, ease: 'linear', frames: [{ o: 0, y: -40, k: 1.3, ky: 1.3, kx: 0.8, ease: 'cubic-bezier(.6, 0, 1, .6)' }, { at: 0.36, o: 1, y: 0, k: 1, kx: 1.35, ky: 0.65, ease: 'ease-out' }, { at: 0.56, kx: 0.9, ky: 1.12, y: -1.5, ease: 'ease-in-out' }, { at: 0.76, kx: 1.04, ky: 0.97, y: 0 }, {}] },
+  // 번쩍 켜지기: 흐릿하게 크게 번쩍였다가 또렷하게 줄어 선다.
+  flare: { name: '번쩍 켜지기', ms: 650, ease: 'linear', frames: [{ o: 0, k: 1.5, b: 2.2 }, { at: 0.18, o: 1, k: 1.3, b: 1.4, ease: 'ease-out' }, { at: 0.6, k: 0.97, b: 0, ease: 'ease-in-out' }, {}] },
 };
 // 사라지는 효과: 누를 때 그 요소가 사라진다. 처음이 제 모습이고 끝이 사라진 모습이다(frames 의 꼴은 ENTER_DEFS 와 같다).
 const EXIT_DEFS = {
@@ -183,6 +196,11 @@ const EXIT_DEFS = {
   blur: { name: '흐려지며', ms: 650, ease: 'ease-in', frames: [{}, { o: 0, b: 1.2, k: 1.06 }] },
   pop: { name: '톡 터지기', ms: 450, ease: 'linear', frames: [{ ease: 'ease-out' }, { at: 0.35, k: 1.15, ease: 'ease-in' }, { o: 0, k: 0 }] },
   drop: { name: '떨어지기', ms: 700, ease: 'cubic-bezier(.55, 0, 1, .45)', frames: [{}, { o: 0, y: 30, r: 18 }] },
+  // ---- 임팩트 ----
+  vortex: { name: '빨려 들어가기', ms: 750, ease: 'cubic-bezier(.6, 0, .8, .4)', frames: [{}, { at: 0.6, o: 1 }, { o: 0, k: 0, r: 540 }] },
+  blast: { name: '펑 터지기', ms: 520, ease: 'linear', frames: [{ ease: 'ease-in' }, { at: 0.25, k: 0.88, ease: 'cubic-bezier(.2, .8, .3, 1)' }, { o: 0, k: 2.6, b: 1.8 }] },
+  zoomout: { name: '앞으로 날아가기', ms: 600, ease: 'cubic-bezier(.6, 0, .9, .5)', frames: [{}, { o: 0, k: 3.5, b: 1.2 }] },
+  skid: { name: '휙 미끄러져 나가기', ms: 600, ease: 'linear', frames: [{ ease: 'ease-out' }, { at: 0.25, x: 2, kx: 0.92, r: 2, ease: 'cubic-bezier(.6, 0, .9, .4)' }, { o: 0, x: -45, kx: 1.35, r: -6, b: 0.6 }] },
 };
 /** 사라지는 효과들 [{ id, name }]. */
 export const EXITS = Object.entries(EXIT_DEFS).map(([id, d]) => ({ id, name: d.name }));
@@ -218,6 +236,12 @@ const EMPH_DEFS = {
   squash: { name: '찌그러졌다 펴기', ms: 700, ease: 'ease-in-out', frames: [{}, { at: 0.3, kx: 1.25, ky: 0.8 }, { at: 0.55, kx: 0.9, ky: 1.12 }, { at: 0.8, kx: 1.04, ky: 0.97 }, {}] },
   tada: { name: '짜잔', ms: 900, ease: 'linear', frames: [{}, { at: 0.1, k: 0.92, r: -3 }, { at: 0.3, k: 1.12, r: 3 }, { at: 0.45, r: -3 }, { at: 0.6, r: 3 }, { at: 0.75, r: -2 }, { at: 0.9, k: 1.04, r: 0 }, {}] },
   focus: { name: '초점 흔들기', ms: 800, ease: 'ease-in-out', frames: [{}, { at: 0.4, b: 0.5, k: 1.06 }, {}] },
+  // ---- 임팩트 ----
+  rubber: { name: '고무줄 튕기기', ms: 900, ease: 'ease-in-out', frames: [{}, { at: 0.3, kx: 1.3, ky: 0.75 }, { at: 0.4, kx: 0.75, ky: 1.25 }, { at: 0.5, kx: 1.15, ky: 0.85 }, { at: 0.65, kx: 0.95, ky: 1.05 }, { at: 0.75, kx: 1.05, ky: 0.95 }, {}] },
+  wobble: { name: '휘청휘청', ms: 1000, ease: 'ease-in-out', frames: [{}, { at: 0.15, x: -4, r: -5 }, { at: 0.3, x: 3, r: 3 }, { at: 0.45, x: -2.4, r: -3 }, { at: 0.6, x: 1.6, r: 2 }, { at: 0.75, x: -0.8, r: -1 }, {}] },
+  boom: { name: '쾅! 크게', ms: 700, ease: 'linear', frames: [{ ease: 'ease-in' }, { at: 0.15, k: 0.85, ease: 'cubic-bezier(.2, .9, .3, 1.4)' }, { at: 0.45, k: 1.45, ease: 'ease-in-out' }, { at: 0.7, k: 0.95 }, {}] },
+  flip: { name: '빙글 뒤집기', ms: 800, ease: 'ease-in-out', frames: [{}, { at: 0.5, kx: -1, k: 1.1 }, {}] },
+  swing: { name: '그네', ms: 1100, ease: 'ease-in-out', frames: [{}, { at: 0.2, r: 15 }, { at: 0.4, r: -10 }, { at: 0.6, r: 5 }, { at: 0.8, r: -5 }, {}] },
 };
 /** 강조 효과들 [{ id, name }]. */
 export const EMPHASES = Object.entries(EMPH_DEFS).map(([id, d]) => ({ id, name: d.name }));
@@ -258,6 +282,10 @@ const COMBO_DEFS = {
   typing: { name: '타자기', hint: '글이 한 줄씩 타자 치듯 써져요', gap: 0, chain: true, pick: (role, it) => (it.t === 'text' ? 'type' : 'fade') },
   glitch: { name: '디지털', hint: '화면이 지지직 튀듯 켜져요', gap: 90, order: 'shuffle', pick: (role, it) => (role === BACK ? 'fade' : it.t === 'text' ? 'glitch' : 'split') },
   slam: { name: '쾅쾅', hint: '위에서 떨어져 쾅 내려앉아요', gap: 140, pick: (role, it) => (role === BACK ? 'fade' : it.t === 'link' ? 'wipe' : 'slam') },
+  // ---- 임팩트 ----
+  impact: { name: '임팩트', hint: '제목이 확 박히고, 글은 끼익 미끄러져 서고, 그림은 튀어나와요', gap: 120, pick: (role, it, { lead }) => (role === BACK ? 'blurzoom' : it.t === 'text' ? (lead ? 'shock' : 'skid') : 'burst') },
+  blast: { name: '빵 터지기', hint: '가운데에서 바깥으로 뒤에서 튀어나오듯 터져 나와요', gap: 55, order: 'center', idle: ['breathe', 'float'], pick: (role, it) => (role === BACK ? 'flare' : it.t === 'text' ? 'burst' : 'shock') },
+  storm: { name: '회오리', hint: '조각들이 소용돌이치며 나오고, 글은 번쩍 켜져요', gap: 70, order: 'shuffle', pick: (role, it) => (role === BACK ? 'fade' : it.t === 'text' ? 'flare' : it.t === 'link' ? 'wipe' : 'vortex') },
 };
 // 조합 효과가 저절로 계속 움직이게 하는 조각: 글 · 바탕 · 영상은 읽고 보기 편하게 가만히 두고, 연결선이 붙은 조각은 선이 떨어져 보이지 않게 가만히 둔다.
 const AUTO_IDLE_TYPES = ['shape', 'emoji', 'art', 'image'];
@@ -269,6 +297,7 @@ export const COMBO_IDS = COMBOS.map((c) => c.id);
 // 전환 효과: ms(길이) · ease(전체의 빠르기) · next(d) · old(d): 들어오는 장 · 나가는 장의 모습들(d 는 방향. 다음 장으로 1, 앞 장으로 -1).
 // old 가 없으면 나가는 장은 가만히 있는다. 들어오는 장이 늘 위에 그려진다.
 // 장의 모습(frame): x(옆으로 옮긴 거리. 카드 너비의 %) · y(위아래로 옮긴 거리. 카드 높이의 %) · k(크기 배율) · o(투명도) · turn(세로축으로 돌린 각도)
+//                  r(화면 위에서 돌린 각도) · lt(밝기를 더한 정도. 0 은 그대로, 3 은 네 배로 밝게: 번쩍)
 //                  b(흐림. 카드 너비의 %. 빠르게 지나가는 느낌)
 //                  inset([위, 오른쪽, 아래, 왼쪽] 에서 가린 %) · circle(가운데에서 연 동그라미의 반지름 %) · at(0~1 사이의 때) · ease(다음 frame 까지의 빠르기)
 const TURN_EASE = 'cubic-bezier(.4, 0, .2, 1)';
@@ -299,6 +328,43 @@ const TRANSITION_DEFS = {
   split: { name: '가운데서 열기', ms: 650, next: () => [{ inset: [0, 50, 0, 50] }, { inset: [0, 0, 0, 0] }] },
   // 블라인드: 위에서 아래로 쓸어내리며 열린다(조금 흐릿하게 내려앉는다).
   reveal: { name: '쓸어내리기', ms: 700, next: (d) => [{ inset: d > 0 ? [0, 0, 100, 0] : [100, 0, 0, 0], k: 1.06 }, { inset: [0, 0, 0, 0], k: 1 }] },
+  // ---- 임팩트 전환(r: 돌린 각도 · lt: 밝기를 더한 정도. 쓰는 전환은 모든 모습에 적는다) ----
+  // 번쩍: 앞 장이 하얗게 번쩍 타오르고, 다음 장이 눈부신 데서 가라앉는다(사진기 플래시).
+  flash: {
+    name: '번쩍', ms: 650, ease: 'linear',
+    next: () => [{ o: 0, lt: 3, k: 1.04 }, { at: 0.42, o: 0, lt: 3, k: 1.04 }, { at: 0.5, o: 1, lt: 2.4, k: 1.03, ease: 'ease-out' }, { o: 1, lt: 0, k: 1 }],
+    old: () => [{ o: 1, lt: 0, ease: 'ease-in' }, { at: 0.45, o: 1, lt: 3 }, { at: 0.5, o: 0, lt: 3 }, { o: 0, lt: 3 }],
+  },
+  // 펀치: 다음 장이 화면 앞에서 흐릿하게 날아와 쾅 박히며 출렁인다. 앞 장은 뒤로 밀려난다.
+  punch: {
+    name: '펀치', ms: 760, ease: 'linear',
+    next: () => [{ k: 2.2, o: 0, b: 2, ease: 'cubic-bezier(.55, 0, .9, .45)' }, { at: 0.5, k: 0.93, o: 1, b: 0, ease: 'ease-out' }, { at: 0.72, k: 1.025, ease: 'ease-in-out' }, { k: 1 }],
+    old: () => [{ k: 1, o: 1, b: 0, ease: 'ease-in' }, { at: 0.5, k: 0.7, o: 0.6, b: 0.8 }, { k: 0.7, o: 0, b: 0.8 }],
+  },
+  // 회오리: 다음 장이 작게 돌며 빨려 나오듯 커지고, 앞 장은 돌며 앞으로 날아간다.
+  spin: {
+    name: '회오리', ms: 850, ease: 'cubic-bezier(.65, 0, .25, 1)',
+    next: (d) => [{ k: 0.15, r: -200 * d, o: 0 }, { at: 0.35, k: 0.4, r: -120 * d, o: 1 }, { k: 1, r: 0, o: 1 }],
+    old: (d) => [{ k: 1, r: 0, o: 1, b: 0 }, { k: 1.5, r: 90 * d, o: 0, b: 1.6 }],
+  },
+  // 쿵 떨어지기: 다음 장이 위에서 떨어져 쿵 하고 바닥에 닿아 통 튀었다 선다.
+  drop: {
+    name: '쿵 떨어지기', ms: 900, ease: 'linear',
+    next: () => [{ y: -100, ease: 'cubic-bezier(.55, 0, 1, .45)' }, { at: 0.5, y: 0, ease: 'ease-out' }, { at: 0.66, y: -7, ease: 'ease-in' }, { at: 0.8, y: 0, ease: 'ease-out' }, { at: 0.9, y: -1.8, ease: 'ease-in' }, { y: 0 }],
+    old: () => [{ k: 1, o: 1 }, { at: 0.5, k: 0.92, o: 0.55 }, { k: 0.92, o: 0.3 }],
+  },
+  // 굴러가기: 두 장이 바퀴처럼 기울어 굴러 지나간다.
+  roll: {
+    name: '굴러가기', ms: 720, ease: 'cubic-bezier(.7, 0, .25, 1)',
+    next: (d) => [{ x: 110 * d, r: 30 * d, k: 0.8 }, { x: 0, r: 0, k: 1 }],
+    old: (d) => [{ x: 0, r: 0, k: 1, o: 1 }, { x: -110 * d, r: -30 * d, k: 0.8, o: 0.6 }],
+  },
+  // 지지직: 화면이 튀고 끊기듯 바뀐다(디지털 잡음).
+  glitch: {
+    name: '지지직', ms: 620, ease: 'linear',
+    next: () => [{ o: 0, x: 0 }, { at: 0.18, o: 0, x: 0 }, { at: 0.22, o: 1, x: -6 }, { at: 0.32, o: 0.3, x: 5 }, { at: 0.42, o: 1, x: -3 }, { at: 0.55, o: 0.6, x: 2 }, { at: 0.68, o: 1, x: -1 }, { at: 0.8, o: 1, x: 0 }, { o: 1, x: 0 }],
+    old: () => [{ o: 1, x: 0 }, { at: 0.1, o: 1, x: 4 }, { at: 0.16, o: 0.4, x: -5 }, { at: 0.22, o: 1, x: 3 }, { at: 0.3, o: 0, x: 0 }, { o: 0, x: 0 }],
+  },
 };
 /** 뒤집기 효과의 원근(화면에서의 px). 화면용 키프레임과 영상이 같은 값을 쓴다. */
 export const TURN_DEPTH = 1600;
@@ -488,15 +554,20 @@ export function hasMotion(design) {
 }
 
 // 장의 모습 하나를 화면용 키프레임으로 적는다. w: 카드 너비(px. 흐림의 크기를 정한다).
-function turnKeyframe(f, w = 1000) {
+// spun · lit: 그 전환이 돌리기(r) · 밝기(lt)를 쓰는지. 쓰면 모든 모습을 같은 꼴로 적는다(꼴이 다르면 브라우저가 돌린 바퀴 수를 잃는다).
+function turnKeyframe(f, w = 1000, { spun = false, lit = false } = {}) {
   const out = {};
   const parts = [];
-  if (f.y != null) parts.push(`translate(${f.x || 0}%, ${f.y}%)`);
-  else if (f.x != null) parts.push(`translateX(${f.x}%)`);
-  if (f.k != null) parts.push(`scale(${f.k})`);
-  if (!parts.length && f.turn != null) parts.push(`perspective(${TURN_DEPTH}px) rotateY(${f.turn}deg)`);
+  if (spun) parts.push(`translate(${f.x || 0}%, ${f.y || 0}%) rotate(${f.r || 0}deg) scale(${f.k ?? 1})`);
+  else {
+    if (f.y != null) parts.push(`translate(${f.x || 0}%, ${f.y}%)`);
+    else if (f.x != null) parts.push(`translateX(${f.x}%)`);
+    if (f.k != null) parts.push(`scale(${f.k})`);
+    if (!parts.length && f.turn != null) parts.push(`perspective(${TURN_DEPTH}px) rotateY(${f.turn}deg)`);
+  }
   if (parts.length) out.transform = parts.join(' ');
-  if (f.b != null) out.filter = `blur(${round((f.b / 100) * w)}px)`;
+  if (lit) out.filter = `blur(${round(((f.b || 0) / 100) * w)}px) brightness(${round(1 + (f.lt || 0))})`;
+  else if (f.b != null) out.filter = `blur(${round((f.b / 100) * w)}px)`;
   if (f.o != null) out.opacity = f.o;
   if (f.inset) out.clipPath = `inset(${f.inset.map((v) => `${v}%`).join(' ')})`;
   if (f.circle != null) out.clipPath = `circle(${f.circle}% at 50% 50%)`;
@@ -514,8 +585,11 @@ export function transitionFrames(id, dir = 1, { w = 1000 } = {}) {
   const def = TRANSITION_DEFS[id];
   if (!def) return null;
   const d = dir < 0 ? -1 : 1;
-  const write = (f) => turnKeyframe(f, w);
-  return { ms: def.ms, easing: def.ease || TURN_EASE, next: def.next(d).map(write), old: def.old ? def.old(d).map(write) : null };
+  const side = (frames) => {
+    const opts = { spun: frames.some((f) => f.r != null), lit: frames.some((f) => f.lt != null) };
+    return frames.map((f) => turnKeyframe(f, w, opts));
+  };
+  return { ms: def.ms, easing: def.ease || TURN_EASE, next: side(def.next(d)), old: def.old ? side(def.old(d)) : null };
 }
 
 // ---------- 이어 움직이기: 두 장의 같은 요소 짝짓기 ----------
@@ -734,7 +808,7 @@ function poseOf(def, ms, { mirror = false, scale = 1 } = {}) {
 /**
  * 전환 효과가 시작한 지 ms 가 지났을 때 두 장의 모습. 모르는 효과면 null.
  * 돌려주는 것: { ms(길이), done, next(들어오는 장), old(나가는 장. 가만히 있으면 null) }
- *   장의 모습: { x(옆으로 옮긴 거리. 카드 너비의 %) · y(위아래. 카드 높이의 %) · k · o · turn(도) · b(흐림. 카드 너비의 %)
+ *   장의 모습: { x(옆으로 옮긴 거리. 카드 너비의 %) · y(위아래. 카드 높이의 %) · k · o · turn(도) · b(흐림. 카드 너비의 %) · r(돌린 각도) · lt(더한 밝기)
  *               inset([위, 오른쪽, 아래, 왼쪽] % 또는 null) · circle(% 또는 null) }
  */
 export function transitionPose(id, dir = 1, ms = 0) {
@@ -745,7 +819,7 @@ export function transitionPose(id, dir = 1, ms = 0) {
     const at = offsetsOf(frames);
     const flow = (key) => frames.map((f, i) => ({ at: at[i], v: f[key], ease: f.ease })).filter((x) => x.v != null);
     const value = (key, rest, mix) => { const points = flow(key); return points.length ? sample(points, p, mix) : rest; };
-    return { x: value('x', 0), y: value('y', 0), k: value('k', 1), o: value('o', 1), turn: value('turn', 0), b: Math.max(0, value('b', 0)), inset: value('inset', null, mixList), circle: value('circle', null) };
+    return { x: value('x', 0), y: value('y', 0), k: value('k', 1), o: value('o', 1), turn: value('turn', 0), b: Math.max(0, value('b', 0)), r: value('r', 0), lt: Math.max(0, value('lt', 0)), inset: value('inset', null, mixList), circle: value('circle', null) };
   };
   const d = dir < 0 ? -1 : 1;
   return { ms: def.ms, done: ms >= def.ms, next: pose(def.next(d)), old: def.old ? pose(def.old(d)) : null };

@@ -329,7 +329,11 @@ function drawTurnSide(ctx, W, H, img, pose, depth) {
   if (pose.o <= 0.001) return;
   ctx.save();
   ctx.globalAlpha = Math.min(1, pose.o);
-  if (pose.b > 0.005) ctx.filter = `blur(${((pose.b / 100) * W).toFixed(2)}px)`;
+  // 흐림 · 밝기(번쩍)는 한 거르개로 함께 건다(화면의 filter 와 같은 차례).
+  const filters = [];
+  if (pose.b > 0.005) filters.push(`blur(${((pose.b / 100) * W).toFixed(2)}px)`);
+  if (pose.lt > 0.005) filters.push(`brightness(${(1 + pose.lt).toFixed(3)})`);
+  if (filters.length) ctx.filter = filters.join(' ');
   if (pose.inset) {
     const [top, right, bottom, left] = pose.inset;
     ctx.beginPath();
@@ -345,6 +349,7 @@ function drawTurnSide(ctx, W, H, img, pose, depth) {
   if (pose.turn) drawTurned(ctx, W, H, img, pose.turn, depth);
   else {
     ctx.translate(W / 2 + (pose.x / 100) * W, H / 2 + ((pose.y || 0) / 100) * H);
+    if (pose.r) ctx.rotate((pose.r * Math.PI) / 180);
     ctx.scale(pose.k, pose.k);
     ctx.drawImage(img, -W / 2, -H / 2);
   }

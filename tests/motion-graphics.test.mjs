@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   ENTER_IDS, EXIT_IDS, EXITS, COMBO_IDS, TRANSITION_IDS, SPEEDS, DELAY_MAX,
-  enterKeyframes, enterPose, enterTime, exitKeyframes, exitPose, exitTime, emphasisTime, idleTime,
+  enterKeyframes, enterPose, enterTime, exitKeyframes, exitPose, exitTime, emphasisTime, emphasisPose, idleTime,
   planMotion, hasMotion, clipInsets, typePoints, easeFn, motionTransform, transitionFrames, transitionPose, tweenItem,
 } from '../src/motion.js';
 import {filmPlan, slidePoses} from '../src/film.js';
@@ -34,7 +34,7 @@ test('every entrance starts from its first frame and lands exactly on the elemen
 });
 
 test('exits begin at the element\'s own look and end gone; they are offered as their own list', () => {
-  assert.deepEqual(EXIT_IDS, ['fade', 'sink', 'up', 'shrink', 'away', 'wipe', 'blur', 'pop', 'drop']);
+  assert.deepEqual(EXIT_IDS, ['fade', 'sink', 'up', 'shrink', 'away', 'wipe', 'blur', 'pop', 'drop', 'vortex', 'blast', 'zoomout', 'skid']);
   assert.ok(EXITS.every((e) => typeof e.name === 'string' && e.name.length));
   for (const id of EXIT_IDS) {
     const item = {t: 'shape', rot: 0, op: 80};
@@ -230,4 +230,29 @@ test('new transitions move up and down, blur while passing, and open from the mi
   // 예전 전환은 그대로다.
   assert.equal(transitionFrames('slide', 1).next[0].transform, 'translateX(100%)');
   assert.equal(transitionFrames('zoom', 1).next[0].transform, 'scale(0.7)');
+});
+
+test('impact effects are stored, start and end where they should, and transitions match the video pose', () => {
+  const enters = ['shock', 'vortex', 'burst', 'skid', 'smash', 'flare'], exits = ['vortex', 'blast', 'zoomout', 'skid'];
+  const emphases = ['rubber', 'wobble', 'boom', 'flip', 'swing'], combos = ['impact', 'blast', 'storm'], turns = ['flash', 'punch', 'spin', 'drop', 'roll', 'glitch'];
+  for (const id of enters) { assert.ok(ENTER_IDS.includes(id), id); assert.ok(atRest(enterPose(id, enterTime(id) * 2)), `${id} lands at rest`); }
+  for (const id of emphases) { assert.ok(atRest(emphasisPose(id, 0)) && atRest(emphasisPose(id, 5000)), `${id} returns to rest`); }
+  for (const id of combos) assert.ok(COMBO_IDS.includes(id), id);
+  // 저장: 새 값이 정리(clean)를 거쳐도 그대로 남는다.
+  const design = cleanDesign({ id: 'pimpact001', bg: '#fff', pa: 'impact', tr: 'spin', items: enters.map((an, i) => ({ id: `eimpact00${i}`, t: 'shape', shape: 'rect', x: 10 + i * 10, y: 50, w: 8, h: 8, color: '#277565', an, ...(exits[i] ? { ex: exits[i] } : {}), ...(emphases[i] ? { em: emphases[i] } : {}) })) });
+  assert.equal(design.pa, 'impact'); assert.equal(design.tr, 'spin');
+  assert.deepEqual(design.items.map((it) => [it.an, it.ex, it.em]), enters.map((an, i) => [an, exits[i], emphases[i]]));
+  for (const id of turns) {
+    assert.ok(TRANSITION_IDS.includes(id), id);
+    const f = transitionFrames(id, 1), end = transitionPose(id, 1, f.ms);
+    assert.ok(end.done && end.next.o === 1 && end.next.k === 1 && end.next.x === 0 && end.next.y === 0 && end.next.r === 0 && end.next.lt === 0, `${id} lands on the next slide: ${JSON.stringify(end.next)}`);
+    // 돌리기 · 밝기를 쓰는 전환은 모든 키프레임을 같은 꼴로 적는다(돌린 바퀴 수를 잃지 않게).
+    for (const side of [f.next, f.old].filter(Boolean)) {
+      const forms = new Set(side.map((k) => (k.transform || '').replace(/[-\d.]+/g, '#')));
+      assert.ok(forms.size <= 1, `${id} uses one transform form: ${[...forms]}`);
+    }
+  }
+  assert.match(transitionFrames('spin', 1).next[0].transform, /rotate\(-200deg\)/);
+  assert.match(transitionFrames('flash', 1).old[1].filter, /brightness\(4\)/);
+  assert.equal(transitionPose('flash', 1, 650 * 0.45).old.lt, 3);
 });
