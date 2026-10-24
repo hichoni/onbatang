@@ -93,15 +93,22 @@ export function createPptxImportWorkflow({imports,convert=convertPptx,applyFonts
    else{
     if([...jobs.values()].some(active=>active.running&&active.signature===signature))fail('IMPORT_IN_PROGRESS');
     if(jobs.size>=5){const completed=[...jobs].find(([,j])=>j.complete);if(completed)jobs.delete(completed[0]);else fail('IMPORT_QUEUE_FULL');}
-    const parts=planImportParts(inspection,selectedPages,importModes),token=newId('j');
-    job={token,signature,batchId:token,selectedPages:[...selectedPages],queue:parts.map(pages=>({pages})),running:false,complete:false};jobs.set(token,job);
+    const token=newId('j');
+    // 끊긴 가져오기(창을 닫았거나 새로 고침): 같은 PPT · 같은 쪽 고르기면 이미 저장한 파트는 그대로 두고 남은 쪽부터 이어서 저장한다.
+    const prior=typeof imports.findIncompleteBatch==='function'?await imports.findIncompleteBatch({sha256:fingerprint,selectedPages}):null;
+    if(prior){
+     const done=new Set(prior.parts.flatMap(p=>p.pages)),rest=selectedPages.filter(n=>!done.has(n));
+     job={token,signature,batchId:prior.batchId,selectedPages:[...selectedPages],resumed:done.size,
+      queue:[...prior.parts.map(p=>({pages:[...p.pages],envelope:p.envelope})),...planImportParts(inspection,rest,importModes).map(pages=>({pages}))],running:false,complete:false};
+    }else job={token,signature,batchId:token,selectedPages:[...selectedPages],queue:planImportParts(inspection,selectedPages,importModes).map(pages=>({pages})),running:false,complete:false};
+    jobs.set(token,job);
    }
    if(job.running)fail('IMPORT_IN_PROGRESS');
    if(job.complete)return result(job);
    job.running=true;acquired=true;
    const sourceBlob=new Blob([file],{type:MIME});
    // current: 지금 다루는 쪽들(보여 주는 쪽이 "담는 중"으로 그린다).
-   const progress=(phase,current)=>{const stored=job.queue.filter(p=>p.envelope).flatMap(p=>p.pages);try{onProgress({phase,completed:stored.length,total:job.selectedPages.length,documents:job.queue.filter(p=>p.envelope).length,...(current?{current:[...current]}:{})});}catch{/* Status rendering cannot cancel a durable write. */}};
+   const progress=(phase,current)=>{const stored=job.queue.filter(p=>p.envelope).flatMap(p=>p.pages);try{onProgress({phase,completed:stored.length,total:job.selectedPages.length,documents:job.queue.filter(p=>p.envelope).length,...(job.resumed?{resumed:job.resumed}:{}),...(current?{current:[...current]}:{})});}catch{/* Status rendering cannot cancel a durable write. */}};
    for(let index=0;index<job.queue.length;index++){
     const part=job.queue[index];if(part.envelope)continue;cancelled(signal);progress('converting',part.pages);
     try{
@@ -182,6 +189,6 @@ export function createPptxImportWorkflow({imports,convert=convertPptx,applyFonts
    throw error;
   }finally{if(acquired)job.running=false;}
  }
- function result(job){const saved=job.queue.filter(p=>p.envelope);return {complete:job.complete,documents:saved.map(p=>p.envelope),parts:saved.map(p=>({documentId:p.envelope.id,pages:[...p.pages]})),pageCount:saved.reduce((n,p)=>n+p.pages.length,0),batchId:job.batchId,retryToken:job.token};}
+ function result(job){const saved=job.queue.filter(p=>p.envelope);return {complete:job.complete,...(job.resumed?{resumed:job.resumed}:{}),documents:saved.map(p=>p.envelope),parts:saved.map(p=>({documentId:p.envelope.id,pages:[...p.pages]})),pageCount:saved.reduce((n,p)=>n+p.pages.length,0),batchId:job.batchId,retryToken:job.token};}
  return {saveAll,dispose:()=>jobs.clear()};
 }

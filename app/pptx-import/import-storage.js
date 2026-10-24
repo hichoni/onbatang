@@ -157,6 +157,30 @@ export function createOnbatangImportStorage({repository}={}) {
         return checked;
       } catch(error) {throw wrapped(error,stage,input,recovery);}
     },
+    /**
+     * 끊긴 가져오기: 같은 PPT(sha256) · 같은 쪽 고르기로 시작했지만 다 저장하지 못한 묶음 가운데 가장 새것.
+     * 저장한 파트가 1번부터 빠짐없이 이어져 있고 그 쪽들이 고른 쪽의 앞부분일 때만 돌려준다(이어서 저장해도 차례가 맞게).
+     * 돌려주는 것: { batchId, parts: [{ pages, envelope }] } 또는 null. 목록을 못 읽는 저장소면 null.
+     */
+    async findIncompleteBatch({sha256,selectedPages}={}) {
+      if(typeof repository.listHeads!=='function'||!/^[a-f0-9]{64}$/.test(String(sha256||''))||!Array.isArray(selectedPages))return null;
+      const batches=new Map();
+      for(const head of await repository.listHeads({kind:'document'})){
+        const batch=head?.sidecar?.importReport?.importBatch;
+        if(!batch?.id||head.payload?.source?.sha256!==sha256||!equal(batch.selectedPages,selectedPages))continue;
+        if(!batches.has(batch.id))batches.set(batch.id,[]);
+        batches.get(batch.id).push({index:batch.partIndex,pages:[...batch.pages],envelope:head,at:String(head.createdAt||'')});
+      }
+      const found=[];
+      for(const [batchId,parts] of batches){
+        parts.sort((a,b)=>a.index-b.index);
+        const pages=parts.flatMap(p=>p.pages);
+        if(parts.some((p,k)=>p.index!==k+1)||pages.length>=selectedPages.length||!pages.every((n,k)=>n===selectedPages[k]))continue;
+        found.push({batchId,parts:parts.map(({pages,envelope})=>({pages,envelope})),at:parts.reduce((m,p)=>p.at>m?p.at:m,'')});
+      }
+      found.sort((a,b)=>b.at.localeCompare(a.at));
+      return found[0]?{batchId:found[0].batchId,parts:found[0].parts}:null;
+    },
     async reopenDocument({id,revision}={}) {
       let stage='revision-read';
       const recovery={id,revision,sourceBlob:null,uploadedAsset:null};

@@ -67,6 +67,7 @@ let showAudience = null;           // 발표의 실시간 질문 · 반응(호�
 let accountBridge = null;          // 공용 온바탕: 가이랩 계정으로 이어 쓰기(연결 창 주소 등). 계정 저장(sync)이 있으면 쓰지 않는다.
 let bridge = null;
 let accountHome = null;
+let cloudAction = null;   // 호스트의 "내 클라우드"(계정에 백업한 자료). 첫 화면에 따로 둔다.
 let materialNavigation = null;
 let appMaker = null;
 // 들여쓰기(embed.html): 다른 앱이 부른 온바탕. { done(id), close() } — 위 막대가 "닫기" · "다 했어요"가 되고, 첫 화면 · 모양 바꾸기 · 발표 · 내려받기 · 영상 · 카메라가 없다.
@@ -452,6 +453,7 @@ function render() {
           try { await importAction.open(); } catch (error) { console.warn(error); toast('가져오기 화면을 열지 못했어요. 다시 시도해주세요.'); }
           finally { button.disabled = false; }
         } }, importAction.label) : null,
+        cloudAction ? el('button',{class:'btn cv-cloud-btn',type:'button',disabled:loading,dataset:{cloudAction:''},title:cloudAction.title||'',onClick:()=>openAccountFromHome(cloudAction)},...face('cloud',cloudAction.label)) : null,
         accountAction ? el('button',{class:'btn cv-account-btn',type:'button',disabled:loading,dataset:{accountAction:''},onClick:()=>openAccountFromHome()},accountAction.label) : null,
         accountBridge && !sync ? el('button', { class: 'btn cv-bridge-btn', type: 'button', disabled: loading, dataset: { accountBridge: '' }, title: '집에서 만든 그림을 학교에서: 가이랩 선생님 계정에 올리고 가져와요', onClick: () => openBridgeFromHome() }, ...face('cloud', '가이랩 계정으로 이어 쓰기')) : null,
         full ? el('p', { class: 'cv-hero-full', text: `그림은 ${MAX_DESIGNS}개까지 저장돼요(PPT 하나는 파트가 여럿이어도 1개). 안 쓰는 그림을 지워 주세요.` }) : null),
@@ -990,6 +992,7 @@ function moveStripSelection(O,delta){if(O.materialDeck){const pages=materialPage
 async function reorderStrip(O,from,to){
   if(O.closed||O.leaving||O.inlineImport||app.inert||videoBusy(O))return;
   if(!O.materialDeck){changeSlides(O,(slides,at)=>{const next=[...slides];next.splice(to,0,...next.splice(from,1));const selected=slides[at];return [next,next.indexOf(selected)];});return;}
+  if(looseBlock(O))return;
   if(!materialNavigation.reorder){toast('이 자료의 순서를 저장하는 기능을 연결하지 못했어요.');return;}
   const pages=materialPages(O);if(from<0||to<0||from>=pages.length||to>=pages.length||from===to)return;
   O.leaving=true;app.inert=true;
@@ -1038,10 +1041,22 @@ async function loadMaterialNavigation(O) {
     if(deck?.documents?.some(record=>record.id===O.record.id)){
       O.materialDeck={...deck,documents:deck.documents.map(migrateRecord)};
       renderStrip(O);
+    }else if(!deck){
+      // 이 기기에 PPT 원본(전체 자료)이 없는 파트(다른 기기에서 계정으로 받아 온 것): 같은 PPT 의 파트들을 이어 모든 쪽을 보여 준다.
+      const loose=await looseDeck(O);
+      if(loose&&!O.closed&&S.open===O){O.materialDeck=loose;renderStrip(O);toast(LOOSE_NOTE,6500);}
     }
   }catch(error){O.materialLoadError=error;if(!O.closed&&S.open===O)toast('PPT 전체 목록을 열지 못했어요. 현재 편집과 저장 자료는 유지돼요. 내 자료에서 다시 열어주세요.',5000);}
   finally{loading.finish();}
 }
+// 원본이 없는 기기의 PPT: 보기 · 고치기 · 발표는 모든 쪽으로 하고, 쪽 차례 바꾸기 · 활동 결과처럼 전체 자료에 고정 저장하는 일만 막는다.
+const LOOSE_NOTE='다른 기기에서 가져온 PPT라 이 기기에는 원본이 없어요. 모든 쪽을 보고 고칠 수 있어요(계정에 저장돼요). 쪽 차례 바꾸기 · 전체 자료 저장은 처음 기기에서 계정에 백업한 뒤 "내 클라우드"에서 열면 할 수 있어요.';
+async function looseDeck(O){
+  const list=await listDesigns(),entry=homeEntries(list,homeGroups(list)).find(e=>e.deck&&e.records.some(r=>r.id===O.record.id));
+  if(!entry||entry.records.length<2)return null;
+  return {title:entry.name,documents:entry.records.map(r=>migrateRecord(r.id===O.record.id?{...O.record,slides:currentSlides(O)}:r)),materialRef:null,loose:true};
+}
+const looseBlock=O=>{if(O.materialDeck?.loose){toast(LOOSE_NOTE,6500);return true;}return false;};
 function materialPages(O){
   const pages=O.materialDeck.documents.flatMap(record=>(record.id===O.record.id?currentSlides(O):record.slides).map((page,index)=>({record,page,index})));
   return orderPages(pages,withNewPages(O.materialDeck.pageOrder,O.materialDeck.documents.map(record=>record.id===O.record.id?currentSlides(O):record.slides)));
@@ -1514,9 +1529,9 @@ function lessonPages(O){
   if(O.materialLoadError)throw Error('PPT 전체 자료를 읽지 못했어요. 내 자료에서 다시 열어주세요.');
   return O.materialDeck?materialPages(O):currentSlides(O).map((page,index)=>({record:{...O.record,slides:currentSlides(O)},page,index}));
 }
-const lessonTarget=O=>({kind:O.materialDeck?'material':'document',id:O.materialDeck?.materialRef.id||O.record.id});
+const lessonTarget=O=>({kind:O.materialDeck?'material':'document',id:O.materialDeck?.materialRef?.id||O.record.id});
 async function importLessonResults(O){
- if(O.closed||O.inlineImport||O.activityBusy||videoBusy(O))return;
+ if(O.closed||O.inlineImport||O.activityBusy||videoBusy(O)||looseBlock(O))return;
  try{
   if(O.materialLoadingPromise)await O.materialLoadingPromise;await persistEditorAction(O);
   const snapshot=()=>({target:lessonTarget(O),records:O.materialDeck?O.materialDeck.documents.map(row=>row.id===O.record.id?structuredClone(O.persistedRecord):structuredClone(row)):[structuredClone(O.persistedRecord)],pageOrder:lessonPages(O).map(v=>v.page.id)});
@@ -1548,6 +1563,7 @@ function selectActivityRecord(O,record,pageId){
 }
 async function commitActivityDocument(O,document,pageOrder,selectedPageId,expectedDocument){
   if(O.recoveryRequired)throw Error('전체 자료에는 저장했어요. 발표를 끝내고 내 자료에서 다시 열어주세요.');
+  if(O.materialDeck?.loose)throw Error(LOOSE_NOTE);
   if(O.materialDeck){
     if(!materialNavigation?.saveActivity)throw Error('이 자료의 활동 저장 기능을 연결하지 못했어요.');
     const deck=await materialNavigation.saveActivity({designId:document.id,materialRef:O.materialDeck.materialRef,document,pageOrder,expectedDocument});
@@ -2371,21 +2387,21 @@ async function openLessonFromEditor(O,action=lessonAction){
  catch(error){setStatus(O,error?.message||'수업 화면을 열지 못했어요. 그림은 그대로예요.','bad');}
  finally{O.leaving=false;if(S.open===O&&!O.closed)app.inert=false;}
 }
-/** Account lists do not require creating an empty drawing on a new device. */
-async function openAccountFromHome(){
- if(!accountAction||accountHome||S.open||moving||S.phase!=='home')return;
+/** Account lists do not require creating an empty drawing on a new device. action: 계정 수업(accountAction) 또는 내 클라우드(cloudAction). */
+async function openAccountFromHome(action=accountAction){
+ if(!action||accountHome||S.open||moving||S.phase!=='home')return;
  const session={controller:null,disposed:false,closing:false};accountHome=session;
  const outlet=el('div',{class:'cv-account-home-body'}),back=el('button',{class:'btn',type:'button',disabled:true},'내 그림으로 돌아가기');
- const shell=el('section',{class:'cv-account-home',role:'region','aria-label':accountAction.editorTitle||accountAction.label},
+ const shell=el('section',{class:'cv-account-home',role:'region','aria-label':action.editorTitle||action.label},
   el('style',{},'.cv-account-home{height:100dvh;display:flex;flex-direction:column;background:#fbfdfb;color:#233f36}.cv-account-home>header{padding:16px 24px;display:flex;gap:16px;align-items:center;justify-content:space-between;border-bottom:1px solid #d8e6df}.cv-account-home h2{margin:0}.cv-account-home-body{flex:1;min-height:0;overflow:auto}'),
-  el('header',{},el('h2',{},accountAction.editorTitle||accountAction.label),back),outlet);
+  el('header',{},el('h2',{},action.editorTitle||action.label),back),outlet);
  const dispose=async()=>{if(session.disposed)return;session.disposed=true;await session.controller?.dispose?.();if(accountHome===session)accountHome=null;};
  const close=async()=>{if(session.closing||session.disposed)return;session.closing=true;await dispose();await refresh();};
  const open=async(id,options={})=>{const record=await getDesign(id);if(!record||session.disposed)throw Error('DOCUMENT_NOT_FOUND');await dispose();await openSavedDesign(id,options);};
  back.onclick=async()=>{if(session.controller?.requestClose)await session.controller.requestClose({reason:'return'});else await close();};
  setView('edit');app.replaceChildren(shell);
- try{session.controller=await accountAction.open({from:'home',inline:{root:outlet,close,openDesign:open}})||{};if(session.disposed)await session.controller.dispose?.();else back.disabled=false;}
- catch(error){await dispose();await refresh();toast(error.message||'내 수업을 열지 못했어요.');}
+ try{session.controller=await action.open({from:'home',inline:{root:outlet,close,openDesign:open}})||{};if(session.disposed)await session.controller.dispose?.();else back.disabled=false;}
+ catch(error){await dispose();await refresh();toast(error.message||(action===cloudAction?'내 클라우드를 열지 못했어요.':'내 수업을 열지 못했어요.'));}
 }
 async function openInlineImport(O, context, action=importAction) {
   const work = O.shell.querySelector('.cv-work');
@@ -3101,13 +3117,14 @@ function readOpen() {
  * - resume: true 면 새로 고침한 뒤 이 탭에서 꾸미던 그림 · 장을 다시 연다(공용 온바탕 첫 쪽이 켠다. 그림을 스스로 여는 들여 쓰는 곳은 끈 채로 둔다).
  * - lessonAction: {label, editorTitle?, accepts?(record), open({designId,slideIndex,inline})}; 저장 후 같은 편집 영역에서 호스트의 수업 구성/진행을 연다. 공용 기본값은 숨김.
  * - accountAction: {label,editorTitle?,open({from,designId?,inline})}; 첫 화면과 편집기 안의 계정 수업 목록. 기본값은 숨김이며 서버/로그인은 호스트가 담당한다.
+ * - cloudAction: {label,editorTitle?,title?,open({from:'home',inline})}; 첫 화면의 "내 클라우드"(계정에 백업한 자료를 열기). accountAction 과 같은 전체 화면 칸에서 열고, 기본값은 숨김.
  * - showAudience: {open({state(),root,savePoll(result)})→{update(state),show?(),close()}}; 발표 막대의 "질문 · 반응"(state: {at,total,title}). 기본값은 숨김.
  *   savePoll({question,options,counts}): 투표 결과 장(app/poll-result.js)을 지금 장 다음에 저장하고 그 장으로 간다 → {at,total}.
  * - showRemote: {open({state(),command(cmd),root})→{update(state),show?(),close()}}; 발표 막대의 "휴대폰 리모컨". cmd: {action:'next'|'prev'|'go'(at)|'black'|'state'}. 기본값은 숨김.
  * - accountBridge: {url?}; 공용 온바탕 첫 화면의 "가이랩 계정으로 이어 쓰기"(가이랩 연결 창으로 그림을 올리고 가져온다). sync 가 있으면 숨김.
  * - shareAction: {label,title?,open({designId,flush(),goTo(slideIndex,{upload})}),saved?(record)}; 편집기 위 막대의 공유 단추(가이랩의 보기 전용 링크). saved 는 이 기기에 저장할 때마다 불린다(링크에 반영은 호스트가 모아서). 기본값은 숨김.
  */
-export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, accountAction: accountLibrary = null, shareAction: sharing = null, accountBridge: bridging = null, showRemote: remoting = null, showAudience: audiencing = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false, resume = false, embed = null, syncDelay = null } = {}) {
+export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, accountAction: accountLibrary = null, cloudAction: cloudLibrary = null, shareAction: sharing = null, accountBridge: bridging = null, showRemote: remoting = null, showAudience: audiencing = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false, resume = false, embed = null, syncDelay = null } = {}) {
   if (app) throw new Error('minican already started');
   if (!root) throw new Error('minican root');
   app = root;
@@ -3119,6 +3136,7 @@ export function startMinican({ root = document.getElementById('app'), fonts = []
   if (material && typeof material.open === 'function' && typeof material.label === 'string' && material.label.trim() && (!material.accepts || typeof material.accepts === 'function')) materialAction = material;
   if(lesson&&typeof lesson.open==='function'&&typeof lesson.label==='string'&&lesson.label.trim()&&(!lesson.accepts||typeof lesson.accepts==='function'))lessonAction=lesson;
   if(accountLibrary&&typeof accountLibrary.open==='function'&&typeof accountLibrary.label==='string'&&accountLibrary.label.trim())accountAction=accountLibrary;
+  if(cloudLibrary&&typeof cloudLibrary.open==='function'&&typeof cloudLibrary.label==='string'&&cloudLibrary.label.trim())cloudAction=cloudLibrary;
   if(navigation&&typeof navigation.load==='function')materialNavigation=navigation;
   if(sharing&&typeof sharing.open==='function'&&typeof sharing.label==='string'&&sharing.label.trim())shareAction=sharing;
   if (remoting && typeof remoting.open === 'function') showRemote = remoting;
