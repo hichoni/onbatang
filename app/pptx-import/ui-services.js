@@ -1,4 +1,5 @@
-import {inspectPptx, convertPptx} from './client.js';
+import {inspectPptx, convertPptx, previewPptx} from './client.js';
+import {migrateRecord} from '../designs.js';
 import {createPptxPreview} from './preview.js';
 import {createPptxImportWorkflow} from './workflow.js';
 import {defaultImportFontServices} from './fonts.js';
@@ -10,10 +11,20 @@ export function createImportUiServices({imports, fonts = ONBATANG_FONTS, fontSer
   const {getImportFontRegistry, collectImportFonts, createFontPlan, applyFontPlan, loadImportFontAssets, resolveImportFontReplacement} = fontServices;
   configure({fonts: fonts});
   const workflow = createPptxImportWorkflow({imports, applyFonts: applyFontPlan, loadFonts: loadImportFontAssets}), renderer = createPptxPreview({fontServices});
-  let session, previewFile, fileSignal, queue = Promise.resolve(), generation = 0;
+  let session, previewFile, fileSignal, queue = Promise.resolve(), generation = 0, batch = null;
   const editable = new Map(), fontLoads = new Map(), ownedFaces = new Set();
   const fail = () => { throw Object.assign(new Error('이전 파일의 미리보기를 취소했어요.'), {code: 'CANCELLED'}); };
   const trim = cache => { while (cache.size > 18) cache.delete(cache.keys().next().value); };
+  // 고르는 화면의 작은 그림 재료: 파일을 한 번 읽어 모든 쪽의 편집 모습을 만든다(쪽 번호 → { document }).
+  function startBatch(file) {
+    if (batch) return batch;
+    batch = previewPptx(file, {signal: fileSignal}).then(result => {
+      const shellOf = slide => migrateRecord({id: 'dpreviewpage', schemaVersion: 1, revision: 0, name: '미리보기', size: result.size, originalSize: result.originalSize, source: result.source, assetRefs: [result.source.assetId], assets: result.assets, slides: [slide]});
+      return new Map(result.pages.filter(p => p.slide).map(p => { try { return [p.pageNumber, {document: shellOf(p.slide)}]; } catch { return null; } }).filter(Boolean));
+    });
+    const mine = batch; batch.catch(() => { if (batch === mine) batch = null; });
+    return batch;
+  }
   async function loadFonts(plan, signal) {
     if (!plan) return;
     const key = JSON.stringify(plan);
@@ -28,7 +39,9 @@ export function createImportUiServices({imports, fonts = ONBATANG_FONTS, fontSer
   const sourceNames = inspection => Object.fromEntries((inspection.pages || []).flatMap(page => (page.fontUsage || []).map(usage => [usage.elementId, usage.originalName])));
   const services = {
     async inspect(file, options) {
-      generation++; previewFile = file; fileSignal = options?.signal; editable.clear(); queue = Promise.resolve();
+      generation++; previewFile = file; fileSignal = options?.signal; editable.clear(); queue = Promise.resolve(); batch = null;
+      // 작은 그림 재료를 살펴보기와 함께 다른 일꾼에서 바로 만들기 시작한다(살펴보기가 끝나면 거의 같이 준비된다).
+      startBatch(file);
       return inspectPptx(file, options);
     },
     async preparePreview({file, inspection, signal}) {
@@ -42,6 +55,13 @@ export function createImportUiServices({imports, fonts = ONBATANG_FONTS, fontSer
       if (view === 'pptx') {
         if (!session) throw Object.assign(new Error('PPT 화면을 준비하고 있어요. 편집 미리보기를 먼저 확인할 수 있어요.'), {code: 'PREVIEW_NOT_OPEN'});
         return session.renderPage(pageNumber, {width: purpose === 'thumbnail' ? 320 : 1280, purpose: purpose === 'thumbnail' ? 'thumbnail' : 'image', fontPlan, signal});
+      }
+      // 고르는 화면의 작은 그림: 파일을 한 번 읽어 모든 쪽을 함께 만든다(쪽마다 파일 전체를 다시 풀면 쪽마다 1초 넘게 걸렸다).
+      if (!editable.has(pageNumber)) {
+        startBatch(file);
+        const pages = await batch.catch(() => null);
+        if (current !== generation || signal?.aborted) fail();
+        if (pages?.has(pageNumber)) editable.set(pageNumber, Promise.resolve(pages.get(pageNumber)));
       }
       if (!editable.has(pageNumber)) {
         // A single large PPT is not unpacked by hundreds of concurrent workers.
@@ -95,7 +115,7 @@ export function createImportUiServices({imports, fonts = ONBATANG_FONTS, fontSer
         return plan;
       }
     },
-    disposePreview() { generation++; session?.dispose(); session = null; editable.clear(); fontLoads.clear(); queue = Promise.resolve(); },
+    disposePreview() { generation++; session?.dispose(); session = null; editable.clear(); batch = null; fontLoads.clear(); queue = Promise.resolve(); },
     dispose() { services.disposePreview(); workflow.dispose(); for (const face of ownedFaces) document.fonts.delete(face); ownedFaces.clear(); }
   };
   return services;
