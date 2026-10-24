@@ -190,3 +190,26 @@ test('a whole PPT has its "새 장" button: the new slide lands right after the 
   assert.match(await page.locator('.cv-canvas .fe-stage').innerText(), /파트 2 · 1/);
   assert.deepEqual(errors, []);
 });
+
+// 다른 기기에서 계정으로 받아 온 PPT 파트(이 기기에 원본 · 전체 자료가 없다): 호스트의 load 가 null 을 돌려줘도 같은 PPT 의 모든 쪽을 잇는다.
+const looseFixture = fixture.replace("await startMinican({storage:'v73-home'});",
+  `const {getDesign}=await import('/app/store.js');window.readPart=getDesign;window.partIds=['d'+'1'.repeat(24),'d'+'2'.repeat(24),'d'+'3'.repeat(24)];
+   await startMinican({storage:'v73-home',materialNavigation:{load:async()=>null,reorder:async()=>{window.reordered=true;throw Error('no');}}});`);
+test('a PPT synced from another device still shows every page; fixed-material actions say why they wait', options, async t => {
+  const {page, errors} = await setup(t, looseFixture);
+  await page.locator('.cv-deck .cv-item-open').click();
+  await page.waitForFunction(() => document.querySelectorAll('[data-material-page]').length === 7);
+  assert.match(await page.locator('#toast').textContent(), /이 기기에는 원본이 없어요/);
+  // 다른 파트의 쪽으로 가서 고치면 그 파트에 저장되고, 모든 쪽이 그대로 이어진다.
+  await page.locator('[data-material-page="6"]').click();
+  await page.waitForFunction(() => document.querySelector('input.cv-name')?.value === '메이커 캠프 · 3');
+  await page.waitForFunction(() => document.querySelectorAll('[data-material-page]').length === 7);
+  await page.locator('[data-material-add]').click();
+  await page.waitForFunction(() => document.querySelectorAll('[data-material-page]').length === 8);
+  await page.waitForFunction(async () => (await window.readPart(window.partIds[2])).slides.length === 3, null, {timeout: 10000});
+  // 쪽 차례 바꾸기는 원본이 있는 기기에서: 막고 알려 준다.
+  await page.locator('[data-material-page="7"]').focus(); await page.keyboard.press('Alt+ArrowLeft');
+  await page.waitForTimeout(300);
+  assert.equal(await page.evaluate(() => window.reordered || false), false);
+  assert.deepEqual(errors, []);
+});
