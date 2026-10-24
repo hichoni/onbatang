@@ -996,7 +996,7 @@ async function reorderStrip(O,from,to){
   if(!materialNavigation.reorder){toast('이 자료의 순서를 저장하는 기능을 연결하지 못했어요.');return;}
   const pages=materialPages(O);if(from<0||to<0||from>=pages.length||to>=pages.length||from===to)return;
   O.leaving=true;app.inert=true;
-  try{await persistEditorAction(O);const deck=await materialNavigation.reorder({designId:O.record.id,materialRef:O.materialDeck.materialRef,pageIds:movePage(pages.map(v=>v.page.id),from,to)});
+  try{await persistLocal(O);const deck=await materialNavigation.reorder({designId:O.record.id,materialRef:O.materialDeck.materialRef,pageIds:movePage(pages.map(v=>v.page.id),from,to)});
     if(!O.closed&&S.open===O){O.materialDeck={...deck,documents:deck.documents.map(migrateRecord)};renderStrip(O);toast('슬라이드 순서를 저장했어요. 원본과 이전 저장본은 그대로예요.');}
   }catch(error){toast(error?.message||'순서를 저장하지 못했어요. 원래 순서와 편집은 유지돼요.',5000);}
   finally{O.leaving=false;if(!O.closed&&S.open===O)app.inert=false;}
@@ -1124,14 +1124,17 @@ async function navigateMaterialPage(O,value) {
   if(O.closed||O.leaving||O.inlineImport||moving||app.inert||hostFlush||videoBusy(O))return;
   if(value.record.id===O.record.id){goSlide(O,value.index);return;}
   O.leaving=true;app.inert=true;
-  const loading=materialLoading(O,{title:`${value.page.source?.pageNumber||value.index+1}쪽을 여는 중이에요`,detail:'지금 편집한 내용을 먼저 저장해요.'});
+  const loading=materialLoading(O,{title:`${value.page.source?.pageNumber||value.index+1}쪽을 여는 중이에요`,detail:'지금 편집한 내용을 이 기기에 저장해요.'});
   try{
-    await persistEditorAction(O);
+    // 다른 파트의 장으로 갈 때: 이 기기에만 바로 적고(바뀐 것이 있을 때만) 넘어간다. 계정에 올리기는 뒤에서 이어서 한다
+    // (전에는 계정에 다 올라갈 때까지 기다려 장을 넘길 때마다 오래 걸렸다).
+    await persistLocal(O);
     const record=await getDesign(value.record.id);
     if(!record)throw Error('DOCUMENT_NOT_FOUND');
     const ready=migrateRecord(record);
     if(ready.slides[value.index]?.id!==value.page.id)throw Error('DOCUMENT_CHANGED');
-    await tidyVideos(O.record.id,currentSlides(O));
+    const leaving=O.record.id,kept=currentSlides(O);
+    setTimeout(()=>{tidyVideos(leaving,kept).catch(()=>{});},0);
     // The editor's render normalization is not a saved draft. Keep the exact
     // snapshot written by this editor as the CAS basis when another part later
     // needs room for an activity/result. Foreign drafts must still conflict.
@@ -2274,6 +2277,16 @@ async function closeToHost(O, btn) {
 
 /** Import navigation is opt-in. Keep the existing editor intact until local and
  * account persistence have both succeeded; never drop a new blank drawing. */
+/** 이 기기에만 바로 저장한다(계정에 올리기는 save 가 뒤에서 줄 세운다). 장 · 파트를 넘길 때처럼 빨라야 하는 곳에서 쓴다. */
+async function persistLocal(O) {
+  if (O.putting) await O.putting;
+  if (O.closed || S.open !== O) throw new Error('EDITOR_BUSY');
+  if (!O.saved) O.dirty = true;
+  if (!O.dirty) return;
+  let ok = await save(O, {preserveBlank: true});
+  if (O.dirty) ok = await save(O, {preserveBlank: true});
+  if (!ok || O.dirty || O.localOk === false) throw new Error('EDITOR_SAVE_FAILED');
+}
 async function persistEditorAction(O) {
   if (O.putting) await O.putting;
   if (O.closed || S.open !== O) throw new Error('EDITOR_BUSY');

@@ -285,7 +285,7 @@ const COMBO_DEFS = {
   // ---- 임팩트 ----
   impact: { name: '임팩트', hint: '제목이 확 박히고, 글은 끼익 미끄러져 서고, 그림은 튀어나와요', gap: 120, pick: (role, it, { lead }) => (role === BACK ? 'blurzoom' : it.t === 'text' ? (lead ? 'shock' : 'skid') : 'burst') },
   blast: { name: '빵 터지기', hint: '가운데에서 바깥으로 뒤에서 튀어나오듯 터져 나와요', gap: 55, order: 'center', idle: ['breathe', 'float'], pick: (role, it) => (role === BACK ? 'flare' : it.t === 'text' ? 'burst' : 'shock') },
-  storm: { name: '회오리', hint: '조각들이 소용돌이치며 나오고, 글은 번쩍 켜져요', gap: 70, order: 'shuffle', pick: (role, it) => (role === BACK ? 'fade' : it.t === 'text' ? 'flare' : it.t === 'link' ? 'wipe' : 'vortex') },
+  storm: { name: '휘몰아치기', hint: '조각들이 소용돌이치며 나오고, 글은 번쩍 켜져요', gap: 70, order: 'shuffle', pick: (role, it) => (role === BACK ? 'fade' : it.t === 'text' ? 'flare' : it.t === 'link' ? 'wipe' : 'vortex') },
 };
 // 조합 효과가 저절로 계속 움직이게 하는 조각: 글 · 바탕 · 영상은 읽고 보기 편하게 가만히 두고, 연결선이 붙은 조각은 선이 떨어져 보이지 않게 가만히 둔다.
 const AUTO_IDLE_TYPES = ['shape', 'emoji', 'art', 'image'];

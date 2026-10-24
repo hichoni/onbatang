@@ -162,6 +162,10 @@ test('임팩트: new combo, effects and transitions are picked in the panel, sav
   await page.locator('.cv-slide').nth(1).click();
   await page.locator('.fe-motions[data-group="tr"] .fe-mo[data-motion="spin"]').click();
   await saved(page, r => r.slides[1].tr === 'spin');
+  // 장 넘김과 조합은 함께 쓴다: 둘 다 고르면 무엇이 어떤 차례로 움직이는지 보여 주고 함께 미리 본다.
+  await page.locator('.fe-motions[data-group="combo"] .fe-mo[data-motion="storm"]').click();
+  await saved(page, r => r.slides[1].tr === 'spin' && r.slides[1].pa === 'storm');
+  assert.match(await page.locator('[data-motion-both]').innerText(), /회오리 로 넘어온 뒤 → 휘몰아치기/);
   await page.locator('.cv-slide').nth(0).click();
   await page.locator('.cv-canvas .fe-card .fi-shape').click();
   await page.locator('.fe-motions[data-group="emph"] .fe-mo[data-motion="boom"]').click();
