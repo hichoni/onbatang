@@ -1032,7 +1032,13 @@ function materialLoading(O,options){
   return O.materialLoading=deferredOnbatangLoading(O.shell.querySelector('.cv-canvas'),{...options,compact:true,className:'cv-material-loading',active:()=>!O.closed&&S.open===O});
 }
 async function loadMaterialNavigation(O) {
-  if (!materialNavigation || O.record.source?.kind !== 'pptx') return;
+  if (O.record.source?.kind !== 'pptx') return;
+  // 전체 자료를 모르는 곳(공용 온바탕 · 가이랩 계정에서 가져온 파트들): 같은 PPT 의 파트들을 이어 모든 쪽을 보여 준다.
+  if (!materialNavigation) {
+    const loose=await looseDeck(O).catch(()=>null);
+    if(loose&&!O.closed&&S.open===O){O.materialDeck=loose;renderStrip(O);}
+    return;
+  }
   const loading=materialLoading(O,{title:'PPT 전체 슬라이드를 불러오고 있어요',detail:'저장된 모든 쪽을 순서대로 연결해요.'});
   try {
     const deck=await materialNavigation.load({designId:O.record.id});
@@ -1056,7 +1062,8 @@ async function looseDeck(O){
   if(!entry||entry.records.length<2)return null;
   return {title:entry.name,documents:entry.records.map(r=>migrateRecord(r.id===O.record.id?{...O.record,slides:currentSlides(O)}:r)),materialRef:null,loose:true};
 }
-const looseBlock=O=>{if(O.materialDeck?.loose){toast(LOOSE_NOTE,6500);return true;}return false;};
+const LOOSE_PUBLIC='여러 파트로 나뉜 PPT라 쪽 차례 바꾸기는 한 파트 안에서만 돼요. 모든 쪽을 보고 고치는 것은 그대로 할 수 있어요.';
+const looseBlock=O=>{if(O.materialDeck?.loose){toast(materialNavigation?LOOSE_NOTE:LOOSE_PUBLIC,6500);return true;}return false;};
 function materialPages(O){
   const pages=O.materialDeck.documents.flatMap(record=>(record.id===O.record.id?currentSlides(O):record.slides).map((page,index)=>({record,page,index})));
   return orderPages(pages,withNewPages(O.materialDeck.pageOrder,O.materialDeck.documents.map(record=>record.id===O.record.id?currentSlides(O):record.slides)));
@@ -1566,7 +1573,7 @@ function selectActivityRecord(O,record,pageId){
 }
 async function commitActivityDocument(O,document,pageOrder,selectedPageId,expectedDocument){
   if(O.recoveryRequired)throw Error('전체 자료에는 저장했어요. 발표를 끝내고 내 자료에서 다시 열어주세요.');
-  if(O.materialDeck?.loose)throw Error(LOOSE_NOTE);
+  if(O.materialDeck?.loose)throw Error(materialNavigation?LOOSE_NOTE:LOOSE_PUBLIC);
   if(O.materialDeck){
     if(!materialNavigation?.saveActivity)throw Error('이 자료의 활동 저장 기능을 연결하지 못했어요.');
     const deck=await materialNavigation.saveActivity({designId:document.id,materialRef:O.materialDeck.materialRef,document,pageOrder,expectedDocument});

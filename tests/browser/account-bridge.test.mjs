@@ -31,7 +31,7 @@ test('home → 가이랩 계정에 올리기, then an empty computer takes it fr
     const chunks = []; for await (const c of req) chunks.push(c);
     const body = chunks.length ? JSON.parse(Buffer.concat(chunks)) : {};
     res.setHeader('Content-Type', 'application/json');
-    if (path === '/account/list') return res.end(JSON.stringify([...account.values()].map(r => ({id: r.id, name: r.name, updatedAt: r.updatedAt, slides: r.slides.length}))));
+    if (path === '/account/list') return res.end(JSON.stringify([...account.values()].map(r => ({id: r.id, name: r.name, updatedAt: r.updatedAt, slides: r.slides.length, ppt: r.source?.kind === 'pptx', first: r.slides[0], size: r.size}))));
     if (path === '/account/get') return res.end(JSON.stringify(body.ids.map(id => account.get(id)).filter(Boolean)));
     if (path === '/account/put') { for (const r of body.records) account.set(r.id, r); return res.end(JSON.stringify({saved: body.records.map(r => r.id), failed: []})); }
     res.writeHead(404); res.end();
@@ -77,7 +77,7 @@ test('home → 가이랩 계정에 올리기, then an empty computer takes it fr
   await home.page.locator('.cv-back').click();
   await home.page.locator('[data-account-bridge]').waitFor();
   const homePopup = await link(home);
-  await home.page.getByRole('button', {name: '골라서 계정에 올리기', exact: true}).click();
+  await home.page.getByRole('button', {name: '고른 1개 계정에 올리기', exact: true}).click();
   await home.page.getByText(/1개를 가이랩 계정에 올렸어요/).waitFor();
   assert.equal(account.size, 1);
   const [stored] = account.values();
@@ -86,18 +86,32 @@ test('home → 가이랩 계정에 올리기, then an empty computer takes it fr
   await home.page.waitForFunction(() => true);
   for (let i = 0; i < 50 && !homePopup.isClosed(); i++) await new Promise(r => setTimeout(r, 100));
   assert.equal(homePopup.isClosed(), true, 'done closes the 가이랩 window');
+  // 계정에는 다른 컴퓨터에서 올린 세 파트짜리 PPT 도 있다(한 칸으로 묶여 보여야 한다).
+  const deckParts = await home.page.evaluate(async () => {
+    const {migrateRecord} = await import('/app/designs.js'), sha = 'b'.repeat(64), asset = 'a' + sha.slice(0, 24), src = {kind: 'pptx', sourceDocumentId: 's' + sha.slice(0, 24), assetId: asset, filename: '캠프.pptx', sha256: sha};
+    return [1, 2, 3].map((n) => migrateRecord({id: 'd' + String(n).repeat(24).slice(0, 24), schemaVersion: 1, revision: 0, name: `캠프 자료 · ${n}`, size: {width: 1280, height: 720, unit: 'px'}, source: src, assetRefs: [asset],
+      assets: [{id: asset, kind: 'source', mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', sha256: sha}],
+      slides: Array.from({length: n === 3 ? 2 : 1}, (_, k) => ({id: 'p' + n + 'x' + k + '0000000', bg: '#ffffff', items: [{id: 'e' + n + 'x' + k + '0000000', t: 'text', text: `파트 ${n}`, x: 50, y: 50, w: 60, size: 6}]}))}));
+  });
+  for (const r of deckParts) account.set(r.id, {...r, updatedAt: Date.now()});
   // 학교(빈 컴퓨터): 계정에서 가져와 첫 화면에 보이고 연다.
   const school = await computer();
   assert.equal(await school.page.locator('.cv-card, [data-design]').count(), 0);
   await link(school);
   const list = school.page.getByRole('list', {name: '가져올 그림'});
-  assert.equal(await list.locator('input[type=checkbox]:checked').count(), 1, 'new drawings are picked by default');
-  await school.page.getByRole('button', {name: '골라서 이 기기로 가져오기', exact: true}).click();
-  await school.page.getByText(/1개를 이 기기로 가져왔어요/).waitFor();
-  assert.equal(await list.locator('input[type=checkbox]:disabled').count(), 1, 'after taking it, the device copy is the same');
+  assert.equal(await list.locator('li').count(), 2, 'the three PPT parts are one card');
+  assert.match(await list.locator('li', {hasText: '캠프 자료'}).innerText(), /PPT[\s\S]*4장 · 파트 3개/);
+  assert.equal(await list.locator('.cv-bridge-cover .fe-card').count(), 2, 'every card shows its first slide');
+  assert.equal(await list.locator('input[type=checkbox]:checked').count(), 2, 'new drawings are picked by default');
   if (process.env.BRIDGE_SHOT) await school.page.screenshot({path: process.env.BRIDGE_SHOT});
+  await school.page.getByRole('button', {name: '고른 2개 이 기기로 가져오기', exact: true}).click();
+  await school.page.getByText(/4개를 이 기기로 가져왔어요/).waitFor();
+  assert.equal(await list.locator('input[type=checkbox]:disabled').count(), 2, 'after taking it, the device copy is the same');
   await school.page.getByRole('button', {name: '다 했어요 · 연결 끊기', exact: true}).click();
   const stored2 = await school.page.evaluate(async () => (await import('/app/store.js')).listDesigns());
-  assert.deepEqual(stored2.map(r => r.id), [stored.id]);
+  assert.deepEqual(stored2.map(r => r.id).sort(), [stored.id, ...deckParts.map(r => r.id)].sort());
+  // 가져온 PPT 는 첫 화면에서 한 칸이고, 열면 모든 쪽(4쪽)이 이어진다.
+  await school.page.locator('.cv-deck .cv-item-open').click();
+  await school.page.waitForFunction(() => document.querySelectorAll('[data-material-page]').length === 4);
   assert.deepEqual(errors, []);
 });
