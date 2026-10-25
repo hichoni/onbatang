@@ -1,5 +1,5 @@
-// 휴대폰 리모컨(공용 온바탕): 발표 막대의 "휴대폰 리모컨"을 누르면 가이랩의 리모컨 판(QR · 링크)을 발표 화면 오른쪽 위에 작은 창으로 띄운다.
-// 로그인은 없다. 판(onbatang-remote-relay.html)이 가이랩의 실시간 통로를 열고, 휴대폰이 보낸 넘기기를 이 창으로 건네준다.
+// 휴대폰 리모컨(공용 온바탕): 발표 막대의 "휴대폰 리모컨"을 누르면 GBE-AI Lab의 리모컨 판(QR · 링크)을 발표 화면 오른쪽 위에 작은 창으로 띄운다.
+// 로그인은 없다. 판(onbatang-remote-relay.html)이 GBE-AI Lab의 실시간 통로를 열고, 휴대폰이 보낸 넘기기를 이 창으로 건네준다.
 // 신호(postMessage, type: 'onbatang-remote-relay'): 판 → 발표 loaded · ready · error · cmd · size · hidden, 발표 → 판 open(state) · state · show · close.
 // 판은 처음 정한 주소(gai-lab.netlify.app)와 그 창에서 온 신호만 받는다. 오가는 것은 지금 장 · 다음 장 글 · 발표자 노트와 넘기기뿐이다.
 import { el } from './ui.js';
@@ -12,7 +12,7 @@ export function cleanRemoteCommand(raw, total) {
   return { action: raw.action };
 }
 
-/** startMinican({ showRemote }) 에 넘길 것(공용 온바탕). url: 가이랩의 리모컨 판. */
+/** startMinican({ showRemote }) 에 넘길 것(공용 온바탕). url: GBE-AI Lab의 리모컨 판. */
 export function createPhoneRemote({ url = 'https://gai-lab.netlify.app/onbatang-remote-relay.html', host = globalThis.window, timeoutMs = 20000 } = {}) {
   const endpoint = new URL(url);
   if (endpoint.protocol !== 'https:' && !(endpoint.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(endpoint.hostname))) throw Error('리모컨 판 주소를 확인해 주세요.');

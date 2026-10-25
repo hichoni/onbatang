@@ -77,7 +77,7 @@ test('the gray area around the card and slide thumbnails open the slide menu ins
     assert.ok((await menuItems(page)).includes('새 장 더하기'), selector);
     await page.keyboard.press('Escape');
   }
-  // A host page that leaves bare page background around the editor (가이랩 iframe): the same menu.
+  // A host page that leaves bare page background around the editor (GBE-AI Lab iframe): the same menu.
   await page.evaluate(() => document.documentElement.dispatchEvent(new MouseEvent('contextmenu', {bubbles: true, cancelable: true, clientX: 200, clientY: 200})));
   await page.locator('.fe-menu').waitFor({timeout: 5000});
   assert.ok((await menuItems(page)).includes('새 장 더하기'), 'page background');

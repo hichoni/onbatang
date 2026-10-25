@@ -1,5 +1,5 @@
-// 복사 링크: 내보내기의 "링크 공유"(호스트 copyAction · 가이랩 회원만)와 공용 온바탕이 ?copy=코드 를 열어 사본을 받는 길(copyLink).
-// 서버(가이랩의 onbatang_copy_info · onbatang_copy_part · 영상 자리)는 이 시험의 작은 서버가 흉내 낸다.
+// 복사 링크: 내보내기의 "링크 공유"(호스트 copyAction · GBE-AI Lab 회원만)와 공용 온바탕이 ?copy=코드 를 열어 사본을 받는 길(copyLink).
+// 서버(GBE-AI Lab의 onbatang_copy_info · onbatang_copy_part · 영상 자리)는 이 시험의 작은 서버가 흉내 낸다.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
@@ -88,7 +88,7 @@ test('export dialog: 링크 공유 opens the host with every saved part; without
   await plain.locator('.cv-down-btn').click();
   await plain.locator('.cv-down-format[data-type=link]').click();
   assert.equal(await plain.locator('[data-download-save]').isDisabled(), true);
-  assert.match(await plain.locator('[data-copy-members]').innerText(), /가이랩 회원만/);
+  assert.match(await plain.locator('[data-copy-members]').innerText(), /GBE-AI Lab 회원만/);
   assert.deepEqual(errors, []);
 });
 

@@ -139,7 +139,7 @@ export function createGaiMaker({ provider, activity, context, entries=[], select
   details.addEventListener('toggle',()=>{if(details.open)details.querySelector('pre').textContent=share.checked?(entries.length?gaiLessonContext(entries,afterPageId,title,{referenceIds:[...referenceIds],editing:!!activity}):context):'수업 흐름을 전달하지 않아요.';});
   root.append(el('header', {}, el('div', {}, el('h2', {},gaiOwl(),'가이X로 나만의 수업 앱'), el('p', { text: '수업 흐름 선택 → 대화 → 미리보기 → 슬라이드 안에서 실행' })), el('button', { type: 'button', class: 'btn', onClick: () => { if (busy && !controller) return; save(); onCancel(); } }, '편집으로 돌아가기')),entries.length?references:null,
     el('div', { class: 'gai-maker-body' }, el('section', { class: 'gai-maker-chat' }, connect, el('label', { class: 'gai-maker-share' }, share, 'PPT 수업 흐름 함께 전달'),el('label',{class:'gai-maker-share gai-maker-note'},screens,'선택한 슬라이드 화면도 전달'),
-      el('p', { class: 'gai-maker-note', text: '보내기를 누르면 체크한 쪽의 글·발표자 노트·축소 화면과 앱을 넣을 위치를 가이X에 전달해요. 화면 전달을 끄면 글만 보냅니다. 원본 PPT 파일은 보내지 않아요. 기존 가이랩 계정의 AI 사용량이 적용돼요.' }),details,log, form, status),
+      el('p', { class: 'gai-maker-note', text: '보내기를 누르면 체크한 쪽의 글·발표자 노트·축소 화면과 앱을 넣을 위치를 가이X에 전달해요. 화면 전달을 끄면 글만 보냅니다. 원본 PPT 파일은 보내지 않아요. 기존 GBE-AI Lab 계정의 AI 사용량이 적용돼요.' }),details,log, form, status),
       el('section', { class: 'gai-maker-stage' }, previewRoot, apply, el('p', { class: 'gai-maker-note', text: `${activity ? '앱을 고쳐서 반영하면 진행 상태는 새로 시작해요. 이전 결과 쪽은 남아요. ' : ''}앱과 결과는 이 기기에 저장돼요. HTML 수업으로 내려받으면 앱도 함께 실행할 수 있어요.` }))));
   root.addEventListener('keydown', event => event.stopPropagation());
   root.dispose = () => { if (disposed) return; save(); disposed = true; controller?.abort(); preview?.destroy();observer?.disconnect(); };

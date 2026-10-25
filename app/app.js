@@ -64,11 +64,11 @@ let materialAction = null;
 let lessonAction = null;
 let accountAction = null;
 let shareAction = null;
-let copyAction = null;             // 내보내기의 "링크 공유": 받은 사람이 링크를 열어 자기 브라우저에 사본을 받아 고친다(가이랩 회원만 만든다). 호스트가 맡는다.
+let copyAction = null;             // 내보내기의 "링크 공유": 받은 사람이 링크를 열어 자기 브라우저에 사본을 받아 고친다(GBE-AI Lab 회원만 만든다). 호스트가 맡는다.
 let copyLink = null;               // 공용 온바탕: 복사 링크(?copy=코드)를 받는 곳(app/copy-link.js). 없으면 링크를 열지 않는다.
 let showRemote = null;             // 발표의 휴대폰 리모컨(호스트가 연결 · QR 을 맡는다). 없으면 단추도 없다.
 let showAudience = null;           // 발표의 실시간 질문 · 반응(호스트가 연결 · QR · 질문 판을 맡는다). 없으면 단추도 없다.
-let accountBridge = null;          // 공용 온바탕: 가이랩 계정으로 이어 쓰기(연결 창 주소 등). 계정 저장(sync)이 있으면 쓰지 않는다.
+let accountBridge = null;          // 공용 온바탕: GBE-AI Lab 계정으로 이어 쓰기(연결 창 주소 등). 계정 저장(sync)이 있으면 쓰지 않는다.
 let bridge = null;
 let accountHome = null;
 let cloudAction = null;   // 호스트의 "내 클라우드"(계정에 백업한 자료). 첫 화면에 따로 둔다.
@@ -469,7 +469,7 @@ function render() {
         cloudAction ? el('button',{class:'btn cv-cloud-btn',type:'button',disabled:loading,dataset:{cloudAction:''},title:cloudAction.title||'',onClick:()=>openAccountFromHome(cloudAction)},...face('cloud',cloudAction.label)) : null,
         accountAction ? el('button',{class:'btn cv-account-btn',type:'button',disabled:loading,dataset:{accountAction:''},onClick:()=>openAccountFromHome()},accountAction.label) : null,
         ...fileOpenButton(loading),
-        accountBridge && !sync ? el('button', { class: 'btn cv-bridge-btn', type: 'button', disabled: loading, dataset: { accountBridge: '' }, title: '집에서 만든 그림을 학교에서: 가이랩 선생님 계정에 올리고 가져와요', onClick: () => openBridgeFromHome() }, ...face('cloud', '가이랩 계정으로 이어 쓰기')) : null,
+        accountBridge && !sync ? el('button', { class: 'btn cv-bridge-btn', type: 'button', disabled: loading, dataset: { accountBridge: '' }, title: '집에서 만든 그림을 학교에서: GBE-AI Lab 선생님 계정에 올리고 가져와요', onClick: () => openBridgeFromHome() }, ...face('cloud', 'GBE-AI Lab 계정으로 이어 쓰기')) : null,
         full ? el('p', { class: 'cv-hero-full', text: `그림은 ${MAX_DESIGNS}개까지 저장돼요(PPT 하나는 파트가 여럿이어도 1개). 안 쓰는 그림을 지워 주세요.` }) : null),
       el('p', { class: 'cv-hero-tag', text: `작은 생각도 멋진 작품이 되도록 · ${sync ? '내 계정에 자동 저장' : '이 기기에 자동 저장'}` })),
     heroShowcase()));
@@ -1069,7 +1069,7 @@ function materialLoading(O,options){
 }
 async function loadMaterialNavigation(O) {
   if (O.record.source?.kind !== 'pptx') return;
-  // 전체 자료를 모르는 곳(공용 온바탕 · 가이랩 계정에서 가져온 파트들): 같은 PPT 의 파트들을 이어 모든 쪽을 보여 준다.
+  // 전체 자료를 모르는 곳(공용 온바탕 · GBE-AI Lab 계정에서 가져온 파트들): 같은 PPT 의 파트들을 이어 모든 쪽을 보여 준다.
   if (!materialNavigation) {
     const loose=await looseDeck(O).catch(()=>null);
     if(loose&&!O.closed&&S.open===O){O.materialDeck=loose;renderStrip(O);}
@@ -1379,7 +1379,7 @@ function openOutline(O) {
   } }, '장 만들기');
   const sample = el('button', { class: 'btn chip', type: 'button', dataset: { outlineSample: '' }, onClick: () => { input.value = OUTLINE_SAMPLE; update(); input.focus(); } }, '예시 넣어 보기');
   input.addEventListener('input', () => update(false));
-  // 가이X 에게 개요 부탁하기(가이랩처럼 가이X 를 이어 준 곳에서만): 주제 · 장 수를 보내면 개요 글이 칸에 들어온다. 장은 확인 · 고친 뒤 직접 만든다.
+  // 가이X 에게 개요 부탁하기(GBE-AI Lab처럼 가이X 를 이어 준 곳에서만): 주제 · 장 수를 보내면 개요 글이 칸에 들어온다. 장은 확인 · 고친 뒤 직접 만든다.
   let asking = null, before = null;
   const ai = appMaker && activityAuthoring ? (() => {
     const topic = el('textarea', { class: 'cv-outline-topic', rows: '2', maxlength: '600', 'aria-label': '가이X에게 부탁할 주제', placeholder: '예) 초등 4학년 과학 — 식물의 한살이를 처음 배우는 시간. 씨앗 관찰부터 열매까지.' });
@@ -1757,7 +1757,7 @@ async function present(O) {
   const tubeNow = () => tube.find((p) => p.started) || null;
   const stage = el('div', { class: 'cv-show-stage' });
   const count = el('span', { class: 'cv-show-count' });
-  // 휴대폰 리모컨(호스트 · 가이랩): 휴대폰에서 다음 · 앞 · 그 장으로 · 검은 화면을 보내고, 발표는 지금 장 · 발표자 노트를 알려 준다.
+  // 휴대폰 리모컨(호스트 · GBE-AI Lab): 휴대폰에서 다음 · 앞 · 그 장으로 · 검은 화면을 보내고, 발표는 지금 장 · 발표자 노트를 알려 준다.
   let remote = null, remoteJob = null;
   const pageTitle = (k) => { const t = (slides[k]?.items || []).filter((it) => it.t === 'text' && String(it.text || '').trim()).sort((a, b) => (Number(a.y) || 0) - (Number(b.y) || 0))[0]; return t ? Array.from(String(t.text).replace(/\s+/g, ' ').trim()).slice(0, 60).join('') : ''; };
   const remoteState = () => ({ at: i, total: slides.length, title: O.record.name, page: pageTitle(i), next: i + 1 < slides.length ? pageTitle(i + 1) : '', notes: spokenNotes(slides[i]?.notes).slice(0, 2000) });
@@ -1779,11 +1779,11 @@ async function present(O) {
     catch (error) { toast(String(error?.message || '휴대폰 리모컨을 열지 못했어요.').slice(0, 200), 4500); }
     finally { remoteJob = null; }
   };
-  // 실시간 질문 · 반응(호스트 · 가이랩): 학생은 다른 QR(리모컨과 다른 통로)로 들어와 반응 · 질문만 보낸다. 장을 넘길 수는 없다.
+  // 실시간 질문 · 반응(호스트 · GBE-AI Lab): 학생은 다른 QR(리모컨과 다른 통로)로 들어와 반응 · 질문만 보낸다. 장을 넘길 수는 없다.
   let audience = null, audienceJob = null;
   const audienceState = () => ({ at: i, total: slides.length, title: O.record.name });
   const tellAudience = () => { try { audience?.update?.(audienceState()); } catch (error) { console.warn(error); } };
-  // 투표 결과를 지금 장 다음에 넣고 그 장으로 간다(가이랩 실시간 투표의 "결과를 다음 장으로 저장"). 활동 결과 장과 같은 길로 저장한다.
+  // 투표 결과를 지금 장 다음에 넣고 그 장으로 간다(GBE-AI Lab 실시간 투표의 "결과를 다음 장으로 저장"). 활동 결과 장과 같은 길로 저장한다.
   const savePoll = async (raw) => {
     if (closed) throw Error('발표가 끝났어요.');
     if (savingActivity) throw Error('저장하는 중이에요. 잠시 뒤에 다시 해 주세요.');
@@ -2041,7 +2041,7 @@ async function present(O) {
   const onKey = (e) => {
     // 앱·그림판 안에서 치는 글쇠는 앱의 것이다. 프레젠터의 넘기기(PageDown · PageUp)와 Esc 만 발표가 듣는다.
     if(e.target?.closest?.('.cv-show-activity')&&!['Escape','PageDown','PageUp'].includes(e.key))return;
-    // 발표 위에 호스트가 띄운 칸(가이랩 투표 만들기 같은)의 글 칸에서 치는 글쇠는 그 칸의 것이다. 프레젠터의 넘기기와 Esc 만 발표가 듣는다.
+    // 발표 위에 호스트가 띄운 칸(GBE-AI Lab 투표 만들기 같은)의 글 칸에서 치는 글쇠는 그 칸의 것이다. 프레젠터의 넘기기와 Esc 만 발표가 듣는다.
     if (!['Escape', 'PageDown', 'PageUp'].includes(e.key) && e.target?.closest?.('input, textarea, select, [contenteditable=""], [contenteditable="true"]')) return;
     // 아래 막대의 단추에 초점이 있을 때 스페이스 · 엔터는 그 단추를 누르는 글쇠다(다음 장으로 넘기지 않는다).
     if ((e.key === ' ' || e.key === 'Enter') && e.target?.closest?.('.cv-show-key')) { e.stopPropagation(); return; }
@@ -2431,7 +2431,7 @@ async function importFromEditor(O) {
 
 /** The host owns conversion; the editor owns its shell and the saved drawing.
  * No navigation/home render occurs while a host imports inside My materials. */
-// 가이랩 계정으로 이어 쓰기(공용 온바탕): 첫 화면에서만. 가져오면 첫 화면 목록을 다시 읽는다.
+// GBE-AI Lab 계정으로 이어 쓰기(공용 온바탕): 첫 화면에서만. 가져오면 첫 화면 목록을 다시 읽는다.
 async function openBridgeFromHome() {
   if (!accountBridge || S.open || S.phase !== 'home') return;
   try {
@@ -2931,7 +2931,7 @@ function askDownload(O, btn) {
       const gone=[...filmScenes.values()].filter(v=>v==='gone').length;
       rows.push(section('담을 것',el('p',{class:'cv-down-note',dataset:{fileScope:String(scopeN)},text:`이 자료 전체 ${scopeN}쪽${O.materialDeck?`(파트 ${O.materialDeck.documents.length}개)`:''}을 고친 그대로 파일 하나(.onbatang)에 담아요.`}),
         el('p',{class:'cv-down-note',text:'사진 · 바탕 영상 · 움직임 · 글자 효과 · 전환 · 발표자 노트 · 숨긴 장 · 쪽 차례까지 모두 그대로예요.'}),
-        el('p',{class:'cv-down-note',text:'다른 컴퓨터의 온바탕(공용 온바탕 onbatang.web.app 또는 가이랩)에서 첫 화면의 "온바탕 파일 열기"로 열면 그대로 이어서 고치고 발표해요.'}),
+        el('p',{class:'cv-down-note',text:'다른 컴퓨터의 온바탕(공용 온바탕 onbatang.web.app 또는 GBE-AI Lab)에서 첫 화면의 "온바탕 파일 열기"로 열면 그대로 이어서 고치고 발표해요.'}),
         gone?el('p',{class:'cv-down-note warn',role:'note',text:`바탕 영상 ${gone}개는 이 기기에도 없어서 담지 못해요(이 기기에서처럼 그 장은 영상 자리만 보여요).`}):null));
     }
     else if(link&&!copyAction&&copyLink){
@@ -2948,8 +2948,8 @@ function askDownload(O, btn) {
       rows.push(section('링크로 보낼 것',el('p',{class:'cv-down-note',text:`이 자료 전체 ${scopeN}쪽${O.materialDeck?`(파트 ${O.materialDeck.documents.length}개)`:''}을 링크 하나로 보내요.`}),
         el('p',{class:'cv-down-note',text:'받은 사람이 링크를 열면 그 사람 브라우저의 온바탕에 사본이 생겨 로그인 없이 바로 고칠 수 있어요. 받은 사람이 고쳐도 내 자료는 그대로예요.'}),
         el('p',{class:'cv-down-note',text:'사진 · 움직임 · 발표자 노트까지 그대로 가요. 바탕 영상은 한 개 20MB까지 함께 가요.'})));
-      if(!copyAction)rows.push(el('div',{class:'cv-down-note warn',role:'note',dataset:{copyMembers:''}},el('b',{text:'가이랩 회원만 링크를 만들 수 있어요. '}),
-        '가이랩(gai-lab.netlify.app)에 로그인한 선생님은 가이랩 스튜디오의 온바탕에서 이 칸으로 링크를 만들어요. 받는 사람은 회원이 아니어도 돼요.'));
+      if(!copyAction)rows.push(el('div',{class:'cv-down-note warn',role:'note',dataset:{copyMembers:''}},el('b',{text:'GBE-AI Lab 회원만 링크를 만들 수 있어요. '}),
+        'GBE-AI Lab(gai-lab.netlify.app)에 로그인한 선생님은 GBE-AI Lab 스튜디오의 온바탕에서 이 칸으로 링크를 만들어요. 받는 사람은 회원이 아니어도 돼요.'));
     }
     else if (video) {
       // 담을 쪽: 모든 쪽(PPT 면 모든 파트) 또는 범위. 발표에서 숨긴 장은 빼고 차례대로 이어 담는다.
@@ -3032,7 +3032,7 @@ function askDownload(O, btn) {
     const label = whole ? '온바탕 파일' : link ? '링크 공유' : gif ? 'GIF' : pdf ? 'PDF·인쇄' : video ? '영상' : pptx ? `PPTX ${pick.pptxMode === 'editable' ? '편집형' : '이미지형'}` : pick.kind.toUpperCase();
     summaryTitle.textContent = `${label} · ${range}`;
     const px = video ? videoSize(aspect, VIDEO_SIZES.find(size => size.id === pick.vsize).short) : exportSize(pick.size, aspect);
-    summaryDetail.textContent = whole?'고친 그대로 한 파일(.onbatang) · 다른 기기의 온바탕에서 그대로 열어요.':link&&!copyAction&&copyLink?'누구나 만드는 7일 링크 · 7일이 지나면 서버에서 저절로 지워져요.':link?(copyAction?'링크를 만들면 복사 · QR로 나눠요. 언제든 끄거나 지울 수 있어요.':'가이랩 회원(로그인한 선생님)만 만들 수 있어요.'):gif?`가로 ${pick.gifWidth}px · 장마다 ${pick.stay}초 · 끝나면 처음부터 되풀이해요.`:pdf?`${PRINT_LAYOUTS.find(v=>v.id===pick.printLayout).name} · 인쇄 창에서 PDF로 저장할 수 있어요.`:html?'인터넷 연결 없이 실행하는 수업 파일 · 원본은 보존돼요.':pptx ? 'PPTX 한 파일 · 원본과 편집 자료는 그대로 보관돼요.' : video
+    summaryDetail.textContent = whole?'고친 그대로 한 파일(.onbatang) · 다른 기기의 온바탕에서 그대로 열어요.':link&&!copyAction&&copyLink?'누구나 만드는 7일 링크 · 7일이 지나면 서버에서 저절로 지워져요.':link?(copyAction?'링크를 만들면 복사 · QR로 나눠요. 언제든 끄거나 지울 수 있어요.':'GBE-AI Lab 회원(로그인한 선생님)만 만들 수 있어요.'):gif?`가로 ${pick.gifWidth}px · 장마다 ${pick.stay}초 · 끝나면 처음부터 되풀이해요.`:pdf?`${PRINT_LAYOUTS.find(v=>v.id===pick.printLayout).name} · 인쇄 창에서 PDF로 저장할 수 있어요.`:html?'인터넷 연결 없이 실행하는 수업 파일 · 원본은 보존돼요.':pptx ? 'PPTX 한 파일 · 원본과 편집 자료는 그대로 보관돼요.' : video
       ? `${px.width} × ${px.height}px · 약 ${secondsText(ms)} · 만든 뒤 미리보고 저장해요.`
       : `${px.width} × ${px.height}px · ${pick.all && n > 1 ? `${label} ${n}장을 ZIP 한 파일로 저장해요.` : '그림 한 파일로 저장해요.'}`;
     submit.disabled = (video && (long || !film.entries.length)) || (link && !copyAction && !copyLink);
@@ -3082,7 +3082,7 @@ function addFileFonts(list) {
 async function loadFileFonts() {
   try { addFileFonts(await listFileFonts()); } catch (error) { console.warn(error); }
 }
-// 그림들이 쓰는 글꼴 가운데 온바탕에 들어 있지 않은 것(가이랩 글꼴 · 온바탕 파일로 받은 글꼴): 파일과 사용 허락 글을 함께 담는다.
+// 그림들이 쓰는 글꼴 가운데 온바탕에 들어 있지 않은 것(GBE-AI Lab 글꼴 · 온바탕 파일로 받은 글꼴): 파일과 사용 허락 글을 함께 담는다.
 async function fileFonts(records, kit) {
   const used = kit.usedFonts(records), builtIn = new Set(ONBATANG_FONTS.map((f) => f.id)), out = [];
   for (const f of fontList()) {
@@ -3195,7 +3195,7 @@ async function openOnbatangFile(file) {
       loading.update({ detail: `바탕 영상 저장 중 · ${i + 1} / ${got.videos.length}`, completed: i, total: got.videos.length });
       if (await placeVideo({ ...video, design: owners.get(video.key) || '' })) dropScene(video.key);
     }
-    // 계정에 저장하는 곳(가이랩)에서는 받은 때를 고친 때로 적는다: 계정의 예전 것이 받은 것을 덮거나 지우지 않게.
+    // 계정에 저장하는 곳(GBE-AI Lab)에서는 받은 때를 고친 때로 적는다: 계정의 예전 것이 받은 것을 덮거나 지우지 않게.
     const stamp = pusher ? Date.now() : 0, made = [];
     for (const record of got.records) {
       const saved = await putDesign(stamp ? { ...record, updatedAt: stamp } : record);
@@ -3572,12 +3572,12 @@ function readOpen() {
  * - cloudAction: {label,editorTitle?,title?,open({from:'home',inline})}; 첫 화면의 "내 클라우드"(계정에 백업한 자료를 열기). accountAction 과 같은 전체 화면 칸에서 열고, 기본값은 숨김.
  * - showAudience: {open({state(),root,savePoll(result)})→{update(state),show?(),close()}}; 발표 막대의 "질문 · 반응"(state: {at,total,title}). 기본값은 숨김.
  *   savePoll({question,options,counts}): 투표 결과 장(app/poll-result.js)을 지금 장 다음에 저장하고 그 장으로 간다 → {at,total}.
- * - phoneRemote: {url?}; 공용 온바탕이 켠다. showRemote 가 없으면 가이랩의 리모컨 판(onbatang-remote-relay.html)을 발표 화면에 작은 창으로 띄워 휴대폰으로 넘긴다(app/phone-remote.js).
+ * - phoneRemote: {url?}; 공용 온바탕이 켠다. showRemote 가 없으면 GBE-AI Lab의 리모컨 판(onbatang-remote-relay.html)을 발표 화면에 작은 창으로 띄워 휴대폰으로 넘긴다(app/phone-remote.js).
  * - showRemote: {open({state(),command(cmd),root})→{update(state),show?(),close()}}; 발표 막대의 "휴대폰 리모컨". cmd: {action:'next'|'prev'|'go'(at)|'black'|'state'}. 기본값은 숨김.
- * - accountBridge: {url?}; 공용 온바탕 첫 화면의 "가이랩 계정으로 이어 쓰기"(가이랩 연결 창으로 그림을 올리고 가져온다). sync 가 있으면 숨김.
- * - copyAction: {open({designId,title,records()})}; 내보내기 창의 "링크 공유"(받은 사람이 링크를 열어 자기 브라우저에 사본을 받아 고친다). 없으면 그 칸은 "가이랩 회원만"이라고 알리고 막힌다.
+ * - accountBridge: {url?}; 공용 온바탕 첫 화면의 "GBE-AI Lab 계정으로 이어 쓰기"(GBE-AI Lab 연결 창으로 그림을 올리고 가져온다). sync 가 있으면 숨김.
+ * - copyAction: {open({designId,title,records()})}; 내보내기 창의 "링크 공유"(받은 사람이 링크를 열어 자기 브라우저에 사본을 받아 고친다). 없으면 그 칸은 "GBE-AI Lab 회원만"이라고 알리고 막힌다.
  * - copyLink: {url?,key?}; 공용 온바탕이 켠다. 주소의 ?copy=코드를 열면 그 자료를 이 기기에 사본으로 받아 바로 연다(app/copy-link.js).
- * - shareAction: {label,title?,open({designId,flush(),goTo(slideIndex,{upload})}),saved?(record)}; 편집기 위 막대의 공유 단추(가이랩의 보기 전용 링크). saved 는 이 기기에 저장할 때마다 불린다(링크에 반영은 호스트가 모아서). 기본값은 숨김.
+ * - shareAction: {label,title?,open({designId,flush(),goTo(slideIndex,{upload})}),saved?(record)}; 편집기 위 막대의 공유 단추(GBE-AI Lab의 보기 전용 링크). saved 는 이 기기에 저장할 때마다 불린다(링크에 반영은 호스트가 모아서). 기본값은 숨김.
  */
 export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, accountAction: accountLibrary = null, cloudAction: cloudLibrary = null, shareAction: sharing = null, copyAction: copying = null, copyLink: copyIntake = null, accountBridge: bridging = null, showRemote: remoting = null, phoneRemote: phoning = null, showAudience: audiencing = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false, resume = false, embed = null, syncDelay = null } = {}) {
   if (app) throw new Error('minican already started');
@@ -3597,7 +3597,7 @@ export function startMinican({ root = document.getElementById('app'), fonts = []
   if(copying&&typeof copying.open==='function')copyAction=copying;
   if(copyIntake&&typeof copyIntake==='object'&&!embed)copyLink={...(typeof copyIntake.url==='string'?{url:copyIntake.url}:{}),...(typeof copyIntake.key==='string'?{key:copyIntake.key}:{})};
   if (remoting && typeof remoting.open === 'function') showRemote = remoting;
-  // 공용 온바탕: 호스트의 리모컨이 없으면 가이랩의 리모컨 판(로그인 없음)을 작은 창으로 띄운다(app/phone-remote.js).
+  // 공용 온바탕: 호스트의 리모컨이 없으면 GBE-AI Lab의 리모컨 판(로그인 없음)을 작은 창으로 띄운다(app/phone-remote.js).
   else if (phoning && typeof phoning === 'object' && !embed) { const opts = typeof phoning.url === 'string' ? { url: phoning.url } : {}; showRemote = { open: async (context) => (await import('./phone-remote.js')).createPhoneRemote(opts).open(context) }; }
   if (audiencing && typeof audiencing.open === 'function') showAudience = audiencing;
   if (bridging && typeof bridging === 'object' && !embed) accountBridge = { ...(typeof bridging.url === 'string' ? { url: bridging.url } : {}) };

@@ -1,4 +1,4 @@
-// 공용 온바탕의 휴대폰 리모컨: 호스트의 리모컨이 없어도(phoneRemote) 발표 막대에 단추가 있고, 누르면 리모컨 판(가이랩 판 대신 시험용 판)을
+// 공용 온바탕의 휴대폰 리모컨: 호스트의 리모컨이 없어도(phoneRemote) 발표 막대에 단추가 있고, 누르면 리모컨 판(GBE-AI Lab 판 대신 시험용 판)을
 // 오른쪽 위 작은 창으로 띄운다. 판이 건넨 넘기기로 장이 넘어가고, 장이 바뀌면 판에 지금 장을 알린다. 모르는 신호 · 다른 창의 신호는 버린다.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -17,7 +17,7 @@ const text=(id,t)=>({id,t:'text',text:t,x:50,y:40,w:60,size:6});
 const record=newRecord('16:9');record.name='리모컨 수업';record.slides=['첫째','둘째','셋째'].map((t,k)=>({id:'prm0000'+k,bg:'#ffffff',items:[text('erm0000'+k,t+' 장')],notes:t+' 노트'}));await putDesign(record);
 await startMinican({storage:'remote-fixture',phoneRemote:{url:location.origin+'/relay.html'}});await openSavedDesign(record.id);window.ready=true;
 </script>`;
-// 시험용 판: 가이랩 판과 같은 신호로 답한다(받은 지금 장을 window.seen 에 모은다).
+// 시험용 판: GBE-AI Lab 판과 같은 신호로 답한다(받은 지금 장을 window.seen 에 모은다).
 const relay = `<!doctype html><meta charset="utf-8"><body style="margin:0"><div id="panel" style="height:240px">판</div><script>
 const p=new URLSearchParams(location.hash.slice(1)),origin=p.get('origin'),channel=p.get('channel');window.seen=[];
 const post=(event,more={})=>parent.postMessage({type:'onbatang-remote-relay',channel,event,...more},origin);

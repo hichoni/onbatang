@@ -139,7 +139,7 @@ test('WebM 길이 적어 넣기: 모양이 다르면 그대로 돌려준다', ()
   assert.equal(fixWebmDuration(junk, 2), junk);
 });
 
-test('편집기 자체에는 인증·서버 API가 없고 가이랩 연결 주소는 명시적인 팝업(가이X · 계정 이어 쓰기)과 복사 링크 받기에만 있다', () => {
+test('편집기 자체에는 인증·서버 API가 없고 GBE-AI Lab 연결 주소는 명시적인 팝업(가이X · 계정 이어 쓰기)과 복사 링크 받기에만 있다', () => {
   const files = readdirSync(APP).filter((f) => /\.(js|css|html)$/.test(f));
   assert.ok(files.includes('app.js') && files.includes('app.css') && files.includes('index.html'));
   for (const f of files) {
@@ -154,7 +154,7 @@ test('편집기 자체에는 인증·서버 API가 없고 가이랩 연결 주�
     const addresses = f === 'pptx.js' ? src.replaceAll(/http:\/\/schemas\.openxmlformats\.org\/(?:drawingml\/2006\/main|presentationml\/2006\/main|officeDocument\/2006\/(?:relationships|extended-properties)|package\/2006\/(?:relationships(?:\/metadata\/core-properties)?|content-types|metadata\/core-properties))/g, '').replaceAll('http://purl.org/dc/elements/1.1/', '').replaceAll('http://schemas.microsoft.com/office/powerpoint/2010/main', '') : src;
     // 링크 미리보기 태그(og:* · twitter:*)는 공용 온바탕의 주소를 절대 주소로 적어야 미리보기가 그림을 읽는다(앱이 보내는 요청이 아니다).
     const previews = f === 'index.html' ? addresses.replace(/<meta (?:property="og:(?:url|image)"|name="twitter:image") content="https:\/\/onbatang\.web\.app\/[^"]*" \/>/g, '') : addresses;
-    // 휴대폰 리모컨(phone-remote.js)은 가이랩의 리모컨 판을 작은 창으로만 띄운다. 복사 링크(copy-link.js)는 로그인 없이 가이랩의 공개 함수 두 개와 영상 자리만 읽는다(인증 정보를 싣지 않는다, credentials: 'omit').
+    // 휴대폰 리모컨(phone-remote.js)은 GBE-AI Lab의 리모컨 판을 작은 창으로만 띄운다. 복사 링크(copy-link.js)는 로그인 없이 GBE-AI Lab의 공개 함수 두 개와 영상 자리만 읽는다(인증 정보를 싣지 않는다, credentials: 'omit').
     const allowed = f === 'gai-provider.js' ? previews.replaceAll('https://gai-lab.netlify.app/onbatang-gai-connect.html', '') : f === 'account-bridge.js' ? previews.replaceAll('https://gai-lab.netlify.app/onbatang-account-connect.html', '') : f === 'copy-link.js' ? previews.replaceAll('https://wiaciazdsnhzgwplwjpu.supabase.co', '').replaceAll("'https://gai-lab.netlify.app/onbatang-copy.html'", '').replaceAll("'https://gai-lab.netlify.app/onbatang-play.html'", '') : f === 'phone-remote.js' ? previews.replaceAll('https://gai-lab.netlify.app/onbatang-remote-relay.html', '') : previews;
     if (f === 'copy-link.js') {
       assert.deepEqual([...src.matchAll(/\/(rest\/v1\/rpc|storage\/v1\/object)\/([\w${}-]+)/g)].map((m) => m[0]), ['/rest/v1/rpc/${name}', '/storage/v1/object/onbatang-copy-videos']);
@@ -171,7 +171,7 @@ test('편집기 자체에는 인증·서버 API가 없고 가이랩 연결 주�
 
 test('들여 쓰는 곳의 표시: 안전한 로고를 받고 온바탕 로고와 함께 편집기 막대에 놓는다', async () => {
   const { cleanBrand } = await import('../app/designs.js');
-  assert.deepEqual(cleanBrand({ name: ' G-AI LAB ', logo: 'assets/brand-logo-owl.png' }), { name: 'G-AI LAB', logo: 'assets/brand-logo-owl.png' });
+  assert.deepEqual(cleanBrand({ name: ' GBE-AI LAB ', logo: 'assets/brand-logo-owl.png' }), { name: 'GBE-AI LAB', logo: 'assets/brand-logo-owl.png' });
   for (const logo of ['./logo.png', '../logo.svg', '/logo.png', 'https://example.org/logo.png', 'data:image/png;base64,AAAA']) assert.ok(cleanBrand({ name: '학교', logo }), logo);
   for (const logo of ['javascript:alert(1)', 'http://example.org/a.png', '//example.org/a.png', 'data:text/html,<b>', '', null]) assert.equal(cleanBrand({ name: '학교', logo }), null, String(logo));
   assert.equal(cleanBrand({ name: '', logo: 'a/b.png' }), null);assert.equal(cleanBrand({ name: '가'.repeat(41), logo: 'a/b.png' }), null);assert.equal(cleanBrand(null), null);

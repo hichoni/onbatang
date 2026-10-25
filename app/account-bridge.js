@@ -1,5 +1,5 @@
-// 가이랩 계정으로 이어 쓰기(공용 온바탕): 집에서 만든 그림을 가이랩 선생님 계정에 올려 두고, 학교 컴퓨터에서 가져온다.
-// 로그인은 가이랩 창(작은 연결 창)에서만 하고, 로그인 정보는 이 창으로 넘어오지 않는다. 오가는 것은 선생님이 고른 그림뿐이다.
+// GBE-AI Lab 계정으로 이어 쓰기(공용 온바탕): 집에서 만든 그림을 GBE-AI Lab 선생님 계정에 올려 두고, 학교 컴퓨터에서 가져온다.
+// 로그인은 GBE-AI Lab 창(작은 연결 창)에서만 하고, 로그인 정보는 이 창으로 넘어오지 않는다. 오가는 것은 선생님이 고른 그림뿐이다.
 // 신호(postMessage, type: 'onbatang-account'): 연결 창 → 온바탕 ready · result · error, 온바탕 → 연결 창 list · get · put.
 // 연결 창은 처음 열 때 정한 주소(gai-lab.netlify.app)와 그 창에서 온 신호만 받는다. 다 하면 온바탕이 연결 창을 닫는다.
 import { el, toast, openModal, closeModal } from './ui.js';
@@ -9,7 +9,7 @@ import { designView } from '../src/render.js';
 const PUT_MAX = 10;                 // 한 번에 올리는 그림 수
 export function createAccountBridge({ url = 'https://gai-lab.netlify.app/onbatang-account-connect.html', host = globalThis.window } = {}) {
   const endpoint = new URL(url), pending = new Map();
-  if (endpoint.protocol !== 'https:' && !(endpoint.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(endpoint.hostname))) throw Error('가이랩 연결 주소를 확인해 주세요.');
+  if (endpoint.protocol !== 'https:' && !(endpoint.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(endpoint.hostname))) throw Error('GBE-AI Lab 연결 주소를 확인해 주세요.');
   let popup = null, channel = '', ready = false, waiting = null, poll = 0;
   const fail = (message) => {
     ready = false; clearInterval(poll);
@@ -24,29 +24,29 @@ export function createAccountBridge({ url = 'https://gai-lab.netlify.app/onbatan
     const item = pending.get(data.request);
     if (!item || !['result', 'error'].includes(data.event)) return;
     pending.delete(data.request);
-    if (data.event === 'error') item.reject(Error(String(data.message || '가이랩 계정에서 처리하지 못했어요.').slice(0, 300)));
+    if (data.event === 'error') item.reject(Error(String(data.message || 'GBE-AI Lab 계정에서 처리하지 못했어요.').slice(0, 300)));
     else item.resolve(data.result);
   });
-  /** 가이랩 연결 창을 열고, 선생님이 그 창에서 로그인 · 허락하면 끝난다. 누르기에서 바로 불러야 창이 막히지 않는다. */
+  /** GBE-AI Lab 연결 창을 열고, 선생님이 그 창에서 로그인 · 허락하면 끝난다. 누르기에서 바로 불러야 창이 막히지 않는다. */
   function connect() {
     if (ready && popup && !popup.closed) return Promise.resolve();
     if (waiting && popup && !popup.closed) { popup.focus(); return waiting.promise; }
     channel = crypto.randomUUID(); ready = false;
     endpoint.hash = new URLSearchParams({ origin: host.location.origin, channel }).toString();
     popup = host.open(endpoint.href, `onbatang-account-${channel}`, 'popup,width=480,height=680');
-    if (!popup) return Promise.reject(Error('가이랩 연결 창이 막혔어요. 이 사이트의 팝업을 허용하고 다시 눌러 주세요.'));
+    if (!popup) return Promise.reject(Error('GBE-AI Lab 연결 창이 막혔어요. 이 사이트의 팝업을 허용하고 다시 눌러 주세요.'));
     let resolve, reject;
     const promise = new Promise((ok, no) => { resolve = ok; reject = no; });
     waiting = { promise, resolve, reject };
     clearInterval(poll);
-    poll = setInterval(() => { if (popup.closed) fail('가이랩 연결 창이 닫혔어요. 다시 연결해 주세요.'); }, 500);
+    poll = setInterval(() => { if (popup.closed) fail('GBE-AI Lab 연결 창이 닫혔어요. 다시 연결해 주세요.'); }, 500);
     return promise;
   }
   function ask(action, payload = {}, timeoutMs = 120000) {
-    if (!ready || !popup || popup.closed) return Promise.reject(Error('가이랩 계정을 먼저 연결해 주세요.'));
+    if (!ready || !popup || popup.closed) return Promise.reject(Error('GBE-AI Lab 계정을 먼저 연결해 주세요.'));
     const request = crypto.randomUUID();
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => { pending.delete(request); reject(Error('가이랩 계정이 답하지 않아요. 다시 해 주세요.')); }, timeoutMs);
+      const timer = setTimeout(() => { pending.delete(request); reject(Error('GBE-AI Lab 계정이 답하지 않아요. 다시 해 주세요.')); }, timeoutMs);
       pending.set(request, { resolve: (v) => { clearTimeout(timer); resolve(v); }, reject: (e) => { clearTimeout(timer); reject(e); } });
       popup.postMessage({ type: 'onbatang-account', channel, request, action, ...payload }, endpoint.origin);
     });
@@ -108,15 +108,15 @@ function coverOf(first, size, name) {
 export function openAccountBridge({ bridge, store, onChanged = () => {} }) {
   const status = el('p', { class: 'cv-bridge-status', role: 'status', 'aria-live': 'polite' });
   const body = el('div', { class: 'cv-bridge-body' });
-  const connect = el('button', { class: 'btn btn-primary cv-bridge-go', type: 'button', onClick: () => start() }, '가이랩 계정 연결');
+  const connect = el('button', { class: 'btn btn-primary cv-bridge-go', type: 'button', onClick: () => start() }, 'GBE-AI Lab 계정 연결');
   const intro = el('div', { class: 'cv-bridge-intro' },
     el('ol', { class: 'cv-bridge-steps' },
-      el('li', {}, el('b', { text: '가이랩 창에서 로그인' }), el('span', { text: '작은 창이 열려요. 로그인 정보는 이 창으로 오지 않아요.' })),
+      el('li', {}, el('b', { text: 'GBE-AI Lab 창에서 로그인' }), el('span', { text: '작은 창이 열려요. 로그인 정보는 이 창으로 오지 않아요.' })),
       el('li', {}, el('b', { text: '"허락" 누르기' }), el('span', { text: '이 온바탕과 계정을 이어요.' })),
       el('li', {}, el('b', { text: '가져오거나 올리기' }), el('span', { text: '고른 그림 · PPT만 오가요.' }))),
     connect);
   const panel = el('div', { class: 'cv-bridge' },
-    el('div', { class: 'cv-bridge-head' }, el('h2', { text: '가이랩 계정으로 이어 쓰기' }),
+    el('div', { class: 'cv-bridge-head' }, el('h2', { text: 'GBE-AI Lab 계정으로 이어 쓰기' }),
       el('p', { class: 'cv-bridge-lead', text: '집에서 만든 그림을 학교에서, 학교에서 만든 PPT를 집에서 이어서 고쳐요.' })),
     body, status);
   body.append(intro);
@@ -126,8 +126,8 @@ export function openAccountBridge({ bridge, store, onChanged = () => {} }) {
   function start() {
     // 연결 창은 누르기에서 곧바로 연다(기다린 뒤에 열면 브라우저가 막는다).
     const opened = bridge.connect();
-    status.textContent = '가이랩 창에서 로그인하고 "허락"을 눌러 주세요.';
-    busy(async () => { await opened; await paint(); status.textContent = '가이랩 계정에 연결했어요.'; });
+    status.textContent = 'GBE-AI Lab 창에서 로그인하고 "허락"을 눌러 주세요.';
+    busy(async () => { await opened; await paint(); status.textContent = 'GBE-AI Lab 계정에 연결했어요.'; });
   }
   // 고르는 칸들: 칸마다 표지 · 이름 · 장 수 · 파트 수 · 때 · 상태. 이미 같은 것은 고를 수 없다.
   function pick(entries, label, words, action) {
@@ -183,7 +183,7 @@ export function openAccountBridge({ bridge, store, onChanged = () => {} }) {
         saved += out?.saved?.length || 0; failed.push(...(out?.failed || []));
       }
       await paint();
-      status.textContent = failed.length ? `${saved}개를 올렸고 ${failed.length}개는 못 올렸어요: ${failed[0].message}` : `${saved}개를 가이랩 계정에 올렸어요. 다른 컴퓨터에서 가져오거나 가이랩에서 열어요.`;
+      status.textContent = failed.length ? `${saved}개를 올렸고 ${failed.length}개는 못 올렸어요: ${failed[0].message}` : `${saved}개를 GBE-AI Lab 계정에 올렸어요. 다른 컴퓨터에서 가져오거나 GBE-AI Lab에서 열어요.`;
     }) });
     const tabs = el('div', { class: 'cv-bridge-tabs', role: 'tablist', 'aria-label': '가져오기 · 올리기' });
     const show = (which) => { tab = which; for (const b of tabs.children) { const on = b.dataset.tab === which; b.setAttribute('aria-selected', String(on)); b.classList.toggle('on', on); } take.hidden = which !== 'down'; send.hidden = which !== 'up'; };
@@ -191,7 +191,7 @@ export function openAccountBridge({ bridge, store, onChanged = () => {} }) {
       el('button', { type: 'button', role: 'tab', dataset: { tab: 'down' }, onClick: () => show('down') }, `계정에서 가져오기 · ${downs.length}`),
       el('button', { type: 'button', role: 'tab', dataset: { tab: 'up' }, onClick: () => show('up') }, `계정에 올리기 · ${ups.length}`));
     body.replaceChildren(tabs, take, send,
-      el('div', { class: 'cv-bridge-end' }, el('button', { class: 'btn btn-ghost', type: 'button', onClick: () => { bridge.close(); closeModal(); toast('가이랩 연결을 끊었어요.'); } }, '다 했어요 · 연결 끊기')));
+      el('div', { class: 'cv-bridge-end' }, el('button', { class: 'btn btn-ghost', type: 'button', onClick: () => { bridge.close(); closeModal(); toast('GBE-AI Lab 연결을 끊었어요.'); } }, '다 했어요 · 연결 끊기')));
     show(tab);
   }
 }
