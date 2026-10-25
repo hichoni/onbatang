@@ -830,6 +830,35 @@ const EMPHS = {
 // 나타나는 움직임마다 짝이 되는 강조 움직임.
 const EM_OF = { bloom: 'flare', flicker: 'surge', ignite: 'blaze', glitch: 'burst', sweep: 'spin', grow: 'deepen', stamp: 'thump', drop: 'hop', rise: 'heave', drift: 'swayem', shakein: 'rattle', pop: 'boing' };
 const emOf = (look) => EMPHS[EM_OF[look?.intro]] || null;
+// 계속 움직이기: 글상자마다 "계속 움직이기"(lkloop)를 켠 글은 나타난 뒤(나타나는 움직임이 끝난 때부터) 머무는 동안 그 효과답게 계속 움직인다.
+// 시간만으로 정해지고(되풀이), 강조 · 사라지기 때는 그것이 먼저다. n: 그 장에서 몇째 글인가(글마다 박자를 조금씩 엇갈린다).
+const pulse = (x, c, w) => Math.exp(-(((x - c) / w) ** 2));
+const LOOPS = {
+  glowbreath: { name: '빛 숨쉬기', at: (q, n) => { const v = Math.sin((TAU * q) / 2.8 + n * 0.7); return { k: 1 + 0.45 * v, scale: 1 + 0.02 * v }; } },
+  buzz: { name: '지직 깜빡', at: (q, n) => (hash(Math.floor(q * 14) + n * 31.7) < 0.08 ? { k: 0.15, alpha: 0.7, dx: 0.006 * (hash(Math.floor(q * 14) + 5) - 0.5) } : { k: 1 + 0.15 * Math.sin((TAU * q) / 0.9) }) },
+  flame: { name: '일렁이는 불꽃', at: (q, n) => ({ k: 0.85 + 0.45 * (0.5 * hash(Math.floor(q * 12) + n * 13) + 0.5 * hash(Math.floor(q * 7) + n * 29 + 3)), dy: -0.025 * (0.5 + 0.5 * Math.sin((TAU * q) / 0.7 + n)), scale: 1 + 0.015 * Math.sin((TAU * q) / 0.55 + n) }) },
+  glitchloop: { name: '가끔 지지직', at: (q, n) => { const c = (q + n * 0.9) % 2.6; return c < 0.3 ? { shake: 0.05, alpha: hash(Math.floor(q * 20) + n * 7) < 0.4 ? 0.2 : 1, k: 1.5 } : {}; } },
+  cycle: { name: '빛깔 돌기', at: (q) => ({ warp: q, scale: 1 + 0.015 * Math.sin((TAU * q) / 2) }) },
+  shadowsway: { name: '그림자 흔들', at: (q, n) => ({ grow: 1 + 0.35 * Math.sin((TAU * q) / 3 + n * 0.7) }) },
+  beat: { name: '쿵쿵 박자', at: (q, n) => { const x = ((q + n * 0.2) % 1.2) / 1.2; return { scale: 1 + 0.07 * (pulse(x, 0.05, 0.05) + 0.6 * pulse(x, 0.23, 0.05)) }; } },
+  hopping: { name: '콩콩 뛰기', at: (q, n) => ({ dy: -0.18 * Math.abs(Math.sin((Math.PI * q) / 0.6 + n * 0.5)) }) },
+  // (둥실 효과 자체의 둥실(bob)과 박자가 겹쳐 서로 지우지 않게 다른 박자로)
+  floaty: { name: '둥실둥실', at: (q, n) => ({ dy: -0.12 * Math.sin((TAU * q) / 2.2 + n * 1.1 + 1), dx: 0.05 * Math.sin((TAU * q) / 3.7 + n) }) },
+  swaying: { name: '살랑살랑', at: (q, n) => ({ dx: 0.12 * Math.sin((TAU * q) / 2.6 + n * 0.9), dy: -0.03 * Math.sin((2 * TAU * q) / 2.6 + n * 0.9) }) },
+  jitter: { name: '부들부들', at: () => ({ shake: 0.018 }) },
+  wobble: { name: '말랑말랑', at: (q, n) => ({ scale: 1 + 0.035 * Math.sin((TAU * q) / 0.9 + n) }) },
+};
+// 나타나는 움직임마다 짝이 되는 계속 움직이기.
+const LOOP_OF = { bloom: 'glowbreath', flicker: 'buzz', ignite: 'flame', glitch: 'glitchloop', sweep: 'cycle', grow: 'shadowsway', stamp: 'beat', drop: 'hopping', rise: 'floaty', drift: 'swaying', shakein: 'jitter', pop: 'wobble' };
+const loopOf = (look) => LOOPS[LOOP_OF[look?.intro]] || null;
+/** 그 효과의 계속 움직이기 { id, name }(없으면 null). */
+export const lookLoop = (look) => { const d = loopOf(look); return d ? { id: LOOP_OF[look.intro], name: d.name } : null; };
+/** 계속 움직이기를 시작한 뒤 q 초의 모습(나타나는 움직임과 같은 모양. 끝이 없다). 시작 전(q < 0)이면 null. */
+export function loopAt(look, q, n = 0) {
+  const d = loopOf(look);
+  if (!d || !(q >= 0) || !Number.isFinite(q)) return null;
+  return { k: 1, alpha: 1, dx: 0, dy: 0, scale: 1, blur: 0, grow: 1, warp: 0, shake: 0, ...d.at(q, n) };
+}
 /** 그 효과의 강조 움직임 { id, name, ms }(없으면 null). */
 export const lookEmphasis = (look) => { const d = emOf(look); return d ? { id: EM_OF[look.intro], name: d.name, ms: LOOK_EM_MS } : null; };
 /** 강조를 시작한 뒤 h 초의 모습(나타나는 움직임과 같은 모양). 시작 전이거나 끝났으면 null(제 모습). */
@@ -854,12 +883,17 @@ export function introAt(look, u) {
  * u: 글이 나타난 뒤의 초(나타나는 움직임. 없으면 다 나타난 모습) · plain: 그 글에 따로 나타나기 효과가 있으면 참(자리 · 크기는 그 효과에 맡긴다).
  * out: 사라지기 시작한 뒤의 초(사라지는 움직임. 시작했으면 나타나는 움직임보다 먼저다. 사라질 때는 plain 과 상관없이 자리 · 크기도 움직인다).
  * hit: 강조를 시작한 뒤의 초(강조 움직임. 사라지는 움직임 다음, 나타나는 움직임보다 먼저. 강조도 자리 · 크기를 움직인다).
+ * loop: 계속 움직이기를 시작한 뒤의 초(글상자의 lkloop. 나타나는 · 강조 · 사라지는 움직임이 없을 때만. 자리 · 크기는 move 일 때만).
  */
-export function lookAt(look, t, n = 0, { move = true, u = Infinity, plain = false, out = -Infinity, hit = -Infinity } = {}) {
+export function lookAt(look, t, n = 0, { move = true, u = Infinity, plain = false, out = -Infinity, hit = -Infinity, loop = -Infinity } = {}) {
   if (!look) return { w: [], dx: 0, dy: 0, alpha: 1, scale: 1, blur: 0, grow: 1 };
   const leaving = outroAt(look, out) || emphasisAt(look, hit);
   if (leaving) plain = false;
-  const intro = leaving || introAt(look, u);
+  const once = leaving || introAt(look, u);
+  // 한 번 하는 움직임이 없으면 계속 움직이기. 자리 · 크기는 둥실 · 살랑처럼 move 일 때만(고르는 중인 글은 빛 · 그늘만).
+  const cont = once ? null : loopAt(look, loop, n);
+  const intro = once || (cont && !move ? { ...cont, dx: 0, dy: 0, scale: 1, shake: 0 } : cont);
+  if (cont) plain = false;
   const s = (Number.isFinite(t) ? Math.max(0, t) : LIVE_STILL) + (intro?.warp || 0);
   const P = look.pals.length;
   let k = 0;
@@ -912,7 +946,7 @@ const looked = new WeakMap();
  * 글 요소(.fi-text) 하나에 t 초의 글자 효과를 입힌다. look 이 없으면 입힌 것을 걷는다.
  * u · plain: 나타나는 움직임(lookAt). 투명도 · 흐림은 filter, 크기는 scale 로 한다(요소의 transform · opacity · 움직임 효과와 따로 겹친다).
  */
-export function lookText(node, look, t, n = 0, { move = true, u = Infinity, plain = false, out = -Infinity, hit = -Infinity } = {}) {
+export function lookText(node, look, t, n = 0, { move = true, u = Infinity, plain = false, out = -Infinity, hit = -Infinity, loop = -Infinity } = {}) {
   const mem = looked.get(node);
   const base = mem && node.style.textShadow === mem.applied ? mem.base : node.style.textShadow;
   if (!look) {
@@ -920,7 +954,7 @@ export function lookText(node, look, t, n = 0, { move = true, u = Infinity, plai
     return;
   }
   // 고르거나 고치는 중인 글은 움직이지 않는다(빛과 그늘만. 꾸미기 판의 손잡이와 어긋나지 않게).
-  const at = lookAt(look, t, n, { move: move && node.contentEditable !== 'true' && !node.classList.contains('sel'), u, plain, out, hit });
+  const at = lookAt(look, t, n, { move: move && node.contentEditable !== 'true' && !node.classList.contains('sel'), u, plain, out, hit, loop });
   node.style.textShadow = [base, ...lookShadows(look, at)].filter(Boolean).join(', ');
   // translate · scale 은 요소의 transform(자리 · 기울기 · 움직임 효과)과 따로 겹친다.
   // scale 은 요소의 본디 네모의 가운데를 붙들고 키우는데, 글은 transform 으로 반 칸씩 옮겨 놓았으므로 그만큼 되돌려 보이는 가운데를 붙든다.
@@ -958,7 +992,9 @@ export function lookCard(card, look, t, opts = {}) {
     const out = opts.leaving?.has(node) ? t - opts.leave : -Infinity;
     // 강조: 발표에서 누를 때 motion.js 가 그 글에 data-lk-hit(performance.now 의 ms)를 적는다. clock 은 지금 그 시계의 ms.
     const hit = node.dataset.lkHit && opts.clock != null ? (opts.clock - Number(node.dataset.lkHit)) / 1000 : -Infinity;
-    lookText(node, own, t, n, { ...opts, u, plain, out, hit });
+    // 계속 움직이기(itemView 가 data-lk-loop 을 적는다): 나타나는 움직임이 끝난 때부터(나타나는 움직임을 세지 않으면 장이 열린 때부터).
+    const loop = own && node.dataset.lkLoop ? (Number.isFinite(u) ? u - (lookIntro(own)?.ms || 0) / 1000 : t) : -Infinity;
+    lookText(node, own, t, n, { ...opts, u, plain, out, hit, loop });
   });
 }
 

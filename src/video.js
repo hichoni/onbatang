@@ -26,7 +26,7 @@ import { filmPlan, slidePoses, slideLoops, filmCells, packCells, DEFAULT_STAY, M
 import { mp4Parts, webmParts } from './mux.js';
 import { sceneBlob } from './scene.js';
 import { openReel, videoInfo } from './reel.js';
-import { paintLive, liveSeed, itemLooks, lookAt, lookOutro, LOOK_EM } from './live.js';
+import { paintLive, liveSeed, itemLooks, lookAt, lookOutro, lookIntro, LOOK_EM } from './live.js';
 import { soundTrack, mixSound, hasSound, decodeSound, encodeSound, soundKinds } from './sound.js';
 
 const RAD = Math.PI / 180;
@@ -244,6 +244,8 @@ async function buildSlide(design, slide, W, H, before = null) {
       L.look.out = outMs ? (slide.ms - outMs) / 1000 : Infinity;
       // 강조: 누를 때의 차례(영상에서는 저절로 그 때에) 강조 움직임을 한다.
       L.look.hits = slide.moves.filter((m) => m.i === L.i && m.emphasis === LOOK_EM).map((m) => m.start / 1000);
+      // 계속 움직이기: 나타나는 움직임이 끝난 때부터(그 장에서 나타나는 움직임을 껐으면 장이 열린 때부터). 화면과 같다.
+      L.look.loop = design.items[L.i].lkloop ? (design.lkin === false ? 0 : L.look.at + (lookIntro(L.look.def)?.ms || 0) / 1000) : Infinity;
     }
   }
   return { slide, layers, canvases, missingFonts: [...missingFonts], scene, tweens, stops, live, look };
@@ -332,7 +334,7 @@ function drawSlide(ctx, W, H, built, local, skip = null) {
     if (skip && skip.has(L.i)) continue;              // 이어 움직이기: 옮겨 그릴 요소는 따로 그린다
     const p = L.i >= 0 ? poses.get(L.i) : null;
     const hit = L.look ? Math.max(-Infinity, ...L.look.hits.filter((h) => h <= sec)) : -Infinity;
-    const lk = L.look ? lookAt(L.look.def, sec, L.look.n, { u: sec - L.look.at, plain: L.look.plain, out: sec - L.look.out, hit: sec - hit }) : null;
+    const lk = L.look ? lookAt(L.look.def, sec, L.look.n, { u: sec - L.look.at, plain: L.look.plain, out: sec - L.look.out, hit: sec - hit, loop: sec - L.look.loop }) : null;
     if (!p && lk) {
       // 글자 효과: 둥실 · 살랑 · 나타나는 움직임(가운데를 붙들고 키우고, 흐림은 글자 크기를 따른다).
       ctx.save();

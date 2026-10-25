@@ -555,7 +555,7 @@ export function planMotion(design) {
 export function hasMotion(design) {
   if (!design) return false;
   if (TRANSITION_DEFS[design.tr] || COMBO_DEFS[design.pa]) return true;
-  return (Array.isArray(design.items) ? design.items : []).some((it) => it && (ENTER_DEFS[it.an] || it.aw === true || EMPH_DEFS[it.em] || EXIT_DEFS[it.ex] || IDLE_DEFS[it.lp] || it.lkem === true));
+  return (Array.isArray(design.items) ? design.items : []).some((it) => it && (ENTER_DEFS[it.an] || it.aw === true || EMPH_DEFS[it.em] || EXIT_DEFS[it.ex] || IDLE_DEFS[it.lp] || it.lkem === true || it.lkloop === true));
 }
 
 // 장의 모습 하나를 화면용 키프레임으로 적는다. w: 카드 너비(px. 흐림의 크기를 정한다).

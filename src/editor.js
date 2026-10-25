@@ -21,7 +21,7 @@ import { styleRuns, runsAll, dropRunKey, shiftRuns } from './runs.js';
 const RUN_KEYS = [['bold', 'b'], ['italic', 'i'], ['under', 'u'], ['color', 'c']];
 import { layoutLinks, relink, LINK_LINE, LINK_SHAPES, LINK_LABEL_MAX, linkSvg, linkHandle, dragLinkHandle, linkLabelSize, linkLabelT, linkEnds, endSpot, pieceNear, boxOfItem } from './links.js';
 import { sceneView, scenePlayer, keepScene, probeVideo, ACCEPT_VIDEOS } from './scene.js';
-import { LIVES, LIVE_GROUPS, LIVE_STILL, liveView, liveStill, liveBackdrops, liveLooks, liveSeed, liveLookName, slideLook, itemLook, lookById, lookText, lookIntro, lookOutro, lookEmphasis, LOOK_EM, LOOK_GROUPS, LOOK_NONE } from './live.js';
+import { LIVES, LIVE_GROUPS, LIVE_STILL, liveView, liveStill, liveBackdrops, liveLooks, liveSeed, liveLookName, slideLook, itemLook, lookById, lookText, lookIntro, lookOutro, lookEmphasis, lookLoop, LOOK_EM, LOOK_GROUPS, LOOK_NONE } from './live.js';
 import { icon } from './icons.js';
 import { parseYouTube, ytStart, ytTime, ytWatch, ytEmbed } from './youtube.js';
 import { ACCEPT_IMAGES, PHOTO_EDGE, readPixels, canvasToPng, shrinkImage } from './images.js';
@@ -493,14 +493,14 @@ export function createEditor({
       if (look) lookText(sample, look, LIVE_STILL, 0, { move: false });
       let raf = 0;
       // 손을 올리면 나타나는 움직임부터 이어서 움직여 보여 준다. 칸이 다시 그려져 떨어지면(고른 뒤) 멈춘다.
-      // 나타나기 → 0.6초 머물기 → 강조 → 0.6초 머물기 → 사라지기 → 잠깐 쉬고 다시.
+      // 나타나기 → 1.2초 계속 움직이기 → 강조 → 0.8초 계속 움직이기 → 사라지기 → 잠깐 쉬고 다시.
       const play = (t0) => {
         const inS = (lookIntro(look)?.ms || 0) / 1000, emS = (lookEmphasis(look)?.ms || 0) / 1000, outS = (lookOutro(look)?.ms || 0) / 1000;
-        const hitAt = inS + 0.6, outAt = hitAt + emS + 0.6, round = outAt + outS + 0.4;
+        const hitAt = inS + 1.2, outAt = hitAt + emS + 0.8, round = outAt + outS + 0.4;
         const step = (now) => {
           if (!sample.isConnected) { raf = 0; return; }
           const e = (now - t0) / 1000, c = e % round;
-          lookText(sample, look, LIVE_STILL + e, 0, { u: c, hit: c - hitAt, out: c - outAt });
+          lookText(sample, look, LIVE_STILL + e, 0, { u: c, hit: c - hitAt, out: c - outAt, loop: c - inS });
           raf = requestAnimationFrame(step);
         };
         raf = requestAnimationFrame(step);
@@ -515,7 +515,7 @@ export function createEditor({
     return el('div', { class: 'fe-looks-all' },
       el('div', { class: 'fe-looks', role: 'group', 'aria-label': '글자 효과 없이 · 따르기' }, ...first.map((f) => tile(...f))),
       ...LOOK_GROUPS.map((g) => [el('div', { class: 'fe-looks-head', text: g.name }),
-        el('div', { class: 'fe-looks', role: 'group', 'aria-label': `글자 효과 · ${g.name}` }, ...g.ids.map((id) => tile(id, lookById(id).name, lookById(id), `${lookById(id).name} · 나타날 때 ${lookIntro(lookById(id)).name} · 강조 ${lookEmphasis(lookById(id)).name} · 사라질 때 ${lookOutro(lookById(id)).name}`)))]).flat());
+        el('div', { class: 'fe-looks', role: 'group', 'aria-label': `글자 효과 · ${g.name}` }, ...g.ids.map((id) => tile(id, lookById(id).name, lookById(id), `${lookById(id).name} · 나타날 때 ${lookIntro(lookById(id)).name} · 계속 ${lookLoop(lookById(id)).name} · 강조 ${lookEmphasis(lookById(id)).name} · 사라질 때 ${lookOutro(lookById(id)).name}`)))]).flat());
   }
   // 장의 효과(바탕색 칸): 이 장의 모든 글에(글상자마다 따로 고른 것은 그대로).
   // 이 장의 나타나는 · 사라지는 움직임 켜고 끄기(lkin · lkout: 끈 것만 false 로 적는다). 장의 효과 칸 · 글상자 칸에 함께 보인다.
@@ -563,6 +563,12 @@ export function createEditor({
       change({ lkem: on || undefined });
       if (on && nodes[sel]) nodes[sel].dataset.lkHit = String(performance.now());
     };
+    // 계속 움직이기: 머무는 동안 그 효과의 계속 움직이기(글 요소의 lkloop).
+    const loop = lookLoop(mine);
+    const loopChoose = (label, value) => el('button', {
+      class: `fe-btn${!!it.lkloop === value ? ' on' : ''}`, type: 'button', 'aria-pressed': String(!!it.lkloop === value), dataset: { lookLoop: value ? 'on' : 'off' },
+      disabled: !mine, onClick: () => { if (!!it.lkloop !== value) change({ lkloop: value || undefined }); },
+    }, label);
     const emChoose = (label, value) => el('button', {
       class: `fe-btn${!!it.lkem === value ? ' on' : ''}`, type: 'button', 'aria-pressed': String(!!it.lkem === value), dataset: { lookEm: value ? 'on' : 'off' },
       disabled: !mine, onClick: () => setEm(value),
@@ -573,6 +579,9 @@ export function createEditor({
       el('div', { class: 'fe-poshead', text: `누를 때 강조${em ? ` · ${em.name}` : ''}` }),
       el('div', { class: 'fe-grid two' }, emChoose('하지 않기', false), emChoose('누를 때 강조하기', true)),
       el('p', { class: 'fe-note', text: mine ? '발표에서 누르는 차례가 오면 이 글이 그 효과답게 한 번 크게 움직였다가 돌아와요(움직임 칸의 "누를 때" 차례에 들어가요). 영상에서는 그 차례에 저절로 해요.' : '이 글상자에 글자 효과가 있어야 강조할 수 있어요. 위에서 효과를 먼저 골라요.' }),
+      el('div', { class: 'fe-poshead', text: `계속 움직이기${loop ? ` · ${loop.name}` : ''}` }),
+      el('div', { class: 'fe-grid two' }, loopChoose('하지 않기', false), loopChoose('계속 움직이기', true)),
+      el('p', { class: 'fe-note', text: mine ? '글이 나타난 뒤 머무는 동안 그 효과답게 계속 움직여요(빛이 숨쉬고, 콩콩 뛰고, 살랑거려요). 누를 때 강조 · 넘길 때 사라지기는 그대로 해요.' : '이 글상자에 글자 효과가 있어야 계속 움직일 수 있어요.' }),
       ...lookFlow(),
       el('p', { class: 'fe-note', text: '이 글상자에만 효과를 입혀요. 장 전체에 한꺼번에 입히려면 빈 곳을 누르고 "바탕색"의 글자 효과에서 골라요. 서식 복사로 다른 글상자에 옮길 수도 있어요.' }),
     ];
@@ -3748,8 +3757,8 @@ export function createEditor({
   function motionTimeline() {
     const design = cleanDesign(card, { keepSpaces: true });
     const plan = planMotion(design);
-    if (!plan.auto.length && !plan.clicks.length) return [];
     const list = design.items;
+    if (!plan.auto.length && !plan.clicks.length && !list.some((it) => it.lkloop)) return [];
     const nameOf = (defs, id) => defs.find((d) => d.id === id)?.name || '';
     const total = Math.max(1, plan.ms);
     const sec = (ms) => `${(Math.round(ms / 100) / 10).toFixed(1)}초`;
@@ -3766,7 +3775,11 @@ export function createEditor({
         : c.exit ? `사라지기 · ${nameOf(EXITS, c.exit)} ${sec(exitTime(c.exit, list[c.i]))}` : `나타나기 · ${nameOf(ENTERS, c.enter)} ${sec(enterTime(c.enter, list[c.i]))}`;
       return row(c.i, [el('span', { class: 'fe-tl-step', text: `누름 ${n + 1}` }), el('b', { text: itemLabel(list[c.i]) }), el('small', { text: what })]);
     });
-    const loopNote = plan.loops.length ? el('p', { class: 'fe-note', text: `머무는 동안 계속 움직이는 조각: ${plan.loops.map((l) => `${itemLabel(list[l.i])}(${nameOf(IDLES, l.loop)})`).slice(0, 6).join(', ')}${plan.loops.length > 6 ? ` 외 ${plan.loops.length - 6}개` : ''}` }) : null;
+    // 계속 움직이는 조각: 움직임 칸의 계속 움직이기 + 글자 효과의 계속 움직이기(lkloop).
+    const slideLk = slideLook(design);
+    const lasting = [...plan.loops.map((l) => `${itemLabel(list[l.i])}(${nameOf(IDLES, l.loop)})`),
+      ...list.flatMap((it) => (it.lkloop && itemLook(it, slideLk) ? [`${itemLabel(it)}(글자 효과 · ${lookLoop(itemLook(it, slideLk)).name})`] : []))];
+    const loopNote = lasting.length ? el('p', { class: 'fe-note', text: `머무는 동안 계속 움직이는 조각: ${lasting.slice(0, 6).join(', ')}${lasting.length > 6 ? ` 외 ${lasting.length - 6}개` : ''}` }) : null;
     return [
       el('div', { class: 'fe-head', text: `이 장의 움직임 차례${plan.ms ? ` · ${sec(plan.ms)}` : ''}` }),
       el('ol', { class: 'fe-timeline', 'aria-label': '이 장의 움직임 차례' }, ...autoRows, ...clickRows),
