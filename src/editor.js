@@ -5,7 +5,7 @@
 import { el, toast } from './dom.js';
 import { newId, cleanNotes, NOTES_LIMIT, cleanTopic } from './document.js';
 import {
-  COLORS, SHAPES, SHAPE_GROUPS, MASKS, OPACITY, TEXT_PRESETS, settings, configure, reshapeItems, backgroundOf, fontList, fontFamilyOf, layoutList, textLimit, clip, DEFAULT_FONT,
+  COLORS, SHAPES, SHAPE_GROUPS, MASKS, OPACITY, TEXT_PRESETS, settings, configure, reshapeItems, backgroundOf, fontList, fontFamilyOf, layoutList, textLimit, newText, clip, DEFAULT_FONT,
   cleanBg, cleanItems, cleanDesign, emptyDesign, cleanItem, cleanImg, moveLayer, newPresetText, newEmoji, newShape, newArt, newYouTube, newWebBox, newPhoto, moveItem, rotateItem,
   designMotion, reorder, duplicateItem, pasteItem, itemLabel, sizeOf, resizeTo, sizeRange, alignItem, coverItem, layoutItems, EDGE, canEdge, canRound, cornerOf, THICK, isLine, thickOf, thicken,
   designVideo, cleanVideo, trimVideo, videoSeconds, videoTime, VIDEO_FITS, MIN_VIDEO, rebaseItems, alignBoxes, distributeBoxes, clampShift, scaleItems, regroup, newGroupId,
@@ -1243,6 +1243,55 @@ export function createEditor({
     const list = chosen();
     if (!list.length) return false;
     clipboard = JSON.parse(JSON.stringify(list.map((i) => items()[i])));
+    stampClipboard(clipboard);
+    return true;
+  }
+  // 이 편집기에서 조각을 복사하면 컴퓨터 클립보드에도 그 글(글이 없으면 "온바탕 조각 N개")을 적어 둔다(clipStamp).
+  // 붙여 넣을 때 클립보드가 그대로면 조각을 붙이고, 그사이 다른 곳에서 그림 · 글 · 주소를 복사했으면 그것을 넣는다(pasteOutside).
+  // 클립보드에 적지 못하는 창이면(clipStamp 없음) 예전처럼 복사해 둔 조각이 먼저다.
+  let clipStamp = null, clipTicket = 0, pasteWait = 0;
+  function stampClipboard(list) {
+    const text = list.map((it) => (it.t === 'text' ? it.text : '')).filter(Boolean).join('\n') || `온바탕 조각 ${list.length}개`;
+    const ticket = ++clipTicket;
+    clipStamp = null;
+    try { navigator.clipboard?.writeText?.(text)?.then(() => { if (ticket === clipTicket) clipStamp = text; }, () => {}); } catch { /* 클립보드를 쓸 수 없는 창 */ }
+  }
+  // 오른쪽 누르기 메뉴의 붙여넣기: 컴퓨터 클립보드를 읽어(브라우저가 한 번 물어볼 수 있다) 같은 규칙으로 넣는다. 읽지 못하면 복사해 둔 조각.
+  async function pasteFromMenu(at = null) {
+    if (!(clipboard?.length && clipStamp === null) && navigator.clipboard?.read) {
+      try {
+        const files = [], parts = { text: '', html: '' };
+        for (const entry of await navigator.clipboard.read()) for (const type of entry.types) {
+          if (type.startsWith('image/')) files.push(new File([await entry.getType(type)], 'clip.' + type.split('/')[1], { type }));
+          else if (type === 'text/plain' || type === 'text/html') parts[type === 'text/plain' ? 'text' : 'html'] = await (await entry.getType(type)).text();
+        }
+        if (pasteOutside({ files, ...parts }, at)) return;
+      } catch (error) { console.warn(error); }
+    }
+    if (clipboard?.length) clipPaste(at);
+    else notify('Ctrl+V 로 붙여 넣어요. 그림 · 글 · 주소를 복사해 두었다면 바로 조각으로 들어가요.', 4000);
+  }
+  // 바깥에서 복사한 것을 조각으로: 그림 파일 → 사진, 유튜브 주소 → 영상, 웹 주소 → 웹사이트 상자, 글 → 글상자. 넣었으면 true.
+  // 웹 페이지 · 문서에서 글을 복사하면 그 모습의 그림이 함께 오기도 한다: 글이 있고 HTML 에 <img> 가 없으면 글을 넣는다.
+  function pasteOutside({ files = [], text = '', html = '' } = {}, at = null) {
+    if (!card) return false;
+    const images = files.filter((f) => /^image\//.test(f?.type || ''));
+    const value = String(text || '').replace(/\r\n?/g, '\n');
+    const mine = clipboard?.length && !images.length && (clipStamp === null || value === clipStamp);
+    if (mine) { clipPaste(at); return true; }
+    if (images.length && (!value.trim() || /<img[\s>]/i.test(html))) { addPhotoFiles(images.slice(0, 1)); return true; }
+    const one = value.trim();
+    if (!one) {
+      if (clipboard?.length) { clipPaste(at); return true; }
+      return false;
+    }
+    if (!/\s/.test(one) && parseYouTube(one)) { addYouTube(one); return true; }
+    if (/^https?:\/\/\S+$/i.test(one)) { addWebBox(one); return true; }
+    const draft = newText('글', { color: backgroundOf(card.bg).ink });
+    const limit = textLimit(draft);
+    if (value.trim().length > limit) notify(`글상자 하나에는 ${limit}자까지 넣을 수 있어요. 앞의 ${limit}자만 넣었어요.`, 4000);
+    const item = newText(clip(value.replace(/^\n+|\s+$/g, ''), limit), { color: backgroundOf(card.bg).ink, ...(value.length > 40 ? { size: 5, align: 'l' } : {}) });
+    add(at ? { ...item, x: at.x, y: at.y } : item, { edit: false });
     return true;
   }
   function clipCut() {
@@ -1359,7 +1408,7 @@ export function createEditor({
         [
           row('copy', '복사', 'Ctrl+C', () => { clipCopy(); focusStage(); }),
           row('cut', '잘라내기', 'Ctrl+X', clipCut),
-          row('paste', '붙여넣기', 'Ctrl+V', () => clipPaste(), { disabled: !clipboard }),
+          row('paste', '붙여넣기', 'Ctrl+V', () => pasteFromMenu(), { disabled: !clipboard && !navigator.clipboard?.read }),
           row('duplicate', '복제', 'Ctrl+D', copyMany),
         ],
         styleRows(null),
@@ -1379,7 +1428,7 @@ export function createEditor({
       ];
     } else if (!it) {
       groups = [
-        [row('paste', '붙여넣기', 'Ctrl+V', () => clipPaste(at), { disabled: !clipboard })],
+        [row('paste', '붙여넣기', 'Ctrl+V', () => pasteFromMenu(at), { disabled: !clipboard && !navigator.clipboard?.read })],
         [row('undo', '실행 취소', 'Ctrl+Z', undo, { disabled: !past.length }), row('redo', '다시 실행', 'Ctrl+Y / Ctrl+Shift+Z', redo, { disabled: !future.length })],
         // 장(슬라이드)에 하는 일: 새 장 · 복제 · 바탕 · 발표 … 프로젝트가 정한다(slideMenu).
         ...hostRows(slideMenu),
@@ -1392,7 +1441,7 @@ export function createEditor({
         [
           row('copy', '복사', 'Ctrl+C', () => { clipCopy(); focusStage(); }),
           row('cut', '잘라내기', 'Ctrl+X', clipCut),
-          row('paste', '붙여넣기', 'Ctrl+V', () => clipPaste(), { disabled: !clipboard }),
+          row('paste', '붙여넣기', 'Ctrl+V', () => pasteFromMenu(), { disabled: !clipboard && !navigator.clipboard?.read }),
           row('duplicate', '복제', 'Ctrl+D', copy),
         ],
         styleRows(it),
@@ -1725,14 +1774,17 @@ export function createEditor({
   cardEl.addEventListener('focusout', (e) => {
     if (editing >= 0 && e.target === nodes[editing]) endEdit();
   });
-  // 붙여 넣을 때는 글자만 넣는다(다른 곳에서 복사한 꾸밈이나 그림이 따라 들어오지 않게).
-  // 글을 고치는 중이 아니면: 붙여 넣은 글이 유튜브 주소면 영상을 놓는다.
+  // 글을 고치는 중에는 글자만 넣는다(다른 곳에서 복사한 꾸밈이나 그림이 따라 들어오지 않게: 아래 cardEl 의 paste).
+  // 글을 고치는 중이 아니면 클립보드의 것을 바로 조각으로 넣는다(그림 · 글 · 유튜브 · 웹 주소, 이 편집기에서 복사한 조각: pasteOutside).
   stage.addEventListener('paste', (e) => {
+    clearTimeout(pasteWait); pasteWait = 0;
     if (editing >= 0 || cam) return;
-    const text = e.clipboardData?.getData('text/plain') || '';
     e.preventDefault();
-    if (parseYouTube(text)) addYouTube(text);
-    else notify('먼저 조각을 복사해요 (오른쪽 누르기 → 복사). 유튜브 주소를 붙여 넣으면 영상이 들어가요.', 4000);
+    const data = e.clipboardData;
+    const files = [...(data?.files || [])];
+    if (!files.length) for (const item of data?.items || []) if (item.kind === 'file') { const f = item.getAsFile(); if (f) files.push(f); }
+    if (!pasteOutside({ files, text: data?.getData('text/plain') || '', html: data?.getData('text/html') || '' }))
+      notify('붙여 넣을 것이 없어요. 그림 · 글 · 주소를 복사하거나 조각을 복사해요(오른쪽 누르기 → 복사).', 4000);
   });
   cardEl.addEventListener('paste', (e) => {
     if (editing < 0) return;
@@ -2129,7 +2181,8 @@ export function createEditor({
     if (mod && key === 'KeyY') { e.preventDefault(); redo(); return; }
     if (e.key === 'Escape' && pop) { e.preventDefault(); toggle(pop); return; }
     // 복사해 둔 요소가 없으면 브라우저의 붙여넣기에 맡긴다(유튜브 주소를 붙여 넣으면 영상이 놓인다: 아래의 paste).
-    if (mod && key === 'KeyV') { if (!clipboard?.length) return; e.preventDefault(); clipPaste(); return; }
+    // 붙여넣기는 브라우저의 paste 로 받는다(바깥에서 복사한 그림 · 글도 함께: 아래의 paste). paste 가 오지 않는 브라우저는 복사해 둔 조각을 붙인다.
+    if (mod && key === 'KeyV') { clearTimeout(pasteWait); pasteWait = setTimeout(() => { pasteWait = 0; if (clipboard?.length) clipPaste(); }, 150); return; }
     // 메뉴 글쇠(또는 Shift+F10): 고른 요소의 가운데(없으면 카드 가운데)에서 메뉴를 연다.
     if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
       e.preventDefault();
@@ -2274,6 +2327,10 @@ export function createEditor({
   async function onPhotoPicked() {
     const picked = [...(fileInput.files || [])];
     fileInput.value = '';
+    await addPhotoFiles(picked);
+  }
+  // 그림 파일을 사진 조각으로(파일 고르기 · 붙여넣기). 올린 파일 목록을 쓰면 목록에도 넣는다.
+  async function addPhotoFiles(picked) {
     if (!picked.length || busy || !card) return;
     const keep = libraryOn();
     const target = card;
