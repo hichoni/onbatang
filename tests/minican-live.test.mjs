@@ -212,3 +212,37 @@ test('강조 움직임: 효과마다 짝 · 끝나면 제 모습 · 누를 때 �
   const m = plan.slides[0].moves.find((v) => v.emphasis === LOOK_EM);
   assert.ok(m && m.ms === LOOK_EM_MS && m.start > 0, JSON.stringify(plan.slides[0].moves));
 });
+
+test('계속 움직이기: 효과마다 짝 · 끝이 없다 · 한 번 하는 움직임이 먼저 · 고르는 중인 글은 자리를 옮기지 않는다 · 저장', async () => {
+  const { TEXT_LOOKS, lookById, lookIntro, lookLoop, loopAt, lookAt } = await import('../src/live.js');
+  const { hasMotion } = await import('../src/motion.js');
+  const kinds = new Set();
+  for (const l of TEXT_LOOKS) {
+    const look = lookById(l.id), lp = lookLoop(look);
+    assert.ok(lp && lp.name, `${l.id} has a loop`);
+    kinds.add(lp.id);
+    assert.equal(loopAt(look, -0.1), null, 'not before it starts');
+    assert.ok(loopAt(look, 123.4), 'it keeps going');
+    assert.deepEqual(loopAt(look, 2.2, 1), loopAt(look, 2.2, 1));
+  }
+  assert.equal(kinds.size, 12);
+  assert.equal(new Set(TEXT_LOOKS.map((l) => `${lookIntro(lookById(l.id)).id}>${lookLoop(lookById(l.id)).id}`)).size, 12);
+  // 콩콩 뛰기는 위로 뛰고, 쿵쿵 박자는 커졌다 작아지고, 빛 숨쉬기는 빛이 세졌다 약해진다(시간에 따라 바뀐다).
+  const hop = lookById('bounce'), dys = [0.1, 0.3, 0.6, 0.9].map((q) => lookAt(hop, q, 0, { loop: q }).dy);
+  assert.ok(Math.min(...dys) < -0.25 && new Set(dys.map((v) => v.toFixed(3))).size > 2, dys.join());
+  const beat = [0.06, 0.6].map((q) => lookAt(lookById('pop'), 5, 0, { loop: q }).scale);
+  assert.ok(beat[0] > 1.05 && Math.abs(beat[1] - 1) < 0.01, beat.join());
+  const gold = lookById('gold'), glow = [0.7, 2.1].map((q) => lookAt(gold, 3, 0, { loop: q }).w[0]);
+  assert.ok(Math.abs(glow[0] - glow[1]) > 0.3, glow.join());
+  // 한 번 하는 움직임(나타나기 · 강조 · 사라지기)이 있으면 그것이 먼저다.
+  assert.deepEqual(lookAt(hop, 0.1, 0, { loop: 0.1, u: 0.1 }), lookAt(hop, 0.1, 0, { u: 0.1 }));
+  assert.deepEqual(lookAt(hop, 3, 0, { loop: 2, hit: 0.2 }), lookAt(hop, 3, 0, { hit: 0.2 }));
+  assert.equal(lookAt(hop, 3, 0, { loop: 2, out: 5 }).alpha, 0);
+  // 고르는 중인 글(move: false)은 자리 · 크기를 옮기지 않는다(빛 · 그늘만).
+  assert.deepEqual([lookAt(hop, 3, 0, { loop: 0.3, move: false }).dy, lookAt(lookById('pop'), 5, 0, { loop: 0.06, move: false }).scale], [0, 1]);
+  assert.ok(Math.abs(lookAt(gold, 3, 0, { loop: 0.7, move: false }).w[0] - glow[0]) < 1e-9, 'the glow still breathes');
+  // 저장: 켰을 때만. 움직임이 있는 장으로 센다.
+  const d = cleanDesign({ items: [{ t: 'text', text: '글', x: 50, y: 50, w: 50, size: 5, lk: 'gold', lkloop: true }, { t: 'text', text: '글', x: 50, y: 80, w: 50, size: 5, lkloop: 'yes' }] });
+  assert.deepEqual(d.items.map((it) => it.lkloop), [true, undefined]);
+  assert.equal(hasMotion(d), true);
+});

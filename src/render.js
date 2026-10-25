@@ -31,6 +31,7 @@ export function itemView(item) {
     if (item.bgc) node.style.background = item.bgc;
     node.style.textShadow = textShadow(item);
     if (item.lk) node.dataset.lk = item.lk;     // 이 글상자의 글자 효과(live.js 의 lookCard 가 읽는다)
+    if (item.lkloop) node.dataset.lkLoop = '1'; // 글자 효과의 계속 움직이기
     if (item.runs?.length) paintRuns(node, item);
     else if (!item.nowrap && hangsPunctuation(item)) hangParagraphEnds(node, item.text);
   } else if (item.t === 'link') {

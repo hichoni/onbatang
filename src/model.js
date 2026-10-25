@@ -287,6 +287,8 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
       ...(cleanLook(it.lk) ? {lk: cleanLook(it.lk)} : {}),
       // 누를 때 그 글자 효과의 강조 움직임(motion.js 의 차례에 든다). 켰을 때만 적는다.
       ...(it.lkem === true ? {lkem: true} : {}),
+      // 머무는 동안 그 글자 효과의 계속 움직이기(live.js). 켰을 때만 적는다.
+      ...(it.lkloop === true ? {lkloop: true} : {}),
       ...(pptxItem(base) ? {
         ...(given(it.h) ? {h:measure(base,it.h,0.01,140,10),valign:['top','middle','bottom'].includes(it.valign)?it.valign:'top'} : {}),
         ...(it.nowrap===true ? {nowrap:true} : {}),
