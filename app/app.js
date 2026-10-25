@@ -62,6 +62,8 @@ let materialAction = null;
 let lessonAction = null;
 let accountAction = null;
 let shareAction = null;
+let copyAction = null;             // 내보내기의 "링크 공유": 받은 사람이 링크를 열어 자기 브라우저에 사본을 받아 고친다(가이랩 회원만 만든다). 호스트가 맡는다.
+let copyLink = null;               // 공용 온바탕: 복사 링크(?copy=코드)를 받는 곳(app/copy-link.js). 없으면 링크를 열지 않는다.
 let showRemote = null;             // 발표의 휴대폰 리모컨(호스트가 연결 · QR 을 맡는다). 없으면 단추도 없다.
 let showAudience = null;           // 발표의 실시간 질문 · 반응(호스트가 연결 · QR · 질문 판을 맡는다). 없으면 단추도 없다.
 let accountBridge = null;          // 공용 온바탕: 가이랩 계정으로 이어 쓰기(연결 창 주소 등). 계정 저장(sync)이 있으면 쓰지 않는다.
@@ -171,6 +173,7 @@ function accountNote() {
 /** 내 그림들을 이 기기에서 다시 모은다. */
 async function refresh() {
   const resume = S.phase === 'boot' && resumeOpen ? readOpen() : null;
+  const copyAt = S.phase === 'boot' && copyLink ? copyParam() : '';
   S.list = null;
   render();
   if (S.phase === 'boot') await recoverDrafts();
@@ -183,6 +186,9 @@ async function refresh() {
     S.error = '이 창에서는 기기에 저장할 수 없어요. 그림을 만들 수는 있지만 새로 고침하면 사라져요. 다 만들면 바로 내려받아요.';
   }
   S.phase = 'home';
+  // 복사 링크로 열었으면 그 자료를 이 브라우저에 사본으로 받아 바로 연다.
+  // 여는 화면을 오래 붙잡지 않게 첫 화면을 먼저 그리고, 받는 동안은 따로 진행 화면을 띄운다.
+  if (copyAt) { render(); syncAccount(); openCopyLink(copyAt).catch((error) => console.warn(error)); return; }
   // 새로 고침하기 전에 꾸미던 그림이 있으면 첫 화면을 거치지 않고 그 그림 · 그 장을 다시 연다.
   const again = resume && S.list.find((r) => r.id === resume.id);
   if (again && !S.open) {
@@ -2392,6 +2398,61 @@ async function openBridgeFromHome() {
     openAccountBridge({ bridge, store: { list: listDesigns, put: putDesign }, onChanged: () => { if (!S.open && S.phase === 'home') refresh(); } });
   } catch (error) { console.warn(error); toast(String(error?.message || '이어 쓰기 창을 열지 못했어요.').slice(0, 200), 4500); }
 }
+// 복사 링크: 주소의 ?copy=코드(공용 온바탕). 읽으면 주소에서 지운다(새로 고침해도 다시 받지 않게).
+function copyParam() {
+  try {
+    const url = new URL(location.href), code = String(url.searchParams.get('copy') || '').trim().toLowerCase();
+    if (!url.searchParams.has('copy')) return '';
+    url.searchParams.delete('copy'); history.replaceState(history.state, '', url.pathname + url.search + url.hash);
+    return /^[0-9a-f]{12}$/.test(code) ? code : 'bad';
+  } catch { return ''; }
+}
+async function openCopyLink(code) {
+  const kit = await import('./copy-link.js');
+  if (code === 'bad') { toast('링크 주소가 잘렸어요. 받은 링크를 통째로 다시 열어 주세요.', 6000); return false; }
+  const kept = kit.takenCopy(code).map((id) => S.list.find((r) => r.id === id)).filter(Boolean);
+  if (kept.length) {
+    try { openDesign(kept[0], false); toast('전에 이 링크로 받은 사본을 열었어요. 고친 것은 이 브라우저에 그대로 있어요. 새로 받으려면 내 그림에서 이 사본을 지우고 링크를 다시 열어요.', 7000); return true; }
+    catch (error) { console.warn(error); }
+  }
+  render();
+  const loading = onbatangLoading({ title: '받은 자료를 내려받고 있어요', detail: '이 브라우저에 사본을 만들어요. 다 받으면 바로 열려요.' });
+  loading.node.classList.add('cv-copy-loading');
+  document.body.append(loading.node);
+  const wasInert = app.inert; app.inert = true;   // 받는 동안 첫 화면을 누르지 않게
+  try {
+    const got = await kit.createCopyIntake(copyLink).take(code, { onProgress: (p) => loading.update({
+      detail: p.phase === 'video' ? `바탕 영상 받는 중 · ${p.completed + 1} / ${p.total}` : `자료 받는 중 · ${p.completed} / ${p.total}`, completed: p.completed, total: p.total }) });
+    if (homeEntries(S.list, homeGroups(S.list)).length >= MAX_DESIGNS) { toast(`이 브라우저에는 그림을 ${MAX_DESIGNS}개까지 둘 수 있어요. 안 쓰는 그림을 지우고 링크를 다시 열어 주세요.`, 7000); return false; }
+    loading.update({ detail: '이 브라우저에 저장하고 있어요' });
+    const { records, dropped } = await kit.placeVideos(kit.copyRecords(got.records), got.videos, saveVideo);
+    if (!records.length) throw Error('copy_empty');
+    for (const record of records) await putDesign(record);
+    kit.rememberCopy(code, records.map((r) => r.id));
+    S.list = await listDesigns();
+    const first = S.list.find((r) => r.id === records[0].id) || records[0];
+    app.inert = wasInert;
+    if (!S.open) openDesign(first, false);
+    const pages = records.reduce((n, r) => n + r.slides.length, 0);
+    toast(`'${got.title || first.name}' ${pages}쪽을 이 브라우저에 받았어요. 마음껏 고쳐도 보낸 사람의 자료는 그대로예요.${dropped ? ` 바탕 영상 ${dropped}개는 받지 못했어요.` : ''}`, 7000);
+    return true;
+  } catch (error) { console.warn(error); toast(kit.copyMessage(error), 7000); return false; }
+  finally { loading.node.remove(); app.inert = wasInert; }
+}
+// 링크 공유(내보내기): 저장을 마친 뒤 호스트의 링크 창을 연다. records() 는 이 자료의 모든 파트(이 기기에 저장된 것)를 차례대로 준다.
+async function openCopyFromEditor(O) {
+  if (!copyAction || S.open !== O) return;
+  const ids = O.materialDeck ? O.materialDeck.documents.map((r) => r.id) : [O.record.id];
+  try {
+    await copyAction.open({ designId: ids[0], title: O.materialDeck?.title || O.record.name,
+      records: async () => {
+        await flushSavedDesign(O.record.id);
+        const out = [];
+        for (const id of ids) { const record = await getDesign(id) || O.materialDeck?.documents.find((r) => r.id === id); if (record) out.push(record); }
+        return out;
+      } });
+  } catch (error) { toast(String(error?.message || '링크 창을 열지 못했어요.').slice(0, 200), 4500); }
+}
 // 공유 링크: 저장을 마친 뒤 호스트의 공유 창을 연다(서버 · 로그인은 호스트가 맡는다). goTo 로 그 장 · 내 자료 칸(유튜브 등)을 연다.
 async function openShareFromEditor(O){
   if(!shareAction||S.open!==O)return;
@@ -2644,6 +2705,7 @@ function askDownload(O, btn) {
     if (pick.kind === 'html') { makeHtmlLesson(O, {notes: pick.htmlNotes}); return; }
     if (pick.kind === 'pdf') { printDeck(O, {layout: pick.printLayout}); return; }
     if (pick.kind === 'gif') { makeGif(O, {stay: pick.stay, width: pick.gifWidth}); return; }
+    if (pick.kind === 'link') { if (!copyAction) return; closeModal(); openCopyFromEditor(O); return; }
     if (pick.kind === 'video' && (!can || filmMs(pick.stay) > MAX_FILM_SECONDS * 1000)) return;
     closeModal();
     if (pick.kind === 'video') {
@@ -2686,8 +2748,8 @@ function askDownload(O, btn) {
     const video = pick.kind === 'video';
     const pptx = pick.kind === 'pptx';
     const html=pick.kind==='html';
-    const pdf=pick.kind==='pdf',gif=pick.kind==='gif';
-    const scopeN=(pptx||html||pdf||gif)&&O.materialDeck?O.materialDeck.documents.reduce((total,row)=>total+(row.id===O.record.id?O.slides.length:row.slides.length),0):n;
+    const pdf=pick.kind==='pdf',gif=pick.kind==='gif',link=pick.kind==='link';
+    const scopeN=(pptx||html||pdf||gif||link)&&O.materialDeck?O.materialDeck.documents.reduce((total,row)=>total+(row.id===O.record.id?O.slides.length:row.slides.length),0):n;
     const scopeAt=pptx&&O.materialDeck?materialPages(O).findIndex(value=>value.record.id===O.record.id&&value.index===O.at):O.at;
     const ms = video ? filmMs(pick.stay) : 0;
     const long = ms > MAX_FILM_SECONDS * 1000;
@@ -2698,8 +2760,17 @@ function askDownload(O, btn) {
       choice('cv-down-format', 'HTML 수업', '슬라이드와 활동을 함께 실행', html, {type: 'html'}, {kind: 'html'}),
       choice('cv-down-format', 'PDF·인쇄', '종이로 뽑거나 PDF로 저장', pdf, {type: 'pdf'}, {kind: 'pdf'}),
       choice('cv-down-format', 'GIF', '저절로 넘어가는 움직이는 그림', gif, {type: 'gif'}, {kind: 'gif'}),
+      choice('cv-down-format', '링크 공유', '받은 사람이 열어 바로 고쳐요', link, {type: 'link'}, {kind: 'link'}),
       choice('cv-down-format', '영상', '움직임까지 담기', video, {type: 'video'}, {kind: 'video'}, can ? {} : {disabled: true, title: NO_VIDEO})))];
-    rows.push(section('저장할 쪽', pdf||gif?el('p',{class:'cv-down-note',text:`전체 ${scopeN}쪽을 차례대로 담아요. 발표에서 숨긴 장은 빼요.`}):html?el('p',{class:'cv-down-note',text:`전체 ${scopeN}쪽과 픽셀아트 활동을 한 HTML 파일로 담아요. 발표에서 숨긴 장은 빼요.`}):video
+    if(link){
+      // 링크 공유: 링크만 보내면 받은 사람의 브라우저(공용 온바탕)에 이 자료의 사본이 생겨 로그인 없이 바로 고친다.
+      rows.push(section('링크로 보낼 것',el('p',{class:'cv-down-note',text:`이 자료 전체 ${scopeN}쪽${O.materialDeck?`(파트 ${O.materialDeck.documents.length}개)`:''}을 링크 하나로 보내요.`}),
+        el('p',{class:'cv-down-note',text:'받은 사람이 링크를 열면 그 사람 브라우저의 온바탕에 사본이 생겨 로그인 없이 바로 고칠 수 있어요. 받은 사람이 고쳐도 내 자료는 그대로예요.'}),
+        el('p',{class:'cv-down-note',text:'사진 · 움직임 · 발표자 노트까지 그대로 가요. 바탕 영상은 한 개 20MB까지 함께 가요.'})));
+      if(!copyAction)rows.push(el('div',{class:'cv-down-note warn',role:'note',dataset:{copyMembers:''}},el('b',{text:'가이랩 회원만 링크를 만들 수 있어요. '}),
+        '가이랩(gai-lab.netlify.app)에 로그인한 선생님은 가이랩 스튜디오의 온바탕에서 이 칸으로 링크를 만들어요. 받는 사람은 회원이 아니어도 돼요.'));
+    }
+    else rows.push(section('저장할 쪽', pdf||gif?el('p',{class:'cv-down-note',text:`전체 ${scopeN}쪽을 차례대로 담아요. 발표에서 숨긴 장은 빼요.`}):html?el('p',{class:'cv-down-note',text:`전체 ${scopeN}쪽과 픽셀아트 활동을 한 HTML 파일로 담아요. 발표에서 숨긴 장은 빼요.`}):video
       ? el('p', {class: 'cv-down-note', text: `모든 장 (${n}장)을 순서대로 영상 하나에 담아요.`})
       : scopeN > 1 ? el('div', {class: 'cv-down-chips'},
         chip(`지금 장 (${scopeAt + 1}번째)`, !pick.all, () => set({all: false}), {scope: 'one'}),
@@ -2754,16 +2825,16 @@ function askDownload(O, btn) {
     body.replaceChildren(...rows);
     body.scrollTop = scrollTop;
     if (active && Object.keys(active).length) body.querySelector(Object.entries(active).map(([k, v]) => `button[data-${k}="${v}"]`).join(''))?.focus({preventScroll: true});
-    const range = video || html || pdf || gif || pick.all ? `모든 장 ${scopeN}장` : `지금 장 (${scopeAt + 1}/${scopeN})`;
-    const label = gif ? 'GIF' : pdf ? 'PDF·인쇄' : video ? '영상' : pptx ? `PPTX ${pick.pptxMode === 'editable' ? '편집형' : '이미지형'}` : pick.kind.toUpperCase();
+    const range = video || html || pdf || gif || link || pick.all ? `모든 장 ${scopeN}장` : `지금 장 (${scopeAt + 1}/${scopeN})`;
+    const label = link ? '링크 공유' : gif ? 'GIF' : pdf ? 'PDF·인쇄' : video ? '영상' : pptx ? `PPTX ${pick.pptxMode === 'editable' ? '편집형' : '이미지형'}` : pick.kind.toUpperCase();
     summaryTitle.textContent = `${label} · ${range}`;
     const px = video ? videoSize(aspect, VIDEO_SIZES.find(size => size.id === pick.vsize).short) : exportSize(pick.size, aspect);
-    summaryDetail.textContent = gif?`가로 ${pick.gifWidth}px · 장마다 ${pick.stay}초 · 끝나면 처음부터 되풀이해요.`:pdf?`${PRINT_LAYOUTS.find(v=>v.id===pick.printLayout).name} · 인쇄 창에서 PDF로 저장할 수 있어요.`:html?'인터넷 연결 없이 실행하는 수업 파일 · 원본은 보존돼요.':pptx ? 'PPTX 한 파일 · 원본과 편집 자료는 그대로 보관돼요.' : video
+    summaryDetail.textContent = link?(copyAction?'링크를 만들면 복사 · QR로 나눠요. 언제든 끄거나 지울 수 있어요.':'가이랩 회원(로그인한 선생님)만 만들 수 있어요.'):gif?`가로 ${pick.gifWidth}px · 장마다 ${pick.stay}초 · 끝나면 처음부터 되풀이해요.`:pdf?`${PRINT_LAYOUTS.find(v=>v.id===pick.printLayout).name} · 인쇄 창에서 PDF로 저장할 수 있어요.`:html?'인터넷 연결 없이 실행하는 수업 파일 · 원본은 보존돼요.':pptx ? 'PPTX 한 파일 · 원본과 편집 자료는 그대로 보관돼요.' : video
       ? `${px.width} × ${px.height}px · 약 ${secondsText(ms)} · 만든 뒤 미리보고 저장해요.`
       : `${px.width} × ${px.height}px · ${pick.all && n > 1 ? `${label} ${n}장을 ZIP 한 파일로 저장해요.` : '그림 한 파일로 저장해요.'}`;
-    submit.disabled = video && long;
+    submit.disabled = (video && long) || (link && !copyAction);
     submit.toggleAttribute('data-pptx-save', pptx);
-    submit.replaceChildren(...face('download', gif ? 'GIF 내려받기' : pdf ? '인쇄 창 열기' : video ? '영상 만들기' : `${pptx ? 'PPTX' : label} 내려받기`));
+    submit.replaceChildren(...face(link ? 'link' : 'download', link ? '링크 만들기' : gif ? 'GIF 내려받기' : pdf ? '인쇄 창 열기' : video ? '영상 만들기' : `${pptx ? 'PPTX' : label} 내려받기`));
   };
   draw();
   const wasInert = app.inert;
@@ -3142,9 +3213,11 @@ function readOpen() {
  *   savePoll({question,options,counts}): 투표 결과 장(app/poll-result.js)을 지금 장 다음에 저장하고 그 장으로 간다 → {at,total}.
  * - showRemote: {open({state(),command(cmd),root})→{update(state),show?(),close()}}; 발표 막대의 "휴대폰 리모컨". cmd: {action:'next'|'prev'|'go'(at)|'black'|'state'}. 기본값은 숨김.
  * - accountBridge: {url?}; 공용 온바탕 첫 화면의 "가이랩 계정으로 이어 쓰기"(가이랩 연결 창으로 그림을 올리고 가져온다). sync 가 있으면 숨김.
+ * - copyAction: {open({designId,title,records()})}; 내보내기 창의 "링크 공유"(받은 사람이 링크를 열어 자기 브라우저에 사본을 받아 고친다). 없으면 그 칸은 "가이랩 회원만"이라고 알리고 막힌다.
+ * - copyLink: {url?,key?}; 공용 온바탕이 켠다. 주소의 ?copy=코드를 열면 그 자료를 이 기기에 사본으로 받아 바로 연다(app/copy-link.js).
  * - shareAction: {label,title?,open({designId,flush(),goTo(slideIndex,{upload})}),saved?(record)}; 편집기 위 막대의 공유 단추(가이랩의 보기 전용 링크). saved 는 이 기기에 저장할 때마다 불린다(링크에 반영은 호스트가 모아서). 기본값은 숨김.
  */
-export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, accountAction: accountLibrary = null, cloudAction: cloudLibrary = null, shareAction: sharing = null, accountBridge: bridging = null, showRemote: remoting = null, showAudience: audiencing = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false, resume = false, embed = null, syncDelay = null } = {}) {
+export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, accountAction: accountLibrary = null, cloudAction: cloudLibrary = null, shareAction: sharing = null, copyAction: copying = null, copyLink: copyIntake = null, accountBridge: bridging = null, showRemote: remoting = null, showAudience: audiencing = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false, resume = false, embed = null, syncDelay = null } = {}) {
   if (app) throw new Error('minican already started');
   if (!root) throw new Error('minican root');
   app = root;
@@ -3159,6 +3232,8 @@ export function startMinican({ root = document.getElementById('app'), fonts = []
   if(cloudLibrary&&typeof cloudLibrary.open==='function'&&typeof cloudLibrary.label==='string'&&cloudLibrary.label.trim())cloudAction=cloudLibrary;
   if(navigation&&typeof navigation.load==='function')materialNavigation=navigation;
   if(sharing&&typeof sharing.open==='function'&&typeof sharing.label==='string'&&sharing.label.trim())shareAction=sharing;
+  if(copying&&typeof copying.open==='function')copyAction=copying;
+  if(copyIntake&&typeof copyIntake==='object'&&!embed)copyLink={...(typeof copyIntake.url==='string'?{url:copyIntake.url}:{}),...(typeof copyIntake.key==='string'?{key:copyIntake.key}:{})};
   if (remoting && typeof remoting.open === 'function') showRemote = remoting;
   if (audiencing && typeof audiencing.open === 'function') showAudience = audiencing;
   if (bridging && typeof bridging === 'object' && !embed) accountBridge = { ...(typeof bridging.url === 'string' ? { url: bridging.url } : {}) };
