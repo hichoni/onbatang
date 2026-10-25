@@ -50,6 +50,17 @@ export async function saveVideo({ blob, design = '', seconds = 0 }) {
   return key;
 }
 
+/**
+ * 영상 파일을 받은 열쇠 그대로 둔다(온바탕 파일에서 연 것: 그림에 적힌 열쇠를 바꾸지 않으려고).
+ * 같은 열쇠의 같은 크기 파일이 이미 있으면(같은 영상) 다시 쓰지 않는다. 새로 적었으면 true.
+ */
+export async function placeVideo({ key, blob, design = '', seconds = 0, at = 0 }) {
+  const old = await run('readonly', (s) => s.get(key));
+  if (old?.blob instanceof Blob && old.blob.size === blob.size) return false;
+  await run('readwrite', (s) => s.put({ blob, design: String(design || ''), seconds: Number(seconds) || 0, bytes: blob.size, at: Number(at) || Date.now() }, key));
+  return true;
+}
+
 /** 영상 파일(Blob). 이 기기에 없으면 null. */
 export async function loadVideo(key) {
   try {
