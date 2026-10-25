@@ -136,3 +136,56 @@ test('the home screen has a "새 기능" button that explains each new feature i
   await splashGone(page);
   assert.doesNotMatch(await page.locator('[data-whats-new]').getAttribute('class'), /\bunseen\b/, 'no dot once seen');
 });
+
+// 사용자 보고: "온바탕 들어갈 때마다 튜토리얼이 시작한다". 다른 자료가 저장 공간(localStorage)을 가득 채운 기기에서는 봤다는 표시를 적지 못해
+// 꾸미는 화면을 열 때마다 안내가 다시 떴다. 이제는 쿠키에 적고, 그림이 이미 있는 기기에는 저절로 띄우지 않는다(? 단추로는 언제든 본다).
+const fillStorage = page => page.evaluate(() => {
+  let n = 0;
+  for (let size = 1 << 20; size >= 1; size = Math.floor(size / 2)) { const text = 'x'.repeat(size); for (;;) { try { localStorage.setItem('fill-' + n++, text); } catch { break; } } }
+  try { localStorage.setItem('fill-last', '1'); return false; } catch { return true; }
+});
+test('the guide opens by itself only on the very first visit, even when the browser storage is full', options, async t => {
+  const {page, origin} = await setup(t, {seen: []});
+  await page.goto(origin + '/app/');
+  await splashGone(page);
+  assert.equal(await fillStorage(page), true, 'the storage is full');
+  assert.equal(await page.locator('.cv-tour-btn.invite').count(), 1, 'a first visit: the guide button sparkles');
+  await page.locator('.cv-start').first().click();
+  const card = page.locator('.onba-tour');
+  await card.waitFor();
+  assert.match(await card.locator('.onba-tour-top span').textContent(), /^온바탕 둘러보기 · 1 \/ \d+$/);
+  await card.locator('.onba-tour-x').click();
+  assert.match(await page.evaluate(() => document.cookie), /onba_tour_seen=editor%2Cnews-0\.45/);
+  for (let visit = 0; visit < 2; visit++) {
+    await page.locator('.cv-back').click();
+    await page.waitForFunction(() => !document.body.classList.contains('cv-editing'));
+    await page.reload();
+    await splashGone(page);
+    assert.equal(await page.locator('.cv-tour-btn.invite').count(), 0);
+    await page.locator('.cv-start').nth(visit).click();
+    await page.locator('.cv-canvas .fe-stage').waitFor();
+    await page.waitForTimeout(1200);
+    assert.equal(await page.locator('.onba-tour').count(), 0, `not again (visit ${visit + 2})`);
+  }
+  // ? 단추로는 언제든 다시 본다.
+  await page.locator('.cv-tour-btn[data-onba-tour=editor]').click();
+  await page.locator('.onba-tour').waitFor();
+});
+
+test('a device that already has drawings never gets the guide by itself, even if the "seen" mark was lost', options, async t => {
+  const {page, origin} = await setup(t, {seen: []});
+  await page.goto(origin + '/app/');
+  await splashGone(page);
+  await page.evaluate(async () => {
+    const [{newRecord}, {putDesign}] = await Promise.all([import('/app/designs.js'), import('/app/store.js')]);
+    const record = newRecord('16:9'); record.name = '지난주 수업'; await putDesign(record);
+  });
+  await page.reload();
+  await splashGone(page);
+  assert.equal(await page.locator('.cv-item').count(), 1);
+  assert.equal(await page.locator('.cv-tour-btn.invite').count(), 0);
+  await page.locator('.cv-start').first().click();
+  await page.locator('.cv-canvas .fe-stage').waitFor();
+  await page.waitForTimeout(1200);
+  assert.equal(await page.locator('.onba-tour').count(), 0);
+});
