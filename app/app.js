@@ -30,7 +30,7 @@ import {ONBATANG_VERSION} from './version.js';
 import {createGaiMaker,gaiLessonContext} from './gai-maker.js';
 import {
   createEditor, designView, designToBlob, designToCanvas, configure, settings, reshapeItems, layoutList, layoutItems, icon, cleanDesign, hasMotion, playDesign, playTransition,
-  COMBOS, TRANSITIONS, designsToVideo, canMakeVideo, canFilmScenes, filmPlan, MAX_FILM_SECONDS, videoSize, STAYS, DEFAULT_STAY, scenePlayer, dropScene, sceneUrl, youTubePlayers,
+  COMBOS, TRANSITIONS, designsToVideo, canMakeVideo, canFilmScenes, filmPlan, readCheck, READ, MAX_FILM_SECONDS, videoSize, STAYS, DEFAULT_STAY, scenePlayer, dropScene, sceneUrl, youTubePlayers,
   fontFamilyOf, fontList, textLimit, planMotion,
 } from '../src/index.js';
 import { HERO_ART, HERO_VIEW } from './hero-art.js';
@@ -2669,7 +2669,11 @@ function askDownload(O, btn) {
   const n = O.slides.length;
   const pref = exportPref();
   const can = canMakeVideo();
-  const pick = { kind: pref.video && can ? 'video' : pref.jpg ? 'jpg' : 'png', all: pref.all && n > 1, stay: pref.stay, pptxMode: 'editable', htmlNotes: false, printLayout: 'slides', gifWidth: 480, size: pref.size, vsize: pref.vsize };
+  // 영상에 담을 쪽: PPT 면 모든 파트(전체 자료)의 쪽을 차례대로, 아니면 이 그림의 장들. 쪽 번호는 왼쪽 목록과 같다(숨긴 장도 센다).
+  let filmAll;
+  try { filmAll = lessonPages(O).map((v) => v.page); } catch { filmAll = currentSlides(O); }
+  const pick = { kind: pref.video && can ? 'video' : pref.jpg ? 'jpg' : 'png', all: pref.all && n > 1, stay: pref.stay, pptxMode: 'editable', htmlNotes: false, printLayout: 'slides', gifWidth: 480, size: pref.size, vsize: pref.vsize,
+    range: false, from: 1, to: filmAll.length, readFit: true };
   // 장마다 바탕에 깐 영상이 있는지: ''(없다) · 'yes'(있다) · 'gone'(있는데 그 파일이 이 기기에 없다. 조금 뒤에 알게 된다)
   const scenes = currentSlides(O).map((d) => (hasVideo(d) ? 'yes' : ''));
   currentSlides(O).forEach((d, i) => {
@@ -2689,12 +2693,30 @@ function askDownload(O, btn) {
     return live ? `바탕에 깐 영상은 움직이는 채로, 소리와 함께 담겨요. 그 장은 영상이 끝날 때까지 이어져요.${lost}`
       : `이 브라우저에서는 바탕에 깐 영상이 첫 모습의 멈춘 그림으로 들어가요(소리도 없어요). 크롬이나 엣지에서 만들면 움직이는 채로 담겨요.${lost}`;
   };
-  // 영상의 길이(ms): 만들 때와 같은 계산이다(이 기기에 없는 영상은 세지 않는다).
-  const filmMs = (stay) => filmPlan(currentSlides(O).map((d, i) => {
-    const clean = cleanDesign(d, { keepSpaces: true });
-    if (scenes[i] === 'gone') delete clean.video;
-    return clean;
-  }), { stay, scenes: live }).ms;
+  // 영상에 담을 쪽들의 바탕 영상(위의 scenes 와 같은 뜻. 쪽의 이름표로 찾는다).
+  const filmScenes = new Map(filmAll.map((d) => [d.id, hasVideo(d) ? 'yes' : '']));
+  filmAll.forEach((d) => {
+    const src = slideVideo(d).video?.src;
+    if (src) sceneUrl(src).then((url) => { if (!url) { filmScenes.set(d.id, 'gone'); if (body.isConnected) draw(); } });
+  });
+  // 영상에 담을 쪽: 고른 범위(왼쪽 목록의 쪽 번호) 안에서 발표에서 숨긴 장은 뺀다. [{ page, no(쪽 번호) }]
+  const filmEntries = () => {
+    const a = pick.range ? Math.max(1, Math.min(pick.from, filmAll.length)) : 1, b = pick.range ? Math.max(a, Math.min(pick.to, filmAll.length)) : filmAll.length;
+    return filmAll.map((page, i) => ({ page, no: i + 1 })).filter((v) => v.no >= a && v.no <= b && !v.page.hidden);
+  };
+  // 만들 디자인들과 읽기 점검: 만들 때와 같은 계산이다(이 기기에 없는 영상은 세지 않는다). readFit 이면 읽기 시간이 모자란 장은 읽을 만큼 머문다.
+  const filmWork = (stay) => {
+    const entries = filmEntries();
+    const designs = entries.map(({ page }) => {
+      const clean = cleanDesign(page, { keepSpaces: true });
+      if (filmScenes.get(page.id) === 'gone') delete clean.video;
+      return clean;
+    });
+    const check = readCheck(designs, { stay, scenes: live });
+    return { entries, check, designs: pick.readFit ? check.fit : designs };
+  };
+  // 영상의 길이(ms)
+  const filmMs = (stay) => filmPlan(filmWork(stay).designs, { stay, scenes: live }).ms;
   const lead = el('p', { class: 'muted', text: '파일 형식과 저장할 쪽을 고른 뒤 내려받으세요.' });
   const body = el('div', { class: 'cv-down-body' });
   const summaryTitle = el('b');
@@ -2706,11 +2728,11 @@ function askDownload(O, btn) {
     if (pick.kind === 'pdf') { printDeck(O, {layout: pick.printLayout}); return; }
     if (pick.kind === 'gif') { makeGif(O, {stay: pick.stay, width: pick.gifWidth}); return; }
     if (pick.kind === 'link') { if (!copyAction) return; closeModal(); openCopyFromEditor(O); return; }
-    if (pick.kind === 'video' && (!can || filmMs(pick.stay) > MAX_FILM_SECONDS * 1000)) return;
+    if (pick.kind === 'video' && (!can || !filmEntries().length || filmMs(pick.stay) > MAX_FILM_SECONDS * 1000)) return;
     closeModal();
     if (pick.kind === 'video') {
       rememberExport({video: true, vsize: pick.vsize, stay: pick.stay});
-      makeVideo(O, {vsize: pick.vsize, stay: pick.stay});
+      makeVideo(O, {vsize: pick.vsize, stay: pick.stay, designs: filmWork(pick.stay).designs});
     } else {
       rememberExport({size: pick.size, jpg: pick.kind === 'jpg', all: pick.all, video: false});
       download(O, btn, {size: pick.size, jpg: pick.kind === 'jpg', all: pick.all});
@@ -2751,7 +2773,8 @@ function askDownload(O, btn) {
     const pdf=pick.kind==='pdf',gif=pick.kind==='gif',link=pick.kind==='link';
     const scopeN=(pptx||html||pdf||gif||link)&&O.materialDeck?O.materialDeck.documents.reduce((total,row)=>total+(row.id===O.record.id?O.slides.length:row.slides.length),0):n;
     const scopeAt=pptx&&O.materialDeck?materialPages(O).findIndex(value=>value.record.id===O.record.id&&value.index===O.at):O.at;
-    const ms = video ? filmMs(pick.stay) : 0;
+    const film = video ? filmWork(pick.stay) : null;
+    const ms = video ? filmPlan(film.designs, { stay: pick.stay, scenes: live }).ms : 0;
     const long = ms > MAX_FILM_SECONDS * 1000;
     const rows = [section('파일 형식', el('div', {class: 'cv-down-formats'},
       choice('cv-down-format', 'PNG', '또렷한 그림', pick.kind === 'png', {type: 'png'}, {kind: 'png'}),
@@ -2770,8 +2793,19 @@ function askDownload(O, btn) {
       if(!copyAction)rows.push(el('div',{class:'cv-down-note warn',role:'note',dataset:{copyMembers:''}},el('b',{text:'가이랩 회원만 링크를 만들 수 있어요. '}),
         '가이랩(gai-lab.netlify.app)에 로그인한 선생님은 가이랩 스튜디오의 온바탕에서 이 칸으로 링크를 만들어요. 받는 사람은 회원이 아니어도 돼요.'));
     }
-    else rows.push(section('저장할 쪽', pdf||gif?el('p',{class:'cv-down-note',text:`전체 ${scopeN}쪽을 차례대로 담아요. 발표에서 숨긴 장은 빼요.`}):html?el('p',{class:'cv-down-note',text:`전체 ${scopeN}쪽과 픽셀아트 활동을 한 HTML 파일로 담아요. 발표에서 숨긴 장은 빼요.`}):video
-      ? el('p', {class: 'cv-down-note', text: `모든 장 (${n}장)을 순서대로 영상 하나에 담아요.`})
+    else if (video) {
+      // 담을 쪽: 모든 쪽(PPT 면 모든 파트) 또는 범위. 발표에서 숨긴 장은 빼고 차례대로 이어 담는다.
+      const total = filmAll.length, hiddenIn = filmAll.filter((p, i) => p.hidden && (!pick.range || (i + 1 >= pick.from && i + 1 <= pick.to))).length;
+      const num = (key, label) => el('label', { class: 'cv-down-num' }, el('input', { type: 'number', min: '1', max: String(total), value: String(pick[key]), inputmode: 'numeric', 'aria-label': label, dataset: { filmRange: key },
+        onChange: (e) => { const v = Math.max(1, Math.min(total, Math.round(Number(e.target.value)) || 1)); set(key === 'from' ? { from: v, to: Math.max(v, pick.to) } : { to: v, from: Math.min(v, pick.from) }); } }), label);
+      rows.push(section('담을 쪽', total > 1 ? el('div', { class: 'cv-down-chips' },
+        chip(`모든 쪽 (${total}쪽)`, !pick.range, () => set({ range: false }), { filmScope: 'all' }),
+        chip('범위 정하기', pick.range, () => set({ range: true }), { filmScope: 'range' })) : null,
+        pick.range && total > 1 ? el('div', { class: 'cv-down-range' }, num('from', '쪽부터'), num('to', '쪽까지')) : null,
+        el('p', { class: 'cv-down-note', dataset: { filmCount: String(film.entries.length) }, text: `${film.entries.length}쪽을 차례대로 영상 하나에 담아요.${O.materialDeck ? ' PPT 의 모든 파트를 이어요.' : ''}${hiddenIn ? ` 발표에서 숨긴 장 ${hiddenIn}개는 빼요.` : ''}` }),
+        film.entries.length ? null : el('p', { class: 'cv-down-note warn', role: 'status', text: '담을 쪽이 없어요. 범위를 넓히거나 숨긴 장을 다시 보이게 해 주세요.' })));
+    }
+    else rows.push(section('저장할 쪽', pdf||gif?el('p',{class:'cv-down-note',text:`전체 ${scopeN}쪽을 차례대로 담아요. 발표에서 숨긴 장은 빼요.`}):html?el('p',{class:'cv-down-note',text:`전체 ${scopeN}쪽과 픽셀아트 활동을 한 HTML 파일로 담아요. 발표에서 숨긴 장은 빼요.`})
       : scopeN > 1 ? el('div', {class: 'cv-down-chips'},
         chip(`지금 장 (${scopeAt + 1}번째)`, !pick.all, () => set({all: false}), {scope: 'one'}),
         chip(`모든 장 (${scopeN}장)`, pick.all, () => set({all: true}), {scope: 'all'}))
@@ -2814,25 +2848,36 @@ function askDownload(O, btn) {
       // 한 장이 얼마나 머무는지만 고른다(바탕에 영상을 깐 장은 그 영상이 끝날 때까지 이어진다).
       rows.push(section('장마다 머무는 시간', el('div', {class: 'cv-down-chips'}, ...STAYS.map((sec) => chip(`${sec}초`, pick.stay === sec, () => set({stay: sec}), {stay: String(sec)}))),
         el('p', {class: 'cv-down-note', text: '바탕에 깐 영상이 있는 장은 그 영상이 끝날 때까지 이어져요.'}),
-        currentSlides(O).some((p) => p.dur) ? el('p', {class: 'cv-down-note', text: '리허설로 잰 시간이 있는 장은 그 시간만큼 머물러요.'}) : null));
+        film.entries.some((v) => v.page.dur) ? el('p', {class: 'cv-down-note', text: '리허설로 잰 시간이 있는 장은 그 시간만큼 머물러요.'}) : null));
+      // 읽기 시간 점검: 장마다 머무는 시간 안에 글을 다 읽을 수 있는지. 모자란 장은 영상에서만 더 머물게 한다(편집 자료는 그대로).
+      const short = film.check.short;
+      if (short.length) {
+        const list = short.slice(0, 4).map((x) => `${film.entries[x.index].no}쪽(읽는 데 약 ${Math.ceil(x.need)}초 · 지금 ${Math.round(x.have)}초)`).join(', ') + (short.length > 4 ? ` 외 ${short.length - 4}쪽` : '');
+        rows.push(section('읽기 시간', el('p', { class: `cv-down-note${pick.readFit ? '' : ' warn'}`, dataset: { readShort: String(short.length) }, text: `${short.length}쪽은 고른 시간 안에 글을 다 읽기 어려워요: ${list}.` }),
+          el('div', { class: 'cv-down-chips' },
+            chip('모자란 쪽은 읽을 만큼 더 머물기', pick.readFit, () => set({ readFit: true }), { readFit: 'on' }),
+            chip('고른 시간 그대로', !pick.readFit, () => set({ readFit: false }), { readFit: 'off' })),
+          el('p', { class: 'cv-down-note', text: `한글은 1초에 ${READ.cjk}자, 영문 · 숫자는 ${READ.other}자로 세고 ${READ.pad}초를 더해요. 영상에서만 늘리고 편집 자료는 그대로예요.` })));
+      } else if (film.entries.length) rows.push(el('p', { class: 'cv-down-note', dataset: { readShort: '0' }, text: '모든 쪽의 글을 머무는 시간 안에 읽을 수 있어요.' }));
       if (long) rows.push(el('p', { class: 'cv-down-note warn', role: 'status', text: `영상은 ${MAX_FILM_SECONDS / 60}분까지 만들 수 있어요. 바탕에 깐 영상의 쓸 구간을 줄이거나, 장을 나눠 따로 만들어요.` }));
       // 바탕에 깐 영상이 어떻게 담기는지 미리 알려 준다(멈춘 그림으로 담기거나 빠지는 것이 있을 때는 눈에 띄게).
-      const note = sceneNote(scenes, true);
-      if (note) rows.push(el('p', { class: `cv-down-note${live && !scenes.includes('gone') ? '' : ' warn'}`, text: note }));
+      const filmed = film.entries.map((v) => filmScenes.get(v.page.id));
+      const note = sceneNote(filmed, true);
+      if (note) rows.push(el('p', { class: `cv-down-note${live && !filmed.includes('gone') ? '' : ' warn'}`, text: note }));
     }
     if (!video && sceneNote(pick.all ? scenes : [scenes[O.at]], false)) rows.push(el('p', { class: 'cv-down-note', text: sceneNote(pick.all ? scenes : [scenes[O.at]], false) }));
     if (!can) rows.push(el('p', { class: 'cv-down-note', text: NO_VIDEO }));
     body.replaceChildren(...rows);
     body.scrollTop = scrollTop;
     if (active && Object.keys(active).length) body.querySelector(Object.entries(active).map(([k, v]) => `button[data-${k}="${v}"]`).join(''))?.focus({preventScroll: true});
-    const range = video || html || pdf || gif || link || pick.all ? `모든 장 ${scopeN}장` : `지금 장 (${scopeAt + 1}/${scopeN})`;
+    const range = video ? `${pick.range ? `${pick.from}~${pick.to}쪽 · ` : ''}${film.entries.length}쪽` : html || pdf || gif || link || pick.all ? `모든 장 ${scopeN}장` : `지금 장 (${scopeAt + 1}/${scopeN})`;
     const label = link ? '링크 공유' : gif ? 'GIF' : pdf ? 'PDF·인쇄' : video ? '영상' : pptx ? `PPTX ${pick.pptxMode === 'editable' ? '편집형' : '이미지형'}` : pick.kind.toUpperCase();
     summaryTitle.textContent = `${label} · ${range}`;
     const px = video ? videoSize(aspect, VIDEO_SIZES.find(size => size.id === pick.vsize).short) : exportSize(pick.size, aspect);
     summaryDetail.textContent = link?(copyAction?'링크를 만들면 복사 · QR로 나눠요. 언제든 끄거나 지울 수 있어요.':'가이랩 회원(로그인한 선생님)만 만들 수 있어요.'):gif?`가로 ${pick.gifWidth}px · 장마다 ${pick.stay}초 · 끝나면 처음부터 되풀이해요.`:pdf?`${PRINT_LAYOUTS.find(v=>v.id===pick.printLayout).name} · 인쇄 창에서 PDF로 저장할 수 있어요.`:html?'인터넷 연결 없이 실행하는 수업 파일 · 원본은 보존돼요.':pptx ? 'PPTX 한 파일 · 원본과 편집 자료는 그대로 보관돼요.' : video
       ? `${px.width} × ${px.height}px · 약 ${secondsText(ms)} · 만든 뒤 미리보고 저장해요.`
       : `${px.width} × ${px.height}px · ${pick.all && n > 1 ? `${label} ${n}장을 ZIP 한 파일로 저장해요.` : '그림 한 파일로 저장해요.'}`;
-    submit.disabled = (video && long) || (link && !copyAction);
+    submit.disabled = (video && (long || !film.entries.length)) || (link && !copyAction);
     submit.toggleAttribute('data-pptx-save', pptx);
     submit.replaceChildren(...face(link ? 'link' : 'download', link ? '링크 만들기' : gif ? 'GIF 내려받기' : pdf ? '인쇄 창 열기' : video ? '영상 만들기' : `${pptx ? 'PPTX' : label} 내려받기`));
   };
@@ -3042,10 +3087,11 @@ async function download(O, btn, { size, jpg, all }) {
 }
 
 // 영상으로 만들기: 만드는 모습을 그대로 보여 주고(진행 막대 · 그만두기), 다 되면 틀어 보고 내려받게 한다.
-async function makeVideo(O, { vsize, stay }) {
+// designs: 담을 쪽들(내려받기 창이 고른 범위 · 숨긴 장 뺀 것 · 읽기 시간을 맞춘 것). 없으면 이 그림의 장들.
+async function makeVideo(O, { vsize, stay, designs = null }) {
   if (O.closed) return;
   const size = videoSize(aspectOf(O.record), (VIDEO_SIZES.find((x) => x.id === vsize) || VIDEO_SIZES[0]).short);
-  const slides = currentSlides(O);
+  const slides = designs?.length ? designs : currentSlides(O);
   const stop = new AbortController();
   let url = '';
   let making = true;
