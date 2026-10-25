@@ -151,8 +151,8 @@ test('편집기 자체에는 인증·서버 API가 없고 가이랩 연결 주�
     const addresses = f === 'pptx.js' ? src.replaceAll(/http:\/\/schemas\.openxmlformats\.org\/(?:drawingml\/2006\/main|presentationml\/2006\/main|officeDocument\/2006\/(?:relationships|extended-properties)|package\/2006\/(?:relationships(?:\/metadata\/core-properties)?|content-types|metadata\/core-properties))/g, '').replaceAll('http://purl.org/dc/elements/1.1/', '').replaceAll('http://schemas.microsoft.com/office/powerpoint/2010/main', '') : src;
     // 링크 미리보기 태그(og:* · twitter:*)는 공용 온바탕의 주소를 절대 주소로 적어야 미리보기가 그림을 읽는다(앱이 보내는 요청이 아니다).
     const previews = f === 'index.html' ? addresses.replace(/<meta (?:property="og:(?:url|image)"|name="twitter:image") content="https:\/\/onbatang\.web\.app\/[^"]*" \/>/g, '') : addresses;
-    // 복사 링크(copy-link.js)는 로그인 없이 가이랩의 공개 함수 두 개와 영상 자리만 읽는다(인증 정보를 싣지 않는다, credentials: 'omit').
-    const allowed = f === 'gai-provider.js' ? previews.replaceAll('https://gai-lab.netlify.app/onbatang-gai-connect.html', '') : f === 'account-bridge.js' ? previews.replaceAll('https://gai-lab.netlify.app/onbatang-account-connect.html', '') : f === 'copy-link.js' ? previews.replaceAll('https://wiaciazdsnhzgwplwjpu.supabase.co', '') : previews;
+    // 휴대폰 리모컨(phone-remote.js)은 가이랩의 리모컨 판을 작은 창으로만 띄운다. 복사 링크(copy-link.js)는 로그인 없이 가이랩의 공개 함수 두 개와 영상 자리만 읽는다(인증 정보를 싣지 않는다, credentials: 'omit').
+    const allowed = f === 'gai-provider.js' ? previews.replaceAll('https://gai-lab.netlify.app/onbatang-gai-connect.html', '') : f === 'account-bridge.js' ? previews.replaceAll('https://gai-lab.netlify.app/onbatang-account-connect.html', '') : f === 'copy-link.js' ? previews.replaceAll('https://wiaciazdsnhzgwplwjpu.supabase.co', '') : f === 'phone-remote.js' ? previews.replaceAll('https://gai-lab.netlify.app/onbatang-remote-relay.html', '') : previews;
     if (f === 'copy-link.js') {
       assert.deepEqual([...src.matchAll(/\/(rest\/v1\/rpc|storage\/v1\/object)\/([\w${}-]+)/g)].map((m) => m[0]), ['/rest/v1/rpc/${name}', '/storage/v1/object/onbatang-copy-videos']);
       assert.deepEqual([...src.matchAll(/rpc\('(\w+)'/g)].map((m) => m[1]), ['onbatang_copy_info', 'onbatang_copy_part']);
