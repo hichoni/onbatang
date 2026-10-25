@@ -44,7 +44,8 @@ test('moving backgrounds: picked in the background panel, saved, moving in the e
   // 빈 곳을 누른 채로 위 막대의 "바탕색"을 열고 밤하늘을 고른다.
   await page.locator('.fe-tb.pagebg, [class*="pagebg"]').first().click();
   const tiles = page.locator('[data-live-tile]');
-  assert.equal(await tiles.count(), 13, 'none + 12 styles');
+  assert.equal(await tiles.count(), 26, 'none + 25 styles');
+  assert.equal(await page.locator('.fe-lives-head').count(), 5, 'five groups');
   await page.locator('[data-live-tile=stars]').click();
   assert.equal(await page.locator('[data-live-tile=stars]').getAttribute('aria-pressed'), 'true');
   const stage = '.cv-canvas .fe-stage .fe-live-canvas';

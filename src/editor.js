@@ -21,7 +21,7 @@ import { styleRuns, runsAll, dropRunKey, shiftRuns } from './runs.js';
 const RUN_KEYS = [['bold', 'b'], ['italic', 'i'], ['under', 'u'], ['color', 'c']];
 import { layoutLinks, relink, LINK_LINE, LINK_SHAPES, LINK_LABEL_MAX, linkSvg, linkHandle, dragLinkHandle, linkLabelSize, linkLabelT, linkEnds, endSpot, pieceNear, boxOfItem } from './links.js';
 import { sceneView, scenePlayer, keepScene, probeVideo, ACCEPT_VIDEOS } from './scene.js';
-import { LIVES, liveView, liveStill, liveBackdrops, liveSeed } from './live.js';
+import { LIVES, LIVE_GROUPS, liveView, liveStill, liveBackdrops, liveSeed } from './live.js';
 import { icon } from './icons.js';
 import { parseYouTube, ytStart, ytTime, ytWatch, ytEmbed } from './youtube.js';
 import { ACCEPT_IMAGES, PHOTO_EDGE, readPixels, canvasToPng, shrinkImage } from './images.js';
@@ -429,7 +429,11 @@ export function createEditor({
       class: `fe-live-tile${now === (s?.id || '') ? ' on' : ''}`, type: 'button', 'aria-pressed': String(now === (s?.id || '')), title: s ? s.hint : '움직이는 바탕을 쓰지 않아요',
       dataset: { liveTile: s?.id || 'none' }, onClick: () => setLive(s?.id || ''),
     }, s ? el('img', { src: liveStill({ id: s.id }, 160, 90, 7), alt: '' }) : el('span', { class: 'fe-live-none', 'aria-hidden': 'true', text: '—' }), el('span', { class: 'fe-live-name', text: s ? s.name : '없음' }));
-    return el('div', { class: 'fe-lives', role: 'group', 'aria-label': '움직이는 바탕' }, tile(null), ...LIVES.map(tile));
+    // 묶음(종이 · 자연 · 밤 · 축하 · 디지털)마다 작은 제목 아래에 늘어놓는다.
+    return el('div', { class: 'fe-lives-all' },
+      el('div', { class: 'fe-lives', role: 'group', 'aria-label': '움직이는 바탕 없이' }, tile(null)),
+      ...LIVE_GROUPS.map((g) => [el('div', { class: 'fe-lives-head', text: g.name }),
+        el('div', { class: 'fe-lives', role: 'group', 'aria-label': `움직이는 바탕 · ${g.name}` }, ...g.ids.map((id) => tile(LIVES.find((s) => s.id === id))))]).flat());
   }
   function setLive(id) {
     if ((card.live?.id || '') === id) return;
