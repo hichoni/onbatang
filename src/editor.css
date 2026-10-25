@@ -893,3 +893,5 @@
 .fe-yt-preview:empty { display: none; }
 .fe-yt-preview-frame { width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: 8px; background: #000; }
 .fe-yt-url { min-width: 0; flex: 1; }
+.fe-lives-all { display: grid; gap: 6px; }
+.fe-lives-head { margin-top: 4px; font-size: .74rem; font-weight: 700; color: var(--fe-muted, #6b7a73); }
