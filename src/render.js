@@ -52,7 +52,7 @@ export function itemView(item) {
     // 유튜브 영상: 썸네일과 재생 단추. 썸네일을 받지 못하면(그림 파일로 만들 때 등) 어두운 판에 재생 단추만 보인다.
     // 발표 화면에서는 youTubePlayers 가 영상을 미리 불러 두고 스페이스 바(또는 누르기)로 튼다.
     const thumb = el('img', { class: 'fi-yt-thumb', src: ytThumb(item.yt), alt: '', draggable: 'false', decoding: 'async', referrerPolicy: 'no-referrer', onError: () => thumb.remove() });
-    node = el('div', { class: 'fi fi-yt', dataset: { yt: item.yt, start: String(item.start || 0), auto: item.auto ? '1' : '0' } }, thumb, el('span', { class: 'fi-yt-play', html: YT_PLAY }));
+    node = el('div', { class: `fi fi-yt${item.full ? ' full' : ''}`, dataset: { yt: item.yt, start: String(item.start || 0), end: String(item.end || 0), cc: item.cc || '', auto: item.auto ? '1' : '0', loop: item.loop ? '1' : '0', full: item.full ? '1' : '0' } }, thumb, el('span', { class: 'fi-yt-play', html: YT_PLAY }));
   } else if (item.t === 'web') {
     // 웹사이트 상자: 꾸미기 판 · 그림에는 표지(지구 그림 · 사이트 이름). 발표 화면 · 공유 링크는 그 안에 실제 사이트를 연다(liveWebBoxes).
     node = el('div', { class: 'fi fi-web', dataset: { web: item.url } },
@@ -250,7 +250,7 @@ function ytPlayer(node, onState) {
   const origin = /^https?:$/.test(location.protocol) ? location.origin : '';
   const frame = el('iframe', {
     class: 'fi-yt-frame', title: '유튜브 영상', tabindex: '-1',
-    src: ytEmbed(node.dataset.yt, { start: Number(node.dataset.start) || 0, api: true, origin }),
+    src: ytEmbed(node.dataset.yt, { start: Number(node.dataset.start) || 0, end: Number(node.dataset.end) || 0, cc: node.dataset.cc || '', api: true, origin }),
     allow: 'autoplay; encrypted-media; picture-in-picture; fullscreen', allowfullscreen: true, referrerpolicy: 'strict-origin-when-cross-origin',
   });
   node.prepend(frame);
@@ -260,7 +260,10 @@ function ytPlayer(node, onState) {
   let state = -1;               // 유튜브가 알려 준 상태: 1 트는 중 · 2 멈춤 · 0 끝남 · 3 불러오는 중
   let tries = 0;
   let check = 0;
-  const send = (func) => frame.contentWindow?.postMessage(JSON.stringify({ event: 'command', func, args: [] }), YT_ORIGIN);
+  const send = (func, args = []) => frame.contentWindow?.postMessage(JSON.stringify({ event: 'command', func, args }), YT_ORIGIN);
+  // 화면 가득(full): 틀면 장 전체로 커지고, 끝나면(되풀이가 아니면) 제자리로 돌아온다. 되풀이(loop): 끝나면 시작 시각부터 다시 튼다.
+  const full = node.dataset.full === '1', loop = node.dataset.loop === '1', from = Number(node.dataset.start) || 0;
+  const grow = (on) => { if (full) node.classList.toggle('expanded', on); };
   // 유튜브 쪽이 상태를 알려 주게 한다(답이 올 때까지 몇 번 다시 묻는다).
   const listen = () => frame.contentWindow?.postMessage(JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }), YT_ORIGIN);
   let poll = 0;
@@ -277,7 +280,12 @@ function ytPlayer(node, onState) {
     if (!data || typeof data !== 'object') return;
     if (!ready) { ready = true; clearInterval(poll); if (wanted) send(wanted); wanted = ''; }
     const next = data.info?.playerState ?? (data.event === 'onStateChange' ? data.info : undefined);
-    if (typeof next === 'number' && next !== state) { state = next; onState(api); }
+    if (typeof next === 'number' && next !== state) {
+      state = next;
+      if (state === 0 && loop) { send('seekTo', [from, true]); send('playVideo'); }
+      else if (state === 0) grow(false);
+      onState(api);
+    }
   };
   addEventListener('message', onMessage);
   const order = (func) => { if (ready) send(func); else wanted = func; };
@@ -288,6 +296,7 @@ function ytPlayer(node, onState) {
     get playing() { return state === 1 || state === 3 || (!ready && wanted === 'playVideo'); },
     play() {
       if (!api.started) { api.started = true; node.classList.add('started'); }
+      grow(true);
       order('playVideo');
       onState(api);
       // 브라우저가 소리 나는 재생을 막으면(사용자가 아직 페이지를 누르지 않은 경우 등) 소리를 끈 채로라도 튼다. 영상을 누르면 소리를 켤 수 있다.
@@ -296,7 +305,7 @@ function ytPlayer(node, onState) {
     },
     pause() { order('pauseVideo'); onState(api); },
     toggle() { if (api.playing) api.pause(); else api.play(); },
-    destroy() { clearInterval(poll); clearTimeout(check); removeEventListener('message', onMessage); frame.remove(); },
+    destroy() { clearInterval(poll); clearTimeout(check); removeEventListener('message', onMessage); grow(false); frame.remove(); },
   };
   // 덮개(썸네일 · 재생 단추)를 누르면 튼다. 누르기가 발표 화면으로 가서 장이 넘어가지 않게 한다.
   node.addEventListener('pointerdown', (e) => e.stopPropagation());

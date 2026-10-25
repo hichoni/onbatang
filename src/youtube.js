@@ -1,4 +1,4 @@
-// 유튜브 영상: 카드에 { t: 'yt', yt: '영상 이름표(11자)', start?: 시작 초 } 로 놓는다. 주소 · 제목 · 썸네일은 저장하지 않는다.
+// 유튜브 영상: 카드에 { t: 'yt', yt: '영상 이름표(11자)', start?: 시작 초, end?: 끝 초, cc?: 자막, full?: 틀 때 화면 가득, loop?: 되풀이 } 로 놓는다. 주소 · 제목 · 썸네일은 저장하지 않는다.
 // 꾸미는 화면과 그림 파일에는 썸네일과 재생 단추가 보이고, 발표 화면에서 누르면 그 자리에서 틀어진다(스페이스 바로 틀고 멈춘다).
 // 틀 때는 youtube-nocookie.com(개인 정보 보호 모드)을 쓴다. DOM 을 쓰지 않는다(node 에서도 읽힌다).
 
@@ -52,12 +52,17 @@ export const ytThumb = (id) => `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
 export const ytWatch = (id, start = 0) => `https://www.youtube.com/watch?v=${id}${start ? `&t=${start}s` : ''}`;
 /** 영상을 트는 곳(개인 정보 보호 모드)의 주소 앞부분. 조종 신호는 이곳에만 보낸다. */
 export const YT_ORIGIN = 'https://www.youtube-nocookie.com';
+/** 자막: 'ko' 한국어 · 'en' 영어 · 'on' 영상에 있는 자막(언어는 유튜브가 고른다). 없으면 유튜브 설정대로(보통 꺼짐). */
+export const YT_CC = Object.freeze(['ko', 'en', 'on']);
 /**
  * 카드 안에서 트는 주소. api: 바깥에서 틀기·멈추기 신호를 받는다(origin 은 신호를 보내는 쪽 주소).
  * 영상이 끝나도 다른 영상을 권하지 않게(rel=0) 하고, 휴대폰에서도 카드 안에서 튼다(playsinline).
+ * end: 그 초에서 멈춘다. cc: 자막을 켜고(cc_load_policy) 그 말의 자막 · 화면 글을 고른다(cc_lang_pref · hl).
  */
-export const ytEmbed = (id, { start = 0, api = false, origin = '' } = {}) =>
-  `${YT_ORIGIN}/embed/${id}?rel=0&playsinline=1${start ? `&start=${start}` : ''}${api ? `&enablejsapi=1${origin ? `&origin=${encodeURIComponent(origin)}` : ''}` : ''}`;
+export const ytEmbed = (id, { start = 0, end = 0, cc = '', api = false, origin = '' } = {}) =>
+  `${YT_ORIGIN}/embed/${id}?rel=0&playsinline=1${start ? `&start=${start}` : ''}${end > start ? `&end=${end}` : ''}`
+  + `${YT_CC.includes(cc) ? `&cc_load_policy=1${cc === 'on' ? '' : `&cc_lang_pref=${cc}&hl=${cc}`}` : ''}`
+  + `${api ? `&enablejsapi=1${origin ? `&origin=${encodeURIComponent(origin)}` : ''}` : ''}`;
 /** 시작 시각을 읽기 쉬운 글로: 90 → "1:30". */
 export const ytTime = (s) => {
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;

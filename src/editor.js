@@ -2791,7 +2791,7 @@ export function createEditor({
     } else if (it.t === 'yt') {
       // 유튜브 영상: 발표할 때 누르면 그 자리에서 틀어진다. 시작 시각을 정하고, 유튜브에서 미리 볼 수 있다.
       own.push(
-        pick('play', it.start ? `${ytTime(it.start)}부터` : '재생 설정', 'ytstart', { title: '어디서부터, 언제 틀지 정해요' }),
+        pick('play', it.start ? `${ytTime(it.start)}부터` : '재생 설정', 'ytstart', { title: '시작 · 끝 시각, 화면 가득, 자막, 되풀이를 정해요' }),
         tb(lab('screen', '유튜브에서 보기'), () => window.open(ytWatch(it.yt, it.start || 0), '_blank', 'noopener'), { title: '새 탭에서 이 영상을 열어요', name: '유튜브에서 보기', cls: 'yt-open' }));
     } else {
       own.push(
@@ -4028,16 +4028,40 @@ export function createEditor({
   // 시작 시각 칸: "1:30" · "90" · "1m30s" 를 받는다. 비우면 처음부터.
   function ytStartBody(it) {
     const input = el('input', { class: 'fe-search fe-yt-start', type: 'text', inputmode: 'numeric', value: it.start ? ytTime(it.start) : '', placeholder: '0:00', 'aria-label': '시작 시각' });
+    const endInput = el('input', { class: 'fe-search fe-yt-end', type: 'text', inputmode: 'numeric', value: it.end ? ytTime(it.end) : '', placeholder: '끝까지', 'aria-label': '끝 시각' });
     const apply = () => change({ start: ytStart(input.value) });
+    // 끝 시각은 시작보다 뒤여야 한다(아니면 끝까지 튼다).
+    const applyEnd = () => { const end = ytStart(endInput.value); if (endInput.value.trim() && !(end > (it.start || 0))) notify('끝 시각은 시작 시각보다 뒤로 정해요.', 3500); change({ end: end > (it.start || 0) ? end : 0 }); };
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); apply(); } });
+    endInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); applyEnd(); } });
+    const choose = (label, on, changes, data) => pbtn(label, () => change(changes), { 'aria-pressed': String(on), class: `fe-btn${on ? ' on' : ''}`, dataset: data });
     return [
       el('div', { class: 'fe-poshead', text: '시작 시각' }),
       el('div', { class: 'fe-row' }, input, pbtn('정하기', apply), pbtn('처음부터', () => change({ start: 0 }), { disabled: !it.start })),
       el('p', { class: 'fe-note', text: '예: 1:30 이면 1분 30초부터 틀어져요.' }),
+      el('div', { class: 'fe-poshead', text: '끝 시각' }),
+      el('div', { class: 'fe-row' }, endInput, pbtn('정하기', applyEnd), pbtn('끝까지', () => change({ end: 0 }), { disabled: !it.end })),
+      el('p', { class: 'fe-note', text: '예: 2:45 면 2분 45초에서 멈춰요. 수업에 필요한 부분만 보여 줄 때 써요.' }),
       el('div', { class: 'fe-poshead', text: '발표할 때' }),
       el('div', { class: 'fe-grid two' },
         pbtn('스페이스 바로 틀기', () => change({ auto: false }), { 'aria-pressed': String(!it.auto), class: `fe-btn${it.auto ? '' : ' on'}` }),
         pbtn('장이 열리면 바로 틀기', () => change({ auto: true }), { 'aria-pressed': String(!!it.auto), class: `fe-btn${it.auto ? ' on' : ''}` })),
+      el('div', { class: 'fe-poshead', text: '틀 때 크기' }),
+      el('div', { class: 'fe-grid two' },
+        choose('이 상자 그대로', !it.full, { full: false }, { ytFull: 'off' }),
+        choose('화면 가득', !!it.full, { full: true }, { ytFull: 'on' })),
+      el('p', { class: 'fe-note', text: it.full ? '발표에서 틀면 장 전체를 덮어 크게 보여요. 영상이 끝나면 제자리로 돌아와요. 유튜브의 [ ] 단추로 모니터 전체 화면도 돼요.' : '놓은 자리 · 크기 그대로 틀어요. 유튜브의 [ ] 단추를 누르면 모니터 전체 화면이 돼요.' }),
+      el('div', { class: 'fe-poshead', text: '자막' }),
+      el('div', { class: 'fe-grid two' },
+        choose('끄기', !it.cc, { cc: '' }, { ytCc: 'off' }),
+        choose('한국어 자막', it.cc === 'ko', { cc: 'ko' }, { ytCc: 'ko' }),
+        choose('영어 자막', it.cc === 'en', { cc: 'en' }, { ytCc: 'en' }),
+        choose('영상에 있는 자막', it.cc === 'on', { cc: 'on' }, { ytCc: 'on' })),
+      el('p', { class: 'fe-note', text: '자막은 영상에 그 말의 자막(자동 자막 포함)이 있을 때 나와요. 없으면 유튜브가 있는 자막을 보여 주거나 자막 없이 틀어요. 틀면서 영상의 CC 단추로 끄고 켤 수도 있어요.' }),
+      el('div', { class: 'fe-poshead', text: '끝나면' }),
+      el('div', { class: 'fe-grid two' },
+        choose('멈추기', !it.loop, { loop: false }, { ytLoop: 'off' }),
+        choose('처음부터 다시', !!it.loop, { loop: true }, { ytLoop: 'on' })),
       el('p', { class: 'fe-note', text: '발표 중 스페이스 바: 영상 틀기 → 멈추기 → 다시 틀기. 다음 장은 → 글쇠나 화면 누르기로 넘어가요.' }),
     ];
   }

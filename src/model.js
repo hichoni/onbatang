@@ -13,7 +13,7 @@
 // 프로젝트마다 다른 것(글꼴 목록, 어떤 그림 주소를 믿을지, 카드 비율, 개수 한도)은 configure() 로 한 번 정해 둔다.
 import { SHAPE_ASSETS, SHAPE_GROUPS, shapeAsset } from './shapes.js';
 import { isArtId, artColorable, artAspect, artPack, artName } from './art.js';
-import { isYouTubeId, ytStart, ytTime } from './youtube.js';
+import { isYouTubeId, ytStart, ytTime, YT_CC } from './youtube.js';
 import { ENTER_IDS, COMBO_IDS, TRANSITION_IDS, EMPHASIS_IDS, IDLE_IDS, EXIT_IDS, SPEED_IDS, DELAY_MAX, STILL } from './motion.js';
 import { metadata, newId, fail, validatePageInput, isSlideItem, itemTextLimit, pageLimits, slideNotes, slideHidden, slideTopic, slideDur, cleanAlt, ALT_LIMIT } from './document.js';
 export { cleanAlt, ALT_LIMIT };
@@ -334,7 +334,12 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
     const out = { t: 'yt', ...base, w: num(it.w, SIZE.min, SIZE.max, 60), h: num(it.h, 0.6, SIZE.max, 60), yt: it.yt };
     const start = ytStart(it.start);
     if (start) out.start = start;
+    const end = ytStart(it.end);
+    if (end > start) out.end = end;                 // 이 초에서 멈춘다(되풀이면 시작 시각으로 돌아간다)
     if (it.auto === true) out.auto = true;          // 발표할 때 장이 열리면 바로 튼다(아니면 스페이스 바를 누를 때)
+    if (it.full === true) out.full = true;          // 발표에서 틀면 장 전체(화면 가득)로 커진다. 끝나면 제자리
+    if (YT_CC.includes(it.cc)) out.cc = it.cc;      // 자막 켜기: 한국어 · 영어 · 영상 자막
+    if (it.loop === true) out.loop = true;          // 끝나면 처음(시작 시각)부터 다시
     return out;
   }
   if (it.t === 'web') {
@@ -725,7 +730,7 @@ export function itemLabel(it) {
   if (it.t === 'emoji') return `그래픽 ${it.ch}`;
   if (it.t === 'shape') return `도형: ${SHAPES.find((s) => s.id === it.shape)?.name || '네모'}`;
   if (it.t === 'art') return `그림: ${artName(it.art) || it.art.slice(3)}`;
-  if (it.t === 'yt') return `유튜브 영상${it.start ? ` (${ytTime(it.start)}부터)` : ''}`;
+  if (it.t === 'yt') return `유튜브 영상${it.start ? ` (${ytTime(it.start)}부터)` : ''}${it.full ? ' · 화면 가득' : ''}${it.cc ? ' · 자막' : ''}`;
   if (it.t === 'web') return `웹사이트: ${webHost(it.url)}`;
   if (it.t === 'link') return `연결선${it.head === 'none' ? '' : ' (화살표)'}${it.label ? ` "${it.label}"` : ''}`;
   return '사진';
