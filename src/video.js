@@ -26,7 +26,7 @@ import { filmPlan, slidePoses, slideLoops, filmCells, packCells, DEFAULT_STAY, M
 import { mp4Parts, webmParts } from './mux.js';
 import { sceneBlob } from './scene.js';
 import { openReel, videoInfo } from './reel.js';
-import { paintLive, liveSeed, liveLook, lookAt } from './live.js';
+import { paintLive, liveSeed, slideLook, lookAt } from './live.js';
 import { soundTrack, mixSound, hasSound, decodeSound, encodeSound, soundKinds } from './sound.js';
 
 const RAD = Math.PI / 180;
@@ -196,7 +196,9 @@ async function buildSlide(design, slide, W, H, before = null) {
   // 움직이는 것이 없으면 잴 것도 없다: 통째로 한 칸이다(그림으로 내려받을 때와 같다).
   // 영상 장면이 있는 장은 요소들을 바탕과 따로 그려야 해서(그 사이에 영상이 들어간다) 잰다.
   const typed = new Set(slide.moves.filter((m) => m.enter === 'type').map((m) => m.i));
-  const boxes = slide.moves.length || slide.loops?.length || slide.split?.length || design.video || design.live ? await measure(design, W, H, typed) : null;
+  // 글자 효과가 있는 장도 글마다 제 칸이라 잰다.
+  const look = slideLook(design);
+  const boxes = slide.moves.length || slide.loops?.length || slide.split?.length || design.video || design.live || look ? await measure(design, W, H, typed) : null;
   // 타자 치듯: 화면처럼 글자가 놓인 자리까지 연다(잰 자리. 잴 수 없었으면 어림한다).
   const stops = new Map([...typed].filter((i) => boxes?.[i]?.stops).map((i) => [i, boxes[i].stops]));
   const cells = filmCells(design, slide, boxes, W, H);
@@ -223,8 +225,7 @@ async function buildSlide(design, slide, W, H, before = null) {
   const tweens = slide.turn?.pairs && before ? await buildTweens(before, design, slide.turn, W, H) : null;
   // 움직이는 바탕: 프레임마다 그 순간의 모습을 바탕 바로 위에 그린다(live.js. 발표와 같은 씨앗이라 같은 무늬다).
   const live = design.live ? { live: design.live, seed: liveSeed(design.id) } : null;
-  // 그 바탕의 글자 효과: 글마다 빛 · 그늘을 한 번 그려 두고(lookLayers), 프레임마다 그 순간의 세기 · 자리로 겹친다(drawLayer).
-  const look = liveLook(design.live);
+  // 글자 효과: 글마다 빛 · 그늘을 한 번 그려 두고(lookLayers), 프레임마다 그 순간의 세기 · 자리로 겹친다(drawLayer).
   if (look) {
     const nth = new Map();
     design.items.forEach((it, i) => { if (it.t === 'text') nth.set(i, nth.size); });
@@ -245,15 +246,15 @@ function lookLayers(L, look, n, px) {
     }
     return c;
   };
-  const sh = look.shade;
-  return { n, px, shade: sh ? bake([[sh[3], sh[2], sh[0], sh[1]]]) : null, a: bake(look.glow), b: bake(look.alt) };
+  return { n, px, shade: bake(look.shades.map(([x, y, blur, c]) => [c, blur, x, y])), pals: look.pals.map(bake) };
 }
 // 칸 하나를 그린다. 글자 효과가 있으면 그 밑에 그늘 · 빛을 그 순간의 세기로 먼저 깐다(화면처럼 요소의 투명도 · 흐림을 함께 따른다).
 function drawLayer(ctx, L, lk) {
   if (lk) {
     const alpha = ctx.globalAlpha;
     if (L.look.shade) ctx.drawImage(L.look.shade, L.ox, L.oy);
-    for (const [img, k] of [[L.look.b, lk.b], [L.look.a, lk.a]]) {
+    for (let i = L.look.pals.length - 1; i >= 0; i--) {
+      const img = L.look.pals[i], k = lk.w[i] || 0;
       if (!img || !(k > 0.002)) continue;
       ctx.globalAlpha = alpha * Math.min(1, k);
       ctx.drawImage(img, L.ox, L.oy);
@@ -263,7 +264,7 @@ function drawLayer(ctx, L, lk) {
   ctx.drawImage(L.img, L.sx, L.sy, L.w, L.h, L.ox, L.oy, L.w, L.h);
 }
 function freeSlide(built) {
-  const looks = (built?.layers || []).flatMap((L) => (L.look ? [L.look.shade, L.look.a, L.look.b].filter(Boolean) : []));
+  const looks = (built?.layers || []).flatMap((L) => (L.look ? [L.look.shade, ...L.look.pals].filter(Boolean) : []));
   for (const c of [...(built?.canvases || []), ...(built?.tweens?.canvases || []), ...looks]) { c.width = 0; c.height = 0; }
   closeScene(built?.scene);
 }
@@ -555,7 +556,7 @@ export function createFilm(designs, { width = 1920, height = 1080, stay = DEFAUL
       ctx.fillRect(0, 0, W, H);
       drawTurnSide(ctx, W, H, old, pose.old, depth);
       drawTurnSide(ctx, W, H, next, pose.next, depth);
-    } else if (local >= slide.settle && !slideLoops(slide) && !built.get(n).live && (!built.get(n).scene || local >= built.get(n).scene.start + built.get(n).scene.ms)) {
+    } else if (local >= slide.settle && !slideLoops(slide) && !built.get(n).live && !built.get(n).look && (!built.get(n).scene || local >= built.get(n).scene.start + built.get(n).scene.ms)) {
       // 다 나온 뒤에는 한 번 그려 둔 것을 그대로 붙인다(영상 장면이 있는 장은 영상까지 다 튼 뒤에야 멈춘 모습이 된다. 계속 움직이는 요소가 있는 장은 끝까지 프레임마다 그린다)
       ctx.drawImage(flat(1, n, Infinity), 0, 0);
     } else {

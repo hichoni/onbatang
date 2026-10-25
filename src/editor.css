@@ -893,5 +893,12 @@
 .fe-yt-preview:empty { display: none; }
 .fe-yt-preview-frame { width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: 8px; background: #000; }
 .fe-yt-url { min-width: 0; flex: 1; }
-.fe-lives-all { display: grid; gap: 6px; }
-.fe-lives-head { margin-top: 4px; font-size: .74rem; font-weight: 700; color: var(--fe-muted, #6b7a73); }
+.fe-lives-all, .fe-looks-all { display: grid; gap: 6px; }
+.fe-lives-head, .fe-looks-head { margin-top: 4px; font-size: .74rem; font-weight: 700; color: var(--fe-muted, #6b7a73); }
+/* 글자 효과 고르기: 칸마다 이 장의 바탕색 · 글자 색으로 "가나"를 그 효과로 보여 준다(손을 올리면 움직인다) */
+.fe-looks { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 6px; }
+.fe-look-tile { display: grid; gap: 3px; padding: 4px; border: 1px solid var(--fe-line, #d7e2dc); border-radius: 10px; background: #fff; cursor: pointer; font: inherit; font-size: .74rem; color: inherit; text-align: center; }
+.fe-look-sample { display: grid; place-items: center; aspect-ratio: 16 / 9; border-radius: 6px; overflow: hidden; font-size: 1.3rem; font-weight: 800; line-height: 1; letter-spacing: -.02em; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .06); }
+.fe-look-name { line-height: 1.25; word-break: keep-all; }
+.fe-look-tile.on { border-color: var(--fe-accent, #267565); box-shadow: 0 0 0 2px var(--fe-accent, #267565) inset; font-weight: 700; }
+.fe-look-tile:focus-visible { outline: 3px solid #8cc7b8; outline-offset: 2px; }

@@ -9,7 +9,7 @@
 //   - 영상 장면(그 장의 바탕에 깐 영상)은 "장이 열리면 바로"(video.auto)면 그 장이 열리면(전환 효과가 끝나면), 아니면(누를 때) 저절로 나오는 요소가
 //     다 나온 뒤 잠깐 있다가 틀기 시작해서, 쓰는 구간이 끝날 때까지 튼다.
 //     그래서 영상 장면이 있는 장은 적어도 그 영상의 길이만큼 이어진다. 끝난 뒤에는 마지막 모습에 잠깐 머문다.
-import { liveLook, lookReach } from './live.js';
+import { slideLook, lookReach } from './live.js';
 import { planMotion, enterPose, enterTime, emphasisPose, emphasisTime, exitPose, exitTime, idlePose, idlePhase, transitionPose, matchItems, morphs, looksChanged } from './motion.js';
 
 /** 고를 수 있는 머무는 시간(초)과 기본값. */
@@ -189,8 +189,8 @@ const HALF = SHEET_MAX / 2 - 8;  // 움직이는 요소의 칸은 그 요소의 
  */
 export function filmCells(design, slide, boxes, W, H) {
   const items = Array.isArray(design?.items) ? design.items : [];
-  // 움직이는 바탕의 글자 효과(빛 · 둥실): 글마다 제 칸에 그려 두고 프레임마다 효과를 입힌다(video.js). 글 둘레로 퍼지는 빛만큼 칸을 넓힌다.
-  const look = liveLook(design?.live), reach = lookReach(look);
+  // 글자 효과(빛 · 그늘 · 둥실): 글마다 제 칸에 그려 두고 프레임마다 효과를 입힌다(video.js). 글 둘레로 퍼지는 빛 · 그늘만큼 칸을 넓힌다.
+  const look = slideLook(design), reach = lookReach(look);
   const moving = new Set([...(slide?.moves || []).map((m) => m.i), ...(slide?.loops || []).map((l) => l.i), ...(slide?.split || []),
     ...(look ? items.flatMap((it, i) => (it?.t === 'text' ? [i] : [])) : [])]);
   const card = { x: 0, y: 0, w: W, h: H };

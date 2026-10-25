@@ -606,8 +606,11 @@ export function cleanLive(raw) {
   const id = typeof raw === 'string' ? raw : raw?.id;
   return byId.has(id) ? (raw?.text === false ? { id, text: false } : { id }) : null;
 }
-/** 장(디자인)의 움직이는 바탕: { live: { id } } 또는 {}. */
-export const designLive = (design) => { const live = cleanLive(design?.live); return live ? { live } : {}; };
+/** 장(디자인)의 움직이는 바탕 · 글자 효과: { live: { id }, look } 중 있는 것. */
+export const designLive = (design) => {
+  const live = cleanLive(design?.live), look = cleanLook(design?.look);
+  return { ...(live ? { live } : {}), ...(look ? { look } : {}) };
+};
 
 /** 움직이는 바탕의 t 초 모습을 ctx 의 (0, 0, W, H) 에 그린다. 씨앗이 같으면 같은 그림이다. 그린 뒤 ctx 의 상태는 그대로다. */
 export function paintLive(ctx, W, H, live, t, seed = 0) {
@@ -645,89 +648,134 @@ export function liveView(live, { edge = 640, aspect = 16 / 9, seed = 0 } = {}) {
   const img = el('img', { class: 'fe-live', alt: '', draggable: 'false', src: liveStill({ id }, W, H, seed) });
   img.dataset.live = id;
   img.dataset.liveSeed = String(seed);
-  if (live.text === false) img.dataset.liveText = 'off';
   return img;
 }
 
-// ---------- 글자 효과(움직이는 바탕에 어울리게) ----------
-// 움직이는 바탕을 깐 장의 글에 그 바탕에 어울리는 효과를 입힌다: 글 뒤에 퍼지는 빛(glow · 두 빛깔이면 천천히 오간다) · 종이 그늘(shade) ·
-// 살짝 둥실(bob) · 살랑(sway). 바탕처럼 시간(초)만으로 정해진다: 화면은 text-shadow · translate 로, 영상은 같은 값으로 canvas 에 그린다(video.js).
-// 그림 · PDF 에는 LIVE_STILL 초의 빛과 그늘만 들어간다(움직임은 빼고). 장마다 { live: { id, text: false } } 로 끌 수 있다.
+// ---------- 글자 효과 ----------
+// 장의 글에 입히는 효과: 글 뒤에 퍼지는 빛(빛깔이 여럿이면 차례로 오간다) · 그늘 · 입체 · 둥실 · 살랑 · 통통 · 떨림. 시간(초)만으로 정해진다:
+// 화면은 text-shadow · translate 로, 영상은 같은 값으로 canvas 에 그린다(video.js). 그림 · PDF 에는 LIVE_STILL 초의 빛과 그늘만 들어간다(움직임은 빼고).
+// 장마다 { look: 효과 이름 | 'none' } 로 고른다. 정하지 않으면 움직이는 바탕에 어울리는 효과(바탕마다 하나. 옛 장의 live.text: false 는 끈 것)다.
 // 빛 · 그늘의 크기는 글자 크기(em)를 따른다. 색은 [r, g, b, a].
-//   glow: 빛 겹들 [[색, 번짐, x, y](em. x · y 는 없으면 0: 밝은 바탕은 색 그림자를 조금 비껴 찍는다)] · alt: 오갈 둘째 빛깔(없으면 한 빛깔)
-//   lo~hi: 빛의 세기가 period 초마다 오가는 폭
-//   flicker: 빛이 잠깐 꺼지는 정도(네온 · 옛 필름) · shade: [x, y, 번짐, 색](em) · bob: 위아래(em) · sway: 좌우(em) · swing: 그 한 번(초) · weave: 필름 떨림(em)
-const LOOKS = {
-  watercolor: { name: '물감 번짐', glow: [[[235, 120, 110, 0.6], 0.06, -0.05, 0.04], [[240, 150, 130, 0.55], 0.45]], alt: [[[100, 145, 235, 0.6], 0.06, 0.05, 0.04], [[120, 160, 235, 0.55], 0.45]], lo: 0.75, hi: 1, period: 7 },
-  chalk: { name: '분필 가루', glow: [[[255, 255, 255, 0.75], 0.04], [[235, 245, 225, 0.55], 0.16], [[235, 245, 225, 0.35], 0.45]], lo: 0.7, hi: 1, period: 5 },
-  blueprint: { name: '푸른 선 빛', glow: [[[170, 220, 255, 0.95], 0.06], [[120, 190, 255, 0.85], 0.25], [[120, 190, 255, 0.5], 0.6]], lo: 0.55, hi: 1, period: 4 },
-  film: { name: '옛 필름 떨림', shade: [0.04, 0.05, 0.08, [60, 40, 20, 0.45]], glow: [[[70, 45, 20, 0.6], 0.3]], lo: 0.8, hi: 1, period: 3, flicker: 0.45, weave: 0.015 },
-  stars: { name: '별빛 반짝', glow: [[[235, 240, 255, 0.95], 0.05], [[170, 195, 255, 0.9], 0.25], [[170, 195, 255, 0.6], 0.6]], alt: [[[255, 245, 220, 0.95], 0.05], [[255, 220, 150, 0.9], 0.25], [[255, 220, 150, 0.6], 0.6]], lo: 0.35, hi: 1, period: 3.2 },
-  aurora: { name: '오로라 빛', glow: [[[120, 255, 200, 0.95], 0.08], [[60, 240, 170, 0.8], 0.3], [[60, 240, 170, 0.55], 0.7]], alt: [[[200, 160, 255, 0.95], 0.08], [[160, 110, 255, 0.8], 0.3], [[160, 110, 255, 0.55], 0.7]], lo: 0.6, hi: 1, period: 6 },
-  waves: { name: '물결 출렁', shade: [0, 0.08, 0.18, [20, 70, 100, 0.45]], bob: 0.07, swing: 4 },
-  terminal: { name: '초록 화면 빛', glow: [[[140, 255, 170, 1], 0.05], [[60, 255, 130, 0.9], 0.2], [[40, 220, 110, 0.7], 0.55]], lo: 0.7, hi: 1, period: 2.5, flicker: 0.1 },
-  confetti: { name: '알록달록 빛', glow: [[[255, 90, 150, 0.85], 0.02, 0.05, 0.05], [[255, 110, 165, 0.45], 0.4]], alt: [[[50, 175, 255, 0.85], 0.02, -0.05, 0.05], [[70, 185, 255, 0.45], 0.4]], lo: 0.8, hi: 1, period: 2.4, bob: 0.04, swing: 1.6 },
-  snow: { name: '서리 빛', glow: [[[255, 255, 255, 1], 0.06], [[210, 230, 255, 0.9], 0.3], [[210, 230, 255, 0.6], 0.7]], lo: 0.55, hi: 1, period: 5 },
-  paperhills: { name: '오린 종이 그늘', shade: [0.06, 0.08, 0, [120, 90, 50, 0.5]] },
-  bokeh: { name: '따스한 빛', glow: [[[255, 220, 170, 1], 0.1], [[255, 180, 110, 0.85], 0.4], [[255, 180, 110, 0.6], 0.8]], alt: [[[255, 200, 220, 1], 0.1], [[255, 120, 170, 0.85], 0.4], [[255, 120, 170, 0.6], 0.8]], lo: 0.5, hi: 1, period: 4.5 },
-  clouds: { name: '구름 둥실', shade: [0, 0.08, 0.2, [60, 120, 180, 0.4]], glow: [[[255, 255, 255, 1], 0.1], [[255, 255, 255, 0.9], 0.45]], lo: 0.7, hi: 1, period: 6, bob: 0.05, swing: 5 },
-  rain: { name: '젖은 불빛', glow: [[[200, 220, 245, 0.9], 0.1], [[160, 195, 235, 0.7], 0.4]], lo: 0.45, hi: 0.9, period: 3 },
-  sakura: { name: '꽃잎 살랑', glow: [[[250, 140, 180, 0.9], 0.03, 0.04, 0.05], [[255, 160, 195, 0.6], 0.45]], lo: 0.65, hi: 1, period: 5, sway: 0.06, bob: 0.03, swing: 5 },
-  autumn: { name: '낙엽 살랑', glow: [[[225, 115, 45, 0.85], 0.03, 0.04, 0.05], [[255, 165, 80, 0.55], 0.45]], lo: 0.6, hi: 1, period: 5.5, sway: 0.06, bob: 0.03, swing: 4.5 },
-  underwater: { name: '물속 일렁임', glow: [[[170, 240, 255, 0.95], 0.08], [[120, 220, 255, 0.8], 0.35], [[120, 220, 255, 0.5], 0.7]], lo: 0.5, hi: 1, period: 3.5, bob: 0.06, sway: 0.04, swing: 3.4 },
-  fireflies: { name: '반딧불 깜빡', glow: [[[240, 255, 170, 1], 0.06], [[215, 255, 110, 0.9], 0.3], [[215, 255, 110, 0.7], 0.7]], lo: 0.2, hi: 1, period: 2.6 },
-  planets: { name: '우주 둥실', glow: [[[200, 185, 255, 0.95], 0.08], [[160, 140, 255, 0.8], 0.35], [[160, 140, 255, 0.55], 0.7]], alt: [[[170, 225, 255, 0.95], 0.08], [[110, 200, 255, 0.8], 0.35], [[110, 200, 255, 0.55], 0.7]], lo: 0.55, hi: 1, period: 6, bob: 0.04, swing: 6 },
-  fireworks: { name: '불꽃 번쩍', glow: [[[255, 240, 200, 1], 0.06], [[255, 200, 110, 0.9], 0.3], [[255, 200, 110, 0.7], 0.7]], alt: [[[255, 220, 240, 1], 0.06], [[255, 100, 185, 0.9], 0.3], [[255, 100, 185, 0.7], 0.7]], lo: 0.3, hi: 1, period: 1.8, flicker: 0.05 },
-  balloons: { name: '풍선 둥실', shade: [0, 0.08, 0.2, [40, 80, 140, 0.4]], bob: 0.08, swing: 3.2 },
-  notebook: { name: '연필 겹선', shade: [0.04, 0.05, 0, [110, 125, 165, 0.55]], sway: 0.02, swing: 6 },
-  synthwave: { name: '네온사인', glow: [[[255, 150, 235, 1], 0.04], [[255, 60, 190, 0.95], 0.2], [[255, 60, 190, 0.6], 0.6]], alt: [[[170, 245, 255, 1], 0.04], [[60, 210, 255, 0.95], 0.2], [[60, 210, 255, 0.6], 0.6]], lo: 0.8, hi: 1, period: 4, flicker: 0.07 },
-  mesh: { name: '오색 빛', glow: [[[160, 125, 255, 0.75], 0.05, 0.045, 0.045], [[175, 145, 255, 0.5], 0.45]], alt: [[[255, 125, 190, 0.75], 0.05, -0.045, 0.045], [[255, 145, 200, 0.5], 0.45]], lo: 0.75, hi: 1, period: 8 },
-  plexus: { name: '전자 빛', glow: [[[190, 240, 255, 1], 0.06], [[90, 200, 255, 0.9], 0.25], [[90, 200, 255, 0.6], 0.6]], lo: 0.5, hi: 1, period: 3 },
+//   glow: 빛 겹들 [[색, 번짐, x, y](em. x · y 는 없으면 0: 밝은 바탕은 색 그림자를 조금 비껴 찍는다)] · alt: 오갈 둘째 빛깔 · pals: 차례로 오갈 빛깔들(셋 이상)
+//   lo~hi: 빛의 세기가 period 초마다 오가는 폭 · flicker: 빛이 잠깐 꺼지는 정도(네온 · 옛 필름)
+//   shade: 그늘 [x, y, 번짐, 색](em. 여러 겹이면 [[…], …]) · bob: 위아래(em. bounce 면 통통 튄다) · sway: 좌우(em) · swing: 그 한 번(초)
+//   weave: 필름 떨림(위아래. em) · shake: 덜덜 떨림(사방. em)
+// kind: 고르는 칸의 묶음(glow 빛 · 색 / shade 그림자 · 입체 / move 움직임)
+const rainbow = [[255, 90, 90], [255, 170, 60], [255, 225, 70], [90, 215, 120], [80, 170, 255], [170, 110, 255]].map((c) => [[[...c, 1], 0.05], [[...c, 0.95], 0.22], [[...c, 0.7], 0.6]]);
+const stack = (n, step, color, last) => [...Array.from({ length: n }, (_, i) => [step[0] * (i + 1), step[1] * (i + 1), 0, color(i)]), ...(last ? [last] : [])];
+const LOOK_DEFS = {
+  // 어느 장에나 어울리는 효과(움직이는 바탕과 상관없이)
+  rainbow: { kind: 'glow', name: '무지개 빛', pals: rainbow, lo: 0.85, hi: 1, period: 1.1 },
+  gold: { kind: 'glow', name: '황금빛', glow: [[[255, 245, 200, 1], 0.04], [[255, 205, 90, 1], 0.18], [[255, 180, 60, 0.85], 0.45], [[230, 140, 30, 0.6], 0.9]], lo: 0.65, hi: 1, period: 3 },
+  fire: { kind: 'glow', name: '불꽃 글자', glow: [[[255, 240, 180, 1], 0.04], [[255, 140, 40, 1], 0.18], [[240, 70, 20, 0.85], 0.45], [[200, 30, 10, 0.6], 0.85]], alt: [[[255, 250, 200, 1], 0.04], [[255, 190, 60, 1], 0.2], [[255, 100, 30, 0.85], 0.5], [[220, 50, 15, 0.6], 0.9]], lo: 0.7, hi: 1, period: 0.9, flicker: 0.2, weave: 0.008 },
+  ice: { kind: 'glow', name: '얼음 빛', glow: [[[235, 252, 255, 1], 0.04], [[160, 225, 255, 1], 0.18], [[110, 190, 255, 0.8], 0.45], [[80, 150, 255, 0.55], 0.85]], lo: 0.7, hi: 1, period: 5 },
+  glitch: { kind: 'glow', name: '지지직 글리치', glow: [[[0, 235, 255, 1], 0, -0.05, 0], [[255, 40, 160, 1], 0, 0.05, 0]], lo: 1, hi: 1, period: 1, flicker: 0.25, shake: 0.012 },
+  pop: { kind: 'shade', name: '팝아트 그림자', shade: [0.07, 0.07, 0, [255, 95, 90, 1]] },
+  longshadow: { kind: 'shade', name: '긴 그림자', shade: stack(10, [0.025, 0.025], (i) => [0, 0, 0, 0.16 * (1 - i / 11)]) },
+  extrude: { kind: 'shade', name: '입체 글자', shade: stack(6, [0.012, 0.016], () => [95, 95, 125, 0.95], [0.1, 0.13, 0.15, [0, 0, 0, 0.35]]) },
+  bounce: { kind: 'move', name: '통통 튀기', shade: [0, 0.1, 0.14, [0, 0, 0, 0.25]], bob: 0.12, bounce: true, swing: 0.9 },
+  shake: { kind: 'move', name: '덜덜 떨기', shake: 0.02 },
+  float: { kind: 'move', name: '두둥실', shade: [0, 0.12, 0.25, [0, 0, 0, 0.22]], bob: 0.1, swing: 3 },
+  swing: { kind: 'move', name: '좌우 살랑', sway: 0.1, swing: 2.4 },
+  // 움직이는 바탕마다 어울리는 효과(바탕의 이름과 같다)
+  watercolor: { kind: 'glow', name: '물감 번짐', glow: [[[235, 120, 110, 0.6], 0.06, -0.05, 0.04], [[240, 150, 130, 0.55], 0.45]], alt: [[[100, 145, 235, 0.6], 0.06, 0.05, 0.04], [[120, 160, 235, 0.55], 0.45]], lo: 0.75, hi: 1, period: 7 },
+  chalk: { kind: 'glow', name: '분필 가루', glow: [[[255, 255, 255, 0.75], 0.04], [[235, 245, 225, 0.55], 0.16], [[235, 245, 225, 0.35], 0.45]], lo: 0.7, hi: 1, period: 5 },
+  blueprint: { kind: 'glow', name: '푸른 선 빛', glow: [[[170, 220, 255, 0.95], 0.06], [[120, 190, 255, 0.85], 0.25], [[120, 190, 255, 0.5], 0.6]], lo: 0.55, hi: 1, period: 4 },
+  film: { kind: 'move', name: '옛 필름 떨림', shade: [0.04, 0.05, 0.08, [60, 40, 20, 0.45]], glow: [[[70, 45, 20, 0.6], 0.3]], lo: 0.8, hi: 1, period: 3, flicker: 0.45, weave: 0.015 },
+  stars: { kind: 'glow', name: '별빛 반짝', glow: [[[235, 240, 255, 0.95], 0.05], [[170, 195, 255, 0.9], 0.25], [[170, 195, 255, 0.6], 0.6]], alt: [[[255, 245, 220, 0.95], 0.05], [[255, 220, 150, 0.9], 0.25], [[255, 220, 150, 0.6], 0.6]], lo: 0.35, hi: 1, period: 3.2 },
+  aurora: { kind: 'glow', name: '오로라 빛', glow: [[[120, 255, 200, 0.95], 0.08], [[60, 240, 170, 0.8], 0.3], [[60, 240, 170, 0.55], 0.7]], alt: [[[200, 160, 255, 0.95], 0.08], [[160, 110, 255, 0.8], 0.3], [[160, 110, 255, 0.55], 0.7]], lo: 0.6, hi: 1, period: 6 },
+  waves: { kind: 'move', name: '물결 출렁', shade: [0, 0.08, 0.18, [20, 70, 100, 0.45]], bob: 0.07, swing: 4 },
+  terminal: { kind: 'glow', name: '초록 화면 빛', glow: [[[140, 255, 170, 1], 0.05], [[60, 255, 130, 0.9], 0.2], [[40, 220, 110, 0.7], 0.55]], lo: 0.7, hi: 1, period: 2.5, flicker: 0.1 },
+  confetti: { kind: 'glow', name: '알록달록 빛', glow: [[[255, 90, 150, 0.85], 0.02, 0.05, 0.05], [[255, 110, 165, 0.45], 0.4]], alt: [[[50, 175, 255, 0.85], 0.02, -0.05, 0.05], [[70, 185, 255, 0.45], 0.4]], lo: 0.8, hi: 1, period: 2.4, bob: 0.04, swing: 1.6 },
+  snow: { kind: 'glow', name: '서리 빛', glow: [[[255, 255, 255, 1], 0.06], [[210, 230, 255, 0.9], 0.3], [[210, 230, 255, 0.6], 0.7]], lo: 0.55, hi: 1, period: 5 },
+  paperhills: { kind: 'shade', name: '오린 종이 그늘', shade: [0.06, 0.08, 0, [120, 90, 50, 0.5]] },
+  bokeh: { kind: 'glow', name: '따스한 빛', glow: [[[255, 220, 170, 1], 0.1], [[255, 180, 110, 0.85], 0.4], [[255, 180, 110, 0.6], 0.8]], alt: [[[255, 200, 220, 1], 0.1], [[255, 120, 170, 0.85], 0.4], [[255, 120, 170, 0.6], 0.8]], lo: 0.5, hi: 1, period: 4.5 },
+  clouds: { kind: 'move', name: '구름 둥실', shade: [0, 0.08, 0.2, [60, 120, 180, 0.4]], glow: [[[255, 255, 255, 1], 0.1], [[255, 255, 255, 0.9], 0.45]], lo: 0.7, hi: 1, period: 6, bob: 0.05, swing: 5 },
+  rain: { kind: 'glow', name: '젖은 불빛', glow: [[[200, 220, 245, 0.9], 0.1], [[160, 195, 235, 0.7], 0.4]], lo: 0.45, hi: 0.9, period: 3 },
+  sakura: { kind: 'move', name: '꽃잎 살랑', glow: [[[250, 140, 180, 0.9], 0.03, 0.04, 0.05], [[255, 160, 195, 0.6], 0.45]], lo: 0.65, hi: 1, period: 5, sway: 0.06, bob: 0.03, swing: 5 },
+  autumn: { kind: 'move', name: '낙엽 살랑', glow: [[[225, 115, 45, 0.85], 0.03, 0.04, 0.05], [[255, 165, 80, 0.55], 0.45]], lo: 0.6, hi: 1, period: 5.5, sway: 0.06, bob: 0.03, swing: 4.5 },
+  underwater: { kind: 'move', name: '물속 일렁임', glow: [[[170, 240, 255, 0.95], 0.08], [[120, 220, 255, 0.8], 0.35], [[120, 220, 255, 0.5], 0.7]], lo: 0.5, hi: 1, period: 3.5, bob: 0.06, sway: 0.04, swing: 3.4 },
+  fireflies: { kind: 'glow', name: '반딧불 깜빡', glow: [[[240, 255, 170, 1], 0.06], [[215, 255, 110, 0.9], 0.3], [[215, 255, 110, 0.7], 0.7]], lo: 0.2, hi: 1, period: 2.6 },
+  planets: { kind: 'move', name: '우주 둥실', glow: [[[200, 185, 255, 0.95], 0.08], [[160, 140, 255, 0.8], 0.35], [[160, 140, 255, 0.55], 0.7]], alt: [[[170, 225, 255, 0.95], 0.08], [[110, 200, 255, 0.8], 0.35], [[110, 200, 255, 0.55], 0.7]], lo: 0.55, hi: 1, period: 6, bob: 0.04, swing: 6 },
+  fireworks: { kind: 'glow', name: '불꽃 번쩍', glow: [[[255, 240, 200, 1], 0.06], [[255, 200, 110, 0.9], 0.3], [[255, 200, 110, 0.7], 0.7]], alt: [[[255, 220, 240, 1], 0.06], [[255, 100, 185, 0.9], 0.3], [[255, 100, 185, 0.7], 0.7]], lo: 0.3, hi: 1, period: 1.8, flicker: 0.05 },
+  balloons: { kind: 'move', name: '풍선 둥실', shade: [0, 0.08, 0.2, [40, 80, 140, 0.4]], bob: 0.08, swing: 3.2 },
+  notebook: { kind: 'shade', name: '연필 겹선', shade: [0.04, 0.05, 0, [110, 125, 165, 0.55]], sway: 0.02, swing: 6 },
+  synthwave: { kind: 'glow', name: '네온사인', glow: [[[255, 150, 235, 1], 0.04], [[255, 60, 190, 0.95], 0.2], [[255, 60, 190, 0.6], 0.6]], alt: [[[170, 245, 255, 1], 0.04], [[60, 210, 255, 0.95], 0.2], [[60, 210, 255, 0.6], 0.6]], lo: 0.8, hi: 1, period: 4, flicker: 0.07 },
+  mesh: { kind: 'glow', name: '오색 빛', glow: [[[160, 125, 255, 0.75], 0.05, 0.045, 0.045], [[175, 145, 255, 0.5], 0.45]], alt: [[[255, 125, 190, 0.75], 0.05, -0.045, 0.045], [[255, 145, 200, 0.5], 0.45]], lo: 0.75, hi: 1, period: 8 },
+  plexus: { kind: 'glow', name: '전자 빛', glow: [[[190, 240, 255, 1], 0.06], [[90, 200, 255, 0.9], 0.25], [[90, 200, 255, 0.6], 0.6]], lo: 0.5, hi: 1, period: 3 },
 };
-/** 그 움직이는 바탕의 글자 효과(이름 · 빛 · 그늘 · 움직임). 글자 효과를 끈 장이거나 모르는 바탕이면 null. */
-export function liveLook(live) {
-  const v = cleanLive(live);
-  return v && v.text !== false ? LOOKS[v.id] || null : null;
+// 쓰기 좋은 모양으로: pals(빛깔들) · shades(그늘 겹들)는 늘 배열이다.
+const LOOKS = Object.fromEntries(Object.entries(LOOK_DEFS).map(([id, d]) => [id, Object.freeze({
+  id, ...d, pals: d.pals || [d.glow, d.alt].filter(Boolean), shades: !d.shade ? [] : Array.isArray(d.shade[0]) ? d.shade : [d.shade],
+})]));
+/** 글자 효과를 끈 장의 값. */
+export const LOOK_NONE = 'none';
+/** 고를 수 있는 글자 효과: [{ id, name, kind }](어느 장에나 어울리는 것 먼저, 그다음 움직이는 바탕마다의 것). */
+export const TEXT_LOOKS = Object.freeze(Object.values(LOOKS).map(({ id, name, kind }) => Object.freeze({ id, name, kind })));
+/** 고르는 칸의 묶음(차례대로 보인다). */
+export const LOOK_GROUPS = Object.freeze([['glow', '빛 · 색'], ['shade', '그림자 · 입체'], ['move', '움직임']]
+  .map(([id, name]) => Object.freeze({ id, name, ids: Object.freeze(TEXT_LOOKS.filter((l) => l.kind === id).map((l) => l.id)) })));
+/** 장에 적는 글자 효과 값을 정리한다: 아는 효과의 이름 · 'none' 또는 null(움직이는 바탕에 맡긴다). */
+export const cleanLook = (raw) => (raw === LOOK_NONE || (typeof raw === 'string' && Object.hasOwn(LOOKS, raw)) ? raw : null);
+/** 효과 이름으로 찾기(모르면 null). */
+export const lookById = (id) => (typeof id === 'string' && Object.hasOwn(LOOKS, id) ? LOOKS[id] : null);
+/** 장(디자인)의 글자 효과: 고른 것 → 끈 장은 null → 움직이는 바탕에 어울리는 것(바탕에서 끈 옛 장은 null). */
+export function slideLook(design) {
+  const pick = cleanLook(design?.look);
+  if (pick) return lookById(pick);
+  const live = cleanLive(design?.live);
+  return live && live.text !== false ? lookById(live.id) : null;
 }
-/** 그 바탕의 글자 효과 이름(끈 것과 상관없이). */
-export const liveLookName = (id) => LOOKS[id]?.name || '';
+/** 그 움직이는 바탕에 어울리는 글자 효과(바탕에서 끈 것이면 null). */
+export const liveLook = (live) => slideLook({ live });
+/** 글자 효과의 이름(움직이는 바탕의 이름으로도 찾는다). */
+export const liveLookName = (id) => lookById(id)?.name || '';
 const rgba = ([r, g, b, a], k = 1) => `rgba(${r}, ${g}, ${b}, ${Math.round(clamp(a * k) * 1000) / 1000})`;
 /**
- * t 초의 글자 효과 값: { a, b(첫째 · 둘째 빛깔의 세기 0~1), dx, dy(옮기는 거리. em) }. n: 그 장에서 몇째 글인가(글마다 조금씩 엇갈린다).
+ * t 초의 글자 효과 값: { w(빛깔마다의 세기 0~1), dx, dy(옮기는 거리. em) }. n: 그 장에서 몇째 글인가(글마다 조금씩 엇갈린다).
  * move: 거짓이면 움직임(dx · dy)은 0 이다(그림 · PDF).
  */
 export function lookAt(look, t, n = 0, { move = true } = {}) {
-  if (!look) return { a: 0, b: 0, dx: 0, dy: 0 };
+  if (!look) return { w: [], dx: 0, dy: 0 };
   const s = Number.isFinite(t) ? Math.max(0, t) : LIVE_STILL;
+  const P = look.pals.length;
   let k = 0;
-  if (look.glow) {
+  if (P) {
     k = look.lo + (look.hi - look.lo) * (0.5 - 0.5 * Math.cos((TAU * s) / look.period + n * 0.6));
     // 깜빡임: 1/12 초 칸마다 정해진 우연으로 빛이 잠깐 죽는다(같은 t 면 같은 깜빡임).
     if (look.flicker) { const r = hash(Math.floor(s * 12) + n * 97.3); if (r < look.flicker) k *= 0.25 + r; }
   }
-  const mix = look.alt ? 0.5 - 0.5 * Math.cos((TAU * s) / (look.period * 2) + n * 0.6) : 0;
-  const w = look.swing || 4, ph = n * 1.7;
-  const dy = !move ? 0 : (look.bob ? look.bob * Math.sin((TAU * s) / w + ph) : 0)
-    + (look.weave ? look.weave * (hash(Math.floor(s * 12) * 1.37 + 5) - 0.5) * 2 : 0);
-  const dx = move && look.sway ? look.sway * Math.sin((TAU * s) / (w * 1.3) + ph + 1) : 0;
-  return { a: k * (1 - mix), b: k * mix, dx, dy };
+  // 빛깔이 둘이면 천천히 오가고, 셋 이상이면 period 초마다 다음 빛깔로 부드럽게 넘어간다.
+  let w = P ? [k] : [];
+  if (P === 2) { const mix = 0.5 - 0.5 * Math.cos((TAU * s) / (look.period * 2) + n * 0.6); w = [k * (1 - mix), k * mix]; }
+  else if (P > 2) {
+    const x = (((s / look.period + n * 0.15) % P) + P) % P, i = Math.floor(x), f = ease(x - i);
+    w = Array.from({ length: P }, (_, j) => (j === i ? k * (1 - f) : j === (i + 1) % P ? k * f : 0));
+  }
+  if (!move) return { w, dx: 0, dy: 0 };
+  const per = look.swing || 4, ph = n * 1.7;
+  let dy = 0, dx = 0;
+  if (look.bob) dy += look.bounce ? -look.bob * Math.abs(Math.sin((Math.PI * s) / per + ph)) : look.bob * Math.sin((TAU * s) / per + ph);
+  if (look.sway) dx += look.sway * Math.sin((TAU * s) / (per * 1.3) + ph + 1);
+  if (look.weave) dy += look.weave * (hash(Math.floor(s * 12) * 1.37 + 5) - 0.5) * 2;
+  if (look.shake) { const f = Math.floor(s * 20); dx += look.shake * (hash(f * 2.1 + n * 13 + 1) - 0.5) * 2; dy += look.shake * (hash(f * 3.7 + n * 7 + 2) - 0.5) * 2; }
+  return { w, dx, dy };
 }
-/** 글자 효과의 그림자 겹들(CSS text-shadow 의 한 조각씩): 그늘 · 첫째 빛깔 · 둘째 빛깔. */
+/** 글자 효과의 그림자 겹들(CSS text-shadow 의 한 조각씩): 그늘들 · 빛깔마다의 빛. */
 export function lookShadows(look, at) {
   if (!look) return [];
   const glow = (layers, k) => (k > 0.002 ? layers.map(([c, blur, x = 0, y = 0]) => `${x}em ${y}em ${blur}em ${rgba(c, k)}`) : []);
   return [
-    ...(look.shade ? [`${look.shade[0]}em ${look.shade[1]}em ${look.shade[2]}em ${rgba(look.shade[3])}`] : []),
-    ...glow(look.glow || [], at.a),
-    ...glow(look.alt || [], at.b),
+    ...look.shades.map(([x, y, blur, c]) => `${x}em ${y}em ${blur}em ${rgba(c)}`),
+    ...look.pals.flatMap((layers, i) => glow(layers, at.w[i] || 0)),
   ];
 }
 /** 글자 효과가 글 둘레로 퍼지는 거리(em): 영상 내보내기에서 글의 칸을 그만큼 넓게 잡는다. */
 export function lookReach(look) {
   if (!look) return 0;
-  const blurs = [...(look.glow || []), ...(look.alt || [])].map(([, b, x = 0, y = 0]) => b * 1.6 + Math.max(Math.abs(x), Math.abs(y)));
-  const shade = look.shade ? Math.max(Math.abs(look.shade[0]), Math.abs(look.shade[1])) + look.shade[2] * 1.6 : 0;
-  return Math.max(0, ...blurs, shade) + Math.max(look.bob || 0, look.sway || 0) + (look.weave || 0);
+  const blurs = look.pals.flat().map(([, b, x = 0, y = 0]) => b * 1.6 + Math.max(Math.abs(x), Math.abs(y)));
+  const shades = look.shades.map(([x, y, b]) => Math.max(Math.abs(x), Math.abs(y)) + b * 1.6);
+  return Math.max(0, ...blurs, ...shades) + Math.max(look.bob || 0, look.sway || 0) + (look.weave || 0) + (look.shake || 0);
 }
 // 글 하나에 입힌 효과를 기억한다: 요소 자신의 그림자(테두리 · 그림자)를 지키고, 효과를 걷을 때 되돌린다.
 const looked = new WeakMap();
@@ -765,12 +813,11 @@ export function liveBackdrops(root, { fps = 60, start = performance.now() } = {}
   const runs = [];
   for (const img of root.querySelectorAll('img.fe-live[data-live]')) {
     if (img.nextElementSibling?.classList.contains('fe-live-canvas')) continue;
-    const live = { id: img.dataset.live, ...(img.dataset.liveText === 'off' ? { text: false } : {}) }, seed = Number(img.dataset.liveSeed) || 0;
-    const look = liveLook(live), card = () => img.closest('.fe-card');
+    const live = { id: img.dataset.live }, seed = Number(img.dataset.liveSeed) || 0;
     const canvas = el('canvas', { class: 'fe-live fe-live-canvas', 'aria-hidden': 'true' });
     img.after(canvas);
     const ctx = canvas.getContext('2d');
-    let raf = 0, last = -1, stopped = false, shown = false, waited = 0, ticks = 0;
+    let raf = 0, last = -1, stopped = false, shown = false, waited = 0;
     const fit = () => {
       const box = canvas.getBoundingClientRect(), dpr = Math.min(1.5, globalThis.devicePixelRatio || 1);
       const w = Math.max(16, Math.min(1920, Math.round(box.width * dpr))), h = Math.max(16, Math.min(1920, Math.round(box.height * dpr)));
@@ -784,16 +831,42 @@ export function liveBackdrops(root, { fps = 60, start = performance.now() } = {}
       raf = requestAnimationFrame(draw);
       if (document.hidden) return;
       const still = reduced(), t = still ? LIVE_STILL : (now - start) / 1000;
-      // 글자 효과: 바탕과 같은 때에. 멈춘 모습일 때도 가끔 다시 입힌다(꾸미기 판에서 글을 새로 그리면 효과가 없는 글이 된다).
-      if (look && still && ++ticks % 15 === 0) lookCard(card(), look, t, { move: false });
       if (last >= 0 && (still || t - last < 1 / fps - 0.002)) return;
       fit(); last = t;
       paintLive(ctx, canvas.width, canvas.height, live, t, seed);
-      if (look) lookCard(card(), look, t, { move: !still });
     };
-    const run = { stop() { stopped = true; cancelAnimationFrame(raf); if (look) lookCard(card(), null); canvas.remove(); } };
+    const run = { stop() { stopped = true; cancelAnimationFrame(raf); canvas.remove(); } };
     raf = requestAnimationFrame(draw);
     runs.push(run);
   }
+  // 글자 효과가 있는 장(designView 가 data-look 을 적는다): 바탕과 같은 때로 글에 효과를 입힌다.
+  const cards = [...(root.matches?.('.fe-card[data-look]') ? [root] : []), ...root.querySelectorAll('.fe-card[data-look]')];
+  for (const card of cards) runs.push(liveLooks(card, { fps, start }));
   return { stop() { for (const r of runs) r.stop(); } };
+}
+const looping = new WeakSet();
+/**
+ * 카드 안의 글에 글자 효과(look. 없으면 카드의 data-look)를 순간마다 입힌다(발표 · 공유 링크 · 꾸미기 판). 시간은 부른 때를 0 초로 센다.
+ * 동작 줄이기를 켠 기기는 멈춘 모습(빛 · 그늘만)이다. 돌려주는 것: { stop() }(입힌 것을 걷는다). 화면에서 떨어진 카드는 저절로 멈춘다.
+ */
+export function liveLooks(card, { fps = 60, start = performance.now(), look = lookById(card?.dataset?.look) } = {}) {
+  if (!card || !look || looping.has(card)) return { stop() {} };
+  looping.add(card);
+  let raf = 0, last = -1, stopped = false, shown = false, waited = 0, ticks = 0;
+  const tick = (now) => {
+    if (stopped) return;
+    if (!card.isConnected) { if (shown || ++waited > 600) { run.stop(); return; } raf = requestAnimationFrame(tick); return; }
+    shown = true;
+    raf = requestAnimationFrame(tick);
+    if (document.hidden) return;
+    // 멈춘 모습일 때도 가끔 다시 입힌다(꾸미기 판에서 글을 새로 그리면 효과가 없는 글이 된다).
+    if (reduced()) { if (last < 0 || ++ticks % 15 === 0) { last = LIVE_STILL; lookCard(card, look, LIVE_STILL, { move: false }); } return; }
+    const t = (now - start) / 1000;
+    if (last >= 0 && t - last < 1 / fps - 0.002) return;
+    last = t;
+    lookCard(card, look, t);
+  };
+  const run = { stop() { if (stopped) return; stopped = true; cancelAnimationFrame(raf); looping.delete(card); lookCard(card, null); } };
+  raf = requestAnimationFrame(tick);
+  return run;
 }
