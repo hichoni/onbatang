@@ -1,5 +1,10 @@
 # 온바탕 — 생각을 펼치는 따뜻한 디자인 공간
 
+## v0.80.0 · 공용 온바탕에서도 휴대폰 리모컨 (2026-10-25)
+
+- 호스트의 `showRemote` 가 없어도 `phoneRemote: {}`(공용 온바탕 `app/index.html`)이면 발표 막대에 "휴대폰 리모컨"이 생긴다. 누르면 가이랩의 리모컨 판(`gai-lab.netlify.app/onbatang-remote-relay.html`)을 발표 화면 오른쪽 위 작은 창으로 띄운다(`app/phone-remote.js`). 판이 가이랩 실시간 통로를 로그인 없이 열고 QR · 링크를 보여 주며, 휴대폰의 넘기기를 postMessage 로 건네준다.
+- 신호는 처음 정한 주소의 그 창과만 주고받고(`origin` · `channel`), 넘기기는 `next` · `prev` · `go`(범위 안) · `black` 만 받는다. 판이 숨으면 창도 숨고, 막대 단추로 다시 보인다. 발표를 끝내면 창이 사라진다.
+
 ## v0.79.0 · 유튜브 재생 설정: 화면 가득 · 자막 · 끝 시각 · 되풀이 (2026-10-25)
 
 - 유튜브 조각(`t: 'yt'`)에 `end`(끝 초, 시작보다 뒤일 때만) · `full`(발표에서 틀면 장 전체) · `cc`(`ko` · `en` · `on`) · `loop` 를 더했다(`cleanItem`, `ITEM_FIELDS`). 트는 주소(`ytEmbed`)는 `end=` · `cc_load_policy=1&cc_lang_pref=…&hl=…` 를 붙인다.

@@ -3211,13 +3211,14 @@ function readOpen() {
  * - cloudAction: {label,editorTitle?,title?,open({from:'home',inline})}; 첫 화면의 "내 클라우드"(계정에 백업한 자료를 열기). accountAction 과 같은 전체 화면 칸에서 열고, 기본값은 숨김.
  * - showAudience: {open({state(),root,savePoll(result)})→{update(state),show?(),close()}}; 발표 막대의 "질문 · 반응"(state: {at,total,title}). 기본값은 숨김.
  *   savePoll({question,options,counts}): 투표 결과 장(app/poll-result.js)을 지금 장 다음에 저장하고 그 장으로 간다 → {at,total}.
+ * - phoneRemote: {url?}; 공용 온바탕이 켠다. showRemote 가 없으면 가이랩의 리모컨 판(onbatang-remote-relay.html)을 발표 화면에 작은 창으로 띄워 휴대폰으로 넘긴다(app/phone-remote.js).
  * - showRemote: {open({state(),command(cmd),root})→{update(state),show?(),close()}}; 발표 막대의 "휴대폰 리모컨". cmd: {action:'next'|'prev'|'go'(at)|'black'|'state'}. 기본값은 숨김.
  * - accountBridge: {url?}; 공용 온바탕 첫 화면의 "가이랩 계정으로 이어 쓰기"(가이랩 연결 창으로 그림을 올리고 가져온다). sync 가 있으면 숨김.
  * - copyAction: {open({designId,title,records()})}; 내보내기 창의 "링크 공유"(받은 사람이 링크를 열어 자기 브라우저에 사본을 받아 고친다). 없으면 그 칸은 "가이랩 회원만"이라고 알리고 막힌다.
  * - copyLink: {url?,key?}; 공용 온바탕이 켠다. 주소의 ?copy=코드를 열면 그 자료를 이 기기에 사본으로 받아 바로 연다(app/copy-link.js).
  * - shareAction: {label,title?,open({designId,flush(),goTo(slideIndex,{upload})}),saved?(record)}; 편집기 위 막대의 공유 단추(가이랩의 보기 전용 링크). saved 는 이 기기에 저장할 때마다 불린다(링크에 반영은 호스트가 모아서). 기본값은 숨김.
  */
-export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, accountAction: accountLibrary = null, cloudAction: cloudLibrary = null, shareAction: sharing = null, copyAction: copying = null, copyLink: copyIntake = null, accountBridge: bridging = null, showRemote: remoting = null, showAudience: audiencing = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false, resume = false, embed = null, syncDelay = null } = {}) {
+export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, accountAction: accountLibrary = null, cloudAction: cloudLibrary = null, shareAction: sharing = null, copyAction: copying = null, copyLink: copyIntake = null, accountBridge: bridging = null, showRemote: remoting = null, phoneRemote: phoning = null, showAudience: audiencing = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false, resume = false, embed = null, syncDelay = null } = {}) {
   if (app) throw new Error('minican already started');
   if (!root) throw new Error('minican root');
   app = root;
@@ -3235,6 +3236,8 @@ export function startMinican({ root = document.getElementById('app'), fonts = []
   if(copying&&typeof copying.open==='function')copyAction=copying;
   if(copyIntake&&typeof copyIntake==='object'&&!embed)copyLink={...(typeof copyIntake.url==='string'?{url:copyIntake.url}:{}),...(typeof copyIntake.key==='string'?{key:copyIntake.key}:{})};
   if (remoting && typeof remoting.open === 'function') showRemote = remoting;
+  // 공용 온바탕: 호스트의 리모컨이 없으면 가이랩의 리모컨 판(로그인 없음)을 작은 창으로 띄운다(app/phone-remote.js).
+  else if (phoning && typeof phoning === 'object' && !embed) { const opts = typeof phoning.url === 'string' ? { url: phoning.url } : {}; showRemote = { open: async (context) => (await import('./phone-remote.js')).createPhoneRemote(opts).open(context) }; }
   if (audiencing && typeof audiencing.open === 'function') showAudience = audiencing;
   if (bridging && typeof bridging === 'object' && !embed) accountBridge = { ...(typeof bridging.url === 'string' ? { url: bridging.url } : {}) };
   activityAuthoring=authoring===true;
