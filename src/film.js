@@ -120,6 +120,10 @@ export function filmPlan(designs, { stay = DEFAULT_STAY, scenes = true } = {}) {
     const ms = Math.round(Math.max(lead + Math.max(stayMs, settle - lead + (moves.length ? TAIL : 0)), scene ? scene.start + scene.ms + SCENE_TAIL : 0));
     const slide = { turn, lead, moves, settle, ms, ...(loops.length ? { loops } : {}), ...(scene ? { scene } : {}) };
     Object.defineProperty(slide, 'items', { value: items, enumerable: false });
+    // 글자 효과의 사라지는 움직임: 다음 장이 있고(마지막 장은 그대로 끝난다) 이어 움직이기 전환이 아니며 그 장에서 끄지 않았으면,
+    // 장이 끝나기 조금 앞에서 효과 글이 사라진다(발표 화면에서 넘길 때와 같다. video.js).
+    const next = designs[n + 1];
+    Object.defineProperty(slide, 'leave', { value: !!next && !morphs(next.tr) && design?.lkout !== false, enumerable: false });
     return slide;
   });
   // 짝이 된 요소는 두 장 모두에서 제 칸(따로 그린 그림)이 있어야 옮겨 그릴 수 있다: split 에 적는다.

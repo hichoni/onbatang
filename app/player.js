@@ -3,8 +3,8 @@
 // 편집기 · 저장소에 기대지 않는다. 넘기기는 next() · prev() · go(n): 누를 때 나오는 것이 남아 있으면 next() 가 그것부터 하나씩 나타나게 한다.
 // 모양은 player.css(.ob-player). 움직임을 줄여 달라고 해 둔 기기에서는 motion.js 가 움직이지 않고 바로 보여 준다.
 import { designView, youTubePlayers, webFrame, liveWebBoxes } from '../src/render.js';
-import { liveBackdrops } from '../src/live.js';
-import { playDesign, playTransition } from '../src/motion.js';
+import { liveBackdrops, leaveLooks } from '../src/live.js';
+import { playDesign, playTransition, morphs } from '../src/motion.js';
 import { scenePlayer } from '../src/scene.js';
 import { cleanDesign } from '../src/model.js';
 
@@ -15,7 +15,7 @@ import { cleanDesign } from '../src/model.js';
  */
 export function mountPlayer(stage, { slides = [], aspect = 16 / 9, onChange = () => {}, edge = 1920 } = {}) {
   const pages = slides.map((s) => cleanDesign(s, { keepSpaces: true }));
-  let at = 0, parts = null, turning = null, leaving = null, film = null, waiting = null, tube = [], timers = [], alive = true;
+  let at = 0, parts = null, turning = null, leaving = null, film = null, waiting = null, tube = [], timers = [], alive = true, outro = 0;
   const shown = new WeakMap(), films = new WeakMap(), tubes = new WeakMap();
   stage.classList.add('ob-player');
   stage.style.setProperty('--ob-player-ratio', String(aspect));
@@ -95,21 +95,30 @@ export function mountPlayer(stage, { slides = [], aspect = 16 / 9, onChange = ()
       const tubeWaiting = tube.find((p) => !p.started);
       if (tubeWaiting) { tubeWaiting.play(); return true; }
       if (at >= pages.length - 1) return false;
+      // 글자 효과의 사라지는 움직임: 효과 글이 한 번 사라진 뒤에 넘긴다(이어 움직이기 전환이면 건너뛴다). 그사이 또 넘기면 바로.
+      if (outro) { clearTimeout(outro); outro = 0; }
+      else if (!morphs(pages[at + 1]?.tr)) {
+        const ms = leaveLooks(stage);
+        if (ms) { const from = at; outro = setTimeout(() => { outro = 0; if (alive && at === from) { at++; draw(1); } }, ms); return true; }
+      }
       at++; draw(1); return true;
     },
     prev() {
       if (!alive || at <= 0) return false;
+      clearTimeout(outro); outro = 0;
       at--; draw(-1); return true;
     },
     go(n) {
       if (!alive || !pages.length) return false;
       const to = Math.max(0, Math.min(pages.length - 1, Math.trunc(Number(n)) || 0));
       if (to === at) return false;
+      clearTimeout(outro); outro = 0;
       const dir = to > at ? 1 : -1;
       at = to; draw(dir); return true;
     },
     destroy() {
       alive = false;
+      clearTimeout(outro);
       for (const t of timers) clearTimeout(t);
       settle(); parts?.stop(); parts = null;
       for (const n of cards()) drop(n);

@@ -607,9 +607,10 @@ export function cleanLive(raw) {
   return byId.has(id) ? (raw?.text === false ? { id, text: false } : { id }) : null;
 }
 /** 장(디자인)의 움직이는 바탕 · 글자 효과: { live: { id }, look } 중 있는 것. */
+// lkin · lkout: 거짓이면 그 장의 글자 효과는 나타나는 · 사라지는 움직임 없이(적지 않으면 한다).
 export const designLive = (design) => {
   const live = cleanLive(design?.live), look = cleanLook(design?.look);
-  return { ...(live ? { live } : {}), ...(look ? { look } : {}) };
+  return { ...(live ? { live } : {}), ...(look ? { look } : {}), ...(design?.lkin === false ? { lkin: false } : {}), ...(design?.lkout === false ? { lkout: false } : {}) };
 };
 
 /** 움직이는 바탕의 t 초 모습을 ctx 의 (0, 0, W, H) 에 그린다. 씨앗이 같으면 같은 그림이다. 그린 뒤 ctx 의 상태는 그대로다. */
@@ -776,6 +777,37 @@ const INTROS = {
   shakein: { name: '떨다 멈추기', ms: 1000, at: (p) => ({ alpha: clamp(p * 6), shake: 0.14 * (1 - p) ** 1.5 }) },
   pop: { name: '톡 튀어나오기', ms: 800, at: (p) => ({ alpha: eo(p / 0.3), scale: 0.4 + 0.6 * backOut(p), k: eo(p) * (1 + 0.4 * Math.sin(Math.PI * p)) }) },
 };
+// 사라지는 움직임: 다음 장으로 넘길 때 그 효과답게 한 번 움직이며 사라진다(나타나는 움직임과 짝). 끝나면 보이지 않는다(투명도 0).
+const NEON_OFF = '1110110101100100';
+const OUTROS = {
+  fade: { name: '사르르 사라지기', ms: 700, at: (p) => ({ alpha: 1 - ease(p), blur: 0.2 * ease(p), k: 1 + 0.3 * Math.sin(Math.PI * p) }) },
+  flickerout: { name: '깜빡이며 꺼지기', ms: 800, at: (p) => { const on = NEON_OFF[Math.min(15, Math.floor(p * 16))] === '1'; return { alpha: on ? 1 : 0.12, k: on ? 1.15 : 0 }; } },
+  burnout: { name: '타 사라지기', ms: 800, at: (p, v) => ({ alpha: 1 - eo(p), dy: -0.25 * ease(p), blur: 0.12 * p, k: (1 + 0.6 * Math.sin(Math.PI * Math.min(1, p * 1.6))) * (0.75 + 0.25 * hash(Math.floor(v * 14) + 11)) }) },
+  glitchout: { name: '지지직 사라지기', ms: 700, at: (p, v) => ({ alpha: p > 0.85 || hash(Math.floor(v * 20) * 2.3 + 5) < 0.15 + 0.6 * p ? 0.1 : 1, shake: 0.1 * p, k: 1 + 0.6 * p }) },
+  sweepout: { name: '무지개 훑으며 사라지기', ms: 800, at: (p, v, look) => ({ alpha: 1 - ease(p), warp: look.pals.length * look.period * eo(p), k: 1 + 0.2 * Math.sin(Math.PI * p) }) },
+  retract: { name: '그림자 거두기', ms: 700, at: (p) => ({ grow: 1 - eo(p / 0.7), alpha: 1 - ease((p - 0.5) / 0.5), k: 1 - eo(p) }) },
+  lift: { name: '들어 올리기', ms: 600, at: (p) => ({ scale: 1 + 0.35 * eo(p), alpha: 1 - ease(p), grow: 1 - eo(p) }) },
+  jumpout: { name: '튀어 올라 사라지기', ms: 700, at: (p) => ({ dy: p < 0.2 ? 0.12 * eo(p / 0.2) : 0.12 - 1.4 * ((p - 0.2) / 0.8) ** 2, alpha: 1 - clamp((p - 0.6) / 0.4) }) },
+  floatup: { name: '떠올라 사라지기', ms: 800, at: (p) => ({ dy: -0.6 * ease(p), alpha: 1 - ease(p), k: 1 - ease(p) }) },
+  driftout: { name: '흘러 나가기', ms: 800, at: (p) => ({ dx: 0.7 * ease(p), dy: -0.12 * Math.sin(Math.PI * p), alpha: 1 - ease(p), k: 1 - ease(p) }) },
+  shakeout: { name: '떨며 사라지기', ms: 700, at: (p) => ({ shake: 0.14 * p ** 1.2, alpha: 1 - ease((p - 0.3) / 0.7) }) },
+  popout: { name: '톡 꺼지기', ms: 500, at: (p) => ({ scale: p < 0.4 ? 1 + 0.15 * eo(p / 0.4) : 1.15 - 0.85 * ease((p - 0.4) / 0.6), alpha: 1 - ease((p - 0.4) / 0.6) }) },
+};
+// 나타나는 움직임마다 짝이 되는 사라지는 움직임.
+const OUT_OF = { bloom: 'fade', flicker: 'flickerout', ignite: 'burnout', glitch: 'glitchout', sweep: 'sweepout', grow: 'retract', stamp: 'lift', drop: 'jumpout', rise: 'floatup', drift: 'driftout', shakein: 'shakeout', pop: 'popout' };
+const outOf = (look) => OUTROS[OUT_OF[look?.intro]] || null;
+/** 가장 긴 사라지는 움직임(ms). 영상은 장이 끝나기 이만큼 앞에서 사라지기 시작한다. */
+export const LOOK_OUT_MS = Math.max(...Object.values(OUTROS).map((d) => d.ms));
+/** 그 효과의 사라지는 움직임 { id, name, ms }(없으면 null). */
+export const lookOutro = (look) => { const d = outOf(look); return d ? { id: OUT_OF[look.intro], name: d.name, ms: d.ms } : null; };
+/** 사라지기 시작한 뒤 v 초의 모습(나타나는 움직임과 같은 모양). 아직 시작하기 전(v < 0)이면 null, 끝났으면 보이지 않는 모습. */
+export function outroAt(look, v) {
+  const d = outOf(look);
+  if (!d || !(v >= 0)) return null;
+  const base = { k: 1, alpha: 1, dx: 0, dy: 0, scale: 1, blur: 0, grow: 1, warp: 0, shake: 0 };
+  if (v >= d.ms / 1000) return { ...base, ...d.at(1, v, look), alpha: 0, k: 0 };
+  return { ...base, ...d.at(clamp(v / (d.ms / 1000)), v, look) };
+}
 /** 그 효과의 나타나는 움직임 { id, name, ms }(없으면 null). */
 export const lookIntro = (look) => (look && INTROS[look.intro] ? { id: look.intro, name: INTROS[look.intro].name, ms: INTROS[look.intro].ms } : null);
 /** 나타난 뒤 u 초의 나타나는 움직임의 모습(다 끝났거나 없으면 null). u 가 0 보다 작으면(아직 나타나기 전) 처음 모습이다. */
@@ -789,10 +821,13 @@ export function introAt(look, u) {
  * t 초의 글자 효과 값: { w(빛깔마다의 세기 0~1), dx, dy(옮기는 거리. em), alpha · scale · blur(em) · grow(나타나는 움직임. 다 나타났으면 1 · 1 · 0 · 1) }.
  * n: 그 장에서 몇째 글인가(글마다 조금씩 엇갈린다). move: 거짓이면 계속 움직이기(둥실 · 살랑 · 떨림)는 없다(그림 · PDF · 고르는 중인 글).
  * u: 글이 나타난 뒤의 초(나타나는 움직임. 없으면 다 나타난 모습) · plain: 그 글에 따로 나타나기 효과가 있으면 참(자리 · 크기는 그 효과에 맡긴다).
+ * out: 사라지기 시작한 뒤의 초(사라지는 움직임. 시작했으면 나타나는 움직임보다 먼저다. 사라질 때는 plain 과 상관없이 자리 · 크기도 움직인다).
  */
-export function lookAt(look, t, n = 0, { move = true, u = Infinity, plain = false } = {}) {
+export function lookAt(look, t, n = 0, { move = true, u = Infinity, plain = false, out = -Infinity } = {}) {
   if (!look) return { w: [], dx: 0, dy: 0, alpha: 1, scale: 1, blur: 0, grow: 1 };
-  const intro = introAt(look, u);
+  const leaving = outroAt(look, out);
+  if (leaving) plain = false;
+  const intro = leaving || introAt(look, u);
   const s = (Number.isFinite(t) ? Math.max(0, t) : LIVE_STILL) + (intro?.warp || 0);
   const P = look.pals.length;
   let k = 0;
@@ -844,7 +879,7 @@ const looked = new WeakMap();
  * 글 요소(.fi-text) 하나에 t 초의 글자 효과를 입힌다. look 이 없으면 입힌 것을 걷는다.
  * u · plain: 나타나는 움직임(lookAt). 투명도 · 흐림은 filter, 크기는 scale 로 한다(요소의 transform · opacity · 움직임 효과와 따로 겹친다).
  */
-export function lookText(node, look, t, n = 0, { move = true, u = Infinity, plain = false } = {}) {
+export function lookText(node, look, t, n = 0, { move = true, u = Infinity, plain = false, out = -Infinity } = {}) {
   const mem = looked.get(node);
   const base = mem && node.style.textShadow === mem.applied ? mem.base : node.style.textShadow;
   if (!look) {
@@ -852,7 +887,7 @@ export function lookText(node, look, t, n = 0, { move = true, u = Infinity, plai
     return;
   }
   // 고르거나 고치는 중인 글은 움직이지 않는다(빛과 그늘만. 꾸미기 판의 손잡이와 어긋나지 않게).
-  const at = lookAt(look, t, n, { move: move && node.contentEditable !== 'true' && !node.classList.contains('sel'), u, plain });
+  const at = lookAt(look, t, n, { move: move && node.contentEditable !== 'true' && !node.classList.contains('sel'), u, plain, out });
   node.style.textShadow = [base, ...lookShadows(look, at)].filter(Boolean).join(', ');
   // translate · scale 은 요소의 transform(자리 · 기울기 · 움직임 효과)과 따로 겹친다.
   // scale 은 요소의 본디 네모의 가운데를 붙들고 키우는데, 글은 transform 으로 반 칸씩 옮겨 놓았으므로 그만큼 되돌려 보이는 가운데를 붙든다.
@@ -875,6 +910,7 @@ const animated = (node) => !!node.getAnimations?.().some((a) => a.playState === 
  * seen: 나타나는 움직임을 셀 기억(WeakMap. 없으면 나타나는 움직임 없이). 글이 처음 보인 때부터 센다.
  * late: 거짓이면 처음(0.3초 안)부터 있던 글만 나타나는 움직임을 한다(꾸미기 판: 글을 고칠 때마다 다시 나타나지 않게).
  */
+// leave · leaving: 사라지기 시작한 때(초)와 그때 보이던 글들(그 글만 사라지는 움직임을 한다).
 export function lookCard(card, look, t, opts = {}) {
   if (!card) return;
   textsOf(card).forEach((node, n) => {
@@ -886,7 +922,8 @@ export function lookCard(card, look, t, opts = {}) {
       u = m ? t - m.at : 0;
       plain = !!m?.plain;
     }
-    lookText(node, own, t, n, { ...opts, u, plain });
+    const out = opts.leaving?.has(node) ? t - opts.leave : -Infinity;
+    lookText(node, own, t, n, { ...opts, u, plain, out });
   });
 }
 
@@ -937,12 +974,13 @@ const looping = new WeakSet();
  * 장의 효과도 글상자마다 고른 것도 없는 카드(data-looks 가 없는)는 그냥 둔다. 시간은 부른 때를 0 초로 센다.
  * 동작 줄이기를 켠 기기는 멈춘 모습(빛 · 그늘만)이다. 돌려주는 것: { stop() }(입힌 것을 걷는다). 화면에서 떨어진 카드는 저절로 멈춘다.
  */
-// intro: 'show'(기본. 글이 보일 때마다 나타나는 움직임 · 발표 · 공유 링크) · 'start'(처음부터 있던 글만 · 꾸미기 판) · false(없이)
-export function liveLooks(card, { fps = 60, start = performance.now(), look = lookById(card?.dataset?.look), intro = 'show' } = {}) {
-  if (!card || looping.has(card) || (!look && !card.dataset?.looks)) return { stop() {} };
+// intro: 'show'(기본. 글이 보일 때마다 나타나는 움직임 · 발표 · 공유 링크) · 'start'(처음부터 있던 글만 · 꾸미기 판) · false(없이).
+// 카드에 data-look-in="off" 가 있으면(그 장에서 끈 것) 나타나는 움직임 없이. 돌려주는 것의 leave() 는 사라지는 움직임을 시작한다(leaveLooks).
+export function liveLooks(card, { fps = 60, start = performance.now(), look = lookById(card?.dataset?.look), intro = card?.dataset?.lookIn === 'off' ? false : 'show' } = {}) {
+  if (!card || looping.has(card) || (!look && !card.dataset?.looks)) return { stop() {}, leave: () => 0 };
   looping.add(card);
   const seen = intro ? new WeakMap() : null;
-  let raf = 0, last = -1, stopped = false, shown = false, waited = 0, ticks = 0;
+  let raf = 0, last = -1, stopped = false, shown = false, waited = 0, ticks = 0, leave = null, leaving = null;
   const tick = (now) => {
     if (stopped) return;
     if (!card.isConnected) { if (shown || ++waited > 600) { run.stop(); return; } raf = requestAnimationFrame(tick); return; }
@@ -954,9 +992,31 @@ export function liveLooks(card, { fps = 60, start = performance.now(), look = lo
     const t = (now - start) / 1000;
     if (last >= 0 && t - last < 1 / fps - 0.002) return;
     last = t;
-    lookCard(card, look, t, { seen, late: intro !== 'start' });
+    lookCard(card, look, t, { seen, late: intro !== 'start', leave, leaving });
   };
-  const run = { stop() { if (stopped) return; stopped = true; cancelAnimationFrame(raf); looping.delete(card); lookCard(card, null, 0, { stop: true }); } };
+  const run = {
+    stop() { if (stopped) return; stopped = true; cancelAnimationFrame(raf); looping.delete(card); leavers.delete(card); lookCard(card, null, 0, { stop: true }); },
+    // 지금 보이는 효과 글들이 사라지기 시작한다. 돌려주는 것: 다 사라지는 데 걸리는 ms(사라질 글이 없거나 동작 줄이기면 0).
+    leave() {
+      if (stopped || leave != null || reduced() || !card.isConnected) return 0;
+      const now = (performance.now() - start) / 1000;
+      const nodes = textsOf(card).filter((node) => nodeLook(node, look) && visibleNow(node));
+      const ms = Math.max(0, ...nodes.map((node) => lookOutro(nodeLook(node, look))?.ms || 0));
+      if (ms) { leave = now; leaving = new Set(nodes); last = -1; }
+      return ms;
+    },
+  };
+  leavers.set(card, run);
   raf = requestAnimationFrame(tick);
   return run;
+}
+const leavers = new WeakMap();
+/**
+ * root(발표 화면 · 재생기) 안의 장들의 효과 글이 사라지는 움직임을 시작한다. 돌려주는 것: 다 사라지는 데 걸리는 ms(없으면 0).
+ * 그 장에서 끈 것(data-look-out="off")은 건너뛴다. 부르는 쪽은 그만큼 기다렸다가 다음 장으로 넘긴다.
+ */
+export function leaveLooks(root) {
+  if (!root) return 0;
+  const cards = [...(root.matches?.('.fe-card[data-looks]') ? [root] : []), ...root.querySelectorAll('.fe-card[data-looks]')];
+  return Math.max(0, ...cards.filter((card) => card.dataset.lookOut !== 'off').map((card) => leavers.get(card)?.leave() || 0));
 }

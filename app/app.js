@@ -30,7 +30,7 @@ import {ONBATANG_VERSION} from './version.js';
 import {createGaiMaker,gaiLessonContext} from './gai-maker.js';
 import {
   createEditor, designView, designToBlob, designToCanvas, configure, settings, reshapeItems, layoutList, layoutItems, icon, cleanDesign, hasMotion, playDesign, playTransition,
-  COMBOS, TRANSITIONS, designsToVideo, canMakeVideo, canFilmScenes, filmPlan, readCheck, READ, liveBackdrops, MAX_FILM_SECONDS, videoSize, STAYS, DEFAULT_STAY, scenePlayer, dropScene, sceneUrl, youTubePlayers,
+  COMBOS, TRANSITIONS, designsToVideo, canMakeVideo, canFilmScenes, filmPlan, readCheck, READ, liveBackdrops, leaveLooks, morphs, MAX_FILM_SECONDS, videoSize, STAYS, DEFAULT_STAY, scenePlayer, dropScene, sceneUrl, youTubePlayers,
   fontFamilyOf, fontList, textLimit, planMotion,
 } from '../src/index.js';
 import { HERO_ART, HERO_VIEW } from './hero-art.js';
@@ -1713,6 +1713,7 @@ async function present(O) {
   let parts = null;          // 지금 장의 요소 움직임(조종기)
   let turning = null;        // 틀고 있는 전환 효과
   let leaving = null;        // 나가는 중인 장(전환이 끝나면 뗀다)
+  let leavingLooks = 0;      // 글자 효과가 사라지는 동안 기다리는 다음 장(setTimeout)
   let film = null;           // 지금 장의 영상 조종기(영상 장면이 없는 장이면 null)
   let filmWaiting = null;    // 누를 때 트려고 기다리는 영상(그 장의 film)
   let filmTimer = 0;
@@ -1983,12 +1984,20 @@ async function present(O) {
     const to = i + step;
     if (to < 0) return;
     if (to >= slides.length) { close(); return; }      // 마지막 장에서 더 넘기면 끝난다
+    // 글자 효과의 사라지는 움직임: 다음 장으로 넘기기 전에 효과 글이 한 번 사라진다(이어 움직이기 전환이면 건너뛴다).
+    // 사라지는 동안 또 넘기면 기다리지 않고 바로 넘어간다.
+    if (leavingLooks) { clearTimeout(leavingLooks); leavingLooks = 0; }
+    else if (step > 0 && !morphs(slides[to]?.tr)) {
+      const ms = leaveLooks(stage);
+      if (ms) { leavingLooks = setTimeout(() => { leavingLooks = 0; if (i === to - step) { i = to; draw(step); } }, ms); return; }
+    }
     i = to;
     draw(step);
   };
   // 번호·처음·끝·전체 보기로 그 쪽에 바로 간다(앞으로 가면 그 장의 전환으로, 뒤로 가면 거꾸로).
   const jump = (to) => {
     if (savingActivity) return;
+    if (leavingLooks) { clearTimeout(leavingLooks); leavingLooks = 0; }
     to = Math.max(0, Math.min(slides.length - 1, to));
     if (to === i) return;
     const dir = to > i ? 1 : -1;
@@ -2024,7 +2033,7 @@ async function present(O) {
   };
   function close() {
     if(savingActivity)return;
-    closed=true;pixel?.destroy();pixel=null;dropWeb();
+    closed=true;clearTimeout(leavingLooks);leavingLooks=0;pixel?.destroy();pixel=null;dropWeb();
     try { remote?.close?.(); } catch (error) { console.warn(error); } remote = null;
     try { audience?.close?.(); } catch (error) { console.warn(error); } audience = null;
     tools?.destroy();tools=null;
