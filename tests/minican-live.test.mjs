@@ -176,3 +176,39 @@ test('사라지는 움직임: 효과마다 짝 · 끝나면 보이지 않음 · 
   assert.deepEqual(plan.slides.map((s) => s.leave), [false, true, false, true, false]);
   assert.equal(JSON.stringify(plan.slides[0]).includes('leave'), false, 'not part of the plan JSON');
 });
+
+test('강조 움직임: 효과마다 짝 · 끝나면 제 모습 · 누를 때 차례에 든다(글자 효과가 있는 글만) · 영상은 그 차례에', async () => {
+  const { TEXT_LOOKS, lookById, lookIntro, lookEmphasis, emphasisAt, lookAt, LOOK_EM, LOOK_EM_MS } = await import('../src/live.js');
+  const { planMotion, emphasisTime, hasMotion } = await import('../src/motion.js');
+  const { filmPlan } = await import('../src/film.js');
+  const kinds = new Set();
+  for (const l of TEXT_LOOKS) {
+    const look = lookById(l.id), em = lookEmphasis(look);
+    assert.ok(em && em.name && em.ms === LOOK_EM_MS, `${l.id} has an emphasis`);
+    kinds.add(em.id);
+    assert.equal(emphasisAt(look, -0.01), null);
+    assert.equal(emphasisAt(look, LOOK_EM_MS / 1000), null, 'back to itself after');
+    assert.deepEqual(lookAt(look, 3, 0, { hit: 2 }), lookAt(look, 3, 0));
+  }
+  assert.equal(kinds.size, 12);
+  assert.equal(new Set(TEXT_LOOKS.map((l) => `${lookIntro(lookById(l.id)).id}>${lookEmphasis(lookById(l.id)).id}`)).size, 12);
+  // 폴짝 뛰기는 위로, 쿵 다시 찍기는 커졌다 돌아오고, 반짝 빛나기는 빛이 세진다. 사라지는 중이면 사라지기가 먼저다.
+  assert.ok(lookAt(lookById('bounce'), 0, 0, { hit: 0.25 }).dy < -0.4);
+  assert.ok(lookAt(lookById('pop'), 0, 0, { hit: 0.3 }).scale > 1.25);
+  const gold = lookById('gold');
+  assert.ok(lookAt(gold, 0, 0, { hit: 0.5 }).w[0] > lookAt(gold, 0, 0).w[0] * 1.5);
+  assert.equal(lookAt(gold, 0, 0, { hit: 0.5, out: 2 }).alpha, 0);
+  // 누를 때 차례: lkem 을 켠 글 중 글자 효과가 있는 글만. 다른 강조 다음, 사라지기 앞.
+  const text = (extra) => ({ t: 'text', text: '글', x: 50, w: 50, size: 5, ...extra });
+  const d = cleanDesign({ items: [text({ y: 20, lk: 'gold', lkem: true, em: 'pulse', ex: 'fade' }), text({ y: 50, lkem: true }), text({ y: 80, lkem: 'yes', lk: 'pop' })] });
+  assert.deepEqual(d.items.map((it) => it.lkem), [true, true, undefined], 'only true is kept');
+  assert.deepEqual(planMotion(d).clicks, [{ i: 0, emphasis: 'pulse' }, { i: 0, emphasis: LOOK_EM }, { i: 0, exit: 'fade' }]);
+  // 장의 효과가 있으면 따로 고르지 않은 글도 강조한다.
+  assert.deepEqual(planMotion(cleanDesign({ look: 'fire', items: [text({ y: 50, lkem: true })] })).clicks, [{ i: 0, emphasis: LOOK_EM }]);
+  assert.equal(emphasisTime(LOOK_EM), LOOK_EM_MS);
+  assert.equal(hasMotion(cleanDesign({ items: [text({ y: 50, lkem: true })] })), true);
+  // 영상: 누를 때 차례가 저절로 그 때에 들어간다.
+  const plan = filmPlan([cleanDesign({ id: 'pem000001', items: [{ id: 'eem000001', ...text({ y: 50, lk: 'bounce', lkem: true }) }] })], { stay: 3 });
+  const m = plan.slides[0].moves.find((v) => v.emphasis === LOOK_EM);
+  assert.ok(m && m.ms === LOOK_EM_MS && m.start > 0, JSON.stringify(plan.slides[0].moves));
+});

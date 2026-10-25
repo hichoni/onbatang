@@ -26,7 +26,7 @@ import { filmPlan, slidePoses, slideLoops, filmCells, packCells, DEFAULT_STAY, M
 import { mp4Parts, webmParts } from './mux.js';
 import { sceneBlob } from './scene.js';
 import { openReel, videoInfo } from './reel.js';
-import { paintLive, liveSeed, itemLooks, lookAt, lookOutro } from './live.js';
+import { paintLive, liveSeed, itemLooks, lookAt, lookOutro, LOOK_EM } from './live.js';
 import { soundTrack, mixSound, hasSound, decodeSound, encodeSound, soundKinds } from './sound.js';
 
 const RAD = Math.PI / 180;
@@ -242,6 +242,8 @@ async function buildSlide(design, slide, W, H, before = null) {
       L.look.at = design.lkin === false ? -Infinity : (enters.get(L.i) || 0) / 1000;
       L.look.plain = enters.has(L.i) || loops.has(L.i);
       L.look.out = outMs ? (slide.ms - outMs) / 1000 : Infinity;
+      // 강조: 누를 때의 차례(영상에서는 저절로 그 때에) 강조 움직임을 한다.
+      L.look.hits = slide.moves.filter((m) => m.i === L.i && m.emphasis === LOOK_EM).map((m) => m.start / 1000);
     }
   }
   return { slide, layers, canvases, missingFonts: [...missingFonts], scene, tweens, stops, live, look };
@@ -259,11 +261,11 @@ function lookLayers(L, look, n, px) {
     }
     return c;
   };
-  // 그늘이 뻗어 나오는 동안(나타나는 움직임)의 그늘은 1/12 단계마다 그때 한 번 그려 둔다.
+  // 그늘이 뻗어 나오는 동안(나타나는 움직임 · 강조)의 그늘은 1/12 단계마다 그때 한 번 그려 둔다.
   const shadeOf = (g) => bake(look.shades.map(([x, y, blur, c]) => [c, blur, x * g, y * g]));
   const shade = shadeOf(1), grown = new Map();
   const shadeAt = (g) => {
-    const q = Math.round(Math.min(1, Math.max(0, g)) * 12);
+    const q = Math.round(Math.min(2.5, Math.max(0, g)) * 12);        // 강조(그림자 쭉)는 1 보다 더 뻗는다
     if (q === 12) return shade;
     if (!grown.has(q)) grown.set(q, shadeOf(q / 12));
     return grown.get(q);
@@ -278,7 +280,7 @@ function drawLayer(ctx, L, lk) {
     const alpha = was * (lk.alpha ?? 1);
     if (!(alpha > 0.001)) return;
     ctx.globalAlpha = alpha;
-    const shade = (lk.grow ?? 1) < 1 ? L.look.shadeAt(lk.grow) : L.look.shade;
+    const shade = (lk.grow ?? 1) !== 1 ? L.look.shadeAt(lk.grow) : L.look.shade;
     if (shade) ctx.drawImage(shade, L.ox, L.oy);
     for (let i = L.look.pals.length - 1; i >= 0; i--) {
       const img = L.look.pals[i], k = lk.w[i] || 0;
@@ -329,7 +331,8 @@ function drawSlide(ctx, W, H, built, local, skip = null) {
   for (const L of built.layers) {
     if (skip && skip.has(L.i)) continue;              // 이어 움직이기: 옮겨 그릴 요소는 따로 그린다
     const p = L.i >= 0 ? poses.get(L.i) : null;
-    const lk = L.look ? lookAt(L.look.def, sec, L.look.n, { u: sec - L.look.at, plain: L.look.plain, out: sec - L.look.out }) : null;
+    const hit = L.look ? Math.max(-Infinity, ...L.look.hits.filter((h) => h <= sec)) : -Infinity;
+    const lk = L.look ? lookAt(L.look.def, sec, L.look.n, { u: sec - L.look.at, plain: L.look.plain, out: sec - L.look.out, hit: sec - hit }) : null;
     if (!p && lk) {
       // 글자 효과: 둥실 · 살랑 · 나타나는 움직임(가운데를 붙들고 키우고, 흐림은 글자 크기를 따른다).
       ctx.save();

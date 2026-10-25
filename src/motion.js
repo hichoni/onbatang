@@ -17,6 +17,7 @@
 // 영상으로 만들 때는 브라우저가 틀어 주지 않으므로, 같은 규칙에서 "그 순간의 모습"을 직접 계산한다(enterPose · transitionPose).
 // 키프레임(화면용)과 모습(영상용)이 같은 표(ENTER_DEFS · TRANSITION_DEFS)에서 나오므로 둘이 어긋나지 않는다.
 
+import { LOOK_EM, LOOK_EM_MS, itemLook, slideLook } from './live.js';
 const SOFT = 'cubic-bezier(.2, .8, .2, 1)';
 const SNAP = 'cubic-bezier(.16, 1, .3, 1)';      // 확 다가와 부드럽게 서는 빠르기(모션그래픽의 '스냅')
 
@@ -508,10 +509,14 @@ export function planMotion(design) {
   const order = ORDERS[combo?.order] || readingOrder;
   // 누를 때: 읽는 차례대로. "누를 때 나타나는" 요소는 나타나는 차례가 먼저, 강조 효과가 있으면 그다음, 사라지는 효과가 있으면 맨 뒤에 한다.
   // (강조 · 사라지기 단계에는 enter 가 없다. 숨겨 두는 것은 enter 가 있는 단계뿐이다.)
-  const clicks = moving.filter((r) => r.it.aw === true || EMPH_DEFS[r.it.em] || EXIT_DEFS[r.it.ex]).sort(readingOrder)
+  // 글자 효과의 강조(live.js): "누를 때 강조"(lkem)를 켠 글은 그 글에 글자 효과가 있을 때 강조 차례에 그 효과의 강조 움직임을 한다(LOOK_EM).
+  const slideLk = slideLook(design);
+  const lookEm = (it) => it.lkem === true && !!itemLook(it, slideLk);
+  const clicks = moving.filter((r) => r.it.aw === true || EMPH_DEFS[r.it.em] || lookEm(r.it) || EXIT_DEFS[r.it.ex]).sort(readingOrder)
     .flatMap((r, n) => [
       ...(r.it.aw === true ? [{ i: r.i, enter: r.enter || 'fade', mirror: !!combo?.swing && n % 2 === 1 }] : []),
       ...(EMPH_DEFS[r.it.em] ? [{ i: r.i, emphasis: r.it.em }] : []),
+      ...(lookEm(r.it) ? [{ i: r.i, emphasis: LOOK_EM }] : []),
       ...(EXIT_DEFS[r.it.ex] ? [{ i: r.i, exit: r.it.ex }] : []),
     ]);
   const shown = moving.filter((r) => r.it.aw !== true && r.enter);
@@ -550,7 +555,7 @@ export function planMotion(design) {
 export function hasMotion(design) {
   if (!design) return false;
   if (TRANSITION_DEFS[design.tr] || COMBO_DEFS[design.pa]) return true;
-  return (Array.isArray(design.items) ? design.items : []).some((it) => it && (ENTER_DEFS[it.an] || it.aw === true || EMPH_DEFS[it.em] || EXIT_DEFS[it.ex] || IDLE_DEFS[it.lp]));
+  return (Array.isArray(design.items) ? design.items : []).some((it) => it && (ENTER_DEFS[it.an] || it.aw === true || EMPH_DEFS[it.em] || EXIT_DEFS[it.ex] || IDLE_DEFS[it.lp] || it.lkem === true));
 }
 
 // 장의 모습 하나를 화면용 키프레임으로 적는다. w: 카드 너비(px. 흐림의 크기를 정한다).
@@ -767,6 +772,7 @@ export function exitPose(id, ms, opts = {}) {
 }
 /** 강조 효과의 길이(ms). 모르는 효과면 0. */
 export function emphasisTime(id, item) {
+  if (id === LOOK_EM) return LOOK_EM_MS;          // 글자 효과의 강조(live.js 가 그린다. 자리 · 크기 모습은 없다)
   return defFor(EMPH_DEFS[id], item)?.ms || 0;
 }
 /**
@@ -860,6 +866,8 @@ export function playExit(node, item, id) {
 
 /** 요소 하나를 강조 효과로 한 번 움직인다(끝나면 흔적이 없다). 틀지 못했으면 null. */
 export function playEmphasis(node, item, id) {
+  // 글자 효과의 강조: 그 글에 누른 때를 적어 두면 live.js(liveLooks)가 그때부터 강조 움직임을 그린다.
+  if (id === LOOK_EM) { if (node && !calm()) node.dataset.lkHit = String(performance.now()); return null; }
   const k = emphasisKeyframes(item, id);
   if (!k || !node || typeof node.animate !== 'function' || calm()) return null;
   return node.animate(k.keyframes, { duration: k.ms, easing: k.easing });
