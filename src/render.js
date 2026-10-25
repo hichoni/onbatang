@@ -4,7 +4,7 @@ import { backgroundOf, cleanDesign, fontFamilyOf, settings, hangsPunctuation } f
 import { shapeAsset, shapeSvg } from './shapes.js';
 import { artSvg, loadArt, artReady } from './art.js';
 import { sceneView } from './scene.js';
-import { liveView, liveSeed } from './live.js';
+import { liveView, liveSeed, liveLook, lookText, LIVE_STILL } from './live.js';
 import { ytThumb, ytEmbed, YT_ORIGIN } from './youtube.js';
 import { linkSvg } from './links.js';
 import { runPieces } from './runs.js';
@@ -199,8 +199,14 @@ export function designView(design, { empty = '', sceneEdge = 640, sceneNote = tr
     d.live ? liveView(d.live, { edge: sceneEdge, aspect: settings().aspect, seed: liveSeed(d.id) }) : null,
     d.video ? sceneView(d.video, { edge: sceneEdge, note: sceneNote }) : null,
     d.web ? webCard(d.web) : null,
-    ...d.items.map(itemView),
+    ...withLook(d.items.map(itemView), d),
     !d.items.length && !d.video && !d.web && !d.live && empty ? el('div', { class: 'fe-empty', text: empty }) : null), d.bg);
+}
+// 움직이는 바탕의 글자 효과: 멈춘 모습(LIVE_STILL 초)의 빛 · 그늘을 글마다 입혀 둔다(움직임은 빼고). 발표 · 꾸미기 판은 liveBackdrops 가 이어 움직인다.
+function withLook(nodes, d) {
+  const look = liveLook(d.live);
+  if (look) nodes.filter((n) => n.classList.contains('fi-text')).forEach((n, i) => lookText(n, look, LIVE_STILL, i, { move: false }));
+  return nodes;
 }
 const GLOBE = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M2.8 12h18.4M12 2.8c2.6 2.6 3.9 5.6 3.9 9.2s-1.3 6.6-3.9 9.2M12 2.8C9.4 5.4 8.1 8.4 8.1 12s1.3 6.6 3.9 9.2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
 /** 그린 장(root) 안의 웹사이트 상자마다 실제 사이트를 연다(발표 화면 · 공유 링크). 연 상자들을 돌려준다. */
