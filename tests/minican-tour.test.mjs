@@ -21,7 +21,10 @@ test('안내의 단계: 제목과 설명이 있고, 비추는 자리는 앱이 �
 
 test('처음 꾸미는 화면을 열면 한 번 저절로 보여 주고, ? 단추로 언제든 다시 본다', () => {
   const app = read('../app/app.js');
-  assert.match(app, /if \(!tourSeen\('editor'\)\) \{\n    markTourSeen\('editor'\);/);
+  assert.match(app, /if \(!tourSeen\('editor'\)\) \{\n    const first = firstVisit\([^\n]*\);\n    markTourSeen\('editor'\);/);
+  // 그림이 이미 있는 기기에는 저절로 띄우지 않는다(봤다는 표시를 잃은 기기에서 들어올 때마다 뜨지 않게).
+  assert.match(app, /if \(first\) setTimeout\(\(\) => \{ if \(!O\.closed && app\.dataset\.view === 'edit'\) editorTour\(O\); \}, 700\);/);
+  assert.match(app, /function firstVisit\(mine = new Set\(\)\) \{\n  return !tourSeen\('home'\) && !tourSeen\('editor'\) && !\(S\.list \|\| \[\]\)\.some\(\(r\) => !mine\.has\(r\.id\)\);/);
   assert.match(app, /tourButton\('home'\)/);
   assert.match(app, /tourButton\('editor', O\)/);
   assert.match(app, /function setView\(view\) \{\n  stopTour\(\);/, '화면이 바뀌면 안내를 닫는다');
@@ -30,7 +33,7 @@ test('처음 꾸미는 화면을 열면 한 번 저절로 보여 주고, ? 단�
 test('새 기능 안내: 안내를 이미 본 기기에 한 번, 처음 온 기기는 같은 내용이 든 안내만 본다', async () => {
   const app = read('../app/app.js');
   assert.match(NEWS_KEY, /^news-\d+\.\d+$/);
-  assert.match(app, /if \(!tourSeen\('editor'\)\) \{\n    markTourSeen\('editor'\);\n    markTourSeen\(NEWS_KEY\);[\s\S]*?\} else if \(!tourSeen\(NEWS_KEY\)\) \{\n    markTourSeen\(NEWS_KEY\);[\s\S]*?editorTour\(O, \{ news: true \}\)/);
+  assert.match(app, /if \(!tourSeen\('editor'\)\) \{\n    const first = [^\n]*\n    markTourSeen\('editor'\);\n    markTourSeen\(NEWS_KEY\);[\s\S]*?\} else if \(!tourSeen\(NEWS_KEY\)\) \{\n    markTourSeen\(NEWS_KEY\);[\s\S]*?editorTour\(O, \{ news: true \}\)/);
   // 새 기능 안내의 단계는 처음 온 기기의 안내에도 들어 있다(연결선 · 발표 글쇠 · 내려받기 · 저장).
   for (const title of ['연결선으로 잇기', '발표하기', '내려받기', '저절로 저장돼요']) {
     assert.ok(NEWS_STEPS.some((x) => x.title === title) && EDITOR_STEPS.some((x) => x.title === title), title);
@@ -46,3 +49,30 @@ test('새 기능 안내: 안내를 이미 본 기기에 한 번, 처음 온 기�
   }
   for (const w of ['연결선', '붙는 곳', '손잡이', '이어 움직이기', '강조', '숨기', '주제', '찾아 바꾸기', '전체 보기', '카메라', '자동 넘기기', '리허설', 'PDF', 'GIF', 'HTML', '새로 고쳐도']) assert.ok(words.includes(w), w);
 });
+
+test('봤다는 표시: 저장 공간(localStorage)이 가득 찬 기기에서도 쿠키에 적어, 다음에 들어와도 다시 뜨지 않는다', async () => {
+  const keep = ['localStorage', 'document', 'location'].map((k) => [k, Object.getOwnPropertyDescriptor(globalThis, k)]);
+  const full = { getItem: () => null, setItem() { throw Object.assign(Error('full'), { name: 'QuotaExceededError' }); } };
+  const page = { cookie: '' };
+  for (const [k, v] of [['localStorage', full], ['document', page], ['location', { protocol: 'https:' }]]) Object.defineProperty(globalThis, k, { value: v, configurable: true, writable: true });
+  try {
+    const first = await import('../app/tour.js?visit=1');
+    assert.equal(first.tourSeen('editor'), false);
+    first.markTourSeen('editor');
+    assert.equal(first.tourSeen('editor'), true);
+    assert.match(page.cookie, /^onba_tour_seen=editor; max-age=\d+; path=\/; SameSite=Lax; Secure$/);
+    // 다음에 들어왔을 때(새로 읽은 페이지): 저장 공간은 여전히 가득 차 있어도 봤다고 안다.
+    const again = await import('../app/tour.js?visit=2');
+    assert.equal(again.tourSeen('editor'), true);
+    assert.equal(again.tourSeen('home'), false);
+    again.markTourSeen(again.NEWS_KEY);
+    const third = await import('../app/tour.js?visit=3');
+    assert.deepEqual([third.tourSeen('editor'), third.tourSeen(third.NEWS_KEY)], [true, true]);
+    // 저장 공간이 막힌 창(읽기부터 안 됨)은 예전처럼 본 것으로 둔다.
+    globalThis.localStorage = { getItem() { throw Error('blocked'); } };
+    assert.equal((await import('../app/tour.js?visit=4')).tourSeen('home'), true);
+  } finally {
+    for (const [k, v] of keep) { if (v) Object.defineProperty(globalThis, k, v); else delete globalThis[k]; }
+  }
+});
+

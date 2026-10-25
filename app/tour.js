@@ -187,6 +187,24 @@ export function startTour({ steps, show = () => {}, title = '온바탕 둘러보
   return close;
 }
 
+// 봤다는 표시는 localStorage 에 적는다. 다른 자료가 저장 공간을 가득 채운 기기에서는 거기에 적지 못해 들어올 때마다 안내가 다시 떴다:
+// 그때는 작은 쿠키(onba_tour_seen=editor,news-0.45)에 적는다. 이 창에서 적은 것은 메모리에도 둔다.
+const COOKIE = 'onba_tour_seen';
+const marked = new Set();
+function cookieSeen() {
+  try { return decodeURIComponent(document.cookie.match(/(?:^|;\s*)onba_tour_seen=([^;]*)/)?.[1] || '').split(',').filter(Boolean); } catch { return []; }
+}
 /** 이 안내를 본 적이 있는가 · 봤다고 적는다(이 기기에만). */
-export function tourSeen(name) { try { return localStorage.getItem(SEEN + name) === '1'; } catch { return true; } }
-export function markTourSeen(name) { try { localStorage.setItem(SEEN + name, '1'); } catch { /* 적지 못해도 괜찮다 */ } }
+export function tourSeen(name) {
+  if (marked.has(name)) return true;
+  try { if (localStorage.getItem(SEEN + name) === '1') return true; } catch { return true; }
+  return cookieSeen().includes(name);
+}
+export function markTourSeen(name) {
+  marked.add(name);
+  try { localStorage.setItem(SEEN + name, '1'); return; } catch { /* 가득 찼거나 막힌 저장 공간: 쿠키에 적는다 */ }
+  try {
+    const names = [...new Set([...cookieSeen(), name])].join(',');
+    document.cookie = `${COOKIE}=${encodeURIComponent(names)}; max-age=315360000; path=/; SameSite=Lax${location.protocol === 'https:' ? '; Secure' : ''}`;
+  } catch { /* 적지 못해도 괜찮다 */ }
+}

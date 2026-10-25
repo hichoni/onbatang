@@ -327,10 +327,15 @@ function startNew(layoutId = '', tile = null) {
 const HAND = /손글씨|손 글씨|편안한/;
 // ---------- 사용법 안내(tour.js) ----------
 // 첫 화면: "사용법 보기" 단추(처음 온 기기에서는 살짝 반짝인다). 꾸미는 화면: 위 막대의 ? 단추.
+// 처음 온 기기: 안내를 본 적이 없고, 이 기기에 만든 그림도 없다(mine: 지금 여는 그림 · 같은 PPT 의 파트들은 세지 않는다).
+// 그림이 이미 있는 기기는 봤다는 표시를 잃었어도(저장 공간이 막힌 기기 등) 안내를 저절로 띄우지 않는다. ? 단추로는 언제든 본다.
+function firstVisit(mine = new Set()) {
+  return !tourSeen('home') && !tourSeen('editor') && !(S.list || []).some((r) => !mine.has(r.id));
+}
 function tourButton(where, O = null) {
   const home = where === 'home';
   const btn = el('button', {
-    class: `btn ${home ? 'btn-ghost cv-tour-btn' : 'btn-ghost cv-tour-btn icon'}${home && !tourSeen('home') ? ' invite' : ''}`, type: 'button',
+    class: `btn ${home ? 'btn-ghost cv-tour-btn' : 'btn-ghost cv-tour-btn icon'}${home && firstVisit() ? ' invite' : ''}`, type: 'button',
     title: '사용법 보기', 'aria-label': '사용법 보기', dataset: { onbaTour: where },
     onClick: () => {
       markTourSeen(where);
@@ -830,9 +835,10 @@ function openDesign(record, isNew) {
   // 안내를 이미 본 기기에는 새 기능이 들어온 뒤 처음 열 때 새 기능 안내를 한 번 보여 준다(처음 온 기기의 안내에는 이미 들어 있다).
   if (embedMode) { markTourSeen('editor'); markTourSeen(NEWS_KEY); }   // 들여쓰기는 바로 꾸민다(사용법은 ? 단추로)
   else if (!tourSeen('editor')) {
+    const first = firstVisit(new Set(O.materialDeck ? O.materialDeck.documents.map((r) => r.id) : [O.record.id]));
     markTourSeen('editor');
     markTourSeen(NEWS_KEY);
-    setTimeout(() => { if (!O.closed && app.dataset.view === 'edit') editorTour(O); }, 700);
+    if (first) setTimeout(() => { if (!O.closed && app.dataset.view === 'edit') editorTour(O); }, 700);
   } else if (!tourSeen(NEWS_KEY)) {
     markTourSeen(NEWS_KEY);
     setTimeout(() => { if (!O.closed && app.dataset.view === 'edit') editorTour(O, { news: true }); }, 700);
