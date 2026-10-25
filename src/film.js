@@ -26,6 +26,33 @@ const SCENE_WAIT = 800;      // 누를 때 트는 영상 장면: 저절로 나�
 /** 만들 수 있는 영상의 가장 긴 길이(초). 영상은 다 만들 때까지 메모리에 쌓이므로 한도를 둔다. */
 export const MAX_FILM_SECONDS = 600;
 
+// 읽기 시간: 장이 화면 글을 다 읽을 만큼 머무는지. 한글 · 한자 · 가나는 1초에 4.5자, 나머지 글자는 15자로 세고 1.5초를 더한다(빈칸은 세지 않는다).
+export const READ = Object.freeze({ cjk: 4.5, other: 15, pad: 1.5 });
+const CJK = /[\u1100-\u11ff\u3040-\u30ff\u3130-\u318f\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\uf900-\ufaff]/u;
+/** 장의 글(글상자 · 연결선 위 글)을 다 읽는 데 드는 시간(초). 글이 없으면 0. */
+export function readSeconds(design) {
+  let cjk = 0, other = 0;
+  for (const it of Array.isArray(design?.items) ? design.items : []) {
+    const text = it?.t === 'text' ? it.text : it?.t === 'link' ? it.label : '';
+    for (const ch of String(text || '').replace(/\s+/gu, '')) { if (CJK.test(ch)) cjk++; else other++; }
+  }
+  return cjk + other ? cjk / READ.cjk + other / READ.other + READ.pad : 0;
+}
+/**
+ * 영상에서 읽기 시간이 모자란 장을 찾는다. 장이 열린 뒤(전환이 끝난 뒤) 다음 장으로 넘어갈 때까지를 그 장의 시간으로 본다.
+ * 돌려주는 것: { short: [{ index, need, have }](초, 소수 한 자리), fit: 모자란 장에만 읽을 만큼의 머무는 시간(dur)을 준 디자인들(나머지는 그대로) }.
+ */
+export function readCheck(designs, { stay = DEFAULT_STAY, scenes = true } = {}) {
+  const list = Array.isArray(designs) ? designs : [];
+  const plan = filmPlan(list, { stay, scenes }), short = [];
+  const fit = list.map((d, index) => {
+    const need = readSeconds(d), slide = plan.slides[index], have = (slide.ms - slide.lead) / 1000;
+    if (!need || need <= have + 0.05) return d;
+    short.push({ index, need: Math.round(need * 10) / 10, have: Math.round(have * 10) / 10 });
+    return { ...d, dur: Math.min(600, Math.ceil(need)) };
+  });
+  return { short, fit };
+}
 const staySeconds = (stay) => (Number.isFinite(stay) ? Math.min(30, Math.max(1, stay)) : DEFAULT_STAY);
 
 /**
