@@ -21,7 +21,7 @@ import { styleRuns, runsAll, dropRunKey, shiftRuns } from './runs.js';
 const RUN_KEYS = [['bold', 'b'], ['italic', 'i'], ['under', 'u'], ['color', 'c']];
 import { layoutLinks, relink, LINK_LINE, LINK_SHAPES, LINK_LABEL_MAX, linkSvg, linkHandle, dragLinkHandle, linkLabelSize, linkLabelT, linkEnds, endSpot, pieceNear, boxOfItem } from './links.js';
 import { sceneView, scenePlayer, keepScene, probeVideo, ACCEPT_VIDEOS } from './scene.js';
-import { LIVES, LIVE_GROUPS, LIVE_STILL, liveView, liveStill, liveBackdrops, liveLooks, liveSeed, liveLookName, slideLook, itemLook, lookById, lookText, LOOK_GROUPS, LOOK_NONE } from './live.js';
+import { LIVES, LIVE_GROUPS, LIVE_STILL, liveView, liveStill, liveBackdrops, liveLooks, liveSeed, liveLookName, slideLook, itemLook, lookById, lookText, lookIntro, LOOK_GROUPS, LOOK_NONE } from './live.js';
 import { icon } from './icons.js';
 import { parseYouTube, ytStart, ytTime, ytWatch, ytEmbed } from './youtube.js';
 import { ACCEPT_IMAGES, PHOTO_EDGE, readPixels, canvasToPng, shrinkImage } from './images.js';
@@ -426,13 +426,14 @@ export function createEditor({
   // 글자 효과(live.js): 꾸미기 판의 글에도 순간마다 입혀 보여 준다(1초에 30번). 효과나 장이 바뀌면 다시 시작한다.
   let looks = null;
   // 장의 효과가 없어도 글상자 하나에라도 고른 효과가 있으면 돈다(글상자마다 고른 것은 순간마다 data-lk 에서 읽는다).
+  // 효과를 새로 고르면(장 · 글상자) 다시 시작해서 나타나는 움직임을 한 번 보여 준다. 글을 고칠 때는 다시 나타나지 않는다(intro: 'start').
   function syncLook() {
     const look = card ? slideLook(card) : null, any = !!look || items().some((it) => itemLook(it, null));
-    const key = any ? `${look?.id || '-'}|${card.id || ''}` : '';
+    const key = any ? `${look?.id || '-'}|${items().map((it) => it.lk || '').join(',')}|${card.id || ''}` : '';
     if (looks && looks.key !== key) { looks.run.stop(); looks = null; }
     if (look) cardEl.dataset.look = look.id; else delete cardEl.dataset.look;
     if (any) cardEl.dataset.looks = '1'; else delete cardEl.dataset.looks;
-    if (key && !looks) looks = { key, run: liveLooks(cardEl, { fps: 30, look }) };
+    if (key && !looks) looks = { key, run: liveLooks(cardEl, { fps: 30, look, intro: 'start' }) };
   }
   function dropLook() { looks?.run.stop(); looks = null; }
   // 바탕색 칸의 "움직이는 바탕" 고르기. 고르면 그 바탕에 어울리는 카드 색으로 바꿔 새 글의 색이 잘 보이게 한다(글 · 사진은 그대로).
@@ -491,8 +492,8 @@ export function createEditor({
       Object.assign(sample.style, { background: b.bg, color: ink });
       if (look) lookText(sample, look, LIVE_STILL, 0, { move: false });
       let raf = 0;
-      // 칸이 다시 그려져 떨어지면(고른 뒤) 멈춘다.
-      const play = (t0) => { const step = (now) => { if (!sample.isConnected) { raf = 0; return; } lookText(sample, look, LIVE_STILL + (now - t0) / 1000, 0); raf = requestAnimationFrame(step); }; raf = requestAnimationFrame(step); };
+      // 손을 올리면 나타나는 움직임부터 이어서 움직여 보여 준다. 칸이 다시 그려져 떨어지면(고른 뒤) 멈춘다.
+      const play = (t0) => { const step = (now) => { if (!sample.isConnected) { raf = 0; return; } const e = (now - t0) / 1000; lookText(sample, look, LIVE_STILL + e, 0, { u: e }); raf = requestAnimationFrame(step); }; raf = requestAnimationFrame(step); };
       return el('button', {
         class: `fe-look-tile${now === id ? ' on' : ''}`, type: 'button', 'aria-pressed': String(now === id), title, dataset: { [data]: id || 'auto' },
         onClick: () => onPick(id),
@@ -503,7 +504,7 @@ export function createEditor({
     return el('div', { class: 'fe-looks-all' },
       el('div', { class: 'fe-looks', role: 'group', 'aria-label': '글자 효과 없이 · 따르기' }, ...first.map((f) => tile(...f))),
       ...LOOK_GROUPS.map((g) => [el('div', { class: 'fe-looks-head', text: g.name }),
-        el('div', { class: 'fe-looks', role: 'group', 'aria-label': `글자 효과 · ${g.name}` }, ...g.ids.map((id) => tile(id, lookById(id).name, lookById(id), '')))]).flat());
+        el('div', { class: 'fe-looks', role: 'group', 'aria-label': `글자 효과 · ${g.name}` }, ...g.ids.map((id) => tile(id, lookById(id).name, lookById(id), `${lookById(id).name} · 나타날 때 ${lookIntro(lookById(id)).name}`)))]).flat());
   }
   // 장의 효과(바탕색 칸): 이 장의 모든 글에(글상자마다 따로 고른 것은 그대로).
   function lookBody() {
@@ -513,7 +514,7 @@ export function createEditor({
     ];
     return [
       el('div', { class: 'fe-poshead', text: '글자 효과 (이 장의 모든 글)' }), lookPicker({ now: lookChoice(), onPick: setLook, first }),
-      el('p', { class: 'fe-note', text: '빛 · 그림자 · 움직임을 이 장의 글 전체에 입혀요. 글상자마다 따로 고르려면 글을 누르고 위 막대의 "효과"에서 골라요(따로 고른 것이 먼저예요). 칸에 손을 올리면 움직임을 미리 볼 수 있어요. 발표 · 공유 링크 · 영상에서 움직이고 그림 · PDF 에는 멈춘 모습의 빛과 그늘이 들어가요.' }),
+      el('p', { class: 'fe-note', text: '빛 · 그림자 · 움직임을 이 장의 글 전체에 입혀요. 효과마다 어울리는 나타나는 움직임이 있어서(네온은 켜지며 깜빡, 그림자는 쭉 뻗고, 통통은 떨어져 튀어요) 글이 나타날 때 한 번 움직여요. 글상자마다 따로 고르려면 글을 누르고 위 막대의 "효과"에서 골라요(따로 고른 것이 먼저예요). 칸에 손을 올리면 미리 볼 수 있어요. 그림 · PDF 에는 멈춘 모습이 들어가요.' }),
     ];
   }
   // 글상자 하나의 효과(글의 "효과" 칸): '' = 장의 효과 따르기 · 'none' = 이 글만 없음 · 효과 이름.
