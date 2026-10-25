@@ -145,3 +145,34 @@ test('나타나는 움직임: 효과마다 하나 · 시간만으로 정해진�
   const bow = lookById('rainbow'), d = lookIntro(bow).ms / 1000;
   assert.deepEqual(lookAt(bow, d + 0.2, 0, { u: d - 0.0001 }).w.map((v) => Math.round(v * 10)), lookAt(bow, d + 0.2, 0, { u: d + 0.001 }).w.map((v) => Math.round(v * 10)));
 });
+
+test('사라지는 움직임: 효과마다 짝 · 끝나면 보이지 않음 · 나타나는 움직임보다 먼저 · 장마다 끄기 · 영상은 다음 장이 있을 때만', async () => {
+  const { TEXT_LOOKS, lookById, lookIntro, lookOutro, outroAt, lookAt, LOOK_OUT_MS } = await import('../src/live.js');
+  const { filmPlan } = await import('../src/film.js');
+  const kinds = new Set();
+  for (const l of TEXT_LOOKS) {
+    const look = lookById(l.id), out = lookOutro(look);
+    assert.ok(out && out.name && out.ms >= 400 && out.ms <= LOOK_OUT_MS, `${l.id} has an outro`);
+    kinds.add(out.id);
+    assert.equal(outroAt(look, -0.01), null, 'not before it starts');
+    assert.equal(outroAt(look, out.ms / 1000 + 0.01).alpha, 0, 'gone after it ends');
+    assert.equal(lookAt(look, 3, 0, { out: 5 }).alpha, 0);
+    assert.deepEqual(outroAt(look, 0.33), outroAt(look, 0.33));
+  }
+  assert.equal(kinds.size, 12);
+  assert.ok(new Set(TEXT_LOOKS.map((l) => `${lookIntro(lookById(l.id)).id}>${lookOutro(lookById(l.id)).id}`)).size === 12, 'each intro has one outro');
+  // 튀어 올라 사라지기: 위로 올라간다. 사라질 때는 따로 나타나기 효과가 있어도(plain) 자리를 옮긴다. 나타나는 중에 넘겨도 사라지기가 먼저다.
+  const bounce = lookById('bounce');
+  assert.ok(lookAt(bounce, 0, 0, { out: 0.6 }).dy < -0.6);
+  assert.ok(lookAt(bounce, 0, 0, { out: 0.6, plain: true }).dy < -0.6);
+  assert.ok(lookAt(bounce, 0, 0, { u: 0.05, out: 0.6 }).dy < -0.6);
+  assert.equal(lookAt(lookById('pop'), 0, 0, { out: 0.55 }).scale > 1.2, true, 'lifted up');
+  // 장마다 끄기(lkin · lkout)는 끈 것만 남는다.
+  assert.deepEqual([cleanDesign({ items: [], lkin: false, lkout: false }).lkin, cleanDesign({ items: [], lkin: false, lkout: false }).lkout], [false, false]);
+  assert.equal('lkin' in cleanDesign({ items: [], lkin: true }), false);
+  // 영상: 다음 장이 있고 이어 움직이기 전환이 아니며 끄지 않은 장만 사라지는 움직임을 한다(마지막 장은 그대로 끝난다).
+  const page = (id, extra = {}) => cleanDesign({ id, items: [{ id: `${id}e`, t: 'text', text: '글', x: 50, y: 50, w: 50, size: 6, lk: 'gold' }], ...extra });
+  const plan = filmPlan([page('pout00001'), page('pout00002', { tr: 'move' }), page('pout00003', { lkout: false }), page('pout00004'), page('pout00005')]);
+  assert.deepEqual(plan.slides.map((s) => s.leave), [false, true, false, true, false]);
+  assert.equal(JSON.stringify(plan.slides[0]).includes('leave'), false, 'not part of the plan JSON');
+});

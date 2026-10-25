@@ -26,7 +26,7 @@ import { filmPlan, slidePoses, slideLoops, filmCells, packCells, DEFAULT_STAY, M
 import { mp4Parts, webmParts } from './mux.js';
 import { sceneBlob } from './scene.js';
 import { openReel, videoInfo } from './reel.js';
-import { paintLive, liveSeed, itemLooks, lookAt } from './live.js';
+import { paintLive, liveSeed, itemLooks, lookAt, lookOutro } from './live.js';
 import { soundTrack, mixSound, hasSound, decodeSound, encodeSound, soundKinds } from './sound.js';
 
 const RAD = Math.PI / 180;
@@ -229,15 +229,19 @@ async function buildSlide(design, slide, W, H, before = null) {
   // 몇째 글인지(n)는 화면처럼 글만 센다(효과가 없는 글도 센다).
   // 나타나는 움직임은 그 글이 나타나는 때(나타나기 효과가 시작하는 때. 없으면 장이 열린 때)부터 센다.
   // 따로 나타나기 · 계속 움직이기 효과가 있는 글은 자리 · 크기를 그 효과에 맡긴다(plain. 화면과 같다).
+  // 사라지는 움직임은 장이 끝나기 앞에서(그 장의 효과 글 가운데 가장 긴 사라지는 움직임만큼) 함께 시작한다(slide.leave. 발표 화면에서 넘길 때와 같다).
+  // 그 장에서 나타나는 움직임을 껐으면(lkin: false) 처음부터 다 나온 모습이다.
   if (look) {
     const nth = new Map(), enters = new Map(slide.moves.filter((m) => m.enter).map((m) => [m.i, m.start]));
     const loops = new Set((slide.loops || []).map((l) => l.i));
+    const outMs = slide.leave ? Math.max(0, ...looks.map((l) => lookOutro(l)?.ms || 0)) : 0;
     design.items.forEach((it, i) => { if (it.t === 'text') nth.set(i, nth.size); });
     for (const L of layers) {
       if (!(L.i >= 0 && looks[L.i])) continue;
       L.look = lookLayers(L, looks[L.i], nth.get(L.i), (design.items[L.i].size / 100) * W);
-      L.look.at = (enters.get(L.i) || 0) / 1000;
+      L.look.at = design.lkin === false ? -Infinity : (enters.get(L.i) || 0) / 1000;
       L.look.plain = enters.has(L.i) || loops.has(L.i);
+      L.look.out = outMs ? (slide.ms - outMs) / 1000 : Infinity;
     }
   }
   return { slide, layers, canvases, missingFonts: [...missingFonts], scene, tweens, stops, live, look };
@@ -325,7 +329,7 @@ function drawSlide(ctx, W, H, built, local, skip = null) {
   for (const L of built.layers) {
     if (skip && skip.has(L.i)) continue;              // 이어 움직이기: 옮겨 그릴 요소는 따로 그린다
     const p = L.i >= 0 ? poses.get(L.i) : null;
-    const lk = L.look ? lookAt(L.look.def, sec, L.look.n, { u: sec - L.look.at, plain: L.look.plain }) : null;
+    const lk = L.look ? lookAt(L.look.def, sec, L.look.n, { u: sec - L.look.at, plain: L.look.plain, out: sec - L.look.out }) : null;
     if (!p && lk) {
       // 글자 효과: 둥실 · 살랑 · 나타나는 움직임(가운데를 붙들고 키우고, 흐림은 글자 크기를 따른다).
       ctx.save();

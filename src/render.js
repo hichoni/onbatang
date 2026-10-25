@@ -198,7 +198,9 @@ export function designView(design, { empty = '', sceneEdge = 640, sceneNote = tr
   const d = cleanDesign(design, { keepSpaces: true });
   // 글자 효과: 장의 효과는 data-look, 장이나 글상자 어디에든 효과가 있으면 data-looks(발표 · 공유 링크가 그 카드의 글을 움직인다).
   const look = slideLook(d), looks = d.items.map((it) => itemLook(it, look));
-  return paintCard(el('div', { class: 'fe-card', dataset: { ...(look ? { look: look.id } : {}), ...(looks.some(Boolean) ? { looks: '1' } : {}) } },
+  // 그 장에서 나타나는 · 사라지는 움직임을 끈 것(lkin · lkout: false)은 data-look-in · data-look-out 에 적는다.
+  const flags = { ...(look ? { look: look.id } : {}), ...(looks.some(Boolean) ? { looks: '1' } : {}), ...(d.lkin === false ? { lookIn: 'off' } : {}), ...(d.lkout === false ? { lookOut: 'off' } : {}) };
+  return paintCard(el('div', { class: 'fe-card', dataset: flags },
     d.live ? liveView(d.live, { edge: sceneEdge, aspect: settings().aspect, seed: liveSeed(d.id) }) : null,
     d.video ? sceneView(d.video, { edge: sceneEdge, note: sceneNote }) : null,
     d.web ? webCard(d.web) : null,
