@@ -705,8 +705,16 @@ const LOOK_DEFS = {
   plexus: { kind: 'glow', name: '전자 빛', glow: [[[190, 240, 255, 1], 0.06], [[90, 200, 255, 0.9], 0.25], [[90, 200, 255, 0.6], 0.6]], lo: 0.5, hi: 1, period: 3 },
 };
 // 쓰기 좋은 모양으로: pals(빛깔들) · shades(그늘 겹들)는 늘 배열이다.
+// 나타나는 움직임: 글이 나타날 때(장이 열릴 때 · 누를 때 나오는 글은 그때) 그 효과답게 한 번 움직이며 자리 잡는다(INTROS).
+const LOOK_INTROS = {
+  rainbow: 'sweep', gold: 'bloom', fire: 'ignite', ice: 'bloom', glitch: 'glitch', pop: 'stamp', longshadow: 'grow', extrude: 'grow',
+  bounce: 'drop', shake: 'shakein', float: 'rise', swing: 'drift',
+  watercolor: 'bloom', chalk: 'bloom', blueprint: 'bloom', film: 'flicker', stars: 'bloom', aurora: 'bloom', waves: 'rise', terminal: 'flicker',
+  confetti: 'pop', snow: 'bloom', paperhills: 'grow', bokeh: 'bloom', clouds: 'rise', rain: 'bloom', sakura: 'drift', autumn: 'drift',
+  underwater: 'rise', fireflies: 'bloom', planets: 'rise', fireworks: 'pop', balloons: 'rise', notebook: 'grow', synthwave: 'flicker', mesh: 'bloom', plexus: 'flicker',
+};
 const LOOKS = Object.fromEntries(Object.entries(LOOK_DEFS).map(([id, d]) => [id, Object.freeze({
-  id, ...d, pals: d.pals || [d.glow, d.alt].filter(Boolean), shades: !d.shade ? [] : Array.isArray(d.shade[0]) ? d.shade : [d.shade],
+  id, ...d, pals: d.pals || [d.glow, d.alt].filter(Boolean), shades: !d.shade ? [] : Array.isArray(d.shade[0]) ? d.shade : [d.shade], intro: LOOK_INTROS[id] || 'bloom',
 })]));
 /** 글자 효과를 끈 장의 값. */
 export const LOOK_NONE = 'none';
@@ -742,13 +750,50 @@ export const liveLook = (live) => slideLook({ live });
 /** 글자 효과의 이름(움직이는 바탕의 이름으로도 찾는다). */
 export const liveLookName = (id) => lookById(id)?.name || '';
 const rgba = ([r, g, b, a], k = 1) => `rgba(${r}, ${g}, ${b}, ${Math.round(clamp(a * k) * 1000) / 1000})`;
+// ---------- 나타나는 움직임 ----------
+// 나타난 뒤 u 초의 모습: { k(빛의 세기에 곱함), alpha(글의 투명도에 곱함), dx, dy(em), scale, blur(em), grow(그늘이 뻗은 정도 0~1),
+// warp(빛깔이 앞서 가는 초), shake(더 떠는 폭. em) }. 다 끝났으면 null. 시간만으로 정해진다(화면 · 영상이 같다).
+const backOut = (x) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * (x - 1) ** 3 + c1 * (x - 1) ** 2; };
+const bounceOut = (x) => {
+  const n = 7.5625, d = 2.75;
+  if (x < 1 / d) return n * x * x;
+  if (x < 2 / d) return n * (x -= 1.5 / d) * x + 0.75;
+  if (x < 2.5 / d) return n * (x -= 2.25 / d) * x + 0.9375;
+  return n * (x -= 2.625 / d) * x + 0.984375;
+};
+const NEON_ON = '0100110101110111';     // 네온이 켜지는 차례(1/16 칸마다 켜짐 · 꺼짐)
+const INTROS = {
+  bloom: { name: '피어나기', ms: 1300, at: (p) => ({ alpha: eo(p / 0.55), blur: 0.22 * (1 - eo(p / 0.7)), k: eo(p) * (1 + 0.35 * Math.sin(Math.PI * p)) }) },
+  flicker: { name: '켜지며 깜빡', ms: 1200, at: (p) => { const on = NEON_ON[Math.min(15, Math.floor(p * 16))] === '1'; return { alpha: on ? 1 : 0.12, k: on ? 1.15 : 0 }; } },
+  ignite: { name: '불붙기', ms: 1100, at: (p, u) => ({ alpha: eo(p / 0.5), dy: 0.3 * (1 - eo(p)), scale: 0.94 + 0.06 * eo(p), k: ease(p) * (1.5 - 0.5 * p) * (0.75 + 0.25 * hash(Math.floor(u * 14) + 7)) }) },
+  glitch: { name: '지지직', ms: 1000, at: (p, u) => ({ alpha: hash(Math.floor(u * 20) * 1.9 + 3) < 0.35 * (1 - p) ? 0.1 : 1, shake: 0.09 * (1 - p), k: 1 + 0.6 * (1 - p) }) },
+  sweep: { name: '무지개 훑기', ms: 1400, at: (p, u, look) => ({ alpha: eo(p / 0.5), warp: look.pals.length * look.period * eo(p), k: 1 + 0.2 * Math.sin(Math.PI * p) }) },
+  grow: { name: '그림자 뻗기', ms: 1000, at: (p) => ({ alpha: eo(p / 0.4), grow: eo((p - 0.15) / 0.85), k: eo(p) }) },
+  stamp: { name: '쾅 찍기', ms: 800, at: (p) => ({ alpha: eo(p / 0.25), scale: p < 0.45 ? 1.5 - 0.55 * eo(p / 0.45) : 0.95 + 0.05 * eo((p - 0.45) / 0.55), grow: eo((p - 0.35) / 0.65) }) },
+  drop: { name: '떨어져 튀기', ms: 1200, at: (p) => ({ alpha: clamp(p * 5), dy: -(1 - bounceOut(p)) * 1.2 }) },
+  rise: { name: '떠오르기', ms: 1200, at: (p) => ({ alpha: eo(p / 0.6), dy: 0.6 * (1 - eo(p)), k: eo(p) }) },
+  drift: { name: '흘러 들어오기', ms: 1300, at: (p) => ({ alpha: eo(p / 0.6), dx: -0.7 * (1 - eo(p)), dy: -0.12 * Math.sin(Math.PI * p), k: eo(p) }) },
+  shakein: { name: '떨다 멈추기', ms: 1000, at: (p) => ({ alpha: clamp(p * 6), shake: 0.14 * (1 - p) ** 1.5 }) },
+  pop: { name: '톡 튀어나오기', ms: 800, at: (p) => ({ alpha: eo(p / 0.3), scale: 0.4 + 0.6 * backOut(p), k: eo(p) * (1 + 0.4 * Math.sin(Math.PI * p)) }) },
+};
+/** 그 효과의 나타나는 움직임 { id, name, ms }(없으면 null). */
+export const lookIntro = (look) => (look && INTROS[look.intro] ? { id: look.intro, name: INTROS[look.intro].name, ms: INTROS[look.intro].ms } : null);
+/** 나타난 뒤 u 초의 나타나는 움직임의 모습(다 끝났거나 없으면 null). u 가 0 보다 작으면(아직 나타나기 전) 처음 모습이다. */
+export function introAt(look, u) {
+  const d = look && INTROS[look.intro];
+  if (!d || !(u < d.ms / 1000)) return null;
+  const p = clamp(u / (d.ms / 1000));
+  return { k: 1, alpha: 1, dx: 0, dy: 0, scale: 1, blur: 0, grow: 1, warp: 0, shake: 0, ...d.at(p, Math.max(0, u), look) };
+}
 /**
- * t 초의 글자 효과 값: { w(빛깔마다의 세기 0~1), dx, dy(옮기는 거리. em) }. n: 그 장에서 몇째 글인가(글마다 조금씩 엇갈린다).
- * move: 거짓이면 움직임(dx · dy)은 0 이다(그림 · PDF).
+ * t 초의 글자 효과 값: { w(빛깔마다의 세기 0~1), dx, dy(옮기는 거리. em), alpha · scale · blur(em) · grow(나타나는 움직임. 다 나타났으면 1 · 1 · 0 · 1) }.
+ * n: 그 장에서 몇째 글인가(글마다 조금씩 엇갈린다). move: 거짓이면 계속 움직이기(둥실 · 살랑 · 떨림)는 없다(그림 · PDF · 고르는 중인 글).
+ * u: 글이 나타난 뒤의 초(나타나는 움직임. 없으면 다 나타난 모습) · plain: 그 글에 따로 나타나기 효과가 있으면 참(자리 · 크기는 그 효과에 맡긴다).
  */
-export function lookAt(look, t, n = 0, { move = true } = {}) {
-  if (!look) return { w: [], dx: 0, dy: 0 };
-  const s = Number.isFinite(t) ? Math.max(0, t) : LIVE_STILL;
+export function lookAt(look, t, n = 0, { move = true, u = Infinity, plain = false } = {}) {
+  if (!look) return { w: [], dx: 0, dy: 0, alpha: 1, scale: 1, blur: 0, grow: 1 };
+  const intro = introAt(look, u);
+  const s = (Number.isFinite(t) ? Math.max(0, t) : LIVE_STILL) + (intro?.warp || 0);
   const P = look.pals.length;
   let k = 0;
   if (P) {
@@ -757,27 +802,32 @@ export function lookAt(look, t, n = 0, { move = true } = {}) {
     if (look.flicker) { const r = hash(Math.floor(s * 12) + n * 97.3); if (r < look.flicker) k *= 0.25 + r; }
   }
   // 빛깔이 둘이면 천천히 오가고, 셋 이상이면 period 초마다 다음 빛깔로 부드럽게 넘어간다.
+  if (intro) k *= intro.k;
   let w = P ? [k] : [];
   if (P === 2) { const mix = 0.5 - 0.5 * Math.cos((TAU * s) / (look.period * 2) + n * 0.6); w = [k * (1 - mix), k * mix]; }
   else if (P > 2) {
     const x = (((s / look.period + n * 0.15) % P) + P) % P, i = Math.floor(x), f = ease(x - i);
     w = Array.from({ length: P }, (_, j) => (j === i ? k * (1 - f) : j === (i + 1) % P ? k * f : 0));
   }
-  if (!move) return { w, dx: 0, dy: 0 };
+  const shown = { alpha: intro ? intro.alpha : 1, blur: intro ? intro.blur : 0, grow: intro ? intro.grow : 1 };
+  // 나타나는 움직임의 자리 · 크기(따로 나타나기 효과가 있는 글은 그 효과가 옮기고 키운다). 고르는 중인 글도 이것은 한다(고른 효과를 보여 준다).
+  const own = intro && !plain ? { dx: intro.dx, dy: intro.dy, scale: intro.scale } : { dx: 0, dy: 0, scale: 1 };
+  if (!move) return { w, ...own, ...shown };
   const per = look.swing || 4, ph = n * 1.7;
   let dy = 0, dx = 0;
   if (look.bob) dy += look.bounce ? -look.bob * Math.abs(Math.sin((Math.PI * s) / per + ph)) : look.bob * Math.sin((TAU * s) / per + ph);
   if (look.sway) dx += look.sway * Math.sin((TAU * s) / (per * 1.3) + ph + 1);
   if (look.weave) dy += look.weave * (hash(Math.floor(s * 12) * 1.37 + 5) - 0.5) * 2;
-  if (look.shake) { const f = Math.floor(s * 20); dx += look.shake * (hash(f * 2.1 + n * 13 + 1) - 0.5) * 2; dy += look.shake * (hash(f * 3.7 + n * 7 + 2) - 0.5) * 2; }
-  return { w, dx, dy };
+  const shake = (look.shake || 0) + (intro?.shake || 0);
+  if (shake) { const f = Math.floor(s * 20); dx += shake * (hash(f * 2.1 + n * 13 + 1) - 0.5) * 2; dy += shake * (hash(f * 3.7 + n * 7 + 2) - 0.5) * 2; }
+  return { w, dx: dx + own.dx, dy: dy + own.dy, scale: own.scale, ...shown };
 }
 /** 글자 효과의 그림자 겹들(CSS text-shadow 의 한 조각씩): 그늘들 · 빛깔마다의 빛. */
 export function lookShadows(look, at) {
   if (!look) return [];
   const glow = (layers, k) => (k > 0.002 ? layers.map(([c, blur, x = 0, y = 0]) => `${x}em ${y}em ${blur}em ${rgba(c, k)}`) : []);
   return [
-    ...look.shades.map(([x, y, blur, c]) => `${x}em ${y}em ${blur}em ${rgba(c)}`),
+    ...look.shades.map(([x, y, blur, c]) => { const g = at.grow ?? 1; return `${x * g}em ${y * g}em ${blur}em ${rgba(c)}`; }),
     ...look.pals.flatMap((layers, i) => glow(layers, at.w[i] || 0)),
   ];
 }
@@ -790,30 +840,54 @@ export function lookReach(look) {
 }
 // 글 하나에 입힌 효과를 기억한다: 요소 자신의 그림자(테두리 · 그림자)를 지키고, 효과를 걷을 때 되돌린다.
 const looked = new WeakMap();
-/** 글 요소(.fi-text) 하나에 t 초의 글자 효과를 입힌다. look 이 없으면 입힌 것을 걷는다. */
-export function lookText(node, look, t, n = 0, { move = true } = {}) {
+/**
+ * 글 요소(.fi-text) 하나에 t 초의 글자 효과를 입힌다. look 이 없으면 입힌 것을 걷는다.
+ * u · plain: 나타나는 움직임(lookAt). 투명도 · 흐림은 filter, 크기는 scale 로 한다(요소의 transform · opacity · 움직임 효과와 따로 겹친다).
+ */
+export function lookText(node, look, t, n = 0, { move = true, u = Infinity, plain = false } = {}) {
   const mem = looked.get(node);
   const base = mem && node.style.textShadow === mem.applied ? mem.base : node.style.textShadow;
   if (!look) {
-    if (mem) { node.style.textShadow = base; node.style.translate = ''; looked.delete(node); }
+    if (mem) { node.style.textShadow = base; node.style.translate = ''; node.style.scale = ''; node.style.filter = ''; looked.delete(node); }
     return;
   }
   // 고르거나 고치는 중인 글은 움직이지 않는다(빛과 그늘만. 꾸미기 판의 손잡이와 어긋나지 않게).
-  const at = lookAt(look, t, n, { move: move && node.contentEditable !== 'true' && !node.classList.contains('sel') });
+  const at = lookAt(look, t, n, { move: move && node.contentEditable !== 'true' && !node.classList.contains('sel'), u, plain });
   node.style.textShadow = [base, ...lookShadows(look, at)].filter(Boolean).join(', ');
-  // translate 는 요소의 transform(자리 · 기울기 · 움직임 효과)과 따로 겹친다.
+  // translate · scale 은 요소의 transform(자리 · 기울기 · 움직임 효과)과 따로 겹친다.
+  // scale 은 요소의 본디 네모의 가운데를 붙들고 키우는데, 글은 transform 으로 반 칸씩 옮겨 놓았으므로 그만큼 되돌려 보이는 가운데를 붙든다.
   const em = (v) => `${Math.round(v * 10000) / 10000}em`;
-  node.style.translate = at.dx || at.dy ? `${em(at.dx)} ${em(at.dy)}` : '';
+  const k = Math.round(at.scale * 1000) / 1000, back = Math.round((k - 1) * 50 * 1000) / 1000;
+  node.style.translate = k !== 1 ? `calc(${em(at.dx)} + ${back}%) calc(${em(at.dy)} + ${back}%)` : at.dx || at.dy ? `${em(at.dx)} ${em(at.dy)}` : '';
+  node.style.scale = k !== 1 ? String(k) : '';
+  node.style.filter = at.alpha < 0.999 || at.blur > 0.001 ? [at.alpha < 0.999 ? `opacity(${Math.round(at.alpha * 1000) / 1000})` : '', at.blur > 0.001 ? `blur(${em(at.blur)})` : ''].filter(Boolean).join(' ') : '';
   looked.set(node, { base, applied: node.style.textShadow });
 }
 // 그 카드의 글들(다른 카드 안의 것은 빼고), 놓인 차례대로.
 const textsOf = (card) => [...card.querySelectorAll('.fi-text')].filter((n) => n.closest('.fe-card') === card);
 // 글 요소 하나의 효과: 그 글상자에 고른 것(itemView 가 적는 data-lk) → 없으면 장의 효과.
 const nodeLook = (node, look) => { const pick = cleanLook(node.dataset.lk); return pick ? lookById(pick) : look; };
-/** 카드 안의 글마다 글자 효과를 입힌다(글상자마다 고른 것이 먼저. look 은 장의 효과, null 이면 고른 것만). stop 이면 모두 걷는다. */
+// 글이 지금 보이는가(나타나기 효과 · 누를 때 나오기로 숨어 있으면 거짓). 움직임 효과가 돌고 있으면 그 글은 따로 나타나는 것이다.
+const visibleNow = (node) => { const cs = getComputedStyle(node); return cs.visibility !== 'hidden' && Number(cs.opacity) > 0.02; };
+const animated = (node) => !!node.getAnimations?.().some((a) => a.playState === 'running');
+/**
+ * 카드 안의 글마다 글자 효과를 입힌다(글상자마다 고른 것이 먼저. look 은 장의 효과, null 이면 고른 것만). stop 이면 모두 걷는다.
+ * seen: 나타나는 움직임을 셀 기억(WeakMap. 없으면 나타나는 움직임 없이). 글이 처음 보인 때부터 센다.
+ * late: 거짓이면 처음(0.3초 안)부터 있던 글만 나타나는 움직임을 한다(꾸미기 판: 글을 고칠 때마다 다시 나타나지 않게).
+ */
 export function lookCard(card, look, t, opts = {}) {
   if (!card) return;
-  textsOf(card).forEach((node, n) => lookText(node, opts.stop ? null : nodeLook(node, look), t, n, opts));
+  textsOf(card).forEach((node, n) => {
+    const own = opts.stop ? null : nodeLook(node, look);
+    let u = Infinity, plain = false;
+    if (own && opts.seen) {
+      let m = opts.seen.get(node);
+      if (!m && visibleNow(node)) { m = { at: opts.late === false && t > 0.3 ? -Infinity : t, plain: animated(node) }; opts.seen.set(node, m); }
+      u = m ? t - m.at : 0;
+      plain = !!m?.plain;
+    }
+    lookText(node, own, t, n, { ...opts, u, plain });
+  });
 }
 
 const reduced = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -863,9 +937,11 @@ const looping = new WeakSet();
  * 장의 효과도 글상자마다 고른 것도 없는 카드(data-looks 가 없는)는 그냥 둔다. 시간은 부른 때를 0 초로 센다.
  * 동작 줄이기를 켠 기기는 멈춘 모습(빛 · 그늘만)이다. 돌려주는 것: { stop() }(입힌 것을 걷는다). 화면에서 떨어진 카드는 저절로 멈춘다.
  */
-export function liveLooks(card, { fps = 60, start = performance.now(), look = lookById(card?.dataset?.look) } = {}) {
+// intro: 'show'(기본. 글이 보일 때마다 나타나는 움직임 · 발표 · 공유 링크) · 'start'(처음부터 있던 글만 · 꾸미기 판) · false(없이)
+export function liveLooks(card, { fps = 60, start = performance.now(), look = lookById(card?.dataset?.look), intro = 'show' } = {}) {
   if (!card || looping.has(card) || (!look && !card.dataset?.looks)) return { stop() {} };
   looping.add(card);
+  const seen = intro ? new WeakMap() : null;
   let raf = 0, last = -1, stopped = false, shown = false, waited = 0, ticks = 0;
   const tick = (now) => {
     if (stopped) return;
@@ -878,7 +954,7 @@ export function liveLooks(card, { fps = 60, start = performance.now(), look = lo
     const t = (now - start) / 1000;
     if (last >= 0 && t - last < 1 / fps - 0.002) return;
     last = t;
-    lookCard(card, look, t);
+    lookCard(card, look, t, { seen, late: intro !== 'start' });
   };
   const run = { stop() { if (stopped) return; stopped = true; cancelAnimationFrame(raf); looping.delete(card); lookCard(card, null, 0, { stop: true }); } };
   raf = requestAnimationFrame(tick);

@@ -227,10 +227,18 @@ async function buildSlide(design, slide, W, H, before = null) {
   const live = design.live ? { live: design.live, seed: liveSeed(design.id) } : null;
   // 글자 효과: 글마다 그 글의 효과로 빛 · 그늘을 한 번 그려 두고(lookLayers), 프레임마다 그 순간의 세기 · 자리로 겹친다(drawLayer).
   // 몇째 글인지(n)는 화면처럼 글만 센다(효과가 없는 글도 센다).
+  // 나타나는 움직임은 그 글이 나타나는 때(나타나기 효과가 시작하는 때. 없으면 장이 열린 때)부터 센다.
+  // 따로 나타나기 · 계속 움직이기 효과가 있는 글은 자리 · 크기를 그 효과에 맡긴다(plain. 화면과 같다).
   if (look) {
-    const nth = new Map();
+    const nth = new Map(), enters = new Map(slide.moves.filter((m) => m.enter).map((m) => [m.i, m.start]));
+    const loops = new Set((slide.loops || []).map((l) => l.i));
     design.items.forEach((it, i) => { if (it.t === 'text') nth.set(i, nth.size); });
-    for (const L of layers) if (L.i >= 0 && looks[L.i]) L.look = lookLayers(L, looks[L.i], nth.get(L.i), (design.items[L.i].size / 100) * W);
+    for (const L of layers) {
+      if (!(L.i >= 0 && looks[L.i])) continue;
+      L.look = lookLayers(L, looks[L.i], nth.get(L.i), (design.items[L.i].size / 100) * W);
+      L.look.at = (enters.get(L.i) || 0) / 1000;
+      L.look.plain = enters.has(L.i) || loops.has(L.i);
+    }
   }
   return { slide, layers, canvases, missingFonts: [...missingFonts], scene, tweens, stops, live, look };
 }
@@ -247,13 +255,27 @@ function lookLayers(L, look, n, px) {
     }
     return c;
   };
-  return { def: look, n, px, shade: bake(look.shades.map(([x, y, blur, c]) => [c, blur, x, y])), pals: look.pals.map(bake) };
+  // 그늘이 뻗어 나오는 동안(나타나는 움직임)의 그늘은 1/12 단계마다 그때 한 번 그려 둔다.
+  const shadeOf = (g) => bake(look.shades.map(([x, y, blur, c]) => [c, blur, x * g, y * g]));
+  const shade = shadeOf(1), grown = new Map();
+  const shadeAt = (g) => {
+    const q = Math.round(Math.min(1, Math.max(0, g)) * 12);
+    if (q === 12) return shade;
+    if (!grown.has(q)) grown.set(q, shadeOf(q / 12));
+    return grown.get(q);
+  };
+  return { def: look, n, px, shade, shadeAt, grown, pals: look.pals.map(bake) };
 }
 // 칸 하나를 그린다. 글자 효과가 있으면 그 밑에 그늘 · 빛을 그 순간의 세기로 먼저 깐다(화면처럼 요소의 투명도 · 흐림을 함께 따른다).
+// 나타나는 움직임의 투명도(lk.alpha)는 글 · 그늘 · 빛에 함께 곱하고, 그늘은 뻗은 만큼(lk.grow)의 것을 쓴다.
 function drawLayer(ctx, L, lk) {
+  const was = ctx.globalAlpha;
   if (lk) {
-    const alpha = ctx.globalAlpha;
-    if (L.look.shade) ctx.drawImage(L.look.shade, L.ox, L.oy);
+    const alpha = was * (lk.alpha ?? 1);
+    if (!(alpha > 0.001)) return;
+    ctx.globalAlpha = alpha;
+    const shade = (lk.grow ?? 1) < 1 ? L.look.shadeAt(lk.grow) : L.look.shade;
+    if (shade) ctx.drawImage(shade, L.ox, L.oy);
     for (let i = L.look.pals.length - 1; i >= 0; i--) {
       const img = L.look.pals[i], k = lk.w[i] || 0;
       if (!img || !(k > 0.002)) continue;
@@ -263,9 +285,10 @@ function drawLayer(ctx, L, lk) {
     ctx.globalAlpha = alpha;
   }
   ctx.drawImage(L.img, L.sx, L.sy, L.w, L.h, L.ox, L.oy, L.w, L.h);
+  ctx.globalAlpha = was;
 }
 function freeSlide(built) {
-  const looks = (built?.layers || []).flatMap((L) => (L.look ? [L.look.shade, ...L.look.pals].filter(Boolean) : []));
+  const looks = (built?.layers || []).flatMap((L) => (L.look ? [L.look.shade, ...L.look.grown.values(), ...L.look.pals].filter(Boolean) : []));
   for (const c of [...(built?.canvases || []), ...(built?.tweens?.canvases || []), ...looks]) { c.width = 0; c.height = 0; }
   closeScene(built?.scene);
 }
@@ -302,10 +325,14 @@ function drawSlide(ctx, W, H, built, local, skip = null) {
   for (const L of built.layers) {
     if (skip && skip.has(L.i)) continue;              // 이어 움직이기: 옮겨 그릴 요소는 따로 그린다
     const p = L.i >= 0 ? poses.get(L.i) : null;
-    const lk = L.look ? lookAt(L.look.def, sec, L.look.n) : null;
+    const lk = L.look ? lookAt(L.look.def, sec, L.look.n, { u: sec - L.look.at, plain: L.look.plain }) : null;
     if (!p && lk) {
+      // 글자 효과: 둥실 · 살랑 · 나타나는 움직임(가운데를 붙들고 키우고, 흐림은 글자 크기를 따른다).
       ctx.save();
-      ctx.translate(lk.dx * L.look.px, lk.dy * L.look.px);
+      ctx.translate(L.cx + lk.dx * L.look.px, L.cy + lk.dy * L.look.px);
+      if (lk.scale !== 1) ctx.scale(lk.scale, lk.scale);
+      ctx.translate(-L.cx, -L.cy);
+      if (lk.blur > 0.001) ctx.filter = `blur(${(lk.blur * L.look.px).toFixed(2)}px)`;
       drawLayer(ctx, L, lk);
       ctx.restore();
       continue;
@@ -327,14 +354,16 @@ function drawSlide(ctx, W, H, built, local, skip = null) {
     if (Math.abs(kx) < 0.001 || Math.abs(ky) < 0.001) continue;     // 납작하게 접힌 순간(뒤집히며 · 펼치기의 처음)
     ctx.save();
     ctx.globalAlpha = Math.min(1, p.o);
-    // 흐림: 카드 너비의 b% (화면의 blur(b cqw) 와 같다).
-    if (p.b > 0.005) ctx.filter = `blur(${((p.b / 100) * W).toFixed(2)}px)`;
+    // 흐림: 카드 너비의 b% (화면의 blur(b cqw) 와 같다). 글자 효과의 나타나는 움직임의 흐림은 더한다.
+    const blur = (p.b > 0.005 ? (p.b / 100) * W : 0) + (lk && lk.blur > 0.001 ? lk.blur * L.look.px : 0);
+    if (blur > 0.05) ctx.filter = `blur(${blur.toFixed(2)}px)`;
+    const pk = p.k * (lk?.scale ?? 1);      // 크기(나타나는 움직임의 크기는 곱한다)
     const typing = p.stops && p.tk < p.stops.length;
     if (p.clip > 0 || typing) {
       // 가리개는 요소의 제 방향(기울기 · 뒤집기 · 크기)을 따라간다. 그 방향으로 좌표를 돌려 놓고 네모(타자 치듯은 여섯 점의 다각형)를 잘라 둔다.
       ctx.translate(L.cx + dx, L.cy + dy);
       ctx.rotate((L.rot + p.r) * RAD);
-      ctx.scale(p.k * kx * (L.fx ? -1 : 1), p.k * ky * (L.fy ? -1 : 1));
+      ctx.scale(pk * kx * (L.fx ? -1 : 1), pk * ky * (L.fy ? -1 : 1));
       ctx.beginPath();
       if (typing) {
         typePoints(p.stops, p.tk).forEach(([x, y], n) => ctx[n ? 'lineTo' : 'moveTo'](-L.bw / 2 + (x / 100) * L.bw, -L.bh / 2 + (y / 100) * L.bh));
@@ -355,7 +384,7 @@ function drawSlide(ctx, W, H, built, local, skip = null) {
       ctx.scale(kx, ky);
       ctx.rotate(-L.rot * RAD);
     }
-    ctx.scale(p.k, p.k);
+    ctx.scale(pk, pk);
     ctx.translate(-L.cx, -L.cy);
     drawLayer(ctx, L, lk);
     ctx.restore();

@@ -106,3 +106,42 @@ test('글상자마다 글자 효과: 고른 것이 장의 효과보다 먼저 ·
   assert.ok(lookReach(lookById('gold')) > lookReach(lookById('shake')));
   assert.ok(cells[1].box.w > cells[3].box.w, 'the wide glow gets more room');
 });
+
+test('나타나는 움직임: 효과마다 하나 · 시간만으로 정해진다 · 끝나면 제 모습 · 따로 나타나는 글은 자리를 옮기지 않는다', async () => {
+  const { TEXT_LOOKS, lookById, lookIntro, introAt, lookAt, lookShadows } = await import('../src/live.js');
+  const kinds = new Set();
+  for (const l of TEXT_LOOKS) {
+    const look = lookById(l.id), intro = lookIntro(look);
+    assert.ok(intro && intro.name && intro.ms >= 600 && intro.ms <= 1500, `${l.id} has an intro`);
+    kinds.add(intro.id);
+    // 끝나면 없다(다 나온 모습 = 그림 · PDF 의 모습).
+    assert.equal(introAt(look, intro.ms / 1000 + 0.01), null);
+    assert.equal(introAt(look, Infinity), null);
+    assert.deepEqual(lookAt(look, 3, 0, { u: 9 }), lookAt(look, 3, 0));
+    // 같은 때면 같은 모습.
+    assert.deepEqual(introAt(look, 0.37), introAt(look, 0.37));
+  }
+  assert.equal(kinds.size, 12, [...kinds].join());
+  // 피어나기: 처음엔 흐릿하고(투명 · 흐림) 끝으로 갈수록 또렷하다.
+  const gold = lookById('gold');
+  assert.ok(lookAt(gold, 0, 0, { u: 0.02 }).alpha < 0.2 && lookAt(gold, 0, 0, { u: 0.02 }).blur > 0.15);
+  assert.ok(lookAt(gold, 1, 0, { u: 1 }).alpha > 0.95);
+  // 네온: 켜지기 전엔 꺼진 모습(빛 0).
+  const neon = lookAt(lookById('synthwave'), 0, 0, { u: 0 });
+  assert.ok(neon.alpha < 0.2 && neon.w.every((v) => v === 0));
+  // 떨어져 튀기: 위에서 떨어진다. 따로 나타나기 효과가 있는 글(plain)은 자리를 옮기지 않는다.
+  assert.ok(lookAt(lookById('bounce'), 0, 0, { u: 0.05 }).dy < -0.9);
+  assert.ok(lookAt(lookById('bounce'), 0, 0, { u: 0.05, plain: true }).dy > -0.2);
+  // 쾅 찍기: 크게서 찍힌다(plain 이면 크기는 그 효과에 맡긴다).
+  assert.ok(lookAt(lookById('pop'), 0, 0, { u: 0.02 }).scale > 1.3);
+  assert.equal(lookAt(lookById('pop'), 0, 0, { u: 0.02, plain: true }).scale, 1);
+  // 고르는 중인 글(move: false)도 나타나는 움직임은 보인다.
+  assert.ok(lookAt(lookById('pop'), 0, 0, { u: 0.02, move: false }).scale > 1.3);
+  // 그림자 뻗기: 그림자의 길이가 0 에서 끝까지 자란다.
+  const ls = lookById('longshadow');
+  const lens = [0.05, 0.5, 2].map((u) => Number(/^([\d.]+)em/.exec(lookShadows(ls, lookAt(ls, 0, 0, { u })).at(-1))[1]));
+  assert.ok(lens[0] < 0.02 && lens[1] > lens[0] && Math.abs(lens[2] - 0.25) < 1e-9, lens.join());
+  // 무지개 훑기: 한 바퀴를 앞서 돌고 끝나므로, 끝난 뒤 빛깔이 튀지 않는다.
+  const bow = lookById('rainbow'), d = lookIntro(bow).ms / 1000;
+  assert.deepEqual(lookAt(bow, d + 0.2, 0, { u: d - 0.0001 }).w.map((v) => Math.round(v * 10)), lookAt(bow, d + 0.2, 0, { u: d + 0.001 }).w.map((v) => Math.round(v * 10)));
+});
