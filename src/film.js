@@ -190,7 +190,7 @@ export function filmCells(design, slide, boxes, W, H) {
   const items = Array.isArray(design?.items) ? design.items : [];
   const moving = new Set([...(slide?.moves || []).map((m) => m.i), ...(slide?.loops || []).map((l) => l.i), ...(slide?.split || [])]);
   const card = { x: 0, y: 0, w: W, h: H };
-  const split = !!design?.video;
+  const split = !!design?.video || !!design?.live;     // 바탕 영상 · 움직이는 바탕: 바탕과 요소를 따로 그린다(그 사이에 장면이 들어간다)
   if (!moving.size && !split) return [{ items: items.map((_, i) => i), bg: true, i: -1, box: card }];
   const cells = [];
   let run = { items: [], bg: true, i: -1 };

@@ -15,6 +15,7 @@ export { muxMp4, muxWebm, mp4Parts, webmParts, opusHead } from './mux.js';
 export * from './film.js';
 export { sceneView, scenePlayer, sceneFrame, sceneUrl, sceneBlob, keepScene, dropScene, scenesReady, probeVideo, ACCEPT_VIDEOS } from './scene.js';
 export { demuxVideo, blobReader, bytesReader } from './demux.js';
+export { LIVES, LIVE_STILL, cleanLive, designLive, paintLive, liveStill, liveView, liveBackdrops, liveSeed } from './live.js';
 export { openReel, videoInfo } from './reel.js';
 export { SOUND_RATE, soundTrack, mixSound, hasSound, decodeSound, encodeSound, soundKinds, canDecodeSound } from './sound.js';
 export { registerFonts, fontReady } from './fonts.js';

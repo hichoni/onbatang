@@ -21,6 +21,7 @@ import { cleanActivity } from './activity.js';
 import { cleanCrop } from './crop.js';
 import { cleanRuns } from './runs.js';
 import { designWeb, cleanWebUrl, webHost } from './web.js';
+import { designLive } from './live.js';
 import { LINK_HEADS, LINK_LINE, LINK_SIDES, LINK_BEND, LINK_SHAPES, LINK_LABEL_MAX, LINK_LABEL_AT, LINK_LABEL_SIZES, LINK_LABEL_STYLES, LINK_POS, CURVE_BEND, layoutLinks } from './links.js';
 
 export { SHAPE_GROUPS };
@@ -429,7 +430,7 @@ export function cleanItems(items, opts) {
 export function cleanDesign(design, opts) {
   const d = design && typeof design === 'object' ? design : {};
   const options = d.id ? { ...opts, strict: true, keepSpaces: true } : opts;
-  return { ...metadata(d, { identity: true }), bg: cleanBg(d.bg), items: cleanItems(d.items, options), ...designMotion(d), ...designVideo(d), ...designWeb(d), ...slideNotes(d), ...slideHidden(d), ...slideTopic(d), ...slideDur(d), ...(d.activity === undefined ? {} : {activity:cleanActivity(d.activity)}) };
+  return { ...metadata(d, { identity: true }), bg: cleanBg(d.bg), items: cleanItems(d.items, options), ...designMotion(d), ...designVideo(d), ...designLive(d), ...designWeb(d), ...slideNotes(d), ...slideHidden(d), ...slideTopic(d), ...slideDur(d), ...(d.activity === undefined ? {} : {activity:cleanActivity(d.activity)}) };
 }
 /**
  * 디자인의 움직임: pa(요소들의 조합 효과) · tr(이 장이 넘어올 때의 전환 효과). 정해 둔 것만 담아 돌려준다(없으면 빈 객체).

@@ -4,6 +4,7 @@ import { backgroundOf, cleanDesign, fontFamilyOf, settings, hangsPunctuation } f
 import { shapeAsset, shapeSvg } from './shapes.js';
 import { artSvg, loadArt, artReady } from './art.js';
 import { sceneView } from './scene.js';
+import { liveView, liveSeed } from './live.js';
 import { ytThumb, ytEmbed, YT_ORIGIN } from './youtube.js';
 import { linkSvg } from './links.js';
 import { runPieces } from './runs.js';
@@ -189,15 +190,17 @@ export function paintCard(node, bg) {
  * 받은 값은 먼저 cleanDesign 으로 정리하므로, 저장소에서 읽어 온 값을 그대로 넘겨도 된다.
  * empty: 요소가 하나도 없을 때 가운데에 보일 안내 글(없으면 빈 카드).
  * 영상 장면(design.video)이 있으면 바탕에 그 첫 모습을 깐다(scene.js 의 sceneView. 그림은 조금 뒤에 채워진다). sceneEdge: 그 그림의 긴 쪽(px).
+ * 움직이는 바탕(design.live)은 멈춘 모습의 그림을 맨 아래에 깐다(live.js. 발표 · 공유 링크는 liveBackdrops 로 움직인다). 크기는 sceneEdge 를 따른다.
  * sceneNote: 거짓이면 영상 파일이 없을 때의 이름표를 넣지 않는다(내보낼 때).
  */
 export function designView(design, { empty = '', sceneEdge = 640, sceneNote = true } = {}) {
   const d = cleanDesign(design, { keepSpaces: true });
   return paintCard(el('div', { class: 'fe-card' },
+    d.live ? liveView(d.live, { edge: sceneEdge, aspect: settings().aspect, seed: liveSeed(d.id) }) : null,
     d.video ? sceneView(d.video, { edge: sceneEdge, note: sceneNote }) : null,
     d.web ? webCard(d.web) : null,
     ...d.items.map(itemView),
-    !d.items.length && !d.video && !d.web && empty ? el('div', { class: 'fe-empty', text: empty }) : null), d.bg);
+    !d.items.length && !d.video && !d.web && !d.live && empty ? el('div', { class: 'fe-empty', text: empty }) : null), d.bg);
 }
 const GLOBE = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M2.8 12h18.4M12 2.8c2.6 2.6 3.9 5.6 3.9 9.2s-1.3 6.6-3.9 9.2M12 2.8C9.4 5.4 8.1 8.4 8.1 12s1.3 6.6 3.9 9.2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
 /** 그린 장(root) 안의 웹사이트 상자마다 실제 사이트를 연다(발표 화면 · 공유 링크). 연 상자들을 돌려준다. */

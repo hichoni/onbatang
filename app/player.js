@@ -3,6 +3,7 @@
 // 편집기 · 저장소에 기대지 않는다. 넘기기는 next() · prev() · go(n): 누를 때 나오는 것이 남아 있으면 next() 가 그것부터 하나씩 나타나게 한다.
 // 모양은 player.css(.ob-player). 움직임을 줄여 달라고 해 둔 기기에서는 motion.js 가 움직이지 않고 바로 보여 준다.
 import { designView, youTubePlayers, webFrame, liveWebBoxes } from '../src/render.js';
+import { liveBackdrops } from '../src/live.js';
 import { playDesign, playTransition } from '../src/motion.js';
 import { scenePlayer } from '../src/scene.js';
 import { cleanDesign } from '../src/model.js';
@@ -25,6 +26,7 @@ export function mountPlayer(stage, { slides = [], aspect = 16 / 9, onChange = ()
     if (design.web) card.append(webFrame(design.web));
     liveWebBoxes(card);
     card.style.setProperty('--fe-ratio', String(aspect));
+    queueMicrotask(() => liveBackdrops(card));     // 움직이는 바탕: 장이 붙으면 그때부터 움직인다(떼면 저절로 멈춘다)
     card.style.setProperty('--fe-card-radius', '0');
     card.style.aspectRatio = String(aspect);
     return card;
