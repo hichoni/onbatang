@@ -21,8 +21,9 @@ import { styleRuns, runsAll, dropRunKey, shiftRuns } from './runs.js';
 const RUN_KEYS = [['bold', 'b'], ['italic', 'i'], ['under', 'u'], ['color', 'c']];
 import { layoutLinks, relink, LINK_LINE, LINK_SHAPES, LINK_LABEL_MAX, linkSvg, linkHandle, dragLinkHandle, linkLabelSize, linkLabelT, linkEnds, endSpot, pieceNear, boxOfItem } from './links.js';
 import { sceneView, scenePlayer, keepScene, probeVideo, ACCEPT_VIDEOS } from './scene.js';
+import { LIVES, liveView, liveStill, liveBackdrops, liveSeed } from './live.js';
 import { icon } from './icons.js';
-import { parseYouTube, ytStart, ytTime, ytWatch } from './youtube.js';
+import { parseYouTube, ytStart, ytTime, ytWatch, ytEmbed } from './youtube.js';
 import { ACCEPT_IMAGES, PHOTO_EDGE, readPixels, canvasToPng, shrinkImage } from './images.js';
 import { fontReady } from './fonts.js';
 import { TOLERANCE, colorAlpha, prepareAlpha, finishCutout, resizeMask, plainBorder } from './cutout.js';
@@ -381,13 +382,14 @@ export function createEditor({
     nodes = items().map(itemView);
     // 바탕의 영상 장면은 떼었다 붙이지 않는다(떼면 틀던 영상이 멈추고 깜빡인다). 그 위의 것들만 새로 놓는다.
     syncScene();
-    for (const n of [...cardEl.children]) if (n !== scene?.layer) n.remove();
+    syncLive();
+    for (const n of [...cardEl.children]) if (n !== scene?.layer && n !== live?.box) n.remove();
     // 웹사이트 장: 바탕에 그 사이트의 표지를 깐다(발표할 때 그 자리에 실제 사이트가 열린다).
     if (card.web) cardEl.append(webCard(card.web));
     cardEl.append(...nodes,
       // 비어 있을 때만 보이는 안내(화면에만 있다: 디자인에도, 내보낸 그림에도 들어가지 않는다)
       // 빈 장에서는 무엇부터 할지 바로 고르는 단추를 함께 보인다(왼쪽 도구를 찾지 않아도 시작할 수 있게).
-      ...(nodes.length || card.video || card.web ? [] : [el('div', { class: 'fe-empty' },
+      ...(nodes.length || card.video || card.web || card.live ? [] : [el('div', { class: 'fe-empty' },
         el('b', { text: '무엇부터 놓을까요?' }),
         el('span', { text: '아래 단추를 누르거나, 도구 칸에서 골라요' }),
         el('div', { class: 'fe-empty-go', role: 'group', 'aria-label': '빠르게 시작하기' },
@@ -404,6 +406,50 @@ export function createEditor({
     const btn = panel.querySelector(`.fe-tab[data-tab="${id}"]`);
     if (btn && !btn.classList.contains('on')) btn.click(); else btn?.focus();
     btn?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+  }
+
+  // ---------- 움직이는 바탕(live.js: 코드가 순간마다 그리는 장의 바탕) ----------
+  // 꾸미기 판에서도 움직여 보여 준다(1초에 30번). 같은 장 · 같은 바탕이면 놓인 것을 그대로 둔다(떼었다 붙이면 처음부터 다시 피어난다).
+  let live = null;
+  function syncLive() {
+    const key = card?.live?.id ? `${card.live.id}|${card.id || ''}` : '';
+    if (live && live.key !== key) { live.run.stop(); live.box.remove(); live = null; }
+    if (!key) return;
+    if (!live) {
+      const box = el('div', { class: 'fe-live-box', 'aria-hidden': 'true' }, liveView(card.live, { edge: 960, aspect: settings().aspect, seed: liveSeed(card.id) }));
+      live = { key, box, run: liveBackdrops(box, { fps: 30 }) };
+    }
+    cardEl.prepend(live.box);           // 맨 아래(바탕 영상 · 요소들보다 밑)
+  }
+  function dropLive() { live?.run.stop(); live?.box.remove(); live = null; }
+  // 바탕색 칸의 "움직이는 바탕" 고르기. 고르면 그 바탕에 어울리는 카드 색으로 바꿔 새 글의 색이 잘 보이게 한다(글 · 사진은 그대로).
+  function livePicker() {
+    const now = card.live?.id || '';
+    const tile = (s) => el('button', {
+      class: `fe-live-tile${now === (s?.id || '') ? ' on' : ''}`, type: 'button', 'aria-pressed': String(now === (s?.id || '')), title: s ? s.hint : '움직이는 바탕을 쓰지 않아요',
+      dataset: { liveTile: s?.id || 'none' }, onClick: () => setLive(s?.id || ''),
+    }, s ? el('img', { src: liveStill({ id: s.id }, 160, 90, 7), alt: '' }) : el('span', { class: 'fe-live-none', 'aria-hidden': 'true', text: '—' }), el('span', { class: 'fe-live-name', text: s ? s.name : '없음' }));
+    return el('div', { class: 'fe-lives', role: 'group', 'aria-label': '움직이는 바탕' }, tile(null), ...LIVES.map(tile));
+  }
+  function setLive(id) {
+    if ((card.live?.id || '') === id) return;
+    endEdit();
+    remember();
+    if (id) {
+      card.live = { id };
+      const s = LIVES.find((x) => x.id === id);
+      if (s) {
+        card.bg = s.bg;
+        // 새 바탕에서 잘 안 보일 글(밝기가 바탕과 비슷한 글)은 그 바탕에 맞는 글자 색으로 바꾼다(Ctrl+Z 로 함께 되돌린다).
+        const ink = backgroundOf(s.bg).ink, light = (hex) => { const c = String(hex || '').replace('#', ''); if (!/^[0-9a-f]{6}$/i.test(c)) return null; const [r, g, b] = [0, 2, 4].map((i) => parseInt(c.slice(i, i + 2), 16)); return (r * 299 + g * 587 + b * 114) / 1000; };
+        const base = light(s.bg);
+        card.items = items().map((it) => (it.t === 'text' && !it.bgc && light(it.color) !== null && Math.abs(light(it.color) - base) < 90 ? { ...it, color: ink } : it));
+      }
+    } else delete card.live;
+    renderStage();
+    renderUi();
+    onChange();
+    keepKeys();
   }
 
   // ---------- 영상 장면(이 장의 바탕에 깐 영상) ----------
@@ -2141,6 +2187,8 @@ export function createEditor({
     const it = cur();
     // 연결선을 두 번 누르면 선 위의 글 칸을 연다.
     if (it?.t === 'link' && !it.lock && itemAt(e.clientX, e.clientY) === sel) { if (pop !== 'llabel') toggle('llabel'); return; }
+    // 유튜브 영상을 두 번 누르면 재생 설정(주소 · 시작 · 끝 · 화면 가득 · 자막 · 미리 보기)을 연다.
+    if (it?.t === 'yt' && !it.lock && itemAt(e.clientX, e.clientY) === sel) { if (pop !== 'ytstart') toggle('ytstart'); return; }
     const box = nodes[sel]?.getBoundingClientRect();
     if (!it || !['text','image'].includes(it.t) || !box) return;
     if (e.clientX >= box.left && e.clientX <= box.right && e.clientY >= box.top && e.clientY <= box.bottom) {
@@ -2699,7 +2747,9 @@ export function createEditor({
         el('span', { class: 'fe-sep' }),
         el('span', { class: 'fe-hint', text: items().length
           ? '조각을 누르면 꾸미는 도구가 나와요 · Shift 누르기나 빈 곳 끌기로 여럿 고르기' : '도구 칸에서 틀이나 글을 넣어 시작해요.' }));
-      const body = pop === 'pagebg' ? [el('div', { class: 'fe-poshead', text: '바탕색' }), bgPicker(), el('p', { class: 'fe-note', text: bgNote })] : null;
+      const body = pop === 'pagebg' ? [el('div', { class: 'fe-poshead', text: '바탕색' }), bgPicker(), el('p', { class: 'fe-note', text: bgNote }),
+        el('div', { class: 'fe-poshead', text: '움직이는 바탕' }), livePicker(),
+        el('p', { class: 'fe-note', text: '코드가 순간마다 그려요(인터넷 · AI 없이 이 기기에서). 발표 · 공유 링크 · 영상에서 움직이고, 그림 · PDF 에는 멈춘 모습으로 들어가요.' })] : null;
       popBox.hidden = !body;
       popBox.replaceChildren(...(body ? [
         el('button', { class: 'fe-pop-close', type: 'button', 'aria-label': '닫기', title: '닫기 (Esc)', onClick: () => toggle(pop) }, icon('close')), ...body] : []));
@@ -4027,6 +4077,22 @@ export function createEditor({
   }
   // 시작 시각 칸: "1:30" · "90" · "1m30s" 를 받는다. 비우면 처음부터.
   function ytStartBody(it) {
+    // 영상 주소 바꾸기: 자리 · 크기 · 재생 설정은 그대로 두고 영상만 바꾼다(새 주소에 시작 시각이 있으면 그것을 쓴다).
+    const url = el('input', { class: 'fe-search fe-yt-url', type: 'url', inputmode: 'url', value: ytWatch(it.yt, it.start || 0), 'aria-label': '유튜브 영상 주소', autocomplete: 'off', spellcheck: 'false' });
+    const swap = () => {
+      const got = parseYouTube(url.value);
+      if (!got) { notify('유튜브 영상 주소를 넣어 주세요(youtu.be/… · youtube.com/watch?v=… · shorts).', 4000); return; }
+      if (got.id === it.yt && !got.start) return;
+      change({ yt: got.id, ...(got.start ? { start: got.start, end: 0 } : got.id !== it.yt ? { start: 0, end: 0 } : {}) });
+      notify('영상을 바꿨어요. 자리 · 크기 · 재생 설정은 그대로예요.', 3500);
+    };
+    url.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); swap(); } });
+    // 여기서 미리 보기: 고른 시작 · 끝 · 자막으로 이 칸 안에서 틀어 본다(누를 때만 유튜브를 부른다).
+    const preview = el('div', { class: 'fe-yt-preview' });
+    const showPreview = () => preview.replaceChildren(el('iframe', {
+      class: 'fe-yt-preview-frame', title: '유튜브 미리 보기', src: `${ytEmbed(it.yt, { start: it.start || 0, end: it.end || 0, cc: it.cc || '' })}&autoplay=1`,
+      allow: 'autoplay; encrypted-media; picture-in-picture; fullscreen', allowfullscreen: true, referrerpolicy: 'strict-origin-when-cross-origin',
+    }), pbtn('미리 보기 닫기', () => preview.replaceChildren(), { class: 'fe-btn fe-yt-preview-close' }));
     const input = el('input', { class: 'fe-search fe-yt-start', type: 'text', inputmode: 'numeric', value: it.start ? ytTime(it.start) : '', placeholder: '0:00', 'aria-label': '시작 시각' });
     const endInput = el('input', { class: 'fe-search fe-yt-end', type: 'text', inputmode: 'numeric', value: it.end ? ytTime(it.end) : '', placeholder: '끝까지', 'aria-label': '끝 시각' });
     const apply = () => change({ start: ytStart(input.value) });
@@ -4036,6 +4102,10 @@ export function createEditor({
     endInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); applyEnd(); } });
     const choose = (label, on, changes, data) => pbtn(label, () => change(changes), { 'aria-pressed': String(on), class: `fe-btn${on ? ' on' : ''}`, dataset: data });
     return [
+      el('div', { class: 'fe-poshead', text: '영상 주소' }),
+      el('div', { class: 'fe-row' }, url, pbtn('바꾸기', swap)),
+      el('div', { class: 'fe-row' }, pbtn('▶ 여기서 미리 보기', showPreview, { class: 'fe-btn fe-yt-preview-btn' })),
+      preview,
       el('div', { class: 'fe-poshead', text: '시작 시각' }),
       el('div', { class: 'fe-row' }, input, pbtn('정하기', apply), pbtn('처음부터', () => change({ start: 0 }), { disabled: !it.start })),
       el('p', { class: 'fe-note', text: '예: 1:30 이면 1분 30초부터 틀어져요.' }),
@@ -4452,6 +4522,7 @@ export function createEditor({
       stopPreview();
       closeCamera();
       dropScene();
+      dropLive();
       watcher?.disconnect();
       document.fonts?.removeEventListener?.('loadingdone', onFontsLoaded);
       card = null;

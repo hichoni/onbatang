@@ -40,8 +40,16 @@ test('YouTube settings: end time, full screen, captions and repeat are saved, an
   await page.route('**/*', route => { const u = new URL(route.request().url()); if (u.origin === origin || ['data:', 'blob:', 'about:'].includes(u.protocol)) return route.continue(); return route.abort(); });
   await page.goto(origin + '/fixture.html');
   await page.waitForFunction(() => window.ready);
-  await page.locator('.cv-canvas .fe-stage .fi-yt').click();
-  await page.getByRole('button', {name: /1:30부터|0:30부터|재생 설정/}).first().click();
+  // 영상을 두 번 누르면 재생 설정이 열린다.
+  await page.locator('.cv-canvas .fe-stage .fi-yt').dblclick();
+  await page.locator('.fe-yt-end').waitFor();
+  // 영상 주소 바꾸기(자리 · 크기는 그대로) · 미리 보기(누를 때만 유튜브를 부른다)
+  await page.locator('.fe-yt-url').fill('https://youtu.be/aqz-KE-bpKQ?t=30');
+  await page.locator('.fe-yt-url').press('Enter');
+  await page.locator('.fe-yt-preview-btn').click();
+  assert.match(await page.locator('.fe-yt-preview-frame').getAttribute('src'), /youtube-nocookie\.com\/embed\/aqz-KE-bpKQ\?.*autoplay=1/);
+  await page.locator('.fe-yt-preview-close').click();
+  assert.equal(await page.locator('.fe-yt-preview-frame').count(), 0);
   await page.locator('.fe-yt-end').fill('1:15');
   await page.locator('.fe-yt-end').press('Enter');
   await page.locator('[data-yt-full=on]').click();
@@ -52,6 +60,7 @@ test('YouTube settings: end time, full screen, captions and repeat are saved, an
   const saved = async () => page.evaluate(async (id) => { const {getDesign} = await import('/app/store.js'); const it = (await getDesign(id)).slides[0].items[0]; return {start: it.start, end: it.end, full: it.full, cc: it.cc, loop: it.loop}; }, await page.evaluate(() => window.recordId));
   for (let i = 0; i < 60 && !(await saved()).loop; i++) await page.waitForTimeout(250);
   assert.deepEqual(await saved(), {start: 30, end: 75, full: true, cc: 'ko', loop: true});
+  assert.equal(await page.evaluate(async (id) => { const {getDesign} = await import('/app/store.js'); return (await getDesign(id)).slides[0].items[0].yt; }, await page.evaluate(() => window.recordId)), 'aqz-KE-bpKQ');
 
   await page.keyboard.press('Escape');
   await page.locator('.cv-show-btn').click();

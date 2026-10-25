@@ -30,7 +30,7 @@ import {ONBATANG_VERSION} from './version.js';
 import {createGaiMaker,gaiLessonContext} from './gai-maker.js';
 import {
   createEditor, designView, designToBlob, designToCanvas, configure, settings, reshapeItems, layoutList, layoutItems, icon, cleanDesign, hasMotion, playDesign, playTransition,
-  COMBOS, TRANSITIONS, designsToVideo, canMakeVideo, canFilmScenes, filmPlan, readCheck, READ, MAX_FILM_SECONDS, videoSize, STAYS, DEFAULT_STAY, scenePlayer, dropScene, sceneUrl, youTubePlayers,
+  COMBOS, TRANSITIONS, designsToVideo, canMakeVideo, canFilmScenes, filmPlan, readCheck, READ, liveBackdrops, MAX_FILM_SECONDS, videoSize, STAYS, DEFAULT_STAY, scenePlayer, dropScene, sceneUrl, youTubePlayers,
   fontFamilyOf, fontList, textLimit, planMotion,
 } from '../src/index.js';
 import { HERO_ART, HERO_VIEW } from './hero-art.js';
@@ -1944,6 +1944,7 @@ async function present(O) {
     }
     if (design.web) mountWeb(design.web);
     liveWebBoxes(view);                       // 장 안의 웹사이트 상자: 그 자리에 실제 사이트(바로 누르고 쓴다. 상자 밖을 누르면 다음 장)
+    liveBackdrops(view);                      // 움직이는 바탕: 장이 열린 때부터 코드가 순간마다 그린다(장을 떼면 저절로 멈춘다)
     if (!dir || !old) {
       for (const n of [...stage.children]) drop(n);
       stage.append(view);

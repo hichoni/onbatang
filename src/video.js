@@ -26,6 +26,7 @@ import { filmPlan, slidePoses, slideLoops, filmCells, packCells, DEFAULT_STAY, M
 import { mp4Parts, webmParts } from './mux.js';
 import { sceneBlob } from './scene.js';
 import { openReel, videoInfo } from './reel.js';
+import { paintLive, liveSeed } from './live.js';
 import { soundTrack, mixSound, hasSound, decodeSound, encodeSound, soundKinds } from './sound.js';
 
 const RAD = Math.PI / 180;
@@ -195,7 +196,7 @@ async function buildSlide(design, slide, W, H, before = null) {
   // 움직이는 것이 없으면 잴 것도 없다: 통째로 한 칸이다(그림으로 내려받을 때와 같다).
   // 영상 장면이 있는 장은 요소들을 바탕과 따로 그려야 해서(그 사이에 영상이 들어간다) 잰다.
   const typed = new Set(slide.moves.filter((m) => m.enter === 'type').map((m) => m.i));
-  const boxes = slide.moves.length || slide.loops?.length || slide.split?.length || design.video ? await measure(design, W, H, typed) : null;
+  const boxes = slide.moves.length || slide.loops?.length || slide.split?.length || design.video || design.live ? await measure(design, W, H, typed) : null;
   // 타자 치듯: 화면처럼 글자가 놓인 자리까지 연다(잰 자리. 잴 수 없었으면 어림한다).
   const stops = new Map([...typed].filter((i) => boxes?.[i]?.stops).map((i) => [i, boxes[i].stops]));
   const cells = filmCells(design, slide, boxes, W, H);
@@ -220,7 +221,9 @@ async function buildSlide(design, slide, W, H, before = null) {
   // 영상 장면: 시간표에 트는 때가 적혀 있을 때만(멈춘 그림으로 담는 길에서는 적혀 있지 않다) 릴을 연다.
   const scene = slide.scene && design.video ? await openScene(design.video, slide.scene) : null;
   const tweens = slide.turn?.pairs && before ? await buildTweens(before, design, slide.turn, W, H) : null;
-  return { slide, layers, canvases, missingFonts: [...missingFonts], scene, tweens, stops };
+  // 움직이는 바탕: 프레임마다 그 순간의 모습을 바탕 바로 위에 그린다(live.js. 발표와 같은 씨앗이라 같은 무늬다).
+  const live = design.live ? { live: design.live, seed: liveSeed(design.id) } : null;
+  return { slide, layers, canvases, missingFonts: [...missingFonts], scene, tweens, stops, live };
 }
 function freeSlide(built) {
   for (const c of [...(built?.canvases || []), ...(built?.tweens?.canvases || [])]) { c.width = 0; c.height = 0; }
@@ -260,6 +263,8 @@ function drawSlide(ctx, W, H, built, local, skip = null) {
     if (!p) {
       ctx.drawImage(L.img, L.sx, L.sy, L.w, L.h, L.ox, L.oy, L.w, L.h);
       // 바탕 바로 위에 영상 장면의 프레임을 그린다(요소들은 그 위에 얹힌다).
+      // 움직이는 바탕은 그 장이 열린 때부터의 시간으로(다 나온 모습을 그릴 때는 그 장이 끝나는 때의 모습).
+      if (L.bg && built.live) paintLive(ctx, W, H, built.live.live, (Number.isFinite(local) ? local : built.slide.ms) / 1000, built.live.seed);
       if (L.bg && built.scene) drawScene(ctx, W, H, built.scene, local);
       continue;
     }
@@ -501,7 +506,7 @@ export function createFilm(designs, { width = 1920, height = 1080, stay = DEFAUL
       ctx.fillRect(0, 0, W, H);
       drawTurnSide(ctx, W, H, old, pose.old, depth);
       drawTurnSide(ctx, W, H, next, pose.next, depth);
-    } else if (local >= slide.settle && !slideLoops(slide) && (!built.get(n).scene || local >= built.get(n).scene.start + built.get(n).scene.ms)) {
+    } else if (local >= slide.settle && !slideLoops(slide) && !built.get(n).live && (!built.get(n).scene || local >= built.get(n).scene.start + built.get(n).scene.ms)) {
       // 다 나온 뒤에는 한 번 그려 둔 것을 그대로 붙인다(영상 장면이 있는 장은 영상까지 다 튼 뒤에야 멈춘 모습이 된다. 계속 움직이는 요소가 있는 장은 끝까지 프레임마다 그린다)
       ctx.drawImage(flat(1, n, Infinity), 0, 0);
     } else {
