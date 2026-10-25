@@ -15,6 +15,7 @@ const MESSAGES = {
   onbatang_copy_expired: '7일이 지나 사라진 링크예요. 보낸 사람에게 새 링크나 온바탕 파일을 달라고 해 주세요.',
   onbatang_copy_not_ready: '보낸 사람이 아직 자료를 올리는 중이에요. 잠시 뒤 링크를 다시 열어 주세요.',
   onbatang_copy_changed: '보낸 사람이 그사이 자료를 새로 올렸어요. 링크를 다시 열어 주세요.',
+  onbatang_copy_view_only: '보기 전용 링크예요. 재생 화면으로 열어요.',
 };
 export function copyMessage(error) {
   const text = String(error?.message || error || '');
@@ -44,9 +45,11 @@ export function createCopyIntake({ url = GAILAB.url, key = GAILAB.key, fetch: ge
     } catch (error) { console.warn(error); return null; }
   }
   return {
-    async take(code, { onProgress = () => {} } = {}) {
+    // view: 보기 링크도 받는다(재생기). 아니면 보기 링크는 사본으로 받지 않는다(onbatang_copy_view_only: 받는 쪽이 재생기로 보낸다).
+    async take(code, { onProgress = () => {}, view = false } = {}) {
       const info = await rpc('onbatang_copy_info', { p_code: code });
       if (info?.expired) throw Error('onbatang_copy_expired');      // 7일이 지난 7일 링크
+      if (info?.mode === 'view' && !view) throw Error('onbatang_copy_view_only');
       const total = Number(info?.parts) || 0, records = [];
       onProgress({ phase: 'part', completed: 0, total });
       for (let n = 0; n < total; n++) {
@@ -60,7 +63,7 @@ export function createCopyIntake({ url = GAILAB.url, key = GAILAB.key, fetch: ge
         const blob = await video(code, VIDEO_REF.exec(src)[1]);
         if (blob?.size) videos.set(src, blob);
       }
-      return { title: String(info?.title || ''), records, videos };
+      return { title: String(info?.title || ''), records, videos, mode: info?.mode === 'view' ? 'view' : 'edit', expiresAt: info?.expiresAt || null };
     },
   };
 }
@@ -72,6 +75,10 @@ export function createCopyIntake({ url = GAILAB.url, key = GAILAB.key, fetch: ge
 export const GUEST_DAYS = 7, GUEST_PER_DAY = 5, GUEST_MAX_PARTS = 20, GUEST_PART_MAX_BYTES = 5000000, GUEST_MAX_BYTES = 20000000;
 export const GUEST_PAGE = 'https://gai-lab.netlify.app/onbatang-copy.html';
 export const guestUrl = (code, page = GUEST_PAGE) => `${page}?c=${copyCode(code)}`;
+// 보기 링크(받은 사람이 발표처럼 그대로 본다 · 고칠 수 없다)의 재생 페이지(가이랩). 회원 링크 · 7일 링크가 함께 쓴다.
+export const PLAY_PAGE = 'https://gai-lab.netlify.app/onbatang-play.html';
+export const playUrl = (code, page = PLAY_PAGE) => `${page}?c=${copyCode(code)}`;
+export const linkUrl = (code, mode) => (mode === 'view' ? playUrl(code) : guestUrl(code));
 const bytesOf = (value) => new TextEncoder().encode(JSON.stringify(value)).length;
 /** 7일 링크에 실을 파트: 올려 두기만 한 사진 목록(uploads)과 바탕 영상은 뺀다. { records, bytes, videos(영상을 뺀 장 수), big(파트 하나가 너무 큰가) } */
 export function guestRecords(records) {
@@ -105,11 +112,12 @@ export function guestMessage(error) {
 export function createGuestLinks({ url = GAILAB.url, key = GAILAB.key, fetch: get = globalThis.fetch.bind(globalThis), timeoutMs = 60000 } = {}) {
   const rpc = publicRpc({ url, key, get, timeoutMs });
   return {
-    async publish({ title, records, link = null, onProgress = () => {}, card = null }) {
+    // mode: 'view'(보기 링크) · 'edit'(고치기 링크). 만들 때만 정한다(다시 올리기는 그 링크의 종류 그대로).
+    async publish({ title, records, link = null, mode = 'edit', onProgress = () => {}, card = null }) {
       const plain = guestRecords(records);
       if (!plain.records.length || plain.records.length > GUEST_MAX_PARTS) throw Error('onbatang_copy_invalid');
       if (plain.big || plain.bytes > GUEST_MAX_BYTES) throw Error('onbatang_guest_too_large');
-      const started = await rpc('onbatang_guest_copy_publish', { p_title: title, p_parts: plain.records.length, ...(link ? { p_code: link.code, p_token: link.token } : {}) });
+      const started = await rpc('onbatang_guest_copy_publish', { p_title: title, p_parts: plain.records.length, ...(link ? { p_code: link.code, p_token: link.token } : mode === 'view' ? { p_mode: 'view' } : {}) });
       const token = link?.token || started.token, code = started.code;
       let last = started;
       for (const [n, record] of plain.records.entries()) {
@@ -127,19 +135,20 @@ export function createGuestLinks({ url = GAILAB.url, key = GAILAB.key, fetch: ge
     remove: (link) => rpc('onbatang_guest_copy_remove', { p_code: link.code, p_token: link.token }),
   };
 }
-// 이 브라우저가 만든 7일 링크(자료 이름표 → { code, token, expiresAt, title }). 기간이 지난 것은 읽을 때 버린다.
+// 이 브라우저가 만든 7일 링크(자료 이름표 → { code, token, expiresAt, title }, 보기 링크는 '자료 이름표:view'). 기간이 지난 것은 읽을 때 버린다.
 const GUEST_KEY = 'onbatang.guest-links';
-export function guestLink(designId, now = Date.now()) {
+const guestKey = (designId, mode) => (mode === 'view' ? `${designId}:view` : designId);
+export function guestLink(designId, mode = 'edit', now = Date.now()) {
   try {
-    const link = JSON.parse(localStorage.getItem(GUEST_KEY) || '{}')[designId];
+    const link = JSON.parse(localStorage.getItem(GUEST_KEY) || '{}')[guestKey(designId, mode)];
     return link && copyCode(link.code) && /^[0-9a-f]{64}$/.test(link.token || '') && Date.parse(link.expiresAt) > now ? link : null;
   } catch { return null; }
 }
-export function keepGuestLink(designId, link, now = Date.now()) {
+export function keepGuestLink(designId, link, mode = 'edit', now = Date.now()) {
   try {
-    const all = JSON.parse(localStorage.getItem(GUEST_KEY) || '{}');
+    const all = JSON.parse(localStorage.getItem(GUEST_KEY) || '{}'), key = guestKey(designId, mode);
     for (const [id, value] of Object.entries(all)) if (!(Date.parse(value?.expiresAt) > now)) delete all[id];
-    if (link) all[designId] = { code: link.code, token: link.token, expiresAt: link.expiresAt, title: link.title }; else delete all[designId];
+    if (link) all[key] = { code: link.code, token: link.token, expiresAt: link.expiresAt, title: link.title }; else delete all[key];
     localStorage.setItem(GUEST_KEY, JSON.stringify(all));
   } catch { /* 기억하지 못하면 다음에는 새 링크를 만든다(지난 링크는 7일 뒤 저절로 지워진다) */ }
 }

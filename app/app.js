@@ -2472,7 +2472,12 @@ async function openCopyLink(code) {
     const pages = records.reduce((n, r) => n + r.slides.length, 0);
     toast(`'${got.title || first.name}' ${pages}쪽을 이 브라우저에 받았어요. 마음껏 고쳐도 보낸 사람의 자료는 그대로예요.${dropped ? ` 바탕 영상 ${dropped}개는 받지 못했어요.` : ''}`, 7000);
     return true;
-  } catch (error) { console.warn(error); toast(kit.copyMessage(error), 7000); return false; }
+  } catch (error) {
+    console.warn(error);
+    // 보기 링크는 사본으로 받지 않고 재생 화면으로 보낸다.
+    if (/onbatang_copy_view_only/.test(String(error?.message))) { location.replace(kit.playUrl(code)); return false; }
+    toast(kit.copyMessage(error), 7000); return false;
+  }
   finally { loading.node.remove(); app.inert = wasInert; }
 }
 // 링크 공유(내보내기): 저장을 마친 뒤 호스트의 링크 창을 연다. records() 는 이 자료의 모든 파트(이 기기에 저장된 것)를 차례대로 준다.
@@ -2490,18 +2495,24 @@ async function openCopyFromEditor(O) {
   } catch (error) { toast(String(error?.message || '링크 창을 열지 못했어요.').slice(0, 200), 4500); }
 }
 // 7일 링크(공용 온바탕 · 누구나): 이 자료의 모든 파트를 링크 하나로 보낸다. 만든 때부터 7일만 열리고 그 뒤에는 서버에서 지워진다(app/copy-link.js).
-// 이 브라우저가 만든 링크는 열쇠와 함께 기억해 두어, 다시 열면 그 링크를 보여 주고 다시 올리기 · 지우기를 할 수 있다.
+// 두 가지: 보기 링크(받은 사람이 발표처럼 그대로 본다 · 고칠 수 없다)와 고치기 링크(받은 사람의 온바탕에 사본이 생겨 고친다).
+// 이 브라우저가 만든 링크는 종류마다 열쇠와 함께 기억해 두어, 다시 열면 그 링크를 보여 주고 다시 올리기 · 지우기를 할 수 있다.
+const LINK_MODES = Object.freeze([
+  ['view', '보기 링크', '받은 사람이 발표처럼 그대로 봐요. 움직임 · 전환 · 글자 효과가 모두 나오고, 고칠 수는 없어요.'],
+  ['edit', '고치기 링크', '받은 사람의 온바탕에 사본이 생겨 바로 고쳐요. 받은 사람이 고쳐도 내 자료는 그대로예요.'],
+]);
 async function openGuestLink(O) {
   if (!copyLink || S.open !== O) return;
   const [kit, cards] = await Promise.all([import('./copy-link.js'), import('./link-card.js')]);
   const ids = O.materialDeck ? O.materialDeck.documents.map((r) => r.id) : [O.record.id], owner = ids[0];
   const name = () => String(O.materialDeck?.title || O.record.name || '').replace(/\s*·\s*\d{1,3}$/, '').trim().slice(0, 60) || '온바탕 자료';
   const links = kit.createGuestLinks(copyLink);
+  const saved = { view: kit.guestLink(owner, 'view'), edit: kit.guestLink(owner, 'edit') };
+  let mode = saved.edit && !saved.view ? 'edit' : 'view', timer = 0, closed = false;
+  const tabs = el('div', { class: 'cv-guest-modes', role: 'group', 'aria-label': '링크 종류' });
   const body = el('div', { class: 'cv-guest-body' }), message = el('p', { class: 'cv-guest-msg', role: 'status', 'aria-live': 'polite' });
   const box = el('section', { class: 'cv-guest', dataset: { guestLink: '' } },
-    el('h2', { text: '링크 공유 · 7일 동안 열려요' }),
-    el('p', { class: 'muted', text: '링크만 보내면 받은 사람이 열자마자 그 사람 브라우저의 온바탕에 이 자료의 사본이 생겨요. 받는 사람은 로그인하지 않아도 돼요.' }), body, message);
-  let link = kit.guestLink(owner), timer = 0, closed = false;
+    el('h2', { text: '링크 공유 · 7일 동안 열려요' }), tabs, body, message);
   const wasInert = app.inert;
   openModal(box, { onClose: () => { closed = true; clearTimeout(timer); app.inert = wasInert; } });
   app.inert = true;
@@ -2513,22 +2524,28 @@ async function openGuestLink(O) {
     if (!out.length) throw Error('보낼 자료를 읽지 못했어요. 저장한 뒤 다시 해 주세요.');
     return out;
   };
+  const refreshed = new Set();   // 이 창을 연 뒤 서버에 있는지 확인한 링크의 종류
+  const forget = (kind) => { kit.keepGuestLink(owner, null, kind); saved[kind] = null; };
   const busy = async (job) => {
     box.inert = true; message.textContent = '';
-    try { await job(); } catch (error) { console.warn(error); message.textContent = kit.guestMessage(error); if (/onbatang_copy_not_found/.test(String(error?.message))) { kit.keepGuestLink(owner, null); link = null; paint(); } }
+    try { await job(); } catch (error) { console.warn(error); message.textContent = kit.guestMessage(error); if (/onbatang_copy_not_found/.test(String(error?.message))) { forget(mode); paint(); } }
     finally { box.inert = false; }
   };
   const send = async (title) => {
-    const list = await records();
-    const made = await links.publish({ title, records: list, link,
+    const kind = mode, list = await records();
+    const made = await links.publish({ title, records: list, link: saved[kind], mode: kind,
       onProgress: (p) => { message.textContent = p.phase === 'card' ? '미리보기 그림을 만들고 있어요…' : `자료를 올리고 있어요 · 파트 ${p.completed + 1} / ${p.total}`; },
       card: () => cards.linkCard(list, { render: designToCanvas }) });
-    link = { code: made.code, token: made.token, expiresAt: made.expiresAt, title: made.title, takes: made.takes, videos: made.videos };
-    kit.keepGuestLink(owner, link);
+    saved[kind] = { code: made.code, token: made.token, expiresAt: made.expiresAt, title: made.title, takes: made.takes, videos: made.videos };
+    kit.keepGuestLink(owner, saved[kind], kind);
+    refreshed.add(kind);           // 방금 만든 · 올린 링크는 다시 확인하지 않는다
   };
   const until = (iso) => new Date(iso).toLocaleString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short', hour: 'numeric', minute: '2-digit' });
   function paint() {
     if (closed) return;
+    tabs.replaceChildren(...LINK_MODES.map(([id, label, desc]) => el('button', { class: `cv-guest-mode${mode === id ? ' on' : ''}`, type: 'button', 'aria-pressed': String(mode === id), dataset: { guestMode: id },
+      onClick: () => { if (mode === id) return; mode = id; message.textContent = ''; paint(); } }, el('b', { text: label }), el('small', { text: desc }))));
+    const link = saved[mode], label = LINK_MODES.find(([id]) => id === mode)[1];
     if (!link) {
       const pages = O.materialDeck ? O.materialDeck.documents.reduce((n, r) => n + (r.id === O.record.id ? O.slides.length : r.slides.length), 0) : O.slides.length;
       const title = el('input', { type: 'text', maxlength: '60', value: name(), 'aria-label': '링크 제목', dataset: { guestTitle: '' } });
@@ -2540,31 +2557,34 @@ async function openGuestLink(O) {
           el('li', { text: '오래 두고 보내거나 영상까지 보내려면 내려받기의 "온바탕 파일"을 써 주세요.' })),
         el('label', { class: 'cv-guest-field' }, '자료 이름(받는 사람에게 보여요)', title),
         el('div', { class: 'cv-file-choices' },
-          el('button', { class: 'btn btn-primary', type: 'button', dataset: { guestCreate: '' }, onClick: () => busy(async () => { await send(title.value.trim() || name()); paint(); message.textContent = '링크를 만들었어요. 복사해서 보내 주세요.'; }) }, ...face('link', `${kit.GUEST_DAYS}일 링크 만들기`)),
+          el('button', { class: 'btn btn-primary', type: 'button', dataset: { guestCreate: '' }, onClick: () => busy(async () => { await send(title.value.trim() || name()); paint(); message.textContent = `${label}를 만들었어요. 복사해서 보내 주세요.`; }) }, ...face('link', `${label} 만들기`)),
           el('button', { class: 'btn btn-ghost', type: 'button', onClick: closeModal }, '닫기')));
-      title.focus();
       return;
     }
-    const url = kit.guestUrl(link.code);
+    const url = kit.linkUrl(link.code, mode);
     const copy = el('button', { class: 'btn btn-primary', type: 'button', dataset: { guestCopy: '' }, onClick: async () => {
       try { await navigator.clipboard.writeText(url); copy.textContent = '복사했어요'; } catch { prompt('링크', url); }
       clearTimeout(timer); timer = setTimeout(() => { if (copy.isConnected) copy.textContent = '링크 복사'; }, 2000);
     } }, '링크 복사');
     body.replaceChildren(
       el('div', { class: 'cv-guest-link' }, el('code', { dataset: { guestUrl: '' }, text: url }), copy, el('a', { class: 'btn', href: url, target: '_blank', rel: 'noopener' }, '열어 보기 ↗')),
-      el('p', { class: 'cv-guest-note', dataset: { guestUntil: '' } }, el('b', { text: `${until(link.expiresAt)}까지 열려요.` }), ` 그 뒤에는 링크와 자료가 서버에서 지워져요.${Number.isFinite(link.takes) ? ` · 받은 횟수 ${link.takes}` : ''}`),
+      el('p', { class: 'cv-guest-note', dataset: { guestUntil: '' } }, el('b', { text: `${until(link.expiresAt)}까지 열려요.` }), ` 그 뒤에는 링크와 자료가 서버에서 지워져요.${Number.isFinite(link.takes) ? ` · ${mode === 'view' ? '본' : '받은'} 횟수 ${link.takes}` : ''}`),
       link.videos ? el('p', { class: 'cv-guest-note warn', text: `바탕 영상 ${link.videos}개는 링크에 실리지 않았어요. 영상까지 보내려면 "온바탕 파일"을 써 주세요.` }) : null,
-      el('p', { class: 'cv-guest-note', text: '자료를 고친 뒤 다시 올리면 그다음에 여는 사람부터 새 자료를 받아요(기간은 늘지 않아요).' }),
+      el('p', { class: 'cv-guest-note', text: mode === 'view' ? '자료를 고친 뒤 다시 올리면 그다음에 여는 사람부터 새 모습으로 봐요(기간은 늘지 않아요).' : '자료를 고친 뒤 다시 올리면 그다음에 여는 사람부터 새 자료를 받아요(기간은 늘지 않아요).' }),
       el('div', { class: 'cv-file-choices' },
         el('button', { class: 'btn', type: 'button', dataset: { guestResend: '' }, onClick: () => busy(async () => { await send(link.title || name()); paint(); message.textContent = '지금 자료로 다시 올렸어요.'; }) }, '지금 자료로 다시 올리기'),
         el('button', { class: 'btn btn-ghost', type: 'button', dataset: { guestRemove: '' }, onClick: () => {
-          if (!confirm('링크를 지울까요? 받은 사람이 더는 열 수 없어요. 이미 받은 사람의 사본은 그대로예요.')) return;
-          busy(async () => { await links.remove(link); kit.keepGuestLink(owner, null); link = null; paint(); message.textContent = '링크를 지웠어요.'; });
+          if (!confirm(`${label}를 지울까요? 받은 사람이 더는 열 수 없어요.${mode === 'edit' ? ' 이미 받은 사람의 사본은 그대로예요.' : ''}`)) return;
+          busy(async () => { await links.remove(link); forget(mode); paint(); message.textContent = '링크를 지웠어요.'; });
         } }, '링크 지우기')));
+    // 기억해 둔 링크가 서버에 아직 있는지(본 · 받은 횟수 · 기간) 한 번 확인한다. 지워졌거나 기간이 지났으면 새로 만들게 한다.
+    if (!refreshed.has(mode)) {
+      refreshed.add(mode);
+      const kind = mode;
+      busy(async () => { const now = await links.get(link); if (!saved[kind]) return; saved[kind] = { ...saved[kind], takes: now.takes, expiresAt: now.expiresAt, title: now.title }; kit.keepGuestLink(owner, saved[kind], kind); paint(); });
+    }
   }
   paint();
-  // 기억해 둔 링크가 서버에 아직 있는지(받은 횟수 · 기간) 확인한다. 지워졌거나 기간이 지났으면 새로 만들게 한다.
-  if (link) busy(async () => { const now = await links.get(link); link = { ...link, takes: now.takes, expiresAt: now.expiresAt, title: now.title }; kit.keepGuestLink(owner, link); paint(); });
 }
 // 공유 링크: 저장을 마친 뒤 호스트의 공유 창을 연다(서버 · 로그인은 호스트가 맡는다). goTo 로 그 장 · 내 자료 칸(유튜브 등)을 연다.
 async function openShareFromEditor(O){
@@ -2912,7 +2932,7 @@ function askDownload(O, btn) {
       // 7일 링크(공용 온바탕 · 누구나): 만든 때부터 7일 동안 열리고 그 뒤에는 서버에서 지워진다. 바탕 영상은 빠진다.
       const films=filmAll.filter(p=>hasVideo(p)).length;
       rows.push(section('링크로 보낼 것',el('p',{class:'cv-down-note',text:`이 자료 전체 ${scopeN}쪽${O.materialDeck?`(파트 ${O.materialDeck.documents.length}개)`:''}을 링크 하나로 보내요.`}),
-        el('p',{class:'cv-down-note',text:'받은 사람이 링크를 열면 그 사람 브라우저의 온바탕에 사본이 생겨 로그인 없이 바로 고칠 수 있어요. 받은 사람이 고쳐도 내 자료는 그대로예요.'}),
+        el('p',{class:'cv-down-note',dataset:{linkModes:''}},el('b',{text:'두 가지로 만들어요. '}),'보기 링크: 받은 사람이 발표처럼 그대로 봐요(고칠 수 없어요). 고치기 링크: 받은 사람의 온바탕에 사본이 생겨 바로 고쳐요.'),
         el('p',{class:'cv-down-note',dataset:{guestTerms:''}},el('b',{text:'7일 동안만 열려요. '}),'7일이 지나면 링크와 자료가 서버에서 저절로 지워져요. 사진 포함 20MB까지, 하루에 5개까지 만들 수 있어요.'),
         el('p',{class:'cv-down-note',text:'사진 · 움직임 · 발표자 노트까지 그대로 가요. 오래 두고 보내려면 "온바탕 파일"을 써 주세요.'}),
         films?el('p',{class:'cv-down-note warn',role:'note',text:`바탕 영상 ${films}개는 7일 링크에 실리지 않아요(유튜브 주소로 넣은 영상은 그대로 틀어져요). 영상까지 보내려면 "온바탕 파일"을 써 주세요.`}):null));

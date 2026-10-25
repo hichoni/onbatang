@@ -1,5 +1,11 @@
 # 온바탕 — 생각을 펼치는 따뜻한 디자인 공간
 
+## v0.94.0 · 보기 링크 · 고치기 링크 (2026-10-26)
+
+- 링크 공유를 두 가지로: 보기 링크(`mode: 'view'`, 받은 사람이 가이랩의 재생 페이지 `onbatang-play.html?c=코드` 에서 발표처럼 본다 · 고칠 수 없다)와 고치기 링크(`'edit'`, 지금처럼 사본). 7일 링크 창(`openGuestLink`) 위에 두 칸이 있고, 종류마다 따로 만들고 기억한다(`guestLink(id, mode)`).
+- `copy-link.js`: `PLAY_PAGE` · `playUrl` · `linkUrl(code, mode)`, `createGuestLinks().publish({ mode })`(보기 링크만 `p_mode: 'view'` 를 보낸다), `createCopyIntake().take(code, { view })` — 보기 링크를 사본으로 받으려 하면 `onbatang_copy_view_only` 를 내고, 공용 온바탕은 재생 페이지로 보낸다.
+- 서버: 가이랩 SQL `202610260003_onbatang_link_modes.sql`.
+
 ## v0.93.0 · 링크 미리보기에 온바탕 표 (2026-10-26)
 
 - `app/link-card.js`: 카카오톡 · 메신저 미리보기 그림(첫 장 1200×630)의 오른쪽 아래 구석에 흰 알약 위 온바탕 로고(`brand/logo-primary.svg`, 높이 34px)를 작게 넣는다. 로고를 읽지 못하면 넣지 않는다. 가이랩의 공유 · 복사 링크도 이 그림을 쓴다.
