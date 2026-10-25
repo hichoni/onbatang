@@ -233,3 +233,13 @@ test('moving to a page in another part saves on this device and goes on without 
   await page.waitForFunction(() => document.querySelector('input.cv-name')?.value === '메이커 캠프 · 1', null, {timeout: 4000});
   assert.deepEqual(errors, []);
 });
+
+// 전체 자료를 모르는 곳(공용 온바탕 · 가이랩 계정에서 가져온 파트들): 호스트가 없어도 같은 PPT 의 모든 쪽을 잇는다.
+test('without any host, a PPT of several parts opens with every page in the strip', options, async t => {
+  const {page, errors} = await setup(t, fixture);
+  await page.locator('.cv-deck .cv-item-open').click();
+  await page.waitForFunction(() => document.querySelectorAll('[data-material-page]').length === 7);
+  await page.locator('[data-material-page="6"]').click();
+  await page.waitForFunction(() => document.querySelector('input.cv-name')?.value === '메이커 캠프 · 3');
+  assert.deepEqual(errors, []);
+});

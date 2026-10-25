@@ -4,6 +4,7 @@
 // 연결 창은 처음 열 때 정한 주소(gai-lab.netlify.app)와 그 창에서 온 신호만 받는다. 다 하면 온바탕이 연결 창을 닫는다.
 import { el, toast, openModal, closeModal } from './ui.js';
 import { cleanRecord, isDesignId, MAX_DESIGNS } from './designs.js';
+import { designView } from '../src/render.js';
 
 const PUT_MAX = 10;                 // 한 번에 올리는 그림 수
 export function createAccountBridge({ url = 'https://gai-lab.netlify.app/onbatang-account-connect.html', host = globalThis.window } = {}) {
@@ -73,57 +74,93 @@ export function importPlan(remote, local) {
   });
 }
 
+// 한 PPT 를 나눠 담은 파트들(이름 끝이 " · 2")은 한 칸으로 묶는다. 칸 하나를 고르면 그 파트를 모두 고른다.
+const PART_NAME = /^(.*\S)\s*·\s*(\d{1,3})$/;
+export function bridgeEntries(rows) {
+  const parts = new Map(), out = [];
+  for (const r of rows || []) {
+    const m = PART_NAME.exec(r.name || '');
+    if (m && r.ppt !== false) { if (!parts.has(m[1])) parts.set(m[1], []); parts.get(m[1]).push({ ...r, part: Number(m[2]) }); }
+    else out.push({ key: r.id, name: r.name || '이름 없는 그림', rows: [r], ppt: !!r.ppt });
+  }
+  for (const [name, list] of parts) {
+    if (list.length < 2) { out.push({ key: list[0].id, name: list[0].name, rows: list, ppt: !!list[0].ppt }); continue; }
+    out.push({ key: `p:${name}`, name, rows: list.sort((a, b) => a.part - b.part), ppt: true });
+  }
+  const at = (e) => Math.max(...e.rows.map((r) => r.updatedAt || 0));
+  return out.map((e) => ({ ...e, slides: e.rows.reduce((n, r) => n + (r.slides || 0), 0), updatedAt: at(e),
+    state: e.rows.every((r) => r.state === 'same') ? 'same' : e.rows.some((r) => r.state === 'newer') ? 'newer' : 'new' })).sort((a, b) => b.updatedAt - a.updatedAt);
+}
+const STATE_TEXT = { new: '새로', newer: '계정 것이 더 새로워요', same: '이미 같아요' };
+const UP_TEXT = { new: '아직 안 올렸어요', newer: '이 기기 것이 더 새로워요', same: '이미 올렸어요' };
+// 작은 표지: 첫 장을 그린다(없으면 이름 첫 글자).
+function coverOf(first, size, name) {
+  const box = el('span', { class: 'cv-bridge-cover', 'aria-hidden': 'true' });
+  try {
+    if (first && size?.width > 0 && size?.height > 0) { const view = designView(first); view.style.setProperty('--fe-ratio', String(size.width / size.height)); box.append(view); return box; }
+  } catch { /* 표지 없이 */ }
+  box.dataset.empty = '1'; box.textContent = String(name || '그').slice(0, 1); return box;
+}
+
 /**
  * 이어 쓰기 창. bridge: createAccountBridge(), store: { list(), put(record) }, onChanged: 가져온 뒤 첫 화면 다시 그리기.
  */
 export function openAccountBridge({ bridge, store, onChanged = () => {} }) {
   const status = el('p', { class: 'cv-bridge-status', role: 'status', 'aria-live': 'polite' });
   const body = el('div', { class: 'cv-bridge-body' });
-  const connect = el('button', { class: 'btn btn-primary', type: 'button', onClick: () => start() }, '가이랩 계정 연결');
+  const connect = el('button', { class: 'btn btn-primary cv-bridge-go', type: 'button', onClick: () => start() }, '가이랩 계정 연결');
+  const intro = el('div', { class: 'cv-bridge-intro' },
+    el('ol', { class: 'cv-bridge-steps' },
+      el('li', {}, el('b', { text: '가이랩 창에서 로그인' }), el('span', { text: '작은 창이 열려요. 로그인 정보는 이 창으로 오지 않아요.' })),
+      el('li', {}, el('b', { text: '"허락" 누르기' }), el('span', { text: '이 온바탕과 계정을 이어요.' })),
+      el('li', {}, el('b', { text: '가져오거나 올리기' }), el('span', { text: '고른 그림 · PPT만 오가요.' }))),
+    connect);
   const panel = el('div', { class: 'cv-bridge' },
-    el('h2', { text: '가이랩 계정으로 이어 쓰기' }),
-    el('p', { class: 'cv-bridge-lead', text: '집에서 만든 그림을 학교에서 열 때 써요. 가이랩 선생님 계정에 올려 두고, 다른 컴퓨터에서 가져와요. 가이랩에서 온바탕을 열면 계정의 그림이 저절로 보여요.' }),
-    el('p', { class: 'cv-bridge-note', text: '로그인은 가이랩 창에서만 해요. 여러 사람이 쓰는 컴퓨터라면 다 쓴 뒤 가져온 그림을 지워 주세요.' }),
+    el('div', { class: 'cv-bridge-head' }, el('h2', { text: '가이랩 계정으로 이어 쓰기' }),
+      el('p', { class: 'cv-bridge-lead', text: '집에서 만든 그림을 학교에서, 학교에서 만든 PPT를 집에서 이어서 고쳐요.' })),
     body, status);
-  body.append(connect);
+  body.append(intro);
   openModal(panel, { wide: true, onClose: () => bridge.close() });
   const busy = async (job) => { panel.inert = true; status.textContent = ''; try { await job(); } catch (error) { status.textContent = String(error?.message || '하지 못했어요. 다시 해 주세요.'); } finally { panel.inert = false; } };
+  let tab = null;
   function start() {
     // 연결 창은 누르기에서 곧바로 연다(기다린 뒤에 열면 브라우저가 막는다).
     const opened = bridge.connect();
     status.textContent = '가이랩 창에서 로그인하고 "허락"을 눌러 주세요.';
     busy(async () => { await opened; await paint(); status.textContent = '가이랩 계정에 연결했어요.'; });
   }
-  const pick = (rows, label) => {
-    const boxes = rows.map((r) => ({ r, box: el('input', { type: 'checkbox', checked: r.state !== 'same', disabled: r.state === 'same' }) }));
-    const all = el('label', { class: 'cv-bridge-all' }, el('input', { type: 'checkbox', onChange: (e) => { for (const b of boxes) if (!b.box.disabled) b.box.checked = e.currentTarget.checked; } }), ' 모두');
-    const list = el('ul', { class: 'cv-bridge-list', 'aria-label': label }, ...boxes.map(({ r, box }) => el('li', {}, el('label', {}, box,
-      el('b', { text: r.name || '이름 없는 그림' }), el('span', { text: ` ${r.slides || 0}장 · ${when(r.updatedAt)}` }),
-      r.state === 'same' ? el('em', { text: ' 이 기기 것이 같거나 더 새로워요' }) : r.state === 'newer' ? el('em', { text: ' 계정 것이 더 새로워요' }) : null))));
-    return { all, list, chosen: () => boxes.filter((b) => b.box.checked).map((b) => b.r) };
-  };
+  // 고르는 칸들: 칸마다 표지 · 이름 · 장 수 · 파트 수 · 때 · 상태. 이미 같은 것은 고를 수 없다.
+  function pick(entries, label, words, action) {
+    const boxes = entries.map((e) => ({ e, box: el('input', { type: 'checkbox', checked: e.state !== 'same', disabled: e.state === 'same', 'aria-label': e.name }) }));
+    const count = el('span', { class: 'cv-bridge-count' });
+    const run = el('button', { class: 'btn btn-primary', type: 'button' });
+    const sync = () => { const n = boxes.filter((b) => b.box.checked).length; count.textContent = `${n}개 고름`; run.textContent = `${action.label(n)}`; run.disabled = !n; all.checked = n > 0 && boxes.every((b) => b.box.disabled || b.box.checked); };
+    const all = el('input', { type: 'checkbox', onChange: (ev) => { for (const b of boxes) if (!b.box.disabled) b.box.checked = ev.currentTarget.checked; sync(); } });
+    for (const b of boxes) b.box.addEventListener('change', sync);
+    const list = el('ul', { class: 'cv-bridge-list', 'aria-label': label }, ...boxes.map(({ e, box }) => el('li', { class: 'cv-bridge-item', dataset: { state: e.state } }, el('label', {}, box,
+      coverOf(e.rows[0].first, e.rows[0].size, e.name),
+      el('span', { class: 'cv-bridge-info' },
+        el('b', { text: e.name }),
+        el('span', { class: 'cv-bridge-chips' }, e.ppt ? el('i', { class: 'cv-bridge-ppt', text: 'PPT' }) : null,
+          el('span', { text: `${e.slides}장${e.rows.length > 1 ? ` · 파트 ${e.rows.length}개` : ''}` }), el('span', { text: when(e.updatedAt) })),
+        el('em', { class: 'cv-bridge-state', text: words[e.state] }))))));
+    run.addEventListener('click', () => action.go(boxes.filter((b) => b.box.checked).flatMap((b) => b.e.rows)));
+    sync();
+    return el('div', { class: 'cv-bridge-pane' },
+      entries.length ? list : el('p', { class: 'cv-bridge-empty', text: action.empty }),
+      el('div', { class: 'cv-bridge-foot' }, entries.length ? el('label', { class: 'cv-bridge-all' }, all, ' 모두') : el('span'), count, run));
+  }
   async function paint() {
     const local = await store.list(), remote = await bridge.list();
     const upRows = local.map((r) => {
       const there = remote.find((x) => x.id === r.id);
-      return { id: r.id, name: r.name, slides: r.slides?.length || 0, updatedAt: r.updatedAt, state: there && (there.updatedAt || 0) >= (r.updatedAt || 0) ? 'same' : 'new' };
+      return { id: r.id, name: r.name, slides: r.slides?.length || 0, updatedAt: r.updatedAt, ppt: r.source?.kind === 'pptx', first: r.slides?.[0], size: r.size,
+        state: there && (there.updatedAt || 0) >= (r.updatedAt || 0) ? 'same' : there ? 'newer' : 'new' };
     });
-    const up = pick(upRows, '올릴 그림'), down = pick(importPlan(remote, local), '가져올 그림');
-    const send = el('button', { class: 'btn btn-primary', type: 'button', disabled: !upRows.length, onClick: () => busy(async () => {
-      const ids = up.chosen().map((r) => r.id);
-      if (!ids.length) { status.textContent = '올릴 그림을 골라 주세요.'; return; }
-      const records = (await store.list()).filter((r) => ids.includes(r.id));
-      let saved = 0; const failed = [];
-      for (let i = 0; i < records.length; i += PUT_MAX) {
-        const out = await bridge.put(records.slice(i, i + PUT_MAX));
-        saved += out?.saved?.length || 0; failed.push(...(out?.failed || []));
-      }
-      await paint();
-      status.textContent = failed.length ? `${saved}개를 올렸고 ${failed.length}개는 못 올렸어요: ${failed[0].message}` : `${saved}개를 가이랩 계정에 올렸어요. 다른 컴퓨터에서 가져오거나 가이랩에서 열어요.`;
-    }) }, '골라서 계정에 올리기');
-    const take = el('button', { class: 'btn btn-primary', type: 'button', disabled: !remote.length, onClick: () => busy(async () => {
-      const ids = down.chosen().map((r) => r.id);
-      if (!ids.length) { status.textContent = '가져올 그림을 골라 주세요.'; return; }
+    const downs = bridgeEntries(importPlan(remote, local)), ups = bridgeEntries(upRows);
+    tab ||= downs.some((e) => e.state !== 'same') || !ups.length ? 'down' : 'up';
+    const take = pick(downs, '가져올 그림', STATE_TEXT, { label: (n) => n ? `고른 ${n}개 이 기기로 가져오기` : '가져올 것을 골라 주세요', empty: '계정에 그림이 없어요.', go: (rows) => busy(async () => {
+      const ids = rows.map((r) => r.id);
       const here = await store.list(), fresh = ids.filter((id) => !here.some((r) => r.id === id)).length;
       if (here.length + fresh > MAX_DESIGNS) { status.textContent = `이 기기에는 그림을 ${MAX_DESIGNS}장까지 둘 수 있어요. 안 쓰는 그림을 지우고 다시 해 주세요.`; return; }
       let got = 0;
@@ -135,11 +172,26 @@ export function openAccountBridge({ bridge, store, onChanged = () => {} }) {
       }
       onChanged();
       await paint();
-      status.textContent = `${got}개를 이 기기로 가져왔어요. 첫 화면의 내 그림에서 열어요.`;
-    }) }, '골라서 이 기기로 가져오기');
-    body.replaceChildren(
-      el('section', { class: 'cv-bridge-part' }, el('h3', { text: '이 기기 → 가이랩 계정' }), upRows.length ? up.all : null, upRows.length ? up.list : el('p', { text: '이 기기에 그림이 없어요.' }), send),
-      el('section', { class: 'cv-bridge-part' }, el('h3', { text: '가이랩 계정 → 이 기기' }), remote.length ? down.all : null, remote.length ? down.list : el('p', { text: '계정에 그림이 없어요.' }), take),
-      el('div', { class: 'cv-bridge-end' }, el('button', { class: 'btn', type: 'button', onClick: () => { bridge.close(); closeModal(); toast('가이랩 연결을 끊었어요.'); } }, '다 했어요 · 연결 끊기')));
+      status.textContent = `${got}개를 이 기기로 가져왔어요. 첫 화면의 내 그림에서 열어요(PPT는 한 칸으로 묶여 모든 쪽이 이어져요).`;
+    }) });
+    const send = pick(ups, '올릴 그림', UP_TEXT, { label: (n) => n ? `고른 ${n}개 계정에 올리기` : '올릴 것을 골라 주세요', empty: '이 기기에 그림이 없어요.', go: (rows) => busy(async () => {
+      const ids = rows.map((r) => r.id);
+      const records = (await store.list()).filter((r) => ids.includes(r.id));
+      let saved = 0; const failed = [];
+      for (let i = 0; i < records.length; i += PUT_MAX) {
+        const out = await bridge.put(records.slice(i, i + PUT_MAX));
+        saved += out?.saved?.length || 0; failed.push(...(out?.failed || []));
+      }
+      await paint();
+      status.textContent = failed.length ? `${saved}개를 올렸고 ${failed.length}개는 못 올렸어요: ${failed[0].message}` : `${saved}개를 가이랩 계정에 올렸어요. 다른 컴퓨터에서 가져오거나 가이랩에서 열어요.`;
+    }) });
+    const tabs = el('div', { class: 'cv-bridge-tabs', role: 'tablist', 'aria-label': '가져오기 · 올리기' });
+    const show = (which) => { tab = which; for (const b of tabs.children) { const on = b.dataset.tab === which; b.setAttribute('aria-selected', String(on)); b.classList.toggle('on', on); } take.hidden = which !== 'down'; send.hidden = which !== 'up'; };
+    tabs.append(
+      el('button', { type: 'button', role: 'tab', dataset: { tab: 'down' }, onClick: () => show('down') }, `계정에서 가져오기 · ${downs.length}`),
+      el('button', { type: 'button', role: 'tab', dataset: { tab: 'up' }, onClick: () => show('up') }, `계정에 올리기 · ${ups.length}`));
+    body.replaceChildren(tabs, take, send,
+      el('div', { class: 'cv-bridge-end' }, el('button', { class: 'btn btn-ghost', type: 'button', onClick: () => { bridge.close(); closeModal(); toast('가이랩 연결을 끊었어요.'); } }, '다 했어요 · 연결 끊기')));
+    show(tab);
   }
 }
