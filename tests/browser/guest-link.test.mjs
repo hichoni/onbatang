@@ -106,7 +106,15 @@ test('7-day link: anyone makes it from the export dialog, it carries no video, s
   assert.equal(sent.slides.some(s => 'video' in s), false, 'no background video');
   assert.equal(sent.slides[0].items[0].text, '가을 소풍');
   assert.match(state.link.card, /^\/9j\//);
-  assert.deepEqual(await page.evaluate(async b64 => { const bmp = await createImageBitmap(await (await fetch('data:image/jpeg;base64,' + b64)).blob()); return [bmp.width, bmp.height]; }, state.link.card), [1200, 630]);
+  const pixels = await page.evaluate(async b64 => {
+    const bmp = await createImageBitmap(await (await fetch('data:image/jpeg;base64,' + b64)).blob()), c = new OffscreenCanvas(bmp.width, bmp.height), g = c.getContext('2d');
+    g.drawImage(bmp, 0, 0);
+    return {size: [bmp.width, bmp.height], badge: [...g.getImageData(1000, 580, 1, 1).data].slice(0, 3), slide: [...g.getImageData(900, 580, 1, 1).data].slice(0, 3)};
+  }, state.link.card);
+  assert.deepEqual(pixels.size, [1200, 630]);
+  // 오른쪽 아래 구석에 온바탕 표(흰 알약 위 로고)가 작게 들어 있다. 그 옆은 장의 바탕(노랑)이다.
+  assert.ok(pixels.badge.every(v => v > 230), `a white badge: ${pixels.badge}`);
+  assert.ok(pixels.slide[2] < 170, `the slide around it: ${pixels.slide}`);
   await dialog.locator('[data-guest-copy]').click();
   assert.equal(await page.evaluate(() => navigator.clipboard.readText()), `https://gai-lab.netlify.app/onbatang-copy.html?c=${CODE}`);
 
