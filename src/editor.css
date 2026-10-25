@@ -758,6 +758,9 @@
 .fi-yt.live:not(.started):hover .fi-yt-play { transform: scale(1.08); }
 .fi-yt.started .fi-yt-thumb, .fi-yt.started .fi-yt-play { display: none; }
 .fi-yt.live:not(.started) .fi-yt-frame { visibility: hidden; }
+/* 화면 가득(full): 발표에서 틀면 장 전체를 덮는다(놓인 자리 · 돌림 · 움직임보다 앞선다). 끝나면 제자리로 돌아온다. */
+.fi-yt.expanded { left: 50% !important; top: 50% !important; width: 100% !important; height: 100% !important; transform: translate(-50%, -50%) !important; opacity: 1 !important; z-index: 1000; border-radius: 0; }
+.fe-stage .fi-yt.full:not(.live)::after { content: '화면 가득'; position: absolute; right: 4%; top: 6%; padding: .25em .6em; border-radius: 99px; background: #000a; color: #fff; font: 600 max(10px, 1.6cqw)/1.2 system-ui, sans-serif; pointer-events: none; }
 .fe-yt-add { display: grid; gap: 12px; }
 .fe-yt-row { flex-wrap: nowrap; }
 .fe-panel input.fe-yt-input, .fe-panel input.fe-yt-start { flex: 1 1 auto; min-width: 0; }
