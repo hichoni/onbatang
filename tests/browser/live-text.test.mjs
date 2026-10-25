@@ -85,14 +85,11 @@ test('text looks: matched to the moving background or picked from 37, on any sli
   await until(d => d.live?.id === 'waves');
   await page.waitForFunction(() => /em/.test(document.querySelector('.cv-canvas .fe-stage .fi-text').style.translate));
 
-  // 움직이는 바탕 없이: 바탕을 "없음"으로 하고, 글을 고른 뒤 "효과" 칸에서 통통 튀기를 고른다.
+  // 움직이는 바탕 없이: 바탕을 "없음"으로 하고, 같은 칸에서 통통 튀기 → 불꽃 글자를 고른다.
   await page.locator('[data-live-tile=none]').click();
   await until(d => !d.live);
   assert.equal(await page.locator('[data-look-tile=auto]').count(), 0, 'no "match the background" without one');
   await page.waitForFunction(() => document.querySelector('.cv-canvas .fe-stage .fi-text').style.translate === '');
-  await page.keyboard.press('Escape');
-  await text.click();
-  await page.locator('.fe-bar button').filter({hasText: '효과'}).click();
   await page.locator('[data-look-tile=bounce]').click();
   assert.equal((await until(d => d.look === 'bounce')).live, undefined);
   await page.locator('[data-look-tile=fire]').click();
@@ -100,7 +97,6 @@ test('text looks: matched to the moving background or picked from 37, on any sli
   await glowing();
 
   // 발표: 움직이는 바탕이 없어도 글에 효과가 입혀진다.
-  await page.keyboard.press('Escape');
   await page.keyboard.press('Escape');
   await page.locator('.cv-show-btn').click();
   await page.locator('.cv-show .fe-card[data-look=fire]').waitFor();

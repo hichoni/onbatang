@@ -21,7 +21,7 @@ import { cleanActivity } from './activity.js';
 import { cleanCrop } from './crop.js';
 import { cleanRuns } from './runs.js';
 import { designWeb, cleanWebUrl, webHost } from './web.js';
-import { designLive } from './live.js';
+import { designLive, cleanLook } from './live.js';
 import { LINK_HEADS, LINK_LINE, LINK_SIDES, LINK_BEND, LINK_SHAPES, LINK_LABEL_MAX, LINK_LABEL_AT, LINK_LABEL_SIZES, LINK_LABEL_STYLES, LINK_POS, CURVE_BEND, layoutLinks } from './links.js';
 
 export { SHAPE_GROUPS };
@@ -283,6 +283,8 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
       // 글 테두리(stroke: 색) · 그림자(shadow): 사진 위 제목이 잘 읽히게. 정했을 때만 적는다.
       ...(it.stroke ? {stroke: cleanColor(it.stroke, '#ffffff')} : {}),
       ...(it.shadow === true ? {shadow: true} : {}),
+      // 이 글상자의 글자 효과(live.js): 효과 이름 · 'none'(장의 효과를 쓰지 않음). 없으면 장의 효과를 따른다.
+      ...(cleanLook(it.lk) ? {lk: cleanLook(it.lk)} : {}),
       ...(pptxItem(base) ? {
         ...(given(it.h) ? {h:measure(base,it.h,0.01,140,10),valign:['top','middle','bottom'].includes(it.valign)?it.valign:'top'} : {}),
         ...(it.nowrap===true ? {nowrap:true} : {}),
@@ -861,7 +863,7 @@ export function clampShift(items, dx, dy) {
 // 캔바의 "스타일 복사", 파워포인트의 "서식 복사"처럼 꾸밈 값만 옮긴다(글·자리·크기·사진은 그대로).
 // 종류마다 옮길 수 있는 값이 다르다. 둘 다 가진 값만 옮긴다(예: 글 → 도형이면 색과 투명도만).
 const STYLE_KEYS = {
-  text: ['color', 'font', 'typeface', 'size', 'bold', 'italic', 'under', 'align', 'valign', 'lh', 'bgc', 'stroke', 'shadow', 'op'],
+  text: ['color', 'font', 'typeface', 'size', 'bold', 'italic', 'under', 'align', 'valign', 'lh', 'bgc', 'stroke', 'shadow', 'lk', 'op'],
   shape: ['color', 'line', 'lc', 'hollow', 'r', 'op'],
   art: ['color', 'op'],
   emoji: ['op'],
