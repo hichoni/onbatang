@@ -21,7 +21,7 @@ import { styleRuns, runsAll, dropRunKey, shiftRuns } from './runs.js';
 const RUN_KEYS = [['bold', 'b'], ['italic', 'i'], ['under', 'u'], ['color', 'c']];
 import { layoutLinks, relink, LINK_LINE, LINK_SHAPES, LINK_LABEL_MAX, linkSvg, linkHandle, dragLinkHandle, linkLabelSize, linkLabelT, linkEnds, endSpot, pieceNear, boxOfItem } from './links.js';
 import { sceneView, scenePlayer, keepScene, probeVideo, ACCEPT_VIDEOS } from './scene.js';
-import { LIVES, LIVE_GROUPS, liveView, liveStill, liveBackdrops, liveSeed } from './live.js';
+import { LIVES, LIVE_GROUPS, liveView, liveStill, liveBackdrops, liveSeed, liveLookName } from './live.js';
 import { icon } from './icons.js';
 import { parseYouTube, ytStart, ytTime, ytWatch, ytEmbed } from './youtube.js';
 import { ACCEPT_IMAGES, PHOTO_EDGE, readPixels, canvasToPng, shrinkImage } from './images.js';
@@ -412,7 +412,7 @@ export function createEditor({
   // 꾸미기 판에서도 움직여 보여 준다(1초에 30번). 같은 장 · 같은 바탕이면 놓인 것을 그대로 둔다(떼었다 붙이면 처음부터 다시 피어난다).
   let live = null;
   function syncLive() {
-    const key = card?.live?.id ? `${card.live.id}|${card.id || ''}` : '';
+    const key = card?.live?.id ? `${card.live.id}|${card.live.text === false ? 'plain' : 'look'}|${card.id || ''}` : '';
     if (live && live.key !== key) { live.run.stop(); live.box.remove(); live = null; }
     if (!key) return;
     if (!live) {
@@ -454,6 +454,27 @@ export function createEditor({
     renderUi();
     onChange();
     keepKeys();
+  }
+  // 그 바탕에 어울리는 글자 효과(빛 · 그늘 · 둥실) 켜고 끄기. 바탕을 새로 고르면 다시 켜진다.
+  function setLiveText(on) {
+    if (!card.live || (card.live.text !== false) === on) return;
+    remember();
+    card.live = on ? { id: card.live.id } : { id: card.live.id, text: false };
+    renderStage();
+    renderUi();
+    onChange();
+  }
+  function liveTextBody() {
+    if (!card.live) return [];
+    const on = card.live.text !== false;
+    const choose = (label, value) => el('button', {
+      class: `fe-btn${on === value ? ' on' : ''}`, type: 'button', 'aria-pressed': String(on === value), dataset: { liveText: value ? 'on' : 'off' }, onClick: () => setLiveText(value),
+    }, label);
+    return [
+      el('div', { class: 'fe-poshead', text: `글자 효과 · ${liveLookName(card.live.id)}` }),
+      el('div', { class: 'fe-grid two' }, choose('켜기', true), choose('끄기', false)),
+      el('p', { class: 'fe-note', text: '이 장의 글에 바탕과 어울리는 빛 · 그늘 · 살랑임을 입혀요. 글자 색 · 테두리는 그대로고, 그림 · PDF 에는 멈춘 모습의 빛과 그늘이 들어가요.' }),
+    ];
   }
 
   // ---------- 영상 장면(이 장의 바탕에 깐 영상) ----------
@@ -2753,7 +2774,8 @@ export function createEditor({
           ? '조각을 누르면 꾸미는 도구가 나와요 · Shift 누르기나 빈 곳 끌기로 여럿 고르기' : '도구 칸에서 틀이나 글을 넣어 시작해요.' }));
       const body = pop === 'pagebg' ? [el('div', { class: 'fe-poshead', text: '바탕색' }), bgPicker(), el('p', { class: 'fe-note', text: bgNote }),
         el('div', { class: 'fe-poshead', text: '움직이는 바탕' }), livePicker(),
-        el('p', { class: 'fe-note', text: '코드가 순간마다 그려요(인터넷 · AI 없이 이 기기에서). 발표 · 공유 링크 · 영상에서 움직이고, 그림 · PDF 에는 멈춘 모습으로 들어가요.' })] : null;
+        el('p', { class: 'fe-note', text: '코드가 순간마다 그려요(인터넷 · AI 없이 이 기기에서). 발표 · 공유 링크 · 영상에서 움직이고, 그림 · PDF 에는 멈춘 모습으로 들어가요.' }),
+        ...liveTextBody()] : null;
       popBox.hidden = !body;
       popBox.replaceChildren(...(body ? [
         el('button', { class: 'fe-pop-close', type: 'button', 'aria-label': '닫기', title: '닫기 (Esc)', onClick: () => toggle(pop) }, icon('close')), ...body] : []));

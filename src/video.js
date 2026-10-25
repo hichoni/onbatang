@@ -26,7 +26,7 @@ import { filmPlan, slidePoses, slideLoops, filmCells, packCells, DEFAULT_STAY, M
 import { mp4Parts, webmParts } from './mux.js';
 import { sceneBlob } from './scene.js';
 import { openReel, videoInfo } from './reel.js';
-import { paintLive, liveSeed } from './live.js';
+import { paintLive, liveSeed, liveLook, lookAt } from './live.js';
 import { soundTrack, mixSound, hasSound, decodeSound, encodeSound, soundKinds } from './sound.js';
 
 const RAD = Math.PI / 180;
@@ -223,10 +223,48 @@ async function buildSlide(design, slide, W, H, before = null) {
   const tweens = slide.turn?.pairs && before ? await buildTweens(before, design, slide.turn, W, H) : null;
   // 움직이는 바탕: 프레임마다 그 순간의 모습을 바탕 바로 위에 그린다(live.js. 발표와 같은 씨앗이라 같은 무늬다).
   const live = design.live ? { live: design.live, seed: liveSeed(design.id) } : null;
-  return { slide, layers, canvases, missingFonts: [...missingFonts], scene, tweens, stops, live };
+  // 그 바탕의 글자 효과: 글마다 빛 · 그늘을 한 번 그려 두고(lookLayers), 프레임마다 그 순간의 세기 · 자리로 겹친다(drawLayer).
+  const look = liveLook(design.live);
+  if (look) {
+    const nth = new Map();
+    design.items.forEach((it, i) => { if (it.t === 'text') nth.set(i, nth.size); });
+    for (const L of layers) if (nth.has(L.i)) L.look = lookLayers(L, look, nth.get(L.i), (design.items[L.i].size / 100) * W);
+  }
+  return { slide, layers, canvases, missingFonts: [...missingFonts], scene, tweens, stops, live, look };
+}
+// 글 그림(L)에서 그림자만 떼어 그린 빛 · 그늘 그림들. 글은 칸 밖에 그리고 그림자만 칸 안으로 옮겨 온다(화면의 text-shadow 와 같은 번짐).
+function lookLayers(L, look, n, px) {
+  const bake = (layers) => {
+    if (!layers?.length) return null;
+    const c = document.createElement('canvas');
+    c.width = L.w; c.height = L.h;
+    const g = c.getContext('2d'), off = L.w + 64;
+    for (const [[r, gr, b, a], blur, x = 0, y = 0] of layers) {
+      Object.assign(g, { shadowColor: `rgba(${r}, ${gr}, ${b}, ${a})`, shadowBlur: blur * px, shadowOffsetX: off + x * px, shadowOffsetY: y * px });
+      g.drawImage(L.img, L.sx, L.sy, L.w, L.h, -off, 0, L.w, L.h);
+    }
+    return c;
+  };
+  const sh = look.shade;
+  return { n, px, shade: sh ? bake([[sh[3], sh[2], sh[0], sh[1]]]) : null, a: bake(look.glow), b: bake(look.alt) };
+}
+// 칸 하나를 그린다. 글자 효과가 있으면 그 밑에 그늘 · 빛을 그 순간의 세기로 먼저 깐다(화면처럼 요소의 투명도 · 흐림을 함께 따른다).
+function drawLayer(ctx, L, lk) {
+  if (lk) {
+    const alpha = ctx.globalAlpha;
+    if (L.look.shade) ctx.drawImage(L.look.shade, L.ox, L.oy);
+    for (const [img, k] of [[L.look.b, lk.b], [L.look.a, lk.a]]) {
+      if (!img || !(k > 0.002)) continue;
+      ctx.globalAlpha = alpha * Math.min(1, k);
+      ctx.drawImage(img, L.ox, L.oy);
+    }
+    ctx.globalAlpha = alpha;
+  }
+  ctx.drawImage(L.img, L.sx, L.sy, L.w, L.h, L.ox, L.oy, L.w, L.h);
 }
 function freeSlide(built) {
-  for (const c of [...(built?.canvases || []), ...(built?.tweens?.canvases || [])]) { c.width = 0; c.height = 0; }
+  const looks = (built?.layers || []).flatMap((L) => (L.look ? [L.look.shade, L.look.a, L.look.b].filter(Boolean) : []));
+  for (const c of [...(built?.canvases || []), ...(built?.tweens?.canvases || []), ...looks]) { c.width = 0; c.height = 0; }
   closeScene(built?.scene);
 }
 
@@ -257,9 +295,19 @@ function drawSlide(ctx, W, H, built, local, skip = null) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.globalAlpha = 1;
   ctx.clearRect(0, 0, W, H);
+  // 글자 효과의 시간: 움직이는 바탕과 같다(그 장이 열린 때부터. 다 나온 모습은 그 장이 끝나는 때).
+  const sec = (Number.isFinite(local) ? local : built.slide.ms) / 1000;
   for (const L of built.layers) {
     if (skip && skip.has(L.i)) continue;              // 이어 움직이기: 옮겨 그릴 요소는 따로 그린다
     const p = L.i >= 0 ? poses.get(L.i) : null;
+    const lk = L.look ? lookAt(built.look, sec, L.look.n) : null;
+    if (!p && lk) {
+      ctx.save();
+      ctx.translate(lk.dx * L.look.px, lk.dy * L.look.px);
+      drawLayer(ctx, L, lk);
+      ctx.restore();
+      continue;
+    }
     if (!p) {
       ctx.drawImage(L.img, L.sx, L.sy, L.w, L.h, L.ox, L.oy, L.w, L.h);
       // 바탕 바로 위에 영상 장면의 프레임을 그린다(요소들은 그 위에 얹힌다).
@@ -269,8 +317,9 @@ function drawSlide(ctx, W, H, built, local, skip = null) {
       continue;
     }
     if (p.o <= 0.001 || p.clip >= 99.999 || (p.stops && p.tk <= 0)) continue;
-    const dx = (p.x / 100) * W;
-    const dy = (p.y / 100) * W;      // 세로로 옮기는 거리도 카드 "너비"를 따른다(화면에서 cqw 로 옮기는 것과 같다)
+    // 세로로 옮기는 거리도 카드 "너비"를 따른다(화면에서 cqw 로 옮기는 것과 같다). 글자 효과의 둥실 · 살랑은 그 위에 더한다.
+    const dx = (p.x / 100) * W + (lk ? lk.dx * L.look.px : 0);
+    const dy = (p.y / 100) * W + (lk ? lk.dy * L.look.px : 0);
     const kx = p.kx ?? 1;
     const ky = p.ky ?? 1;
     if (Math.abs(kx) < 0.001 || Math.abs(ky) < 0.001) continue;     // 납작하게 접힌 순간(뒤집히며 · 펼치기의 처음)
@@ -306,7 +355,7 @@ function drawSlide(ctx, W, H, built, local, skip = null) {
     }
     ctx.scale(p.k, p.k);
     ctx.translate(-L.cx, -L.cy);
-    ctx.drawImage(L.img, L.sx, L.sy, L.w, L.h, L.ox, L.oy, L.w, L.h);
+    drawLayer(ctx, L, lk);
     ctx.restore();
   }
 }
