@@ -1079,6 +1079,12 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero-go { display: flex
 .cv-file-clash,.cv-file-make{max-width:440px}
 .cv-file-clash h2,.cv-file-make h2{margin:0 0 8px}
 .cv-file-choices{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 12px}
+/* 7일 링크(공용 온바탕의 링크 공유) */
+.cv-guest{max-width:560px}.cv-guest h2{margin:0 0 8px}
+.cv-guest-terms{margin:10px 0;padding-left:20px;line-height:1.6}.cv-guest-note{margin:8px 0;line-height:1.55}.cv-guest-note.warn{color:#9a4b00}
+.cv-guest-field{display:grid;gap:6px;margin:12px 0 0;font-weight:600}.cv-guest-field input{font:inherit;padding:10px 12px;border:1px solid #cfd8d3;border-radius:10px}
+.cv-guest-link{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}.cv-guest-link code{flex:1 1 100%;padding:10px 12px;border-radius:10px;background:#f2f5f3;word-break:break-all;font-size:14px}
+.cv-guest-msg{min-height:1.4em;margin:8px 0 0;font-weight:600}
 @media(max-width:600px){.cv-strip{padding:10px}.cv-strip-header{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px}.cv-strip-header .cv-slide-count{grid-column:1/-1;grid-row:1}.cv-strip-guide{grid-column:1/-1;grid-row:3}.cv-slide-scroll{grid-row:2;min-width:44px;min-height:44px}.cv-strip-size{grid-column:1;grid-row:2;margin:0}}
 @keyframes onba-assemble{0%,100%{transform:translate(var(--from-x),var(--from-y)) rotate(var(--from-r));opacity:.35}32%,78%{transform:translate(0,0) rotate(0deg);opacity:1}92%{opacity:.6}}
 @media(prefers-reduced-motion:reduce){.onba-loading-art *{animation:none!important;transform:none!important;opacity:1!important}}
