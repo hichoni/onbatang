@@ -1,4 +1,4 @@
-// Account credentials stay in the G-AI Lab window. Only explicit generation
+// Account credentials stay in the GBE-AI Lab window. Only explicit generation
 // requests and bounded app results cross this channel.
 export function createGaiPopupProvider({ url = 'https://gai-lab.netlify.app/onbatang-gai-connect.html', host = globalThis.window } = {}) {
   const endpoint = new URL(url), pending = new Map();

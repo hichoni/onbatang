@@ -1,4 +1,4 @@
-// Local-only browser contract for a host share button (가이랩 공유 링크): startMinican({ shareAction }).
+// Local-only browser contract for a host share button (GBE-AI Lab 공유 링크): startMinican({ shareAction }).
 // The button sits in the editor bar, opens the host with a flush and goTo (slide + 내 자료 · 유튜브), and every local save calls saved(record).
 import test from 'node:test';
 import assert from 'node:assert/strict';

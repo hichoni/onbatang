@@ -1,4 +1,4 @@
-// Local-only browser contract for a host phone remote (가이랩 휴대폰 리모컨): startMinican({ showRemote }).
+// Local-only browser contract for a host phone remote (GBE-AI Lab 휴대폰 리모컨): startMinican({ showRemote }).
 // The presentation bar gets 휴대폰 리모컨; the host gets the state (slide, titles, notes) on every turn and its commands turn slides.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -79,7 +79,7 @@ test('a host phone remote and a host audience panel: buttons in the show bar, st
   assert.deepEqual(await page.evaluate(() => [window.audience.first, window.audience.root]), [{at: 2, total: 3, title: '리모컨 발표'}, true]);
   await page.evaluate(() => window.command({action: 'prev'}));
   await page.waitForFunction(() => window.audience.updates.at(-1).at === 1);
-  // Typing in a text box the host puts on the show (가이랩 투표 칸) stays in that box: space and arrows do not turn slides.
+  // Typing in a text box the host puts on the show (GBE-AI Lab 투표 칸) stays in that box: space and arrows do not turn slides.
   await page.evaluate(() => { const box = document.createElement('input'); box.className = 'host-box'; document.querySelector('.cv-show').append(box); box.focus(); });
   await page.keyboard.type('1 번 ');
   await page.keyboard.press('ArrowRight');

@@ -1,5 +1,5 @@
-// 가이랩 계정으로 이어 쓰기(브라우저): 집 컴퓨터에서 그림을 계정에 올리고, 다른(빈) 컴퓨터에서 가져온다.
-// 가이랩 연결 창은 다른 주소(localhost)의 시험용 창이 맡는다(계정 보관은 그 서버의 메모리). 바깥 요청은 없다.
+// GBE-AI Lab 계정으로 이어 쓰기(브라우저): 집 컴퓨터에서 그림을 계정에 올리고, 다른(빈) 컴퓨터에서 가져온다.
+// GBE-AI Lab 연결 창은 다른 주소(localhost)의 시험용 창이 맡는다(계정 보관은 그 서버의 메모리). 바깥 요청은 없다.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
@@ -14,8 +14,8 @@ import {startMinican} from '/app/app.js';
 try{localStorage.setItem('onbatang-tour-seen-v1:editor','1');localStorage.setItem('onbatang-tour-seen-v1:news-0.45','1');localStorage.setItem('onbatang-tour-seen-v1:home','1');}catch{}
 await startMinican({storage:'bridge-fixture',accountBridge:{url:${JSON.stringify(connectUrl)}}});window.ready=true;
 </script>`;
-// 시험용 가이랩 연결 창: 허락을 누르면 ready, list · get · put 은 서버 메모리의 계정 보관함을 쓴다.
-const connect = `<!doctype html><meta charset="utf-8"><title>가이랩 계정 연결(시험)</title><button id="ok">허락하고 온바탕에 연결</button><script>
+// 시험용 GBE-AI Lab 연결 창: 허락을 누르면 ready, list · get · put 은 서버 메모리의 계정 보관함을 쓴다.
+const connect = `<!doctype html><meta charset="utf-8"><title>GBE-AI Lab 계정 연결(시험)</title><button id="ok">허락하고 온바탕에 연결</button><script>
 const p=new URLSearchParams(location.hash.slice(1)),origin=p.get('origin'),channel=p.get('channel');
 const call=async(path,body)=>(await fetch(path,{method:'POST',body:JSON.stringify(body)})).json();
 document.getElementById('ok').onclick=()=>opener.postMessage({type:'onbatang-account',channel,event:'ready'},origin);
@@ -23,7 +23,7 @@ addEventListener('message',async e=>{const d=e.data;if(e.origin!==origin||e.sour
  const result=await call('/account/'+d.action,d);opener.postMessage({type:'onbatang-account',channel,request:d.request,event:'result',result},origin);});
 </script>`;
 
-test('home → 가이랩 계정에 올리기, then an empty computer takes it from the account and opens it', options, async t => {
+test('home → GBE-AI Lab 계정에 올리기, then an empty computer takes it from the account and opens it', options, async t => {
   const account = new Map();
   const gai = createServer(async (req, res) => {
     const path = new URL(req.url, 'http://x').pathname;
@@ -64,9 +64,9 @@ test('home → 가이랩 계정에 올리기, then an empty computer takes it fr
   }
   async function link({context, page}) {
     await page.locator('[data-account-bridge]').click();
-    const [popup] = await Promise.all([context.waitForEvent('page'), page.getByRole('button', {name: '가이랩 계정 연결', exact: true}).click()]);
+    const [popup] = await Promise.all([context.waitForEvent('page'), page.getByRole('button', {name: 'GBE-AI Lab 계정 연결', exact: true}).click()]);
     await popup.getByRole('button', {name: '허락하고 온바탕에 연결'}).click();
-    await page.getByText('가이랩 계정에 연결했어요.', {exact: true}).waitFor();
+    await page.getByText('GBE-AI Lab 계정에 연결했어요.', {exact: true}).waitFor();
     return popup;
   }
   // 집: 그림을 하나 만들고(제목 하나) 첫 화면으로 돌아와 계정에 올린다.
@@ -78,14 +78,14 @@ test('home → 가이랩 계정에 올리기, then an empty computer takes it fr
   await home.page.locator('[data-account-bridge]').waitFor();
   const homePopup = await link(home);
   await home.page.getByRole('button', {name: '고른 1개 계정에 올리기', exact: true}).click();
-  await home.page.getByText(/1개를 가이랩 계정에 올렸어요/).waitFor();
+  await home.page.getByText(/1개를 GBE-AI Lab 계정에 올렸어요/).waitFor();
   assert.equal(account.size, 1);
   const [stored] = account.values();
   assert.equal(stored.slides[0].items.filter(it => it.t === 'text').length, 1);
   await home.page.getByRole('button', {name: '다 했어요 · 연결 끊기', exact: true}).click();
   await home.page.waitForFunction(() => true);
   for (let i = 0; i < 50 && !homePopup.isClosed(); i++) await new Promise(r => setTimeout(r, 100));
-  assert.equal(homePopup.isClosed(), true, 'done closes the 가이랩 window');
+  assert.equal(homePopup.isClosed(), true, 'done closes the GBE-AI Lab window');
   // 계정에는 다른 컴퓨터에서 올린 세 파트짜리 PPT 도 있다(한 칸으로 묶여 보여야 한다).
   const deckParts = await home.page.evaluate(async () => {
     const {migrateRecord} = await import('/app/designs.js'), sha = 'b'.repeat(64), asset = 'a' + sha.slice(0, 24), src = {kind: 'pptx', sourceDocumentId: 's' + sha.slice(0, 24), assetId: asset, filename: '캠프.pptx', sha256: sha};

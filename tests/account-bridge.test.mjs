@@ -1,4 +1,4 @@
-// 가이랩 계정으로 이어 쓰기(app/account-bridge.js): 연결 창과의 신호 · 가져올지 정하기.
+// GBE-AI Lab 계정으로 이어 쓰기(app/account-bridge.js): 연결 창과의 신호 · 가져올지 정하기.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createAccountBridge, importPlan} from '../app/account-bridge.js';
@@ -12,7 +12,7 @@ function fakeHost() {
   return {host, popup, sent, emit};
 }
 
-test('the bridge opens the 가이랩 window with this origin, waits for ready, and only trusts that window', async () => {
+test('the bridge opens the GBE-AI Lab window with this origin, waits for ready, and only trusts that window', async () => {
   const f = fakeHost(), bridge = createAccountBridge({host: f.host});
   assert.throws(() => createAccountBridge({url: 'http://evil.example/x', host: f.host}), /주소/);
   await assert.rejects(bridge.list(), /먼저 연결/);
@@ -35,7 +35,7 @@ test('the bridge opens the 가이랩 window with this origin, waits for ready, a
   f.emit({type: 'onbatang-account', channel, request: ask.message.request, event: 'result', result: [{id: 'd1234567', name: '집에서', updatedAt: 5, slides: 2}]});
   assert.deepEqual(await listing, [{id: 'd1234567', name: '집에서', updatedAt: 5, slides: 2}]);
   const putting = bridge.put([{id: 'd1234567'}]);
-  f.emit({type: 'onbatang-account', channel, request: f.sent[1].message.request, event: 'error', message: '가이랩 계정에 그림을 더 둘 수 없어요.'});
+  f.emit({type: 'onbatang-account', channel, request: f.sent[1].message.request, event: 'error', message: 'GBE-AI Lab 계정에 그림을 더 둘 수 없어요.'});
   await assert.rejects(putting, /더 둘 수 없어요/);
   bridge.close();
   assert.equal(f.popup.closed, true);

@@ -1,4 +1,4 @@
-// Local-only browser contract for a host that saves drawings itself (가이랩 받은함): startMinican({ embed, sync, syncDelay }).
+// Local-only browser contract for a host that saves drawings itself (GBE-AI Lab 받은함): startMinican({ embed, sync, syncDelay }).
 // The editor opens straight away with the host's button label and no close button, edits go up after the given delay,
 // and a newer record from the host wins when the drawing opens.
 import test from 'node:test';

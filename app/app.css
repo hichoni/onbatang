@@ -1227,7 +1227,7 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero-go { display: flex
 .cv-news-how { margin: 2px 0 0; padding-left: 1.3em; display: grid; gap: 4px; font-size: .9rem; line-height: 1.5; }
 .cv-news-foot { justify-content: flex-end; }
 
-/* 가이랩 계정으로 이어 쓰기(공용 온바탕 첫 화면 → 창) */
+/* GBE-AI Lab 계정으로 이어 쓰기(공용 온바탕 첫 화면 → 창) */
 .cv-bridge { display: grid; gap: 14px; }
 .cv-bridge-head h2 { margin: 0; font-size: 1.35rem; }
 .cv-bridge-lead { margin: 4px 0 0; color: var(--muted, #5d6b66); }
@@ -1270,6 +1270,6 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero-go { display: flex
 .cv-outline-ref label { display: flex; gap: 6px; align-items: center; }
 .cv-outline-ref-peek summary { cursor: pointer; color: var(--muted, #5d6b66); font-size: .85rem; }
 .cv-outline-ref-text { max-height: 9rem; overflow: auto; margin: 4px 0 0; padding: 8px; border-radius: 8px; background: #f3f6f4; font: .8rem/1.5 inherit; white-space: pre-wrap; }
-/* 공용 온바탕의 휴대폰 리모컨 판(가이랩 판을 작은 창으로): 발표 화면 오른쪽 위 */
+/* 공용 온바탕의 휴대폰 리모컨 판(GBE-AI Lab 판을 작은 창으로): 발표 화면 오른쪽 위 */
 .cv-phone-remote{position:absolute;right:16px;top:16px;z-index:40;width:min(300px,calc(100% - 32px));height:420px;border:0;border-radius:16px;background:#fff;box-shadow:0 12px 40px #0006;color-scheme:light}
 .cv-phone-remote[hidden]{display:none}

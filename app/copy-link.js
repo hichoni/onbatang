@@ -1,7 +1,7 @@
 // 복사 링크(공용 온바탕): 내보내기의 "링크 공유"로 만든 링크(…/app/?copy=코드)를 열면
 // 그 자료(PPT 파트 여러 개 포함)를 이 브라우저에 사본으로 내려받아 바로 고친다. 로그인은 없다. 보낸 사람의 자료는 바뀌지 않는다.
-// 링크는 둘이다: 가이랩 선생님의 링크(가이랩이 만든다)와, 누구나 공용 온바탕에서 만드는 7일 링크(createGuestLinks: 만든 때부터 7일만 열리고 그 뒤에는 서버에서 지워진다).
-// 서버: 가이랩의 공개 함수 onbatang_copy_info · onbatang_copy_part · onbatang_guest_copy_*(로그인 없이 부르는 열쇠로), 바탕 영상은 onbatang-copy-videos/<코드>/<sha>.
+// 링크는 둘이다: GBE-AI Lab 선생님의 링크(GBE-AI Lab이 만든다)와, 누구나 공용 온바탕에서 만드는 7일 링크(createGuestLinks: 만든 때부터 7일만 열리고 그 뒤에는 서버에서 지워진다).
+// 서버: GBE-AI Lab의 공개 함수 onbatang_copy_info · onbatang_copy_part · onbatang_guest_copy_*(로그인 없이 부르는 열쇠로), 바탕 영상은 onbatang-copy-videos/<코드>/<sha>.
 import { cleanRecord, isDesignId, newDesignId } from './designs.js';
 
 export const COPY_PARAM = 'copy';
@@ -26,7 +26,7 @@ export function copyMessage(error) {
 }
 
 /** 링크의 자료 받기: { title, records(서버에 올라간 그대로), videos: Map(영상 열쇠 → Blob) }. onProgress({ completed, total, phase }) */
-// 가이랩의 공개 함수 부르기(로그인 없이 부르는 열쇠만 싣는다. 쿠키 · 인증 정보는 싣지 않는다).
+// GBE-AI Lab의 공개 함수 부르기(로그인 없이 부르는 열쇠만 싣는다. 쿠키 · 인증 정보는 싣지 않는다).
 function publicRpc({ url, key, get, timeoutMs }) {
   const base = String(url).replace(/\/+$/, '');
   return async function rpc(name, args) {
@@ -68,14 +68,14 @@ export function createCopyIntake({ url = GAILAB.url, key = GAILAB.key, fetch: ge
   };
 }
 
-// ---------- 7일 링크: 누구나(가이랩 회원이 아니어도) 공용 온바탕에서 만드는 복사 링크 ----------
+// ---------- 7일 링크: 누구나(GBE-AI Lab 회원이 아니어도) 공용 온바탕에서 만드는 복사 링크 ----------
 // 만든 때부터 7일만 열리고, 그 뒤에는 자료가 서버에서 지워진다. 한 링크 파트 20개 · 사진 포함 20MB(파트 하나 5MB)까지, 바탕 영상은 싣지 않는다.
 // 한 곳(접속 주소)에서 하루 5개까지(서버가 센다). 다시 올리기 · 지우기는 만들 때 받은 비밀 열쇠(token)로만 하고, 열쇠는 이 브라우저에만 둔다.
-// 링크 주소는 가이랩의 복사 링크 페이지다: 카카오톡 · 메신저에 붙이면 그 자료의 제목 · 첫 장이 보이고, 열면 곧바로 공용 온바탕(?copy=코드)으로 간다.
+// 링크 주소는 GBE-AI Lab의 복사 링크 페이지다: 카카오톡 · 메신저에 붙이면 그 자료의 제목 · 첫 장이 보이고, 열면 곧바로 공용 온바탕(?copy=코드)으로 간다.
 export const GUEST_DAYS = 7, GUEST_PER_DAY = 5, GUEST_MAX_PARTS = 20, GUEST_PART_MAX_BYTES = 5000000, GUEST_MAX_BYTES = 20000000;
 export const GUEST_PAGE = 'https://gai-lab.netlify.app/onbatang-copy.html';
 export const guestUrl = (code, page = GUEST_PAGE) => `${page}?c=${copyCode(code)}`;
-// 보기 링크(받은 사람이 발표처럼 그대로 본다 · 고칠 수 없다)의 재생 페이지(가이랩). 회원 링크 · 7일 링크가 함께 쓴다.
+// 보기 링크(받은 사람이 발표처럼 그대로 본다 · 고칠 수 없다)의 재생 페이지(GBE-AI Lab). 회원 링크 · 7일 링크가 함께 쓴다.
 export const PLAY_PAGE = 'https://gai-lab.netlify.app/onbatang-play.html';
 export const playUrl = (code, page = PLAY_PAGE) => `${page}?c=${copyCode(code)}`;
 export const linkUrl = (code, mode) => (mode === 'view' ? playUrl(code) : guestUrl(code));

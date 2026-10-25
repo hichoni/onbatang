@@ -1,8 +1,8 @@
 // 링크 미리보기 그림: 카카오톡 · 메신저 · SNS 에 공유 링크 · 복사 링크를 붙이면 보이는 그 자료의 첫 장(발표에서 숨긴 장은 건너뛴다).
 // 1200×630(미리보기 칸의 크기) JPEG 로 만든다. 장의 비율이 달라도 잘리지 않게 장의 바탕색으로 칸을 채우고 가운데에 맞춰 놓는다.
 // 오른쪽 아래에는 온바탕 표(흰 바탕 위 로고)를 작게 넣는다(온바탕으로 만든 자료인 줄 알게).
-// 링크를 만들거나 다시 올릴 때 서버에 적는다(가이랩 SQL: 202610260001_onbatang_link_cards.sql · 미리보기: 가이랩 netlify/edge-functions/onbatang-card.js).
-// 공용 온바탕의 7일 링크(copy-link.js)와 가이랩의 공유 · 복사 링크(가이랩이 이 파일을 그대로 쓴다)가 함께 쓴다. DOM(canvas)이 있는 곳에서만 그린다.
+// 링크를 만들거나 다시 올릴 때 서버에 적는다(GBE-AI Lab SQL: 202610260001_onbatang_link_cards.sql · 미리보기: GBE-AI Lab netlify/edge-functions/onbatang-card.js).
+// 공용 온바탕의 7일 링크(copy-link.js)와 GBE-AI Lab의 공유 · 복사 링크(GBE-AI Lab이 이 파일을 그대로 쓴다)가 함께 쓴다. DOM(canvas)이 있는 곳에서만 그린다.
 // 서버가 아직 준비되지 않았거나 그리지 못하면 조용히 넘어간다(링크는 그대로 쓰인다. 미리보기만 기본 "온바탕"으로 보인다).
 export const CARD_WIDTH = 1200, CARD_HEIGHT = 630;
 const MAX_BASE64 = 400000;

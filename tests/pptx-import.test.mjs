@@ -271,7 +271,7 @@ test('rich text: a word in another weight, slant, underline or colour comes in a
 });
 
 test('rich text keeps theme colours: a single-style box with a mapped theme colour gets no range',async()=>{
- // Regression (가이랩 colour test): the range reader read colours without the theme and turned theme text into a #222222 range.
+ // Regression (GBE-AI Lab colour test): the range reader read colours without the theme and turned theme text into a #222222 range.
  const parts=unzipSync(await baseBytes()),name='ppt/slides/slide1.xml';
  const body='<a:p><a:r><a:rPr lang="ko-KR" sz="2400"><a:solidFill><a:schemeClr val="tx1"><a:lumMod val="50000"/><a:lumOff val="50000"/></a:schemeClr></a:solidFill></a:rPr><a:t>테마 색 제목</a:t></a:r></a:p>';
  parts[name]=enc.encode(dec.decode(parts[name]).replace(/<a:p>.*<\/a:p>/s,body));
