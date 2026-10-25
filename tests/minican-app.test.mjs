@@ -146,7 +146,10 @@ test('편집기 자체에는 인증·서버 API가 없고 가이랩 연결 주�
     const src = readFileSync(APP + f, 'utf8');
     // PPTX only reads a cleaned existing photo URL. No credentials, referrer, body,
     // writes or other network APIs are allowed; keep every other app file under the old rule.
-    const networkSource = f === 'pptx.js' ? src.replace("fetch(item.url, {signal, method: 'GET', credentials: 'omit', referrerPolicy: 'no-referrer'})", 'readExistingPhoto()') : src;
+    // 온바탕 파일(file-fonts.js)은 글꼴 목록에 적힌 같은 곳의 글꼴 파일 · 사용 허락 글(또는 blob:)만 읽는다. 인증 정보는 싣지 않는다.
+    if (f === 'file-fonts.js') assert.match(src, /if \(u\.protocol !== 'blob:' && u\.origin !== location\.origin\) throw Error\('font_origin'\);/);
+    const networkSource = f === 'pptx.js' ? src.replace("fetch(item.url, {signal, method: 'GET', credentials: 'omit', referrerPolicy: 'no-referrer'})", 'readExistingPhoto()')
+      : f === 'file-fonts.js' ? src.replace("fetch(u.href, { credentials: 'omit', referrerPolicy: 'no-referrer' })", 'readSameOriginAsset()') : src;
     assert.doesNotMatch(networkSource, /\bfetch\(|XMLHttpRequest|WebSocket|sendBeacon|EventSource/, f);
     const addresses = f === 'pptx.js' ? src.replaceAll(/http:\/\/schemas\.openxmlformats\.org\/(?:drawingml\/2006\/main|presentationml\/2006\/main|officeDocument\/2006\/(?:relationships|extended-properties)|package\/2006\/(?:relationships(?:\/metadata\/core-properties)?|content-types|metadata\/core-properties))/g, '').replaceAll('http://purl.org/dc/elements/1.1/', '').replaceAll('http://schemas.microsoft.com/office/powerpoint/2010/main', '') : src;
     // 링크 미리보기 태그(og:* · twitter:*)는 공용 온바탕의 주소를 절대 주소로 적어야 미리보기가 그림을 읽는다(앱이 보내는 요청이 아니다).

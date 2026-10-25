@@ -30,9 +30,11 @@ import {ONBATANG_VERSION} from './version.js';
 import {createGaiMaker,gaiLessonContext} from './gai-maker.js';
 import {
   createEditor, designView, designToBlob, designToCanvas, configure, settings, reshapeItems, layoutList, layoutItems, icon, cleanDesign, hasMotion, playDesign, playTransition,
-  COMBOS, TRANSITIONS, designsToVideo, canMakeVideo, canFilmScenes, filmPlan, readCheck, READ, liveBackdrops, leaveLooks, morphs, MAX_FILM_SECONDS, videoSize, STAYS, DEFAULT_STAY, scenePlayer, dropScene, sceneUrl, youTubePlayers,
-  fontFamilyOf, fontList, textLimit, planMotion,
+  COMBOS, TRANSITIONS, designsToVideo, canMakeVideo, canFilmScenes, filmPlan, readCheck, READ, liveBackdrops, leaveLooks, morphs, MAX_FILM_SECONDS, videoSize, STAYS, DEFAULT_STAY, scenePlayer, dropScene, sceneUrl, sceneBlob, youTubePlayers,
+  fontFamilyOf, fontList, textLimit, planMotion, registerFonts,
 } from '../src/index.js';
+import { ONBATANG_FONTS } from './fonts.js';
+import { listFileFonts, putFileFont, fontEntry, readFontAsset } from './file-fonts.js';
 import { HERO_ART, HERO_VIEW } from './hero-art.js';
 import { startTour, stopTour, tourSeen, markTourSeen, HOME_STEPS, EDITOR_STEPS, NEWS_STEPS, NEWS_KEY } from './tour.js';
 import { WHATS_NEW, latestFeature, hasUnseenFeatures, markFeaturesSeen } from './whats-new.js';
@@ -46,7 +48,7 @@ import {
   libraryOf, dropPhoto, slideMotion, slideVideo, slideExtra, hasVideo, deckVideos, unusedVideos, cleanBrand,
   migrateRecord, aspectOf, canvasRatioOf, copyRecord, withSlideMotion,
 } from './designs.js';
-import { saveVideo, listVideos, removeVideos } from './videos.js';
+import { saveVideo, listVideos, removeVideos, placeVideo } from './videos.js';
 import { zipStore } from './zip.js';
 import { createPptx } from './pptx.js';
 import { listDesigns, getDesign, putDesign, replaceDesignIfUnchanged, removeDesign, setStorageName, storageName, listDesignIssues, getOriginalDesign } from './store.js';
@@ -176,7 +178,7 @@ async function refresh() {
   const copyAt = S.phase === 'boot' && copyLink ? copyParam() : '';
   S.list = null;
   render();
-  if (S.phase === 'boot') await recoverDrafts();
+  if (S.phase === 'boot') { await recoverDrafts(); await loadFileFonts(); }
   try {
     S.list = await listDesigns();
     S.error = '';
@@ -461,6 +463,7 @@ function render() {
         } }, importAction.label) : null,
         cloudAction ? el('button',{class:'btn cv-cloud-btn',type:'button',disabled:loading,dataset:{cloudAction:''},title:cloudAction.title||'',onClick:()=>openAccountFromHome(cloudAction)},...face('cloud',cloudAction.label)) : null,
         accountAction ? el('button',{class:'btn cv-account-btn',type:'button',disabled:loading,dataset:{accountAction:''},onClick:()=>openAccountFromHome()},accountAction.label) : null,
+        ...fileOpenButton(loading),
         accountBridge && !sync ? el('button', { class: 'btn cv-bridge-btn', type: 'button', disabled: loading, dataset: { accountBridge: '' }, title: '집에서 만든 그림을 학교에서: 가이랩 선생님 계정에 올리고 가져와요', onClick: () => openBridgeFromHome() }, ...face('cloud', '가이랩 계정으로 이어 쓰기')) : null,
         full ? el('p', { class: 'cv-hero-full', text: `그림은 ${MAX_DESIGNS}개까지 저장돼요(PPT 하나는 파트가 여럿이어도 1개). 안 쓰는 그림을 지워 주세요.` }) : null),
       el('p', { class: 'cv-hero-tag', text: `작은 생각도 멋진 작품이 되도록 · ${sync ? '내 계정에 자동 저장' : '이 기기에 자동 저장'}` })),
@@ -601,7 +604,8 @@ let openDeck = '';                 // 파트를 펼쳐 둔 PPT 묶음(한 번에
 // 호스트가 아는 PPT 묶음(가져온 한 번 = 한 묶음, materialNavigation.groups). 목록이 바뀔 때 한 번 묻고, 답이 오면 다시 그린다.
 let groupsFor = null, groupsKnown = [];
 function homeGroups(list) {
-  if (typeof materialNavigation?.groups !== 'function') return [];
+  const mine = fileDecks();
+  if (typeof materialNavigation?.groups !== 'function') return mine;
   if (groupsFor !== list) {
     groupsFor = list;
     Promise.resolve().then(() => materialNavigation.groups({ ids: list.map((r) => r.id) })).then((groups) => {
@@ -610,7 +614,20 @@ function homeGroups(list) {
       if (!S.open && S.phase === 'home') render();
     }, (error) => console.warn(error));
   }
-  return groupsKnown;
+  return mine.length ? [...groupsKnown, ...mine] : groupsKnown;
+}
+// 온바탕 파일로 연 여러 파트 PPT 의 묶음(이름 · 파트 · 쪽 차례). 이 기기에 PPT 원본(전체 자료)이 없어도 처음 기기와 같은 이름 · 차례로 묶어 보여 준다.
+// [{ id, title, documents: [그림 id…], pageOrder?, createdAt }]. 그 그림들이 지워지면 묶음은 저절로 쓰이지 않는다(homeEntries 가 파트 둘 이상만 묶는다).
+const fileDecksKey = () => `onbatang-file-decks-v1:${storageName()}`;
+function fileDecks() {
+  try { const v = JSON.parse(localStorage.getItem(fileDecksKey()) || '[]'); return Array.isArray(v) ? v.filter((d) => d && typeof d.id === 'string' && Array.isArray(d.documents)) : []; }
+  catch { return []; }
+}
+function keepFileDeck(deck) {
+  try {
+    const known = new Set(deck.documents), rest = fileDecks().filter((d) => !d.documents.some((id) => known.has(id)));
+    localStorage.setItem(fileDecksKey(), JSON.stringify([...rest, deck].slice(-MAX_DESIGNS)));
+  } catch (error) { console.warn(error); }
 }
 function homeTools(paint) {
   const seg = (items, now, pick, label) => el('div', { class: 'cv-seg cv-list-seg', role: 'group', 'aria-label': label }, ...items.map(([id, name]) => el('button', {
@@ -998,6 +1015,13 @@ function moveStripSelection(O,delta){if(O.materialDeck){const pages=materialPage
 async function reorderStrip(O,from,to){
   if(O.closed||O.leaving||O.inlineImport||app.inert||videoBusy(O))return;
   if(!O.materialDeck){changeSlides(O,(slides,at)=>{const next=[...slides];next.splice(to,0,...next.splice(from,1));const selected=slides[at];return [next,next.indexOf(selected)];});return;}
+  if(O.materialDeck.fileDeck){
+    // 온바탕 파일로 연 PPT: 보이는 쪽 차례만 바꿔 이 기기에 적는다(그림 기록은 그대로).
+    const pages=materialPages(O);if(from<0||to<0||from>=pages.length||to>=pages.length||from===to)return;
+    const pageOrder=movePage(pages.map(v=>v.page.id),from,to),deck=fileDecks().find(d=>d.id===O.materialDeck.fileDeck);
+    if(deck)keepFileDeck({...deck,pageOrder});
+    O.materialDeck={...O.materialDeck,pageOrder};renderStrip(O);return;
+  }
   if(looseBlock(O))return;
   if(!materialNavigation.reorder){toast('이 자료의 순서를 저장하는 기능을 연결하지 못했어요.');return;}
   const pages=materialPages(O);if(from<0||to<0||from>=pages.length||to>=pages.length||from===to)return;
@@ -1056,7 +1080,7 @@ async function loadMaterialNavigation(O) {
     }else if(!deck){
       // 이 기기에 PPT 원본(전체 자료)이 없는 파트(다른 기기에서 계정으로 받아 온 것): 같은 PPT 의 파트들을 이어 모든 쪽을 보여 준다.
       const loose=await looseDeck(O);
-      if(loose&&!O.closed&&S.open===O){O.materialDeck=loose;renderStrip(O);toast(LOOSE_NOTE,6500);}
+      if(loose&&!O.closed&&S.open===O){O.materialDeck=loose;renderStrip(O);if(!loose.fileDeck)toast(LOOSE_NOTE,6500);}
     }
   }catch(error){O.materialLoadError=error;if(!O.closed&&S.open===O)toast('PPT 전체 목록을 열지 못했어요. 현재 편집과 저장 자료는 유지돼요. 내 자료에서 다시 열어주세요.',5000);}
   finally{loading.finish();}
@@ -1066,7 +1090,9 @@ const LOOSE_NOTE='다른 기기에서 가져온 PPT라 이 기기에는 원본�
 async function looseDeck(O){
   const list=await listDesigns(),entry=homeEntries(list,homeGroups(list)).find(e=>e.deck&&e.records.some(r=>r.id===O.record.id));
   if(!entry||entry.records.length<2)return null;
-  return {title:entry.name,documents:entry.records.map(r=>migrateRecord(r.id===O.record.id?{...O.record,slides:currentSlides(O)}:r)),materialRef:null,loose:true};
+  // 온바탕 파일로 연 PPT: 첫 기기의 쪽 차례를 쓰고, 쪽 차례 바꾸기도 이 기기에 적어 둔다(fileDeck).
+  const file=fileDecks().find(d=>d.documents.includes(O.record.id)&&entry.records.every(r=>d.documents.includes(r.id)));
+  return {title:entry.name,documents:entry.records.map(r=>migrateRecord(r.id===O.record.id?{...O.record,slides:currentSlides(O)}:r)),materialRef:null,loose:true,...(file?{fileDeck:file.id,...(Array.isArray(file.pageOrder)?{pageOrder:file.pageOrder}:{})}:{})};
 }
 const LOOSE_PUBLIC='여러 파트로 나뉜 PPT라 쪽 차례 바꾸기는 한 파트 안에서만 돼요. 모든 쪽을 보고 고치는 것은 그대로 할 수 있어요.';
 const looseBlock=O=>{if(O.materialDeck?.loose){toast(materialNavigation?LOOSE_NOTE:LOOSE_PUBLIC,6500);return true;}return false;};
@@ -2738,6 +2764,7 @@ function askDownload(O, btn) {
     if (pick.kind === 'pdf') { printDeck(O, {layout: pick.printLayout}); return; }
     if (pick.kind === 'gif') { makeGif(O, {stay: pick.stay, width: pick.gifWidth}); return; }
     if (pick.kind === 'link') { if (!copyAction) return; closeModal(); openCopyFromEditor(O); return; }
+    if (pick.kind === 'onbatang') { makeOnbatangFile(O); return; }
     if (pick.kind === 'video' && (!can || !filmEntries().length || filmMs(pick.stay) > MAX_FILM_SECONDS * 1000)) return;
     closeModal();
     if (pick.kind === 'video') {
@@ -2780,8 +2807,8 @@ function askDownload(O, btn) {
     const video = pick.kind === 'video';
     const pptx = pick.kind === 'pptx';
     const html=pick.kind==='html';
-    const pdf=pick.kind==='pdf',gif=pick.kind==='gif',link=pick.kind==='link';
-    const scopeN=(pptx||html||pdf||gif||link)&&O.materialDeck?O.materialDeck.documents.reduce((total,row)=>total+(row.id===O.record.id?O.slides.length:row.slides.length),0):n;
+    const pdf=pick.kind==='pdf',gif=pick.kind==='gif',link=pick.kind==='link',whole=pick.kind==='onbatang';
+    const scopeN=(pptx||html||pdf||gif||link||whole)&&O.materialDeck?O.materialDeck.documents.reduce((total,row)=>total+(row.id===O.record.id?O.slides.length:row.slides.length),0):n;
     const scopeAt=pptx&&O.materialDeck?materialPages(O).findIndex(value=>value.record.id===O.record.id&&value.index===O.at):O.at;
     const film = video ? filmWork(pick.stay) : null;
     const ms = video ? filmPlan(film.designs, { stay: pick.stay, scenes: live }).ms : 0;
@@ -2794,8 +2821,17 @@ function askDownload(O, btn) {
       choice('cv-down-format', 'PDF·인쇄', '종이로 뽑거나 PDF로 저장', pdf, {type: 'pdf'}, {kind: 'pdf'}),
       choice('cv-down-format', 'GIF', '저절로 넘어가는 움직이는 그림', gif, {type: 'gif'}, {kind: 'gif'}),
       choice('cv-down-format', '링크 공유', '받은 사람이 열어 바로 고쳐요', link, {type: 'link'}, {kind: 'link'}),
+      choice('cv-down-format', '온바탕 파일', '고친 그대로 옮겨 다시 열기', whole, {type: 'onbatang'}, {kind: 'onbatang'}),
       choice('cv-down-format', '영상', '움직임까지 담기', video, {type: 'video'}, {kind: 'video'}, can ? {} : {disabled: true, title: NO_VIDEO})))];
-    if(link){
+    if(whole){
+      // 온바탕 파일: 이 자료(PPT 면 모든 파트)를 고친 그대로 한 파일에. 다른 기기 · 다른 온바탕의 첫 화면 "온바탕 파일 열기"로 그대로 연다.
+      const gone=[...filmScenes.values()].filter(v=>v==='gone').length;
+      rows.push(section('담을 것',el('p',{class:'cv-down-note',dataset:{fileScope:String(scopeN)},text:`이 자료 전체 ${scopeN}쪽${O.materialDeck?`(파트 ${O.materialDeck.documents.length}개)`:''}을 고친 그대로 파일 하나(.onbatang)에 담아요.`}),
+        el('p',{class:'cv-down-note',text:'사진 · 바탕 영상 · 움직임 · 글자 효과 · 전환 · 발표자 노트 · 숨긴 장 · 쪽 차례까지 모두 그대로예요.'}),
+        el('p',{class:'cv-down-note',text:'다른 컴퓨터의 온바탕(공용 온바탕 onbatang.web.app 또는 가이랩)에서 첫 화면의 "온바탕 파일 열기"로 열면 그대로 이어서 고치고 발표해요.'}),
+        gone?el('p',{class:'cv-down-note warn',role:'note',text:`바탕 영상 ${gone}개는 이 기기에도 없어서 담지 못해요(이 기기에서처럼 그 장은 영상 자리만 보여요).`}):null));
+    }
+    else if(link){
       // 링크 공유: 링크만 보내면 받은 사람의 브라우저(공용 온바탕)에 이 자료의 사본이 생겨 로그인 없이 바로 고친다.
       rows.push(section('링크로 보낼 것',el('p',{class:'cv-down-note',text:`이 자료 전체 ${scopeN}쪽${O.materialDeck?`(파트 ${O.materialDeck.documents.length}개)`:''}을 링크 하나로 보내요.`}),
         el('p',{class:'cv-down-note',text:'받은 사람이 링크를 열면 그 사람 브라우저의 온바탕에 사본이 생겨 로그인 없이 바로 고칠 수 있어요. 받은 사람이 고쳐도 내 자료는 그대로예요.'}),
@@ -2851,7 +2887,7 @@ function askDownload(O, btn) {
         el('p',{class:'cv-down-note',text:PRINT_LAYOUTS.find(v=>v.id===pick.printLayout).hint})));
       rows.push(el('p',{class:'cv-down-note',text:'인쇄 창이 열리면 프린터로 뽑거나, 대상에서 "PDF로 저장"을 골라 PDF 파일로 저장해요. 영상·움직임은 멈춘 모습으로 나와요.'}));
     }
-    else rows.push(section(video ? '영상 화질' : '이미지 화질',
+    else if (!link && !whole) rows.push(section(video ? '영상 화질' : '이미지 화질',
       el('p', {class: 'cv-down-note', text: '클수록 또렷하지만 파일 용량이 커져요.'}),
       el('div', {class: `cv-sizes${video ? ' two' : ''}`}, ...(video ? videoSizes() : imageSizes()))));
     if (video) {
@@ -2875,21 +2911,21 @@ function askDownload(O, btn) {
       const note = sceneNote(filmed, true);
       if (note) rows.push(el('p', { class: `cv-down-note${live && !filmed.includes('gone') ? '' : ' warn'}`, text: note }));
     }
-    if (!video && sceneNote(pick.all ? scenes : [scenes[O.at]], false)) rows.push(el('p', { class: 'cv-down-note', text: sceneNote(pick.all ? scenes : [scenes[O.at]], false) }));
+    if (!video && !whole && sceneNote(pick.all ? scenes : [scenes[O.at]], false)) rows.push(el('p', { class: 'cv-down-note', text: sceneNote(pick.all ? scenes : [scenes[O.at]], false) }));
     if (!can) rows.push(el('p', { class: 'cv-down-note', text: NO_VIDEO }));
     body.replaceChildren(...rows);
     body.scrollTop = scrollTop;
     if (active && Object.keys(active).length) body.querySelector(Object.entries(active).map(([k, v]) => `button[data-${k}="${v}"]`).join(''))?.focus({preventScroll: true});
-    const range = video ? `${pick.range ? `${pick.from}~${pick.to}쪽 · ` : ''}${film.entries.length}쪽` : html || pdf || gif || link || pick.all ? `모든 장 ${scopeN}장` : `지금 장 (${scopeAt + 1}/${scopeN})`;
-    const label = link ? '링크 공유' : gif ? 'GIF' : pdf ? 'PDF·인쇄' : video ? '영상' : pptx ? `PPTX ${pick.pptxMode === 'editable' ? '편집형' : '이미지형'}` : pick.kind.toUpperCase();
+    const range = video ? `${pick.range ? `${pick.from}~${pick.to}쪽 · ` : ''}${film.entries.length}쪽` : html || pdf || gif || link || whole || pick.all ? `모든 장 ${scopeN}장` : `지금 장 (${scopeAt + 1}/${scopeN})`;
+    const label = whole ? '온바탕 파일' : link ? '링크 공유' : gif ? 'GIF' : pdf ? 'PDF·인쇄' : video ? '영상' : pptx ? `PPTX ${pick.pptxMode === 'editable' ? '편집형' : '이미지형'}` : pick.kind.toUpperCase();
     summaryTitle.textContent = `${label} · ${range}`;
     const px = video ? videoSize(aspect, VIDEO_SIZES.find(size => size.id === pick.vsize).short) : exportSize(pick.size, aspect);
-    summaryDetail.textContent = link?(copyAction?'링크를 만들면 복사 · QR로 나눠요. 언제든 끄거나 지울 수 있어요.':'가이랩 회원(로그인한 선생님)만 만들 수 있어요.'):gif?`가로 ${pick.gifWidth}px · 장마다 ${pick.stay}초 · 끝나면 처음부터 되풀이해요.`:pdf?`${PRINT_LAYOUTS.find(v=>v.id===pick.printLayout).name} · 인쇄 창에서 PDF로 저장할 수 있어요.`:html?'인터넷 연결 없이 실행하는 수업 파일 · 원본은 보존돼요.':pptx ? 'PPTX 한 파일 · 원본과 편집 자료는 그대로 보관돼요.' : video
+    summaryDetail.textContent = whole?'고친 그대로 한 파일(.onbatang) · 다른 기기의 온바탕에서 그대로 열어요.':link?(copyAction?'링크를 만들면 복사 · QR로 나눠요. 언제든 끄거나 지울 수 있어요.':'가이랩 회원(로그인한 선생님)만 만들 수 있어요.'):gif?`가로 ${pick.gifWidth}px · 장마다 ${pick.stay}초 · 끝나면 처음부터 되풀이해요.`:pdf?`${PRINT_LAYOUTS.find(v=>v.id===pick.printLayout).name} · 인쇄 창에서 PDF로 저장할 수 있어요.`:html?'인터넷 연결 없이 실행하는 수업 파일 · 원본은 보존돼요.':pptx ? 'PPTX 한 파일 · 원본과 편집 자료는 그대로 보관돼요.' : video
       ? `${px.width} × ${px.height}px · 약 ${secondsText(ms)} · 만든 뒤 미리보고 저장해요.`
       : `${px.width} × ${px.height}px · ${pick.all && n > 1 ? `${label} ${n}장을 ZIP 한 파일로 저장해요.` : '그림 한 파일로 저장해요.'}`;
     submit.disabled = (video && (long || !film.entries.length)) || (link && !copyAction);
     submit.toggleAttribute('data-pptx-save', pptx);
-    submit.replaceChildren(...face(link ? 'link' : 'download', link ? '링크 만들기' : gif ? 'GIF 내려받기' : pdf ? '인쇄 창 열기' : video ? '영상 만들기' : `${pptx ? 'PPTX' : label} 내려받기`));
+    submit.replaceChildren(...face(link ? 'link' : 'download', link ? '링크 만들기' : whole ? '온바탕 파일 내려받기' : gif ? 'GIF 내려받기' : pdf ? '인쇄 창 열기' : video ? '영상 만들기' : `${pptx ? 'PPTX' : label} 내려받기`));
   };
   draw();
   const wasInert = app.inert;
@@ -2921,6 +2957,163 @@ const saveBlob = (blob, name) => {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 30000);
 };
+// ---------- 온바탕 파일: 고친 그대로 내려받기 · 열기(app/onbatang-file.js) ----------
+// 파일 이름: 자료의 이름(파일 이름에 쓸 수 없는 글자는 뺀다). 이름이 없으면 날짜.
+const fileTitle = (name) => String(name || '').replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || fileName();
+// 온바탕 파일로 받은 글꼴(app/file-fonts.js)을 글꼴 목록에 더한다. 이미 있는 글꼴은 그대로 둔다.
+function addFileFonts(list) {
+  const have = new Set(fontList().map((f) => f.id)), fresh = list.filter((f) => !have.has(f.id)).map(fontEntry);
+  if (!fresh.length) return;
+  configure({ fonts: [...fontList(), ...fresh] });
+  registerFonts(fresh);
+}
+async function loadFileFonts() {
+  try { addFileFonts(await listFileFonts()); } catch (error) { console.warn(error); }
+}
+// 그림들이 쓰는 글꼴 가운데 온바탕에 들어 있지 않은 것(가이랩 글꼴 · 온바탕 파일로 받은 글꼴): 파일과 사용 허락 글을 함께 담는다.
+async function fileFonts(records, kit) {
+  const used = kit.usedFonts(records), builtIn = new Set(ONBATANG_FONTS.map((f) => f.id)), out = [];
+  for (const f of fontList()) {
+    if (!used.has(f.id) || builtIn.has(f.id) || !f.url) continue;
+    let blob;
+    try { blob = await readFontAsset(f.url); } catch (error) { console.warn(error); throw Error(`'${f.name}' 글꼴 파일을 읽지 못했어요. 인터넷 연결을 확인하고 다시 해 주세요.`); }
+    const license = typeof f.licenseText === 'string' ? f.licenseText
+      : (await Promise.all([f.license].flat().filter((u) => typeof u === 'string' && u).map((u) => readFontAsset(u, 'text').catch(() => '')))).filter(Boolean).join('\n\n');
+    out.push({ id: f.id, name: f.name, desc: f.desc || '', exportFamily: f.exportFamily || '', family: f.family || '', license, blob });
+  }
+  return out;
+}
+// 내려받기: 저장을 마친 뒤 이 자료의 모든 파트(이 기기에 저장된 그대로) · 쓰는 바탕 영상 파일 · 보이는 쪽 차례를 담는다.
+async function makeOnbatangFile(O) {
+  const abort = new AbortController(), status = el('p', { role: 'status', 'aria-live': 'polite', text: '고친 내용을 저장하고 있어요…' });
+  openModal(el('section', { class: 'cv-file-make' }, el('h2', { text: '온바탕 파일 만들기' }), status, el('button', { class: 'btn', type: 'button', onClick: closeModal }, '취소')), { onClose: () => abort.abort() });
+  try {
+    await flushSavedDesign(O.record.id);
+    if (O.materialLoadingPromise) await O.materialLoadingPromise;
+    if (abort.signal.aborted || O.closed) return;
+    const ids = O.materialDeck ? O.materialDeck.documents.map((r) => r.id) : [O.record.id], records = [];
+    for (const id of ids) {
+      const record = await getDesign(id) || O.materialDeck?.documents.find((r) => r.id === id);
+      if (!record) throw Error('다른 파트를 불러오지 못했어요. 자료를 다시 열고 해 주세요.');
+      records.push(record);
+    }
+    const keys = [...new Set(records.flatMap((r) => deckVideos(r.slides)))], about = new Map((await listVideos().catch(() => [])).map((v) => [v.key, v]));
+    const videos = [];
+    for (const [i, key] of keys.entries()) {
+      if (abort.signal.aborted) return;
+      status.textContent = `바탕 영상을 담고 있어요 · ${i + 1} / ${keys.length}`;
+      const blob = await sceneBlob(key);
+      if (blob) videos.push({ key, blob, seconds: about.get(key)?.seconds, at: about.get(key)?.at });
+    }
+    const title = O.materialDeck?.title || O.record.name;
+    const deck = O.materialDeck && records.length > 1 ? { title, pageOrder: materialPages(O).map((v) => v.page.id) } : null;
+    const kit = await import('./onbatang-file.js');
+    status.textContent = '글꼴을 담고 있어요…';
+    const fonts = await fileFonts(records, kit);
+    if (abort.signal.aborted || O.closed) return;
+    status.textContent = '파일로 묶고 있어요…';
+    const blob = await kit.packOnbatang({ title, records, deck, videos, fonts, app: ONBATANG_VERSION });
+    if (abort.signal.aborted || O.closed) return;
+    saveBlob(blob, `${fileTitle(title)}.${kit.FILE_EXT}`);
+    closeModal();
+    const pages = records.reduce((n, r) => n + r.slides.length, 0), lost = keys.length - videos.length;
+    toast(`온바탕 파일을 내려받았어요(${pages}쪽${videos.length ? ` · 바탕 영상 ${videos.length}개` : ''}). 다른 기기의 온바탕 첫 화면에서 "온바탕 파일 열기"로 그대로 열어요.${lost ? ` 이 기기에 없는 바탕 영상 ${lost}개는 담지 못했어요.` : ''}`, 7000);
+  } catch (error) {
+    console.warn(error);
+    if (abort.signal.aborted) return;
+    status.textContent = error?.code === 'zip_too_large' ? '파일이 너무 커요(4GB까지). 큰 바탕 영상을 줄이거나 유튜브 주소로 바꿔 주세요.' : String(error?.message || '').startsWith('EDITOR') ? '고친 내용을 저장하지 못했어요. 저장 공간을 확인하고 다시 해 주세요.' : String(error?.message || '온바탕 파일을 만들지 못했어요. 다시 해 주세요.').slice(0, 200);
+  }
+}
+const FILE_ERRORS = {
+  not_onbatang: '온바탕 파일(.onbatang)이 아니에요. 온바탕의 내려받기에서 "온바탕 파일"로 받은 파일을 골라 주세요.',
+  broken: '파일이 깨졌거나 다 받아지지 않았어요. 처음 받은 파일을 다시 골라 주세요.',
+  newer: '더 새 온바탕에서 만든 파일이에요. 새로 고침해서 최신 온바탕으로 열어 주세요.',
+  empty: '파일 안에 그림이 없어요.',
+};
+// 이 기기에 같은 그림이 이미 있을 때 묻는다: 파일 것으로 바꾸기 · 사본으로 따로 열기 · 그만두기. 'replace' | 'copy' | ''
+function askFileClash(title, count) {
+  return new Promise((resolve) => {
+    let answer = '';
+    const pickAnswer = (value) => { answer = value; closeModal(); };
+    const box = el('section', { class: 'cv-file-clash', dataset: { fileClash: '' } },
+      el('h2', { text: '이 기기에 이미 있는 자료예요' }),
+      el('p', { text: `'${title}'${count > 1 ? `의 파트 ${count}개` : ''}가 이 기기에 벌써 있어요. 어떻게 열까요?` }),
+      el('div', { class: 'cv-file-choices' },
+        el('button', { class: 'btn btn-primary', type: 'button', dataset: { fileChoice: 'replace' }, onClick: () => pickAnswer('replace') }, '파일 것으로 바꾸기'),
+        el('button', { class: 'btn', type: 'button', dataset: { fileChoice: 'copy' }, onClick: () => pickAnswer('copy') }, '사본으로 따로 열기'),
+        el('button', { class: 'btn btn-ghost', type: 'button', onClick: () => pickAnswer('') }, '그만두기')),
+      el('p', { class: 'muted', text: '바꾸면 이 기기의 그 자료가 파일에 담긴 모습으로 돌아가요. 사본으로 열면 둘 다 남아요.' }));
+    openModal(box, { onClose: () => resolve(answer) });
+    box.querySelector('[data-file-choice]')?.focus();
+  });
+}
+// 열기: 파일의 모든 내용을 확인한 뒤 영상 → 그림 차례로 이 기기에 둔다(그림이 없는 영상을 가리키지 않게). 그림 이름표 · 영상 열쇠는 파일 그대로다.
+async function openOnbatangFile(file) {
+  if (S.open || moving || !file) return false;
+  const kit = await import('./onbatang-file.js');
+  const loading = onbatangLoading({ title: '온바탕 파일을 열고 있어요', detail: '파일 안의 내용을 하나씩 확인해요.' });
+  loading.node.classList.add('cv-copy-loading');
+  document.body.append(loading.node);
+  const wasInert = app.inert; app.inert = true;
+  let got;
+  try { got = await kit.readOnbatang(file, { app: ONBATANG_VERSION }); }
+  catch (error) { console.warn(error); loading.node.remove(); app.inert = wasInert; toast(FILE_ERRORS[error?.code] || '온바탕 파일을 열지 못했어요. 다시 해 주세요.', 7000); return false; }
+  loading.node.remove(); app.inert = wasInert;
+  try {
+    const list = S.list || await listDesigns(), here = new Set(list.map((r) => r.id));
+    const clash = got.records.filter((r) => here.has(r.id)).length;
+    const title = got.deck?.title || got.title || got.records[0].name;
+    if (clash) {
+      const choice = await askFileClash(title, got.records.length);
+      if (!choice) return false;
+      if (choice === 'copy') got = kit.freshCopy(got);
+    }
+    if ((!clash || got.records.every((r) => !here.has(r.id))) && homeEntries(list, homeGroups(list)).length >= MAX_DESIGNS) {
+      toast(`이 브라우저에는 그림을 ${MAX_DESIGNS}개까지 둘 수 있어요. 안 쓰는 그림을 지우고 다시 열어 주세요.`, 7000);
+      return false;
+    }
+    document.body.append(loading.node); app.inert = true;
+    loading.update({ detail: '이 브라우저에 저장하고 있어요' });
+    // 이 온바탕에 없는 글꼴은 이 기기에 두고 목록에 더한다(그 글꼴로 쓴 글이 같은 모습이고, 고쳐도 글꼴이 바뀌지 않게).
+    const have = new Set(fontList().map((f) => f.id)), fonts = got.fonts.filter((f) => !have.has(f.id));
+    for (const font of fonts) await putFileFont(font);
+    addFileFonts(fonts);
+    const owners = kit.videoOwners(got.records);
+    for (const [i, video] of got.videos.entries()) {
+      loading.update({ detail: `바탕 영상 저장 중 · ${i + 1} / ${got.videos.length}`, completed: i, total: got.videos.length });
+      if (await placeVideo({ ...video, design: owners.get(video.key) || '' })) dropScene(video.key);
+    }
+    // 계정에 저장하는 곳(가이랩)에서는 받은 때를 고친 때로 적는다: 계정의 예전 것이 받은 것을 덮거나 지우지 않게.
+    const stamp = pusher ? Date.now() : 0, made = [];
+    for (const record of got.records) {
+      const saved = await putDesign(stamp ? { ...record, updatedAt: stamp } : record);
+      made.push(saved); upsert(saved);
+      if (accountFor(saved)) pusher.queue(saved);
+    }
+    if (got.deck) keepFileDeck({ id: `f${made[0].id}`, title: got.deck.title || title, documents: made.map((r) => r.id), ...(got.deck.pageOrder ? { pageOrder: got.deck.pageOrder } : {}), createdAt: Date.now() });
+    S.list = await listDesigns();
+    loading.node.remove(); app.inert = wasInert;
+    if (S.open) return true;
+    openDesign(S.list.find((r) => r.id === made[0].id) || made[0], false);
+    const pages = made.reduce((n, r) => n + r.slides.length, 0);
+    toast(`'${title}' ${pages}쪽을 고친 그대로 열었어요${got.videos.length ? `(바탕 영상 ${got.videos.length}개 포함)` : ''}.`, 6000);
+    return true;
+  } catch (error) {
+    console.warn(error);
+    toast(error?.code ? `온바탕 파일을 저장하지 못했어요 (${error.code}). 저장 공간을 확인해 주세요.` : '온바탕 파일을 저장하지 못했어요. 저장 공간을 확인하고 다시 해 주세요.', 7000);
+    return false;
+  } finally { loading.node.remove(); app.inert = wasInert; }
+}
+// 첫 화면의 "온바탕 파일 열기" 단추(파일 고르기 창을 연다).
+function fileOpenButton(loading) {
+  const input = el('input', { type: 'file', hidden: true, dataset: { onbatangFileInput: '' }, onChange: async () => {
+    const file = input.files?.[0]; input.value = '';
+    if (file) { button.disabled = true; try { await openOnbatangFile(file); } finally { button.disabled = false; } }
+  } });
+  const button = el('button', { class: 'btn cv-file-open-btn', type: 'button', disabled: loading, dataset: { onbatangFileOpen: '' }, title: '온바탕에서 내려받은 온바탕 파일(.onbatang)을 고친 그대로 열어요', onClick: () => input.click() }, ...face('upload', '온바탕 파일 열기'));
+  return [button, input];
+}
+
 // GIF: 숨기지 않은 장마다 그림 한 장을 만들어 GIF 하나로 잇는다(app/gif.js. 바깥 라이브러리 없음). 크기는 첫 장의 비율을 따르고,
 // 비율이 다른 장(여러 파트 자료)은 흰 바탕 가운데에 맞춰 넣는다.
 async function makeGif(O,{stay=5,width=480}={}){
