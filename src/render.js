@@ -4,7 +4,7 @@ import { backgroundOf, cleanDesign, fontFamilyOf, settings, hangsPunctuation } f
 import { shapeAsset, shapeSvg } from './shapes.js';
 import { artSvg, loadArt, artReady } from './art.js';
 import { sceneView } from './scene.js';
-import { liveView, liveSeed, liveLook, lookText, LIVE_STILL } from './live.js';
+import { liveView, liveSeed, slideLook, lookText, LIVE_STILL } from './live.js';
 import { ytThumb, ytEmbed, YT_ORIGIN } from './youtube.js';
 import { linkSvg } from './links.js';
 import { runPieces } from './runs.js';
@@ -195,16 +195,16 @@ export function paintCard(node, bg) {
  */
 export function designView(design, { empty = '', sceneEdge = 640, sceneNote = true } = {}) {
   const d = cleanDesign(design, { keepSpaces: true });
-  return paintCard(el('div', { class: 'fe-card' },
+  const look = slideLook(d);
+  return paintCard(el('div', { class: 'fe-card', ...(look ? { dataset: { look: look.id } } : {}) },
     d.live ? liveView(d.live, { edge: sceneEdge, aspect: settings().aspect, seed: liveSeed(d.id) }) : null,
     d.video ? sceneView(d.video, { edge: sceneEdge, note: sceneNote }) : null,
     d.web ? webCard(d.web) : null,
-    ...withLook(d.items.map(itemView), d),
+    ...withLook(d.items.map(itemView), look),
     !d.items.length && !d.video && !d.web && !d.live && empty ? el('div', { class: 'fe-empty', text: empty }) : null), d.bg);
 }
-// 움직이는 바탕의 글자 효과: 멈춘 모습(LIVE_STILL 초)의 빛 · 그늘을 글마다 입혀 둔다(움직임은 빼고). 발표 · 꾸미기 판은 liveBackdrops 가 이어 움직인다.
-function withLook(nodes, d) {
-  const look = liveLook(d.live);
+// 글자 효과: 멈춘 모습(LIVE_STILL 초)의 빛 · 그늘을 글마다 입혀 둔다(움직임은 빼고). 카드에 data-look 을 적어 두면 발표 · 공유 링크는 liveBackdrops 가 이어 움직인다.
+function withLook(nodes, look) {
   if (look) nodes.filter((n) => n.classList.contains('fi-text')).forEach((n, i) => lookText(n, look, LIVE_STILL, i, { move: false }));
   return nodes;
 }

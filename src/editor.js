@@ -21,7 +21,7 @@ import { styleRuns, runsAll, dropRunKey, shiftRuns } from './runs.js';
 const RUN_KEYS = [['bold', 'b'], ['italic', 'i'], ['under', 'u'], ['color', 'c']];
 import { layoutLinks, relink, LINK_LINE, LINK_SHAPES, LINK_LABEL_MAX, linkSvg, linkHandle, dragLinkHandle, linkLabelSize, linkLabelT, linkEnds, endSpot, pieceNear, boxOfItem } from './links.js';
 import { sceneView, scenePlayer, keepScene, probeVideo, ACCEPT_VIDEOS } from './scene.js';
-import { LIVES, LIVE_GROUPS, liveView, liveStill, liveBackdrops, liveSeed, liveLookName } from './live.js';
+import { LIVES, LIVE_GROUPS, LIVE_STILL, liveView, liveStill, liveBackdrops, liveLooks, liveSeed, liveLookName, slideLook, lookById, lookText, LOOK_GROUPS, LOOK_NONE } from './live.js';
 import { icon } from './icons.js';
 import { parseYouTube, ytStart, ytTime, ytWatch, ytEmbed } from './youtube.js';
 import { ACCEPT_IMAGES, PHOTO_EDGE, readPixels, canvasToPng, shrinkImage } from './images.js';
@@ -383,6 +383,7 @@ export function createEditor({
     // 바탕의 영상 장면은 떼었다 붙이지 않는다(떼면 틀던 영상이 멈추고 깜빡인다). 그 위의 것들만 새로 놓는다.
     syncScene();
     syncLive();
+    syncLook();
     for (const n of [...cardEl.children]) if (n !== scene?.layer && n !== live?.box) n.remove();
     // 웹사이트 장: 바탕에 그 사이트의 표지를 깐다(발표할 때 그 자리에 실제 사이트가 열린다).
     if (card.web) cardEl.append(webCard(card.web));
@@ -412,7 +413,7 @@ export function createEditor({
   // 꾸미기 판에서도 움직여 보여 준다(1초에 30번). 같은 장 · 같은 바탕이면 놓인 것을 그대로 둔다(떼었다 붙이면 처음부터 다시 피어난다).
   let live = null;
   function syncLive() {
-    const key = card?.live?.id ? `${card.live.id}|${card.live.text === false ? 'plain' : 'look'}|${card.id || ''}` : '';
+    const key = card?.live?.id ? `${card.live.id}|${card.id || ''}` : '';
     if (live && live.key !== key) { live.run.stop(); live.box.remove(); live = null; }
     if (!key) return;
     if (!live) {
@@ -422,6 +423,15 @@ export function createEditor({
     cardEl.prepend(live.box);           // 맨 아래(바탕 영상 · 요소들보다 밑)
   }
   function dropLive() { live?.run.stop(); live?.box.remove(); live = null; }
+  // 글자 효과(live.js): 꾸미기 판의 글에도 순간마다 입혀 보여 준다(1초에 30번). 효과나 장이 바뀌면 다시 시작한다.
+  let looks = null;
+  function syncLook() {
+    const look = card ? slideLook(card) : null, key = look ? `${look.id}|${card.id || ''}` : '';
+    if (looks && looks.key !== key) { looks.run.stop(); looks = null; }
+    if (key) cardEl.dataset.look = look.id; else delete cardEl.dataset.look;
+    if (key && !looks) looks = { key, run: liveLooks(cardEl, { fps: 30, look }) };
+  }
+  function dropLook() { looks?.run.stop(); looks = null; }
   // 바탕색 칸의 "움직이는 바탕" 고르기. 고르면 그 바탕에 어울리는 카드 색으로 바꿔 새 글의 색이 잘 보이게 한다(글 · 사진은 그대로).
   function livePicker() {
     const now = card.live?.id || '';
@@ -455,25 +465,50 @@ export function createEditor({
     onChange();
     keepKeys();
   }
-  // 그 바탕에 어울리는 글자 효과(빛 · 그늘 · 둥실) 켜고 끄기. 바탕을 새로 고르면 다시 켜진다.
-  function setLiveText(on) {
-    if (!card.live || (card.live.text !== false) === on) return;
+  // ---------- 글자 효과 고르기(이 장의 모든 글) ----------
+  // 고른 값: '' = 움직이는 바탕에 맞게(바탕이 있을 때) · 'none' = 없음 · 효과 이름. 옛 장의 live.text: false 는 '없음'이다.
+  const lookChoice = () => card.look || (card.live && card.live.text !== false ? '' : LOOK_NONE);
+  function setLook(id) {
+    if (lookChoice() === id) return;
     remember();
-    card.live = on ? { id: card.live.id } : { id: card.live.id, text: false };
+    // 움직이는 바탕이 없는 장은 "없음"을 따로 적지 않는다(적지 않은 것이 없음이다).
+    if (id && !(id === LOOK_NONE && !card.live)) card.look = id; else delete card.look;
+    if (card.live?.text === false) card.live = { id: card.live.id };
     renderStage();
     renderUi();
     onChange();
   }
-  function liveTextBody() {
-    if (!card.live) return [];
-    const on = card.live.text !== false;
-    const choose = (label, value) => el('button', {
-      class: `fe-btn${on === value ? ' on' : ''}`, type: 'button', 'aria-pressed': String(on === value), dataset: { liveText: value ? 'on' : 'off' }, onClick: () => setLiveText(value),
-    }, label);
+  // 칸마다 이 장의 바탕색 · 글자 색으로 "가나"를 그 효과의 멈춘 모습으로 보여 주고, 손을 올리면 움직여 보여 준다.
+  function lookPicker() {
+    const now = lookChoice(), b = backgroundOf(card.bg);
+    const ink = items().find((it) => it.t === 'text')?.color || b.ink;
+    const tile = (id, label, look, title) => {
+      const sample = el('span', { class: 'fe-look-sample', 'aria-hidden': 'true', text: '가나' });
+      Object.assign(sample.style, { background: b.bg, color: ink });
+      if (look) lookText(sample, look, LIVE_STILL, 0, { move: false });
+      let raf = 0;
+      // 칸이 다시 그려져 떨어지면(고른 뒤) 멈춘다.
+      const play = (t0) => { const step = (now) => { if (!sample.isConnected) { raf = 0; return; } lookText(sample, look, LIVE_STILL + (now - t0) / 1000, 0); raf = requestAnimationFrame(step); }; raf = requestAnimationFrame(step); };
+      return el('button', {
+        class: `fe-look-tile${now === id ? ' on' : ''}`, type: 'button', 'aria-pressed': String(now === id), title, dataset: { lookTile: id || 'auto' },
+        onClick: () => setLook(id),
+        onPointerenter: () => { if (look && !raf && !matchMedia?.('(prefers-reduced-motion: reduce)').matches) play(performance.now()); },
+        onPointerleave: () => { cancelAnimationFrame(raf); raf = 0; if (look) lookText(sample, look, LIVE_STILL, 0, { move: false }); },
+      }, sample, el('span', { class: 'fe-look-name', text: label }));
+    };
+    const first = [
+      ...(card.live ? [tile('', `바탕에 맞게 · ${liveLookName(card.live.id)}`, lookById(card.live.id), '움직이는 바탕에 어울리는 효과')] : []),
+      tile(LOOK_NONE, '없음', null, '글자 효과를 쓰지 않아요'),
+    ];
+    return el('div', { class: 'fe-looks-all' },
+      el('div', { class: 'fe-looks', role: 'group', 'aria-label': '글자 효과 없이 · 바탕에 맞게' }, ...first),
+      ...LOOK_GROUPS.map((g) => [el('div', { class: 'fe-looks-head', text: g.name }),
+        el('div', { class: 'fe-looks', role: 'group', 'aria-label': `글자 효과 · ${g.name}` }, ...g.ids.map((id) => tile(id, lookById(id).name, lookById(id), '')))]).flat());
+  }
+  function lookBody() {
     return [
-      el('div', { class: 'fe-poshead', text: `글자 효과 · ${liveLookName(card.live.id)}` }),
-      el('div', { class: 'fe-grid two' }, choose('켜기', true), choose('끄기', false)),
-      el('p', { class: 'fe-note', text: '이 장의 글에 바탕과 어울리는 빛 · 그늘 · 살랑임을 입혀요. 글자 색 · 테두리는 그대로고, 그림 · PDF 에는 멈춘 모습의 빛과 그늘이 들어가요.' }),
+      el('div', { class: 'fe-poshead', text: '글자 효과 (이 장의 모든 글)' }), lookPicker(),
+      el('p', { class: 'fe-note', text: '빛 · 그림자 · 움직임을 이 장의 글 전체에 입혀요. 칸에 손을 올리면 움직임을 미리 볼 수 있어요. 글자 색 · 테두리는 그대로고, 발표 · 공유 링크 · 영상에서 움직이며 그림 · PDF 에는 멈춘 모습의 빛과 그늘이 들어가요.' }),
     ];
   }
 
@@ -2775,7 +2810,7 @@ export function createEditor({
       const body = pop === 'pagebg' ? [el('div', { class: 'fe-poshead', text: '바탕색' }), bgPicker(), el('p', { class: 'fe-note', text: bgNote }),
         el('div', { class: 'fe-poshead', text: '움직이는 바탕' }), livePicker(),
         el('p', { class: 'fe-note', text: '코드가 순간마다 그려요(인터넷 · AI 없이 이 기기에서). 발표 · 공유 링크 · 영상에서 움직이고, 그림 · PDF 에는 멈춘 모습으로 들어가요.' }),
-        ...liveTextBody()] : null;
+        ...lookBody()] : null;
       popBox.hidden = !body;
       popBox.replaceChildren(...(body ? [
         el('button', { class: 'fe-pop-close', type: 'button', 'aria-label': '닫기', title: '닫기 (Esc)', onClick: () => toggle(pop) }, icon('close')), ...body] : []));
@@ -3099,6 +3134,7 @@ export function createEditor({
           chip('없음', !it.shadow, { shadow: undefined }, { shadow: 'none' }),
           chip('그림자', !!it.shadow, { shadow: true }, { shadow: 'on' })),
         el('p', { class: 'fe-note', text: '테두리와 그림자는 그림·영상·PPTX 로 내려받을 때도 함께 나와요.' }),
+        ...lookBody(),
       ];
     } else if (pop === 'llabel' && it.t === 'link') {
       // 선 위의 글: 다 쓰고 칸을 벗어나거나 Enter 를 누르면 저장한다(글자마다 되돌리기 기록이 쌓이지 않게). 비우면 글을 뗀다.
@@ -4549,6 +4585,7 @@ export function createEditor({
       closeCamera();
       dropScene();
       dropLive();
+      dropLook();
       watcher?.disconnect();
       document.fonts?.removeEventListener?.('loadingdone', onFontsLoaded);
       card = null;

@@ -25,14 +25,14 @@
     "app/pptx-import/preview-punctuation.js": "8ff4f855942dde60b6302e775e5a06b58b411e34b015c129088157533934c90e",
     "app/pptx-import/worker.js": "e4ea8c3a9237c1e1b2fc8dc93f57389cbb2f7966134252b8078ab44ef01dc14c",
     "app/zip.js": "345e936f955665a859d7fa86d9c1b9f4846d75a944c1df0f3d0c7d477152c026",
-    "package-lock.json": "df7906ca4fb676b2967ed103daf901d7434cc4b706e706c6f5a9b124962c8e76",
+    "package-lock.json": "0125052013990ae8cf648fdd0cdd54e1182b0072a8803080ae75e9d543158ff9",
     "src/activity.js": "776e63454bf361306c78c91d39ccd11a1aece40f63d99e64b3756cfd2ee39a8e",
     "src/crop.js": "ec9159574565f560476ede8f5292609ab74eae42d130fe0bf59a1ad8844ac1fb",
     "src/document.js": "88eea030117c4ae923c83750d5e3eba4b74d891552251c251f7c56b5d41b6d44",
     "src/dom.js": "381c1e39c6b79f846820e6dd8a9e214e0afda803c65fbb6c5272cd36326ac5b6",
     "src/gai-app.js": "b475f79811d851731cc5b65ab312b0b4b64274e7661b6a5b79e71b6e5d072073",
     "src/links.js": "b1900f5a82be0132590e8abb5d0eebe974e5873a524b5264f8f413272d94a70b",
-    "src/live.js": "5c9666fccee8100d408655154ebed70cff455eaa90401b7bdbb560dcde54d104",
+    "src/live.js": "ab4e79cdb956ef717b7bec4aefcbd87021e690054b05c2fa4dc9131abed8a794",
     "src/pixel-art.js": "533a61b81f49c6bbf8e33b65681d5db76853a2a37c7d9d089f6c00c0c0ec0089",
     "src/runs.js": "22b07d3ed775fe24dfd20f1678ce369e45fc6e36792daa6e7d4b997474d6a65f",
     "src/web.js": "498fed652433abb37a5cf9ceb780f8e21e962a8afecbae0fcb7a98cee889ad25",
@@ -92,8 +92,8 @@
       "sha256": "a681e9d183c72b4af4856935893805eb48c08f0f5a3f260203db7444c20fb98a"
     },
     "pptx-worker.js": {
-      "bytes": 195110,
-      "sha256": "1823b89befb87a0e608a6d20615c52dbc76b77797fb7fb466341781e1441ebf6"
+      "bytes": 201812,
+      "sha256": "d7b3cf7ea8be94dcafcd625267280cd618ea87f75cb777c6466b773a438bb12d"
     },
     "preview-frame.html": {
       "bytes": 1243897,
