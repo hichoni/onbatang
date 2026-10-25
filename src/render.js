@@ -4,7 +4,7 @@ import { backgroundOf, cleanDesign, fontFamilyOf, settings, hangsPunctuation } f
 import { shapeAsset, shapeSvg } from './shapes.js';
 import { artSvg, loadArt, artReady } from './art.js';
 import { sceneView } from './scene.js';
-import { liveView, liveSeed, slideLook, lookText, LIVE_STILL } from './live.js';
+import { liveView, liveSeed, slideLook, itemLook, lookText, LIVE_STILL } from './live.js';
 import { ytThumb, ytEmbed, YT_ORIGIN } from './youtube.js';
 import { linkSvg } from './links.js';
 import { runPieces } from './runs.js';
@@ -30,6 +30,7 @@ export function itemView(item) {
     node.style.color = item.color;
     if (item.bgc) node.style.background = item.bgc;
     node.style.textShadow = textShadow(item);
+    if (item.lk) node.dataset.lk = item.lk;     // 이 글상자의 글자 효과(live.js 의 lookCard 가 읽는다)
     if (item.runs?.length) paintRuns(node, item);
     else if (!item.nowrap && hangsPunctuation(item)) hangParagraphEnds(node, item.text);
   } else if (item.t === 'link') {
@@ -195,17 +196,20 @@ export function paintCard(node, bg) {
  */
 export function designView(design, { empty = '', sceneEdge = 640, sceneNote = true } = {}) {
   const d = cleanDesign(design, { keepSpaces: true });
-  const look = slideLook(d);
-  return paintCard(el('div', { class: 'fe-card', ...(look ? { dataset: { look: look.id } } : {}) },
+  // 글자 효과: 장의 효과는 data-look, 장이나 글상자 어디에든 효과가 있으면 data-looks(발표 · 공유 링크가 그 카드의 글을 움직인다).
+  const look = slideLook(d), looks = d.items.map((it) => itemLook(it, look));
+  return paintCard(el('div', { class: 'fe-card', dataset: { ...(look ? { look: look.id } : {}), ...(looks.some(Boolean) ? { looks: '1' } : {}) } },
     d.live ? liveView(d.live, { edge: sceneEdge, aspect: settings().aspect, seed: liveSeed(d.id) }) : null,
     d.video ? sceneView(d.video, { edge: sceneEdge, note: sceneNote }) : null,
     d.web ? webCard(d.web) : null,
-    ...withLook(d.items.map(itemView), look),
+    ...withLook(d.items.map(itemView), looks),
     !d.items.length && !d.video && !d.web && !d.live && empty ? el('div', { class: 'fe-empty', text: empty }) : null), d.bg);
 }
-// 글자 효과: 멈춘 모습(LIVE_STILL 초)의 빛 · 그늘을 글마다 입혀 둔다(움직임은 빼고). 카드에 data-look 을 적어 두면 발표 · 공유 링크는 liveBackdrops 가 이어 움직인다.
-function withLook(nodes, look) {
-  if (look) nodes.filter((n) => n.classList.contains('fi-text')).forEach((n, i) => lookText(n, look, LIVE_STILL, i, { move: false }));
+// 글자 효과: 멈춘 모습(LIVE_STILL 초)의 빛 · 그늘을 글마다 입혀 둔다(움직임은 빼고. 글상자마다 고른 것이 먼저). 발표 · 공유 링크는 liveBackdrops 가 이어 움직인다.
+// 몇째 글인지(n)는 화면에서 셀 때처럼 글만 센다.
+function withLook(nodes, looks) {
+  let n = 0;
+  nodes.forEach((node, i) => { if (node.classList.contains('fi-text')) { if (looks[i]) lookText(node, looks[i], LIVE_STILL, n, { move: false }); n++; } });
   return nodes;
 }
 const GLOBE = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M2.8 12h18.4M12 2.8c2.6 2.6 3.9 5.6 3.9 9.2s-1.3 6.6-3.9 9.2M12 2.8C9.4 5.4 8.1 8.4 8.1 12s1.3 6.6 3.9 9.2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';

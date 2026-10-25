@@ -26,7 +26,7 @@ import { filmPlan, slidePoses, slideLoops, filmCells, packCells, DEFAULT_STAY, M
 import { mp4Parts, webmParts } from './mux.js';
 import { sceneBlob } from './scene.js';
 import { openReel, videoInfo } from './reel.js';
-import { paintLive, liveSeed, slideLook, lookAt } from './live.js';
+import { paintLive, liveSeed, itemLooks, lookAt } from './live.js';
 import { soundTrack, mixSound, hasSound, decodeSound, encodeSound, soundKinds } from './sound.js';
 
 const RAD = Math.PI / 180;
@@ -196,8 +196,8 @@ async function buildSlide(design, slide, W, H, before = null) {
   // 움직이는 것이 없으면 잴 것도 없다: 통째로 한 칸이다(그림으로 내려받을 때와 같다).
   // 영상 장면이 있는 장은 요소들을 바탕과 따로 그려야 해서(그 사이에 영상이 들어간다) 잰다.
   const typed = new Set(slide.moves.filter((m) => m.enter === 'type').map((m) => m.i));
-  // 글자 효과가 있는 장도 글마다 제 칸이라 잰다.
-  const look = slideLook(design);
+  // 글자 효과가 있는 글(장의 효과 · 글상자마다 고른 것)도 제 칸이라 잰다.
+  const looks = itemLooks(design), look = looks.some(Boolean);
   const boxes = slide.moves.length || slide.loops?.length || slide.split?.length || design.video || design.live || look ? await measure(design, W, H, typed) : null;
   // 타자 치듯: 화면처럼 글자가 놓인 자리까지 연다(잰 자리. 잴 수 없었으면 어림한다).
   const stops = new Map([...typed].filter((i) => boxes?.[i]?.stops).map((i) => [i, boxes[i].stops]));
@@ -225,11 +225,12 @@ async function buildSlide(design, slide, W, H, before = null) {
   const tweens = slide.turn?.pairs && before ? await buildTweens(before, design, slide.turn, W, H) : null;
   // 움직이는 바탕: 프레임마다 그 순간의 모습을 바탕 바로 위에 그린다(live.js. 발표와 같은 씨앗이라 같은 무늬다).
   const live = design.live ? { live: design.live, seed: liveSeed(design.id) } : null;
-  // 글자 효과: 글마다 빛 · 그늘을 한 번 그려 두고(lookLayers), 프레임마다 그 순간의 세기 · 자리로 겹친다(drawLayer).
+  // 글자 효과: 글마다 그 글의 효과로 빛 · 그늘을 한 번 그려 두고(lookLayers), 프레임마다 그 순간의 세기 · 자리로 겹친다(drawLayer).
+  // 몇째 글인지(n)는 화면처럼 글만 센다(효과가 없는 글도 센다).
   if (look) {
     const nth = new Map();
     design.items.forEach((it, i) => { if (it.t === 'text') nth.set(i, nth.size); });
-    for (const L of layers) if (nth.has(L.i)) L.look = lookLayers(L, look, nth.get(L.i), (design.items[L.i].size / 100) * W);
+    for (const L of layers) if (L.i >= 0 && looks[L.i]) L.look = lookLayers(L, looks[L.i], nth.get(L.i), (design.items[L.i].size / 100) * W);
   }
   return { slide, layers, canvases, missingFonts: [...missingFonts], scene, tweens, stops, live, look };
 }
@@ -246,7 +247,7 @@ function lookLayers(L, look, n, px) {
     }
     return c;
   };
-  return { n, px, shade: bake(look.shades.map(([x, y, blur, c]) => [c, blur, x, y])), pals: look.pals.map(bake) };
+  return { def: look, n, px, shade: bake(look.shades.map(([x, y, blur, c]) => [c, blur, x, y])), pals: look.pals.map(bake) };
 }
 // 칸 하나를 그린다. 글자 효과가 있으면 그 밑에 그늘 · 빛을 그 순간의 세기로 먼저 깐다(화면처럼 요소의 투명도 · 흐림을 함께 따른다).
 function drawLayer(ctx, L, lk) {
@@ -301,7 +302,7 @@ function drawSlide(ctx, W, H, built, local, skip = null) {
   for (const L of built.layers) {
     if (skip && skip.has(L.i)) continue;              // 이어 움직이기: 옮겨 그릴 요소는 따로 그린다
     const p = L.i >= 0 ? poses.get(L.i) : null;
-    const lk = L.look ? lookAt(built.look, sec, L.look.n) : null;
+    const lk = L.look ? lookAt(L.look.def, sec, L.look.n) : null;
     if (!p && lk) {
       ctx.save();
       ctx.translate(lk.dx * L.look.px, lk.dy * L.look.px);

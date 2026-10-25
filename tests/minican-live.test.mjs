@@ -80,3 +80,29 @@ test('글자 효과: 바탕마다 하나 + 어느 장에나 쓰는 것 · 고르
   // 빛이 퍼지는 만큼 글의 칸이 넓다.
   assert.ok(live[2].box.w - 200 >= 2 * Math.ceil(0.08 * 1280 * 0.25));
 });
+
+test('글상자마다 글자 효과: 고른 것이 장의 효과보다 먼저 · 없음은 그 글만 · 영상은 효과가 있는 글만 제 칸', async () => {
+  const { itemLook, itemLooks, lookById, lookReach } = await import('../src/live.js');
+  const { filmCells } = await import('../src/film.js');
+  const { styleOf } = await import('../src/model.js');
+  const text = (lk, y) => ({ t: 'text', text: '글', x: 50, y, w: 60, size: 8, ...(lk === undefined ? {} : { lk }) });
+  // 저장: 아는 효과 · 'none' 만 남고, 글이 아닌 요소에는 붙지 않는다.
+  const d = cleanDesign({ look: 'gold', items: [text('fire', 20), text('none', 40), text(undefined, 60), text('nope', 70), { t: 'shape', x: 50, y: 50, w: 10, h: 10, lk: 'fire' }] });
+  assert.deepEqual(d.items.map((it) => it.lk), ['fire', 'none', undefined, undefined, undefined]);
+  // 고른 것 → 없음 → 장의 효과(황금빛).
+  assert.deepEqual(itemLooks(d).map((l) => l?.id ?? null), ['fire', null, 'gold', 'gold', null]);
+  assert.equal(itemLook({ t: 'text', lk: 'ice' }, null).id, 'ice');
+  assert.equal(itemLook({ t: 'text' }, lookById('gold')).id, 'gold');
+  assert.equal(itemLook({ t: 'shape', lk: 'ice' }, lookById('gold')), null);
+  // 장의 효과가 없어도 고른 글상자에는 효과가 있다.
+  assert.deepEqual(itemLooks(cleanDesign({ items: [text('pop', 30), text(undefined, 60)] })).map((l) => l?.id ?? null), ['pop', null]);
+  // 서식 복사에 글자 효과도 실린다.
+  assert.equal(styleOf(d.items[0]).values.lk, 'fire');
+  // 영상: 효과가 있는 글만 제 칸이고, 칸은 그 글의 효과가 퍼지는 만큼 넓다(황금빛 > 덜덜 떨기).
+  const items = [text('gold', 30), text(undefined, 50), text('shake', 70)];
+  const boxes = items.map(() => ({ x: 100, y: 100, w: 200, h: 80 }));
+  const cells = filmCells({ items }, {}, boxes, 1280, 720);
+  assert.deepEqual(cells.map((c) => [c.i, c.items]), [[-1, []], [0, [0]], [-1, [1]], [2, [2]]]);
+  assert.ok(lookReach(lookById('gold')) > lookReach(lookById('shake')));
+  assert.ok(cells[1].box.w > cells[3].box.w, 'the wide glow gets more room');
+});

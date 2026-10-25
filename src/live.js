@@ -726,6 +726,17 @@ export function slideLook(design) {
   const live = cleanLive(design?.live);
   return live && live.text !== false ? lookById(live.id) : null;
 }
+/** 글상자 하나의 글자 효과: 그 글상자에 고른 것(lk: 효과 이름 | 'none') → 없으면 장의 효과(slide). 글이 아니면 null. */
+export function itemLook(item, slide = null) {
+  if (item?.t !== 'text') return null;
+  const pick = cleanLook(item.lk);
+  return pick ? lookById(pick) : slide;
+}
+/** 장의 요소마다 글자 효과(글이 아니거나 효과가 없으면 null). */
+export function itemLooks(design) {
+  const slide = slideLook(design);
+  return (Array.isArray(design?.items) ? design.items : []).map((it) => itemLook(it, slide));
+}
 /** 그 움직이는 바탕에 어울리는 글자 효과(바탕에서 끈 것이면 null). */
 export const liveLook = (live) => slideLook({ live });
 /** 글자 효과의 이름(움직이는 바탕의 이름으로도 찾는다). */
@@ -797,10 +808,12 @@ export function lookText(node, look, t, n = 0, { move = true } = {}) {
 }
 // 그 카드의 글들(다른 카드 안의 것은 빼고), 놓인 차례대로.
 const textsOf = (card) => [...card.querySelectorAll('.fi-text')].filter((n) => n.closest('.fe-card') === card);
-/** 카드 안의 글마다 글자 효과를 입힌다(look 이 없으면 걷는다). */
-export function lookCard(card, look, t, opts) {
+// 글 요소 하나의 효과: 그 글상자에 고른 것(itemView 가 적는 data-lk) → 없으면 장의 효과.
+const nodeLook = (node, look) => { const pick = cleanLook(node.dataset.lk); return pick ? lookById(pick) : look; };
+/** 카드 안의 글마다 글자 효과를 입힌다(글상자마다 고른 것이 먼저. look 은 장의 효과, null 이면 고른 것만). stop 이면 모두 걷는다. */
+export function lookCard(card, look, t, opts = {}) {
   if (!card) return;
-  textsOf(card).forEach((node, n) => lookText(node, look, t, n, opts));
+  textsOf(card).forEach((node, n) => lookText(node, opts.stop ? null : nodeLook(node, look), t, n, opts));
 }
 
 const reduced = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -839,18 +852,19 @@ export function liveBackdrops(root, { fps = 60, start = performance.now() } = {}
     raf = requestAnimationFrame(draw);
     runs.push(run);
   }
-  // 글자 효과가 있는 장(designView 가 data-look 을 적는다): 바탕과 같은 때로 글에 효과를 입힌다.
-  const cards = [...(root.matches?.('.fe-card[data-look]') ? [root] : []), ...root.querySelectorAll('.fe-card[data-look]')];
+  // 글자 효과가 있는 장(designView 가 data-looks 를 적는다. 장의 효과는 data-look): 바탕과 같은 때로 글에 효과를 입힌다.
+  const cards = [...(root.matches?.('.fe-card[data-looks]') ? [root] : []), ...root.querySelectorAll('.fe-card[data-looks]')];
   for (const card of cards) runs.push(liveLooks(card, { fps, start }));
   return { stop() { for (const r of runs) r.stop(); } };
 }
 const looping = new WeakSet();
 /**
- * 카드 안의 글에 글자 효과(look. 없으면 카드의 data-look)를 순간마다 입힌다(발표 · 공유 링크 · 꾸미기 판). 시간은 부른 때를 0 초로 센다.
+ * 카드 안의 글에 글자 효과를 순간마다 입힌다(발표 · 공유 링크 · 꾸미기 판). look: 장의 효과(없으면 카드의 data-look). 글상자마다 고른 것(data-lk)이 먼저다.
+ * 장의 효과도 글상자마다 고른 것도 없는 카드(data-looks 가 없는)는 그냥 둔다. 시간은 부른 때를 0 초로 센다.
  * 동작 줄이기를 켠 기기는 멈춘 모습(빛 · 그늘만)이다. 돌려주는 것: { stop() }(입힌 것을 걷는다). 화면에서 떨어진 카드는 저절로 멈춘다.
  */
 export function liveLooks(card, { fps = 60, start = performance.now(), look = lookById(card?.dataset?.look) } = {}) {
-  if (!card || !look || looping.has(card)) return { stop() {} };
+  if (!card || looping.has(card) || (!look && !card.dataset?.looks)) return { stop() {} };
   looping.add(card);
   let raf = 0, last = -1, stopped = false, shown = false, waited = 0, ticks = 0;
   const tick = (now) => {
@@ -866,7 +880,7 @@ export function liveLooks(card, { fps = 60, start = performance.now(), look = lo
     last = t;
     lookCard(card, look, t);
   };
-  const run = { stop() { if (stopped) return; stopped = true; cancelAnimationFrame(raf); looping.delete(card); lookCard(card, null); } };
+  const run = { stop() { if (stopped) return; stopped = true; cancelAnimationFrame(raf); looping.delete(card); lookCard(card, null, 0, { stop: true }); } };
   raf = requestAnimationFrame(tick);
   return run;
 }
