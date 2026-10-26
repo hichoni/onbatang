@@ -4,6 +4,10 @@
 
 - `Onbatang.open({ png: { pages: 'all' } })` 이면 "다 했어요" 때 첫 장(`png`)과 함께 **모든 장**(숨긴 장 제외, `EMBED_MAX_PAGES` 40장까지)을 `pngs`(Blob 배열)로 돌려줍니다. 기본은 전처럼 첫 장만(`pngs` 는 `[png]`). 풍풍 꿈마당(학교장 인증제 앱)의 공모전 양식이 '온바탕으로 만들기'로 발표 자료 전체를 붙이는 데 씁니다(`app/embed-host.js` · `app/embed.js` · `docs/embed-2026-10-22.md`).
 
+## v0.94.3 · GBE-AI Lab 새 주소 gbe.ai.kr (2026-10-26)
+
+- GBE-AI Lab 이 `gai-lab.netlify.app` 에서 `gbe.ai.kr` 로 옮겼다(Cloudflare Pages). 온바탕이 여는 GBE-AI Lab 주소(7일 링크 · 보기 링크 `copy-link.js` 의 `GUEST_PAGE` · `PLAY_PAGE`, 계정 연결 `account-bridge.js`, GBE-AI Lab 연결 `gai-provider.js`, 휴대폰 리모컨 `phone-remote.js`)를 새 주소로. 이미 보낸 옛 주소의 링크는 옛 주소가 그대로 연다.
+
 ## v0.94.2 · 이름은 GBE-AI Lab (2026-10-26)
 
 - 정식 명칭은 GBE-AI Lab 이다("가이랩"으로 줄여 부르지 않는다). 화면 글자 · 안내 · 새 기능 설명 · 주석의 "가이랩" · "G-AI Lab" 을 모두 "GBE-AI Lab" 으로 바꿨다. 저장 열쇠 · 주소 · 함수 이름 같은 안쪽 이름(`gailab_*`, `gai-lab.netlify.app`)은 그대로다. 앞선 버전의 기록(아래 · `docs/`)은 그때 이름대로 둔다.

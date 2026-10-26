@@ -73,10 +73,10 @@ export function createCopyIntake({ url = GAILAB.url, key = GAILAB.key, fetch: ge
 // 한 곳(접속 주소)에서 하루 5개까지(서버가 센다). 다시 올리기 · 지우기는 만들 때 받은 비밀 열쇠(token)로만 하고, 열쇠는 이 브라우저에만 둔다.
 // 링크 주소는 GBE-AI Lab의 복사 링크 페이지다: 카카오톡 · 메신저에 붙이면 그 자료의 제목 · 첫 장이 보이고, 열면 곧바로 공용 온바탕(?copy=코드)으로 간다.
 export const GUEST_DAYS = 7, GUEST_PER_DAY = 5, GUEST_MAX_PARTS = 20, GUEST_PART_MAX_BYTES = 5000000, GUEST_MAX_BYTES = 20000000;
-export const GUEST_PAGE = 'https://gai-lab.netlify.app/onbatang-copy.html';
+export const GUEST_PAGE = 'https://gbe.ai.kr/onbatang-copy.html';
 export const guestUrl = (code, page = GUEST_PAGE) => `${page}?c=${copyCode(code)}`;
 // 보기 링크(받은 사람이 발표처럼 그대로 본다 · 고칠 수 없다)의 재생 페이지(GBE-AI Lab). 회원 링크 · 7일 링크가 함께 쓴다.
-export const PLAY_PAGE = 'https://gai-lab.netlify.app/onbatang-play.html';
+export const PLAY_PAGE = 'https://gbe.ai.kr/onbatang-play.html';
 export const playUrl = (code, page = PLAY_PAGE) => `${page}?c=${copyCode(code)}`;
 export const linkUrl = (code, mode) => (mode === 'view' ? playUrl(code) : guestUrl(code));
 const bytesOf = (value) => new TextEncoder().encode(JSON.stringify(value)).length;

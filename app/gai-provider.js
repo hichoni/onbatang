@@ -1,6 +1,6 @@
 // Account credentials stay in the GBE-AI Lab window. Only explicit generation
 // requests and bounded app results cross this channel.
-export function createGaiPopupProvider({ url = 'https://gai-lab.netlify.app/onbatang-gai-connect.html', host = globalThis.window } = {}) {
+export function createGaiPopupProvider({ url = 'https://gbe.ai.kr/onbatang-gai-connect.html', host = globalThis.window } = {}) {
   const endpoint = new URL(url), pending = new Map();
   if (endpoint.protocol !== 'https:' && !(endpoint.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(endpoint.hostname))) throw Error('가이X 연결 주소를 확인해주세요.');
   let popup, channel, ready = false, connection, resolveConnection, rejectConnection, connectionTimer, poll;

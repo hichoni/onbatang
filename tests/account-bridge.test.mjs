@@ -8,7 +8,7 @@ function fakeHost() {
   const popup = {closed: false, focus() {}, close() { this.closed = true; }, postMessage(message, origin) { sent.push({message, origin}); }};
   const host = {location: {origin: 'https://onbatang.web.app'}, opened: [], addEventListener: (type, fn) => listeners.push(fn),
     open(url, name, features) { host.opened.push({url, name, features}); return popup; }};
-  const emit = (data, over = {}) => listeners.forEach((fn) => fn({origin: 'https://gai-lab.netlify.app', source: popup, data, ...over}));
+  const emit = (data, over = {}) => listeners.forEach((fn) => fn({origin: 'https://gbe.ai.kr', source: popup, data, ...over}));
   return {host, popup, sent, emit};
 }
 
@@ -18,7 +18,7 @@ test('the bridge opens the GBE-AI Lab window with this origin, waits for ready, 
   await assert.rejects(bridge.list(), /먼저 연결/);
   const connecting = bridge.connect();
   const opened = new URL(f.host.opened[0].url), params = new URLSearchParams(opened.hash.slice(1));
-  assert.equal(opened.origin + opened.pathname, 'https://gai-lab.netlify.app/onbatang-account-connect.html');
+  assert.equal(opened.origin + opened.pathname, 'https://gbe.ai.kr/onbatang-account-connect.html');
   assert.equal(params.get('origin'), 'https://onbatang.web.app');
   const channel = params.get('channel');
   f.emit({type: 'onbatang-account', channel, event: 'ready'}, {origin: 'https://evil.example'});
@@ -30,7 +30,7 @@ test('the bridge opens the GBE-AI Lab window with this origin, waits for ready, 
   assert.equal(bridge.connected, true);
   const listing = bridge.list();
   const ask = f.sent[0];
-  assert.equal(ask.origin, 'https://gai-lab.netlify.app');
+  assert.equal(ask.origin, 'https://gbe.ai.kr');
   assert.equal(ask.message.action, 'list');
   f.emit({type: 'onbatang-account', channel, request: ask.message.request, event: 'result', result: [{id: 'd1234567', name: '집에서', updatedAt: 5, slides: 2}]});
   assert.deepEqual(await listing, [{id: 'd1234567', name: '집에서', updatedAt: 5, slides: 2}]);
