@@ -1,13 +1,13 @@
 // GBE-AI Lab 계정으로 이어 쓰기(공용 온바탕): 집에서 만든 그림을 GBE-AI Lab 선생님 계정에 올려 두고, 학교 컴퓨터에서 가져온다.
 // 로그인은 GBE-AI Lab 창(작은 연결 창)에서만 하고, 로그인 정보는 이 창으로 넘어오지 않는다. 오가는 것은 선생님이 고른 그림뿐이다.
 // 신호(postMessage, type: 'onbatang-account'): 연결 창 → 온바탕 ready · result · error, 온바탕 → 연결 창 list · get · put.
-// 연결 창은 처음 열 때 정한 주소(gai-lab.netlify.app)와 그 창에서 온 신호만 받는다. 다 하면 온바탕이 연결 창을 닫는다.
+// 연결 창은 처음 열 때 정한 주소(gbe.ai.kr)와 그 창에서 온 신호만 받는다. 다 하면 온바탕이 연결 창을 닫는다.
 import { el, toast, openModal, closeModal } from './ui.js';
 import { cleanRecord, isDesignId, MAX_DESIGNS } from './designs.js';
 import { designView } from '../src/render.js';
 
 const PUT_MAX = 10;                 // 한 번에 올리는 그림 수
-export function createAccountBridge({ url = 'https://gai-lab.netlify.app/onbatang-account-connect.html', host = globalThis.window } = {}) {
+export function createAccountBridge({ url = 'https://gbe.ai.kr/onbatang-account-connect.html', host = globalThis.window } = {}) {
   const endpoint = new URL(url), pending = new Map();
   if (endpoint.protocol !== 'https:' && !(endpoint.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(endpoint.hostname))) throw Error('GBE-AI Lab 연결 주소를 확인해 주세요.');
   let popup = null, channel = '', ready = false, waiting = null, poll = 0;

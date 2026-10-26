@@ -6,7 +6,7 @@ import {gaiLessonContext} from '../app/gai-maker.js';
 function fixture(){
  let listener;const sent=[],popup={closed:false,focus(){},postMessage(message,origin){sent.push({message,origin});}};
  const host={location:{origin:'https://onbatang.web.app'},addEventListener(name,fn){assert.equal(name,'message');listener=fn;},open(url){this.url=new URL(url);return popup;}};
- const emit=(data,overrides={})=>listener({origin:'https://gai-lab.netlify.app',source:popup,data,...overrides});
+ const emit=(data,overrides={})=>listener({origin:'https://gbe.ai.kr',source:popup,data,...overrides});
  return {host,popup,sent,emit,channel:()=>new URLSearchParams(host.url.hash.slice(1)).get('channel')};
 }
 test('popup connects only to its exact origin, source and channel and never forwards credentials',async()=>{
@@ -19,7 +19,7 @@ test('popup connects only to its exact origin, source and channel and never forw
  await Promise.resolve();assert.equal(ready,false);
  f.emit(hello);await connection;assert.equal(ready,true);
  const input={prompt:'나만의 앱을 만들어줘',context:'수업 글',project:null,conversation:[]};
- const task=provider.generate(input);const call=f.sent[0];assert.deepEqual(call.message.input,input);assert.equal(call.origin,'https://gai-lab.netlify.app');
+ const task=provider.generate(input);const call=f.sent[0];assert.deepEqual(call.message.input,input);assert.equal(call.origin,'https://gbe.ai.kr');
  assert.equal(f.sent.length,1);f.emit({type:'onbatang-gai',channel,request:call.message.request,event:'result',result:{kind:'answer',answer:'대화'}});
  assert.deepEqual(await task,{kind:'answer',answer:'대화'});
  f.popup.closed=true;await new Promise(resolve=>setTimeout(resolve,550));

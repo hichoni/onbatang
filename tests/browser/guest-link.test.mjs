@@ -75,7 +75,7 @@ test('7-day links: anyone makes a view link and an edit link, no video, says whe
   await context.route('**/*', route => {
     const u = new URL(route.request().url());
     if (u.origin === origin || ['data:', 'blob:', 'about:'].includes(u.protocol)) return route.continue();
-    if (u.href.startsWith('https://gai-lab.netlify.app/onbatang-play.html')) { played.push(u.href); return route.fulfill({contentType: 'text/html', body: '<!doctype html><link rel="icon" href="data:,"><title>재생</title>'}); }
+    if (u.href.startsWith('https://gbe.ai.kr/onbatang-play.html')) { played.push(u.href); return route.fulfill({contentType: 'text/html', body: '<!doctype html><link rel="icon" href="data:,"><title>재생</title>'}); }
     external.push(u.href); return route.abort();
   });
   const page = await context.newPage(); page.on('pageerror', e => errors.push(e.message));
@@ -104,7 +104,7 @@ test('7-day links: anyone makes a view link and an edit link, no video, says whe
   await dialog.locator('[data-guest-title]').fill('가을 소풍 안내');
   await dialog.locator('[data-guest-create]').click();
   await dialog.locator('[data-guest-url]').waitFor();
-  assert.equal(await dialog.locator('[data-guest-url]').innerText(), `https://gai-lab.netlify.app/onbatang-play.html?c=${VIEW}`, 'a view link opens the player');
+  assert.equal(await dialog.locator('[data-guest-url]').innerText(), `https://gbe.ai.kr/onbatang-play.html?c=${VIEW}`, 'a view link opens the player');
   assert.match(await dialog.locator('[data-guest-until]').innerText(), /11월 1일 \(일\) 오후 3:00까지 열려요/);
   assert.match(await dialog.innerText(), /보기 링크를 만들었어요/);
   assert.match(await dialog.innerText(), /바탕 영상 1개는 링크에 실리지 않았어요/);
@@ -130,10 +130,10 @@ test('7-day links: anyone makes a view link and an edit link, no video, says whe
   await dialog.locator('[data-guest-mode=edit]').click();
   await dialog.locator('[data-guest-create]').click();
   await dialog.locator('[data-guest-url]').waitFor();
-  assert.equal(await dialog.locator('[data-guest-url]').innerText(), `https://gai-lab.netlify.app/onbatang-copy.html?c=${EDIT}`);
+  assert.equal(await dialog.locator('[data-guest-url]').innerText(), `https://gbe.ai.kr/onbatang-copy.html?c=${EDIT}`);
   assert.deepEqual(calls[0][1], {p_title: '우리 반 알림장', p_parts: 1});
   await dialog.locator('[data-guest-copy]').click();
-  assert.equal(await page.evaluate(() => navigator.clipboard.readText()), `https://gai-lab.netlify.app/onbatang-copy.html?c=${EDIT}`);
+  assert.equal(await page.evaluate(() => navigator.clipboard.readText()), `https://gbe.ai.kr/onbatang-copy.html?c=${EDIT}`);
 
   // 다시 열면 두 링크가 그대로(본 · 받은 횟수와 함께) · 다시 올리기는 같은 링크 · 같은 열쇠
   await page.keyboard.press('Escape'); await dialog.waitFor({state: 'detached'});
@@ -154,7 +154,7 @@ test('7-day links: anyone makes a view link and an edit link, no video, says whe
   assert.equal(state.links[EDIT].removed, true);
   await dialog.locator('[data-guest-create]').waitFor();
   await dialog.locator('[data-guest-mode=view]').click();
-  assert.equal(await dialog.locator('[data-guest-url]').innerText(), `https://gai-lab.netlify.app/onbatang-play.html?c=${VIEW}`);
+  assert.equal(await dialog.locator('[data-guest-url]').innerText(), `https://gbe.ai.kr/onbatang-play.html?c=${VIEW}`);
 
   // 하루 개수 · 서버 준비 전은 쉬운 말로
   await dialog.locator('[data-guest-mode=edit]').click();
@@ -174,8 +174,8 @@ test('7-day links: anyone makes a view link and an edit link, no video, says whe
   state.info = {title: '가을 소풍 안내', parts: 1, version: 1, slides: 1, mode: 'view'};
   const viewer = await context.newPage(); viewer.on('pageerror', e => errors.push(e.message));
   await viewer.goto(`${origin}/taker.html?copy=${VIEW}`);
-  await viewer.waitForURL(`https://gai-lab.netlify.app/onbatang-play.html?c=${VIEW}`);
-  assert.deepEqual(played, [`https://gai-lab.netlify.app/onbatang-play.html?c=${VIEW}`]);
+  await viewer.waitForURL(`https://gbe.ai.kr/onbatang-play.html?c=${VIEW}`);
+  assert.deepEqual(played, [`https://gbe.ai.kr/onbatang-play.html?c=${VIEW}`]);
   assert.equal(calls.filter(c => c[0] === 'onbatang_copy_part').length, 0, 'a view link is not taken as a copy');
   assert.deepEqual(errors, []); assert.deepEqual(external, []);
 });

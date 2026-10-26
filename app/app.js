@@ -2949,7 +2949,7 @@ function askDownload(O, btn) {
         el('p',{class:'cv-down-note',text:'받은 사람이 링크를 열면 그 사람 브라우저의 온바탕에 사본이 생겨 로그인 없이 바로 고칠 수 있어요. 받은 사람이 고쳐도 내 자료는 그대로예요.'}),
         el('p',{class:'cv-down-note',text:'사진 · 움직임 · 발표자 노트까지 그대로 가요. 바탕 영상은 한 개 20MB까지 함께 가요.'})));
       if(!copyAction)rows.push(el('div',{class:'cv-down-note warn',role:'note',dataset:{copyMembers:''}},el('b',{text:'GBE-AI Lab 회원만 링크를 만들 수 있어요. '}),
-        'GBE-AI Lab(gai-lab.netlify.app)에 로그인한 선생님은 GBE-AI Lab 스튜디오의 온바탕에서 이 칸으로 링크를 만들어요. 받는 사람은 회원이 아니어도 돼요.'));
+        'GBE-AI Lab(gbe.ai.kr)에 로그인한 선생님은 GBE-AI Lab 스튜디오의 온바탕에서 이 칸으로 링크를 만들어요. 받는 사람은 회원이 아니어도 돼요.'));
     }
     else if (video) {
       // 담을 쪽: 모든 쪽(PPT 면 모든 파트) 또는 범위. 발표에서 숨긴 장은 빼고 차례대로 이어 담는다.
