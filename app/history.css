@@ -1,0 +1,36 @@
+/* 버전 기록 창(.cv-history): 왼쪽 판 목록 · 오른쪽 고른 판의 장들. 좁은 화면에서는 위아래로. */
+.cv-history{display:grid;gap:12px}
+.cv-history h2{margin:0;padding-right:44px;font-size:1.2rem}
+.cv-history .cv-down-note{margin:0}
+.cv-history-body{display:grid;grid-template-columns:minmax(200px,250px) 1fr;gap:14px;min-height:0}
+.cv-history-list{margin:0;padding:0;list-style:none;display:grid;align-content:start;gap:6px;max-height:min(56vh,520px);overflow:auto;padding-right:4px}
+.cv-history-row{display:grid;gap:2px;width:100%;text-align:left;padding:9px 12px;border:1px solid var(--cv-line,#dde1ec);border-radius:10px;background:#fff;color:inherit;font:inherit;cursor:pointer}
+.cv-history-row:hover{border-color:#b4bde8}
+.cv-history-row[aria-pressed=true]{border-color:var(--primary,#3949c7);background:var(--soft,#eef0ff);box-shadow:inset 3px 0 0 var(--primary,#3949c7)}
+.cv-history-row:focus-visible{outline:3px solid var(--primary,#3949c7);outline-offset:2px}
+.cv-history-when{font-weight:700;font-size:.92rem}
+.cv-history-why{font-size:.8rem;color:#5b6283}
+.cv-history-empty{padding:10px 4px;font-size:.85rem;color:#5b6283;line-height:1.5}
+.cv-history-view{display:grid;align-content:start;gap:10px;min-width:0}
+.cv-history-pages{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:10px;max-height:min(50vh,470px);overflow:auto;padding:10px;border-radius:12px;background:var(--cv-desk,#eceef4)}
+.cv-history-pages:empty{display:none}
+.cv-history-page{margin:0;display:grid;gap:4px}
+.cv-history-thumb{display:grid;place-items:center;aspect-ratio:4/3;overflow:hidden}
+.cv-history-thumb .fe-card{--fe-card-radius:3px;box-shadow:0 2px 8px rgba(23,28,68,.18)}
+.cv-history-page figcaption{font-size:.75rem;color:#5b6283;text-align:center}
+.cv-history-note{min-height:1.4em}
+@media(max-width:680px){
+  .cv-history-body{grid-template-columns:1fr}
+  .cv-history-list{max-height:32vh}
+  .cv-history-pages{grid-template-columns:repeat(auto-fill,minmax(110px,1fr));max-height:38vh}
+  .cv-history .cv-find-actions{flex-wrap:wrap}
+}
+/* 위 막대의 "기록" 단추: 좁은 화면에서는 저장 상태와 같은 줄(둘째 줄)에 */
+.cv-bar .btn.cv-history-btn{order:6;min-height:36px;padding:4px 10px;border-color:transparent;color:var(--primary-dark,#26318f);font-size:.85rem}
+.cv-bar .btn.cv-history-btn:hover:not(:disabled){background:var(--soft,#eef0ff)}
+/* 넓은 화면의 한 줄 막대: 1600px 아래에서는 시계 그림만(이름은 화면 읽기 프로그램 · title 에 남는다). 막대가 넘쳐 내려받기가 잘리지 않게 */
+@media (min-width: 900px) and (min-height: 520px) { .cv-bar .btn.cv-history-btn{order:0} }   /* 한 줄 막대에서는 저장 상태 바로 옆 */
+@media (min-width: 900px) and (min-height: 520px) and (max-width: 1599px) {
+  .cv-bar .btn.cv-history-btn{padding:4px 5px}
+  .cv-bar .cv-history-btn .cv-lbl{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+}

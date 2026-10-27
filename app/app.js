@@ -55,6 +55,7 @@ import { zipStore } from './zip.js';
 import { createPptx } from './pptx.js';
 import { listDesigns, getDesign, putDesign, replaceDesignIfUnchanged, removeDesign, setStorageName, storageName, listDesignIssues, getOriginalDesign } from './store.js';
 import { setupApp, useFonts, photoToData, BASIC_GROUP } from './setup.js';
+import { addVersion, listVersions, readVersion, dropHistory, pruneHistory, restoredRecord, whenLabel, HISTORY_REASONS, HISTORY_GAP } from './history.js';
 import { mergeAccount, createPusher, syncsRecord } from './sync.js';
 
 let app = null;
@@ -184,6 +185,8 @@ async function refresh() {
   try {
     S.list = await listDesigns();
     S.error = '';
+    // 이 기기에 없는 그림(다른 기기에서 지운 그림)의 버전 기록을 치운다. 읽지 못한 그림(listDesignIssues)의 기록은 둔다.
+    if (S.phase === 'boot') pruneHistory([...S.list.map((r) => r.id), ...listDesignIssues().map((x) => x.id)]).catch((error) => console.warn(error));
   } catch (ex) {
     console.error(ex);
     S.list = [];
@@ -689,6 +692,7 @@ async function dropRecord(record) {
   }
   if (S.list) S.list = S.list.filter((r) => r.id !== record.id);
   tidyVideos(record.id, [], deckVideos(record.slides));      // 그 그림에 딸린 영상 파일도 이 기기에서 지운다
+  dropHistory(record.id).catch((error) => console.warn(error));   // 그 그림의 버전 기록도
   return true;
 }
 // 목록의 그림을 연다. 이 기기에 저장된 가장 새것을 읽는다(읽지 못하면 목록이 기억하는 것).
@@ -716,6 +720,8 @@ function openDesign(record, isNew) {
   delete O.record.slides;                // 슬라이드는 O.slides 가 맡는다(저장할 때 다시 넣는다)
   S.open = O;
   rememberOpen(O);
+  // 버전 기록: 열 때의 판(바로 앞 판과 같으면 남기지 않는다). 기록을 남기지 못해도 꾸미기는 그대로 한다.
+  if (!isNew) keepVersion(record, 'open');
   const first = isNew ? '꾸미기 시작하면 저절로 저장돼요' : accountFor(record) ? '저장돼 있어요' : '이 기기에 저장돼 있어요';
   O.status = el('span', { class: 'cv-status', role: 'status', text: first, title: first });
   // 저장하지 못했을 때는 위 막대 아래에 띠로 한 번 더 알린다(위 막대의 글은 자리가 좁아 잘릴 수 있다).
@@ -812,11 +818,11 @@ function openDesign(record, isNew) {
     ...(mark ? [mark, el('span', { class: 'cv-bar-sep cv-brand-sep', 'aria-hidden': 'true' })] : []),
     el('button', { class: 'btn btn-ghost cv-back', type: 'button', title: '저장하고 내 그림으로 돌아가요', onClick: (e) => closeDesign(O, e.currentTarget) }, ...face('back', '내 그림')),
     el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' }),
-    name, O.status, ...(material ? [material] : []), ...(lesson?[lesson]:[]), ...(accountLibrary?[accountLibrary]:[]), el('span', { class: 'cv-bar-gap' }), shapes, el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' }), tourButton('editor', O), ...(share ? [share] : []), show, down);
+    name, O.status, historyButton(O), ...(material ? [material] : []), ...(lesson?[lesson]:[]), ...(accountLibrary?[accountLibrary]:[]), el('span', { class: 'cv-bar-gap' }), shapes, el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' }), tourButton('editor', O), ...(share ? [share] : []), show, down);
   // 들여쓰기 막대는 보통 막대 뒤에 만든다(이름 칸 · 저장 상태는 한 곳에만 놓일 수 있다).
   const embedHeader = embedBar ? el('header', { class: 'cv-bar cv-embed-bar' },
     el('span', { class: 'onba-editor-logo' }, onbatangLogo()), ...(embedBar.close ? [embedBar.close, el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' })] : []),
-    name, O.status, el('span', { class: 'cv-bar-gap' }), tourButton('editor', O), embedBar.done) : null;
+    name, O.status, historyButton(O), el('span', { class: 'cv-bar-gap' }), tourButton('editor', O), embedBar.done) : null;
   const shell = editorShell(O, embedHeader || bar);
   // ? : 꾸미는 화면 단축키 표(글을 쓰는 칸에서는 그냥 글자다). 아무 데도 누르지 않은 때에도 듣도록 문서에 단다.
   const onHelpKey = (e) => {
@@ -2338,6 +2344,7 @@ async function save(O, { preserveBlank = false, leaving = false } = {}) {
     if (accountFor(kept)) pusher.queue(kept);
     if (typeof shareAction?.saved === 'function') { try { shareAction.saved(kept); } catch (error) { console.warn(error); } }   // 공유 링크가 있으면 호스트가 고친 것을 링크에도 반영한다
     if (!O.dirty) setStatus(O, accountFor(kept) ? '이 기기에 저장했어요 · 계정에 올리는 중…' : '이 기기에 저장했어요', 'ok');
+    keepVersion(kept, 'auto', { gap: HISTORY_GAP });   // 고치는 동안 10분마다 판 하나
     return true;
   }
   O.dirty = true;
@@ -2345,7 +2352,7 @@ async function save(O, { preserveBlank = false, leaving = false } = {}) {
   return false;
 }
 /** 꾸미던 것을 저장하고 편집기를 치운다. 저장했으면 true. */
-async function leaveEditor(O, { requireSaved = false, waitForSync = false } = {}) {
+async function leaveEditor(O, { requireSaved = false, waitForSync = false, tidy = true } = {}) {
   app.inert = true;                              // 나가는 동안에는 더 고치지 못하게 한다(그때 고친 것은 저장되지 않는다)
   if (O.putting) await O.putting;                // 저절로 걸린 저장이 아직 끝나지 않았으면 기다린다(끝난 뒤에 결과를 본다)
   let ok = await save(O);
@@ -2357,7 +2364,7 @@ async function leaveEditor(O, { requireSaved = false, waitForSync = false } = {}
   // 영상을 빼거나 바꿔서 이제 쓰지 않는 영상 파일을 이 기기에서 지운다(나가면 실행 취소로 되살릴 수 없다).
   // 지금 모습이 이 기기에 적힌 것이 확실할 때에만 지운다. 적히지 못했으면 예전 모습의 그림이 남아 있고,
   // 그 그림은 지우려던 영상을 아직 쓰고 있을 수 있다.
-  if (ok && !O.dirty && O.localOk !== false) await tidyVideos(O.record.id, currentSlides(O));
+  if (tidy && ok && !O.dirty && O.localOk !== false) await tidyVideos(O.record.id, currentSlides(O));
   O.closed = true;
   forgetOpen();
   O.activityConfig?.remove();O.activityConfig=null;
@@ -2862,6 +2869,130 @@ async function closeDesign(O, btn = null) {
     window.scrollTo({ top: 0 });
     app.querySelector(`.cv-item[data-id="${id}"] .cv-thumb .fe-card`)?.classList.add('cv-moving');
   }, 'close');
+}
+// ---------- 버전 기록: 예전 판 보기 · 되돌리기 · 새 그림으로 꺼내기(history.js) ----------
+// 판은 이 기기에만 쌓인다. 남기지 못해도(저장 공간 등) 꾸미기 · 저장은 그대로 한다.
+function keepVersion(record, reason, options) {
+  addVersion(record, reason, options).catch((error) => console.warn(error));
+}
+function historyButton(O) {
+  return el('button', { class: 'btn btn-ghost cv-history-btn', type: 'button', dataset: { history: '' }, title: '버전 기록: 예전 판을 보고 되돌려요', onClick: () => openHistory(O) }, ...face('history', '기록'));
+}
+async function openHistory(O) {
+  if (S.open !== O || O.closed || O.leaving || O.recoveryRequired || moving || videoBusy(O) || O.inlineImport) return;
+  if (O.putting) await O.putting;
+  if (O.dirty) await save(O);                      // 지금 판도 기록과 견줄 수 있게 먼저 저장한다
+  if (S.open !== O || O.closed) return;
+  let versions = [];
+  try { versions = await listVersions(O.record.id); }
+  catch (error) { console.warn(error); toast('버전 기록을 읽지 못했어요. 이 창에서는 기기에 저장할 수 없을 수 있어요.', 5000); return; }
+  setupApp();
+  const now = Date.now(), list = el('ol', { class: 'cv-history-list', 'aria-label': '판 목록' });
+  const preview = el('div', { class: 'cv-history-pages', 'aria-label': '고른 판의 장들' });
+  const note = el('p', { class: 'cv-down-note cv-history-note', role: 'status', 'aria-live': 'polite' });
+  const restore = el('button', { class: 'btn btn-primary', type: 'button', disabled: true, dataset: { historyRestore: '' } }, '이 판으로 되돌리기');
+  const copy = el('button', { class: 'btn', type: 'button', disabled: true, dataset: { historyCopy: '' }, title: '지금 그림은 그대로 두고, 고른 판을 내 그림에 따로 하나 더 만들어요' }, '새 그림으로 꺼내기');
+  const done = el('button', { class: 'btn btn-ghost', type: 'button', onClick: closeModal }, '닫기');
+  let loaded = null, token = 0;
+  const show = (slides, aspect) => preview.replaceChildren(...slides.map((d, i) => el('figure', { class: 'cv-history-page' },
+    el('div', { class: 'cv-history-thumb cv-fit-view' }, fitView(designView(d, { empty: '빈 장' }), aspect)), el('figcaption', { text: `${i + 1}장${d.hidden ? ' · 숨김' : ''}` }))));
+  const pick = async (v, row) => {
+    for (const b of list.querySelectorAll('.cv-history-row')) b.setAttribute('aria-pressed', String(b === row));
+    loaded = null; restore.disabled = copy.disabled = true;
+    const mine = ++token;
+    if (!v) { show(currentSlides(O), aspectOf(O.record)); note.textContent = '지금 꾸미고 있는 판이에요. 목록에서 예전 판을 골라 봐요.'; return; }
+    note.textContent = '판을 불러오고 있어요…';
+    try {
+      const got = await readVersion(v.key);
+      if (mine !== token) return;
+      if (!got) throw new Error('VERSION_NOT_FOUND');
+      loaded = got;
+      show(got.record.slides, aspectOf(got.record));
+      note.textContent = `${whenLabel(v.at, now)} 판 · ${got.record.slides.length}장이에요. 되돌려도 지금 판은 기록에 남아요.`;
+      restore.disabled = copy.disabled = false;
+    } catch (error) {
+      if (mine !== token) return;
+      console.warn(error);
+      preview.replaceChildren();
+      note.textContent = error?.code === 'MISSING_ASSET' ? '이 판의 사진 일부를 찾지 못해 열 수 없어요.' : '이 판을 읽지 못했어요.';
+    }
+  };
+  const row = (v) => {
+    const b = el('button', { class: 'cv-history-row', type: 'button', 'aria-pressed': 'false', dataset: { historyKey: v ? String(v.key) : 'now' }, onClick: () => pick(v, b) },
+      el('span', { class: 'cv-history-when', text: v ? whenLabel(v.at, now) : '지금 판' }),
+      el('span', { class: 'cv-history-why', text: v ? `${HISTORY_REASONS[v.reason] || ''} · ${v.pages}장` : '꾸미고 있는 그대로' }));
+    return el('li', {}, b);
+  };
+  list.append(row(null), ...versions.map(row));
+  restore.addEventListener('click', async () => {
+    if (!loaded) return;
+    restore.disabled = copy.disabled = true; note.textContent = '되돌리고 있어요…';
+    const result = await restoreVersion(O, loaded);
+    if (result !== true && list.isConnected) { note.textContent = result; restore.disabled = copy.disabled = false; }
+  });
+  copy.addEventListener('click', async () => {
+    if (!loaded) return;
+    if (homeEntries(S.list || [], groupsKnown).length >= MAX_DESIGNS) { note.textContent = `이 브라우저에는 그림을 ${MAX_DESIGNS}개까지 둘 수 있어요. 안 쓰는 그림을 지우고 다시 해 주세요.`; return; }
+    copy.disabled = true;
+    try {
+      const made = await putDesign({ ...copyRecord({ ...loaded.record, name: O.record.name }), updatedAt: Date.now() });
+      upsert(made); if (accountFor(made)) pusher.queue(made);
+      note.textContent = `"${made.name}"(으)로 꺼냈어요. 내 그림에서 열 수 있어요. 지금 그림은 그대로예요.`;
+      done.focus();                                 // 누른 단추가 꺼져도 Esc 로 닫히게 창 안에 둔다
+    } catch (error) { console.warn(error); note.textContent = `꺼내지 못했어요 (${error?.code || '저장소 오류'}). 저장 공간을 확인해 주세요.`; copy.disabled = false; }
+  });
+  openModal(el('section', { class: 'cv-history', 'aria-labelledby': 'cv-history-title', onKeydown: escCloses },
+    el('h2', { id: 'cv-history-title', text: '버전 기록' }),
+    el('p', { class: 'cv-down-note', text: `그림을 열 때와 고치는 동안 10분마다 판이 이 기기에 저절로 남아요(최근 20판 + 그 앞은 날마다 한 판).${O.materialDeck ? ' 여러 파트로 된 자료는 지금 연 파트의 기록이에요.' : ''} 바탕 영상 파일은 기록에 들지 않아요.` }),
+    el('div', { class: 'cv-history-body' }, list, el('div', { class: 'cv-history-view' }, preview, note)),
+    el('div', { class: 'cv-find-actions' }, done, copy, restore)), { wide: true, onClose: () => { token++; O.editor.refresh(); } });
+  if (!versions.length) { list.append(el('li', { class: 'cv-history-empty', text: '아직 남은 판이 없어요. 다음에 이 그림을 열 때부터, 또 고치는 동안 10분마다 쌓여요.' })); }
+  pick(null, list.querySelector('.cv-history-row'));
+  requestAnimationFrame(() => list.querySelector('.cv-history-row')?.focus({ preventScroll: true }));
+}
+/**
+ * 예전 판으로 되돌린다: 지금 판을 저장해 기록에 남긴 뒤(남기지 못하면 되돌리지 않는다) 그 판의 내용을 새 차례 번호로 저장하고 다시 연다.
+ * 이름 · 출처 · 계정 이음은 지금 것을 둔다. 되돌렸으면 true, 아니면 알릴 글.
+ */
+async function restoreVersion(O, version) {
+  if (S.open !== O || O.closed || O.leaving || O.recoveryRequired || moving || videoBusy(O)) return '지금은 되돌릴 수 없어요. 잠시 뒤에 다시 해 주세요.';
+  const id = O.record.id, at = O.at;
+  O.leaving = true; app.inert = true;
+  let left = false, written = false;
+  try {
+    if (O.putting) await O.putting;
+    let ok = await save(O, { preserveBlank: true });
+    if (O.dirty) ok = await save(O, { preserveBlank: true });
+    if (!ok || O.dirty || O.localOk === false) return '지금 판을 저장하지 못해 되돌리지 않았어요. 저장 공간을 확인해 주세요.';
+    const current = await getDesign(id);
+    if (!current) return '이 그림을 찾지 못했어요.';
+    try { await addVersion(current, 'before'); }
+    catch (error) { console.warn(error); return '지금 판을 기록에 남기지 못해 되돌리지 않았어요. 저장 공간을 확인해 주세요.'; }
+    const saved = await putDesign(restoredRecord(current, version.record));
+    written = true;
+    dropDraft(id);
+    keepVersion(saved, 'restored', { from: version.at });
+    upsert(saved);
+    if (accountFor(saved)) pusher.queue(saved);
+    closeModal();
+    // 지금 편집기를 치우고(영상 파일은 치우지 않는다: 기록의 판이 쓸 수 있다) 되살린 그림을 다시 연다.
+    await leaveEditor(O, { tidy: false });
+    left = true;
+    S.phase = 'home';
+    await openSavedDesign(id, { slideIndex: Math.min(at, saved.slides.length - 1) });
+    toast(`${whenLabel(version.at)} 판으로 되돌렸어요. 되돌리기 전 판도 기록에 있어요.`, 5000);
+    return true;
+  } catch (error) {
+    console.warn(error);
+    if (!written) return '되돌리지 못했어요. 지금 판은 그대로 있어요.';
+    // 되살린 판은 저장했다: 예전 판을 든 편집기가 그것을 덮지 않게 치우고 다시 연다.
+    try { if (!left) { closeModal(); await leaveEditor(O, { tidy: false }); } S.phase = 'home'; if (!S.open) await openSavedDesign(id); }
+    catch { if (!S.open) { S.phase = 'home'; render(); } }
+    return true;
+  } finally {
+    O.leaving = false;
+    if (S.open === O && !O.closed) app.inert = false;
+  }
 }
 // ---------- 내려받기: 파일 형식 → 범위 → 형식별 옵션 → 명시 실행 ----------
 function exportPref() {

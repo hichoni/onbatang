@@ -2,6 +2,7 @@
 @import url('./gai-app.css');
 @import url('./gai-maker.css');
 @import url('./quiz.css');
+@import url('./history.css');
 /* 미니캔 앱의 바탕: 글자·단추·창(모달)·알림의 기본 모양과 색 값. 앱의 화면 짜임은 이 아래에, 편집기의 모양은 src/editor.css 에 있다.
    이 파일은 미니캔 앱 한 쪽(app/index.html, 또는 그것을 본뜬 쪽)에서만 쓴다: html · body 같은 요소 전체에 규칙을 건다. */
 body.mc-app {
@@ -461,7 +462,8 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"], body.mc-app :is(#app,.cv-a
 @media (min-width: 900px) and (min-height: 520px) and (max-width: 1099px) {
   .cv-name { flex-basis: 150px; }
 }
-@media (min-width: 1200px) and (min-height: 520px) {
+/* 고르지 않은 모양의 이름은 막대에 자리가 넉넉할 때만(1440px 부터. 그 아래는 그림만, 이름은 title · aria-label) */
+@media (min-width: 1440px) and (min-height: 520px) {
   .cv-shape:not(.on) .cv-shape-name { display: inline; }
 }
 @media (min-width: 1366px) and (min-height: 520px) {
