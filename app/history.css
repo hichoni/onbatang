@@ -26,5 +26,11 @@
   .cv-history .cv-find-actions{flex-wrap:wrap}
 }
 /* 위 막대의 "기록" 단추: 좁은 화면에서는 저장 상태와 같은 줄(둘째 줄)에 */
-.cv-bar .cv-history-btn{order:6;min-height:36px;padding:4px 10px;border-color:transparent;color:var(--primary-dark,#26318f);font-size:.85rem}
-.cv-bar .cv-history-btn:hover:not(:disabled){background:var(--soft,#eef0ff)}
+.cv-bar .btn.cv-history-btn{order:6;min-height:36px;padding:4px 10px;border-color:transparent;color:var(--primary-dark,#26318f);font-size:.85rem}
+.cv-bar .btn.cv-history-btn:hover:not(:disabled){background:var(--soft,#eef0ff)}
+/* 넓은 화면의 한 줄 막대: 1600px 아래에서는 시계 그림만(이름은 화면 읽기 프로그램 · title 에 남는다). 막대가 넘쳐 내려받기가 잘리지 않게 */
+@media (min-width: 900px) and (min-height: 520px) { .cv-bar .btn.cv-history-btn{order:0} }   /* 한 줄 막대에서는 저장 상태 바로 옆 */
+@media (min-width: 900px) and (min-height: 520px) and (max-width: 1599px) {
+  .cv-bar .btn.cv-history-btn{padding:4px 5px}
+  .cv-bar .cv-history-btn .cv-lbl{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+}

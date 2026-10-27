@@ -462,7 +462,8 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"], body.mc-app :is(#app,.cv-a
 @media (min-width: 900px) and (min-height: 520px) and (max-width: 1099px) {
   .cv-name { flex-basis: 150px; }
 }
-@media (min-width: 1200px) and (min-height: 520px) {
+/* 고르지 않은 모양의 이름은 막대에 자리가 넉넉할 때만(1440px 부터. 그 아래는 그림만, 이름은 title · aria-label) */
+@media (min-width: 1440px) and (min-height: 520px) {
   .cv-shape:not(.on) .cv-shape-name { display: inline; }
 }
 @media (min-width: 1366px) and (min-height: 520px) {
