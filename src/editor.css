@@ -991,3 +991,33 @@ td .fe-chart-cell[inputmode] { text-align: right; font-variant-numeric: tabular-
 /* 꾸미기 칸의 차트 넣기 단추 */
 .fe-chart-adds { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
 .fe-chart-adds .fe-chart-kind { font-size: .74rem; }
+
+/* 수식 조각(math.js): 저장한 모양을 상자에 비율 그대로(가운데). 색은 글자색 */
+.fi-math { display: block; }
+.fi-math > svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.fi-math.broken { outline: .2cqw dashed #c92a2a; }
+/* 수식 창 */
+.fe-math-dlg { width: min(760px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); padding: 0; border: 0; border-radius: 18px; background: #fff; color: var(--fe-text); box-shadow: var(--fe-shadow-pop); }
+.fe-math-dlg::backdrop { background: rgba(23, 28, 44, .45); }
+.fe-math-form { display: flex; flex-direction: column; max-height: calc(100dvh - 24px); }
+.fe-math-main { display: grid; gap: 10px; padding: 4px 18px 12px; overflow: auto; }
+.fe-math-preview { display: grid; place-items: center; min-height: 110px; max-height: 32vh; padding: 14px; border: 1.5px solid var(--fe-line); border-radius: 12px; background: #fff; overflow: auto; color: #1d2433; }
+.fe-math-preview .fi-math { position: static; width: auto; height: auto; transform: none; }
+.fe-math-preview .fi-math > svg { width: auto; height: auto; max-width: 100%; min-height: 40px; max-height: 26vh; }
+.fe-math-preview.stale { opacity: .45; }
+.fe-math-empty { color: var(--fe-muted); font-size: .9rem; }
+.fe-math-input { box-sizing: border-box; width: 100%; padding: 10px 12px; border: 1.5px solid var(--fe-line); border-radius: 10px; font: 500 1rem/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--fe-text); resize: vertical; }
+.fe-math-input:focus { outline: none; border-color: var(--fe-primary); }
+.fe-math-status { min-height: 1.3em; margin: 0; }
+.fe-math-status.bad { color: var(--fe-danger); font-weight: 700; }
+.fe-math-keys { display: grid; grid-template-columns: repeat(auto-fill, minmax(46px, 1fr)); gap: 5px; }
+.fe-math-key { min-height: 38px; padding: 4px; border: 1.5px solid var(--fe-line); border-radius: 9px; background: #fff; color: var(--fe-text); font: 600 .98rem/1 "Times New Roman", serif; cursor: pointer; }
+.fe-math-key:hover { border-color: var(--fe-primary); background: var(--fe-soft); }
+.fe-math-examples { display: flex; flex-wrap: wrap; gap: 6px; }
+.fe-math-example { padding: 6px 11px; border: 1.5px solid var(--fe-line); border-radius: 999px; background: #fff; color: var(--fe-text); font: inherit; font-size: .84rem; font-weight: 600; cursor: pointer; }
+.fe-math-example:hover { border-color: var(--fe-primary); background: var(--fe-soft); }
+.fe-math-add { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border: 1.5px solid var(--fe-line); border-radius: 12px; background: #fff; color: var(--fe-text); font: inherit; text-align: left; cursor: pointer; }
+.fe-math-add:hover { border-color: var(--fe-primary); background: var(--fe-soft); }
+.fe-math-add b { display: block; font-size: 1rem; }
+.fe-math-add small { color: var(--fe-muted); font-size: .8rem; }
+.fe-math-add-art { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; background: var(--fe-soft); font: italic 700 1.05rem/1 "Times New Roman", serif; color: var(--fe-primary-dark); }

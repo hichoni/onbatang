@@ -17,6 +17,7 @@ import {cleanRuns} from '../src/runs.js';
 import {designWeb} from '../src/web.js';
 import {designLive} from '../src/live.js';
 import {cleanChart} from '../src/chart.js';
+import {cleanMath} from '../src/math.js';
 export { SCHEMA_VERSION, DocumentError };
 
 export const RATIOS = [
@@ -155,7 +156,9 @@ const cleanSlide = (d, index, documentId) => {
     const runs=item.t==='text'&&Array.isArray(item.runs)&&item.runs.length?cleanRuns(String(item.text??''),item.runs,item):[];
     // 차트: 표(항목 · 계열)와 꾸밈(종류 · 제목 · 단위 · 색 묶음 · 값 보이기)은 chart.js 가 정리한다.
     const chart=item.t==='chart'?cleanChart(item):null;
-    return { ...out, ...(crop?{crop}:{}), ...(runs.length?{runs}:{}), ...(chart||{}), ...(item.layout==='slide'?{layout:'slide'}:{}), ...metadata({ ...item, id: item.id ?? legacyId('e', `${documentId}:${pageId}:${i}`) }, { identity: true }) };
+    // 수식: TeX 글과 그린 모양(검사한 것만)은 math.js 가 정리한다.
+    const math=item.t==='math'?cleanMath(item):null;
+    return { ...out, ...(crop?{crop}:{}), ...(runs.length?{runs}:{}), ...(chart||{}), ...(math||{}), ...(item.layout==='slide'?{layout:'slide'}:{}), ...metadata({ ...item, id: item.id ?? legacyId('e', `${documentId}:${pageId}:${i}`) }, { identity: true }) };
   }) };
 };
 /**

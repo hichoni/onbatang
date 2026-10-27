@@ -1,5 +1,13 @@
 # 온바탕 — 생각을 펼치는 따뜻한 디자인 공간
 
+## v0.99.0 · 수식 (2026-10-27)
+
+- 새 조각 `math`(`src/math.js`): TeX 글(`tex`, 600자)과 고칠 때 MathJax 가 그린 모양(`m`: viewBox `vb` 와 그림 나무 `n`)을 함께 저장한다. 보는 쪽(꾸미기 판 · 발표 · 공유 재생기 · 그림/PDF/영상 내보내기)은 MathJax 없이 저장한 모양만 그려(`mathView`) 어디서나 같다. 색은 글자색(`color`, currentColor)을 따른다.
+- 저장한 모양은 믿지 않는다(`cleanMath`): 요소 g · path · rect · text 와 정해 둔 속성만, 값은 모양(숫자 · 변환 · 길 · 색 · 글꼴)을 검사해 하나라도 틀리면 그 요소를 버린다. 깊이 40 · 요소 4000 · 길 600,000자까지. 그릴 때도 innerHTML 없이 요소를 하나씩 만든다. 기록(`app/designs.js`)도 `cleanMath` 로 정리한다.
+- 편집기: 꾸미기 칸 "글"의 "수식 넣기"(`data-add-math`) → 수식 창(`src/math-dialog.js`, `<dialog>`): TeX 칸 · 미리 보기 · 넣기 단추 26개(분수 · 제곱 · 아래첨자 · 루트 · n제곱근 · × ÷ ± ≠ ≤ ≥ ≈ · π θ α ∞ ° ∠ · Σ ∫ lim · 괄호 · 화살표 · 벡터 · 한글 \\text · 화학식 \\ce) · 예시 8개. 고른 글이 있으면 단추가 첫 {} 안에 감싼다. MathJax 오류는 쉬운 말로(`mathError`) 알리고 적용하지 않는다. 두 번 누르기 · 도구의 "수식 고치기"로 다시 열고, 고쳐도 글자 크기는 그대로(`refitMath`). 늘이면 비율을 지킨다. 뒤집지 않는다.
+- MathJax 3.2.2(`tex-svg-full.js`, mhchem · cancel · color 포함, noundefined 뺌)를 `src/mathjax/` 에 그대로 두고(`tools/build-mathjax.mjs`, BUILD.json 에 SHA-256) 수식 창을 처음 열 때만 받는다. 글꼴 모양은 길로 바로(fontCache none).
+- 내보내기: 그림 · PDF · 영상 · GIF · HTML 수업 · 공유 재생기는 화면 그대로. PPTX 는 그림으로 넣고 `MATH_AS_PICTURE` 로 알린다.
+
 ## v0.98.0 · 차트 (2026-10-27)
 
 - 새 조각 `chart`(`src/chart.js`): 표(항목 12개 · 계열 3개까지)와 꾸밈(종류 bar · hbar · line · pie · donut, 제목 40자, 단위 6자, 색 묶음 basic · warm · cool · mono, 값 보이기 `vals`, 글자 색 `color`)만 저장하고 그림은 그릴 때마다 만든다(`chartView`). 기록(`app/designs.js`)도 차트 내용을 `cleanChart` 로 정리해 둔다.

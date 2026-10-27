@@ -22,6 +22,7 @@ import { cleanCrop } from './crop.js';
 import { cleanRuns } from './runs.js';
 import { designWeb, cleanWebUrl, webHost } from './web.js';
 import { cleanChart, sampleChart, chartSummary } from './chart.js';
+import { cleanMath, mathBox, mathLabel } from './math.js';
 import { designLive, cleanLook } from './live.js';
 import { LINK_HEADS, LINK_LINE, LINK_SIDES, LINK_BEND, LINK_SHAPES, LINK_LABEL_MAX, LINK_LABEL_AT, LINK_LABEL_SIZES, LINK_LABEL_STYLES, LINK_POS, CURVE_BEND, layoutLinks } from './links.js';
 
@@ -350,6 +351,12 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
     if (it.loop === true) out.loop = true;          // 끝나면 처음(시작 시각)부터 다시
     return out;
   }
+  if (it.t === 'math') {
+    // 수식(math.js): TeX 글과 MathJax 로 그린 모양(검사한 것만)을 저장한다. 색은 글자색처럼. 뒤집지 않는다.
+    const math = cleanMath(it);
+    if (!math) return null;
+    return { t: 'math', ...base, w: num(it.w, 1, SIZE.max, 30), h: num(it.h, 0.5, SIZE.max, 10), color: cleanColor(it.color, '#1d2433'), ...math };
+  }
   if (it.t === 'chart') {
     // 차트(chart.js): 표(항목 × 계열)와 꾸밈만 저장하고, 그림은 그릴 때마다 만든다. 뒤집지 않는다.
     const chart = cleanChart(it);
@@ -569,6 +576,18 @@ export function newYouTube(id, { start = 0, ...extra } = {}) {
   if (!isYouTubeId(id)) return null;
   return cleanItem({ t: 'yt', x: 50, y: 50, yt: id, start, w: 60, h: tall(60 * 9 / 16), ...extra });
 }
+/** 수식: 글자 한 줄이 카드 너비의 6% 쯤 되게(제목 크기쯤) 가운데에 놓는다. content: { tex, m } */
+export function newMath(content, extra = {}) {
+  const math = cleanMath(content);
+  return math ? cleanItem({ t: 'math', x: 50, y: 50, ...mathBox(math.m, config.aspect), ...math, ...extra }) : null;
+}
+/** 고친 수식의 크기: 글자 크기(1em 이 카드에서 차지하는 너비)를 그대로 두고 모양만 바꾼다. */
+export function refitMath(item, content) {
+  const math = cleanMath(content), old = cleanMath(item);
+  if (!math) return null;
+  const em = old ? (item.w / (old.m.vb[2] / 1000)) : 6;
+  return { ...math, ...mathBox(math.m, config.aspect, em) };
+}
 /** 차트: 카드 너비의 64% 로, 4:3 쯤의 비율로 가운데에 놓는다(내용은 보기 표, 고쳐 쓰라고). */
 export function newChart(kind = 'bar', extra = {}) {
   return cleanItem({ t: 'chart', x: 50, y: 50, w: 64, h: tall(64 * 3 / 4), ...sampleChart(kind), ...extra });
@@ -751,6 +770,7 @@ export function itemLabel(it) {
   if (it.t === 'yt') return `유튜브 영상${it.start ? ` (${ytTime(it.start)}부터)` : ''}${it.full ? ' · 화면 가득' : ''}${it.cc ? ' · 자막' : ''}`;
   if (it.t === 'web') return `웹사이트: ${webHost(it.url)}`;
   if (it.t === 'chart') return chartSummary(it).slice(0, 60);
+  if (it.t === 'math') return mathLabel(it.tex);
   if (it.t === 'link') return `연결선${it.head === 'none' ? '' : ' (화살표)'}${it.label ? ` "${it.label}"` : ''}`;
   return '사진';
 }
@@ -942,9 +962,9 @@ export function reshapeItems(items, from, to, { fit = false } = {}) {
     if (fit) {
       next = { ...it, x: (left + s * (it.x / 100)) * 100, y: (top + s * (it.y / 100) / a) * b * 100, w: it.w * s };
       if (it.t === 'text') next.size = it.size * s;
-      if (it.t === 'shape' || it.t === 'image' || it.t === 'art' || it.t === 'yt' || it.t === 'web' || it.t === 'chart' || it.t==='text'&&given(it.h)) next.h = it.h * k * s;
+      if (it.t === 'shape' || it.t === 'image' || it.t === 'art' || it.t === 'yt' || it.t === 'web' || it.t === 'chart' || it.t === 'math' || it.t==='text'&&given(it.h)) next.h = it.h * k * s;
       if (it.line) next.line = it.line * s;      // 테두리도 같은 비율로 가늘어진다(둥글기는 % 라 그대로)
-    } else if (it.t === 'shape' || it.t === 'image' || it.t === 'art' || it.t === 'yt' || it.t === 'web' || it.t === 'chart' || it.t==='text'&&given(it.h)) {
+    } else if (it.t === 'shape' || it.t === 'image' || it.t === 'art' || it.t === 'yt' || it.t === 'web' || it.t === 'chart' || it.t === 'math' || it.t==='text'&&given(it.h)) {
       next = { ...it, h: it.h * k };
     }
     if (next === it) return it;
