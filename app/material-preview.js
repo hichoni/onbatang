@@ -7,6 +7,7 @@ export function materialPageDescription(page){
   if(page.source?.kind==='result')return '활동 결과';
   if(page.activity?.kind==='gai-app')return '수업 앱';
   if(page.activity?.kind==='pixel-art')return '픽셀아트 활동';
+  if(page.activity?.kind==='quiz')return '퀴즈';
   return '새 쪽';
 }
 export const materialPageLabel=(page,position)=>`${position}쪽 · ${materialPageDescription(page)}`;

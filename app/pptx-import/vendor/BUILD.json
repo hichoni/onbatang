@@ -25,8 +25,8 @@
     "app/pptx-import/preview-punctuation.js": "8ff4f855942dde60b6302e775e5a06b58b411e34b015c129088157533934c90e",
     "app/pptx-import/worker.js": "e4ea8c3a9237c1e1b2fc8dc93f57389cbb2f7966134252b8078ab44ef01dc14c",
     "app/zip.js": "c7c09e5385bab4e403509ab734acb182d15ff017c469e731b05a5d1f3eead18e",
-    "package-lock.json": "3b40b94e86b702b4d2563885bad1c20346a5c9d8c0a67de680a4481e1c47e074",
-    "src/activity.js": "776e63454bf361306c78c91d39ccd11a1aece40f63d99e64b3756cfd2ee39a8e",
+    "package-lock.json": "ca690e79241d872262613fbe1bdae45ad7465fedf2a378704ebb093991dc1951",
+    "src/activity.js": "7e6ff97046d62a8b63f6dd4a85ba2cc0760fc74605e9ae308eaa73d4b25ae29f",
     "src/crop.js": "ec9159574565f560476ede8f5292609ab74eae42d130fe0bf59a1ad8844ac1fb",
     "src/document.js": "88eea030117c4ae923c83750d5e3eba4b74d891552251c251f7c56b5d41b6d44",
     "src/dom.js": "381c1e39c6b79f846820e6dd8a9e214e0afda803c65fbb6c5272cd36326ac5b6",
@@ -34,6 +34,7 @@
     "src/links.js": "b1900f5a82be0132590e8abb5d0eebe974e5873a524b5264f8f413272d94a70b",
     "src/live.js": "0fa7d700bf2ac2f5737df9f723775639707360f387ee99881a5ff64cae8071c3",
     "src/pixel-art.js": "533a61b81f49c6bbf8e33b65681d5db76853a2a37c7d9d089f6c00c0c0ec0089",
+    "src/quiz.js": "abacf8f2ff9fecaf4dee77f372741199d74be5f6a761def954464241be88078a",
     "src/runs.js": "22b07d3ed775fe24dfd20f1678ce369e45fc6e36792daa6e7d4b997474d6a65f",
     "src/web.js": "498fed652433abb37a5cf9ceb780f8e21e962a8afecbae0fcb7a98cee889ad25",
     "tools/build-pptx-import.mjs": "54e7e3e87ecf933018338d5d77ecb8eec7318ce8fd95ff1c0c3096ecadcb0b5b"
@@ -92,8 +93,8 @@
       "sha256": "a681e9d183c72b4af4856935893805eb48c08f0f5a3f260203db7444c20fb98a"
     },
     "pptx-worker.js": {
-      "bytes": 204245,
-      "sha256": "ed11ffe00edece3ae3ce78df4a43581de99f09b82b74260eb8d96d808d27ab1c"
+      "bytes": 205699,
+      "sha256": "175187f399ee92a3189007c0715559d9bf2221b056029878abf65795812f7394"
     },
     "preview-frame.html": {
       "bytes": 1243897,

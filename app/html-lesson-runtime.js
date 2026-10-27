@@ -4,6 +4,7 @@ import { cleanGaiResult } from '../src/gai-app.js';
 import { isId, newId, slideNotes, slideTopic, slideDur } from '../src/document.js';
 import { mountPixelArt } from './pixel-art.js';
 import { mountGaiApp } from './gai-app.js';
+import { mountQuiz } from './quiz.js';
 import { el } from '../src/dom.js';
 import { createShowTools } from './show-tools.js';
 import {cleanLessonTarget,cleanLessonBinding,returnedResultsFromLesson} from './lesson-results.js';
@@ -153,9 +154,11 @@ export function mountHtmlLesson(raw, host = document.getElementById('onbatang-le
     if (executing) return;
     const scene = el('section', { class: 'lesson-scene' });
     scene.append(el('img', { class: 'lesson-slide', src: page.image, alt: `${current + 1}쪽${page.activity ? ` ${page.activity.title}` : page.result ? ' 활동 결과' : ''}` }));
-    if (page.activity) scene.append(el('button', { type: 'button', class: 'lesson-start', text: '활동 시작', onclick: () => {
+    if (page.activity) scene.append(el('button', { type: 'button', class: 'lesson-start', text: page.activity.kind === 'quiz' ? '퀴즈 풀기' : '활동 시작', onclick: () => {
       executing = true; returnToCover.hidden = false;
       const target = el('section', { class: 'lesson-scene lesson-activity' }); stage.replaceChildren(target);
+      // 퀴즈: 혼자 풀어 보는 판(시작 → 정답 공개 → 다시 풀기). 점수판 · 학생 휴대폰은 발표에서만 쓴다.
+      if(page.activity.kind==='quiz'){app=mountQuiz(target,{activity:page.activity,aspect:page.aspect});return;}
       if(page.activity.kind==='gai-app'){
         app=mountGaiApp(target,{activity:page.activity,onKey:appKey,onChange:state=>{page.activity=cleanActivity({...page.activity,state});persist();},onSave:async rawResult=>{
           const value=cleanGaiResult(rawResult);page.activity=cleanActivity({...page.activity,state:value.state});

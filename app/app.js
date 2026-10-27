@@ -12,6 +12,8 @@ import {createLocalPalettes} from './palettes.js';
 import {newId,slideNotes,slideDur,shownTopics,cleanTopic,TOPIC_LIMIT,DUR_LIMIT} from '../src/document.js';
 import {newPixelActivity,pixelArtCover,pixelArtResult} from '../src/pixel-art.js';
 import {mountPixelArt,createPixelArtSetup,pixelArtImage} from './pixel-art.js';
+import {quizCover,createQuizBoard,quizzesFromAnswer} from '../src/quiz.js';
+import {createQuizSetup,mountQuiz} from './quiz.js';
 import {createHtmlLesson} from './html-lesson.js';
 import {activityDefinitionHash} from './lesson-results.js';
 import {openLessonResults} from './lesson-results-ui.js';
@@ -996,6 +998,8 @@ function renderStrip(O) {
       tool('right', '뒤로', '이 장을 뒤로 옮기기', () => moveStripSelection(O,1), O.materialDeck?materialPages(O).findIndex(v=>v.record.id===O.record.id&&v.index===O.at)===materialPages(O).length-1:O.at===n-1),
       tool('copy', '복제', '이 장을 복제하기', () => changeSlides(O, copySlide), full),
       del,
+      // 퀴즈 장(모든 곳): 직접 만들거나, 가이X 를 이어 준 곳에서는 가이X 에게 부탁한다
+      el('button',{class:'btn cv-activity-add',type:'button',dataset:{addQuiz:''},title:'지금 장 다음에 퀴즈 장을 넣어요(발표에서 시간을 재고 정답 · 순위를 보여 줘요)',onClick:()=>configureQuiz(O)},'퀴즈 넣기'),
       activityAuthoring&&el('button',{class:'btn cv-activity-add',type:'button',dataset:{addActivity:''},title:'미리 준비된 픽셀아트 활동을 새 슬라이드로 넣어요',onClick:()=>configureActivity(O)},'픽셀아트 활동 넣기'),
       activityAuthoring&&appMaker&&el('button',{class:'btn cv-activity-add',type:'button',dataset:{addGaiApp:''},onClick:()=>configureGaiActivity(O)},gaiOwl(),'가이X로 앱 만들기'),
       // 가이X 에게 개요를 부탁해 꾸민 장 여러 장을 만든다(개요로 장 만들기 창이 부탁 칸부터 열린다)
@@ -1234,7 +1238,7 @@ function slideMenuGroups(O, { strip = false } = {}) {
       { icon: 'palette', label: '바탕색 바꾸기', run: () => O.editor.openTab('bg') },
       { icon: 'template', label: '틀 고르기', run: () => O.editor.openTab('layout') },
     ],
-    [{ icon: 'pencil', label: '발표자 노트 적기', run: openNotes }],
+    [{ icon: 'pencil', label: '발표자 노트 적기', run: openNotes }, ...(O.editor.getDesign().activity?.kind === 'quiz' ? [{ icon: 'check', label: '퀴즈 고치기', run: () => configureQuiz(O, true) }] : [])],
     strip ? [] : [
       { icon: 'swap', label: '찾아 바꾸기', run: () => openFindReplace(O) },
       { icon: 'check', label: '단축키 보기', hint: '?', run: () => openShortcuts() },
@@ -1243,6 +1247,7 @@ function slideMenuGroups(O, { strip = false } = {}) {
     [
       { icon: 'plus', label: '새 장 더하기', run: press(add), disabled: off(add) },
       { icon: 'text', label: '개요로 장 만들기', run: () => openOutline(O), disabled: off(add) },
+      { icon: 'check', label: '퀴즈 넣기', run: () => configureQuiz(O), disabled: off(add) },
       { icon: 'duplicate', label: '이 장 복제', run: press(dup), disabled: off(dup) },
       { icon: 'left', label: '앞으로 옮기기', hint: strip ? 'Alt+←' : '', run: press(left), disabled: off(left) },
       { icon: 'right', label: '뒤로 옮기기', hint: strip ? 'Alt+→' : '', run: press(right), disabled: off(right) },
@@ -1571,7 +1576,7 @@ async function applyMotionAll(O, motion) {
 // Activities are local, typed page data. Both hosts use the same runtime and
 // pin a new material revision before acknowledging a result. No app URL opens.
 function updateActivityTools(O){
-  const edit=O.strip.querySelector('[data-edit-activity]'),activity=O.editor.getDesign().activity;if(edit)edit.hidden=!activityAuthoring||!activity||activity.kind==='gai-app'&&!appMaker;
+  const edit=O.strip.querySelector('[data-edit-activity]'),activity=O.editor.getDesign().activity;if(edit)edit.hidden=!activity||activity.kind!=='quiz'&&(!activityAuthoring||activity.kind==='gai-app'&&!appMaker);
 }
 function lessonPages(O){
   if(O.materialLoadError)throw Error('PPT 전체 자료를 읽지 못했어요. 내 자료에서 다시 열어주세요.');
@@ -1626,6 +1631,7 @@ async function commitActivityDocument(O,document,pageOrder,selectedPageId,expect
   }
 }
 async function configureActivity(O,editing=false){
+  if(editing&&O.editor.getDesign().activity?.kind==='quiz')return configureQuiz(O,true);
   if(!activityAuthoring)return;
   if(editing&&O.editor.getDesign().activity?.kind==='gai-app')return configureGaiActivity(O,true);
   if(O.closed||O.leaving||O.inlineImport||O.activityBusy||videoBusy(O))return;
@@ -1663,6 +1669,63 @@ async function configureActivity(O,editing=false){
   }}));
   O.activityConfig=host;O.shell.querySelector('.cv-canvas').append(host);
   host.querySelector('input')?.focus({preventScroll:true});
+}
+
+// 퀴즈 장 넣기 · 고치기(모든 곳). 새로 넣을 때는 지금 장 다음에 하나 또는 여러 장(가이X 가 만든 문제)을 넣는다.
+async function configureQuiz(O,editing=false){
+  if(O.closed||O.leaving||O.inlineImport||O.activityBusy||videoBusy(O))return;
+  if(O.materialLoadingPromise)await O.materialLoadingPromise;
+  if(O.closed||S.open!==O||O.recoveryRequired)return;
+  if(O.materialLoadError){toast('PPT 전체 자료를 읽지 못했어요. 내 자료에서 다시 열어주세요.');return;}
+  clearTimeout(O.thumbTimer);
+  O.activityConfig?.remove();
+  const selected=O.editor.getDesign(),activity=editing?selected.activity:undefined;
+  if(editing&&activity?.kind!=='quiz')return;
+  const host=el('section',{class:'cv-activity-config','aria-label':editing?'퀴즈 고치기':'퀴즈 넣기'});
+  const cancel=()=>{host.remove();if(O.activityConfig===host)O.activityConfig=null;};
+  const reference=()=>drawingText(O.slides,{title:O.record.name,at:O.at});
+  // 가이X 에게 부탁하기: 연결 창은 누른 그 순간에 열어야 막히지 않는다(generate 의 첫 줄이 connect 를 부른다).
+  const ai=appMaker&&!editing?{title:O.record.name||'',hasText:!!reference(),generate:async({topic,count,seconds,share,signal,onStatus})=>{
+    const task=appMaker.connect();
+    await task;
+    if(signal?.aborted)throw new DOMException('','AbortError');
+    onStatus?.('가이X가 문제를 만들고 있어요… 30초쯤 걸릴 수 있어요.');
+    const context=share?reference():'';
+    const prompt=(topic||'').trim().length>=3?topic.trim():`${O.record.name||'지금 그림'} 내용 확인 퀴즈`;
+    const answer=await appMaker.generate({kind:'quiz',prompt,count,...(context?{context}:{})},{signal});
+    if(answer?.kind!=='quiz'||typeof answer.quiz!=='string')throw Error('문제 모양의 답을 받지 못했어요. 다시 부탁해 주세요.');
+    return quizzesFromAnswer(answer.quiz,{seconds});
+  }}:null;
+  host.append(createQuizSetup({activity,ai,onCancel:cancel,onApply:async list=>{
+    if(O.closed||O.activityBusy)throw Error('현재 작업을 마친 뒤 다시 시도해주세요.');
+    O.activityBusy=true;app.inert=true;
+    try{
+      await persistEditorAction(O);
+      const entries=lessonPages(O),at=entries.findIndex(v=>v.page.id===selected.id);
+      if(at<0)throw Error('선택한 쪽이 바뀌었어요. 다시 선택해주세요.');
+      let record={...O.record,slides:currentSlides(O)};
+      if(!editing){
+        // 퀴즈 장들과 결과 장 하나가 들어갈 자리가 있는 파트에 넣는다
+        const candidates=O.materialDeck?[record,...O.materialDeck.documents.filter(row=>row.id!==record.id)]:[record];
+        record=candidates.find(row=>row.slides.length<=MAX_SLIDES-list.length-1&&new TextEncoder().encode(JSON.stringify(row)).length<500000);
+        if(!record)throw Error(`퀴즈 ${list.length}장을 넣을 자리가 없어요. 한 그림은 ${MAX_SLIDES}장까지예요. 문제 수를 줄이거나 새 그림에 넣어 주세요.`);
+      }
+      const make=(quiz,id)=>({...quizCover(quiz,aspectOf(record)),id,source:editing?selected.source:{kind:'local'},
+        origin:editing?selected.origin:{documentId:O.record.id,pageId:selected.id,revision:O.record.revision},activity:quiz});
+      const slides=[...record.slides],ids=entries.map(v=>v.page.id);
+      let first;
+      if(editing){const page=make(list[0],selected.id);first=page.id;slides[slides.findIndex(p=>p.id===selected.id)]=page;}
+      else{
+        const pages=list.map(q=>make(q,newId('p')));first=pages[0].id;
+        const local=slides.findIndex(p=>p.id===selected.id);slides.splice(local<0?slides.length:local+1,0,...pages);ids.splice(at+1,0,...pages.map(p=>p.id));
+      }
+      await commitActivityDocument(O,{...record,slides},ids,first,record.id===O.record.id?O.persistedRecord:record);cancel();
+      if(!editing&&list.length>1)toast(`퀴즈 ${list.length}장을 넣었어요.`);
+      if(O.recoveryRequired)await closeDesign(O);
+    }finally{O.activityBusy=false;app.inert=false;}
+  }}));
+  O.activityConfig=host;O.shell.querySelector('.cv-canvas').append(host);
+  host.querySelector('textarea,input')?.focus({preventScroll:true});
 }
 
 async function configureGaiActivity(O,editing=false){
@@ -1784,14 +1847,15 @@ async function present(O) {
   const audienceState = () => ({ at: i, total: slides.length, title: O.record.name });
   const tellAudience = () => { try { audience?.update?.(audienceState()); } catch (error) { console.warn(error); } };
   // 투표 결과를 지금 장 다음에 넣고 그 장으로 간다(GBE-AI Lab 실시간 투표의 "결과를 다음 장으로 저장"). 활동 결과 장과 같은 길로 저장한다.
-  const savePoll = async (raw) => {
+  // 결과 장(투표 결과 · 퀴즈 결과)을 지금 장 다음에 넣고 그 장으로 간다. make(record) 가 그 그림의 비율로 장을 만든다.
+  const insertResult = async (make, empty = '저장할 결과를 확인해 주세요.') => {
     if (closed) throw Error('발표가 끝났어요.');
     if (savingActivity) throw Error('저장하는 중이에요. 잠시 뒤에 다시 해 주세요.');
     const design = slides[i], source = entries.find((v) => v.page.id === design.id);
     const record = source.record.id === O.record.id ? { ...O.record, slides: currentSlides(O) } : source.record;
     if (record.slides.length >= MAX_SLIDES) throw Error(`장은 ${MAX_SLIDES}장까지예요. 장을 정리한 뒤 다시 저장해 주세요.`);
-    const page = pollResultPage(raw, aspectOf(record));
-    if (!page) throw Error('저장할 투표 결과를 확인해 주세요.');
+    const page = make(record);
+    if (!page) throw Error(empty);
     page.origin = { documentId: record.id, pageId: design.id, revision: record.revision };
     savingActivity = true;
     try {
@@ -1804,11 +1868,21 @@ async function present(O) {
       return { at: i, total: slides.length };
     } finally { savingActivity = false; }
   };
+  const savePoll = (raw) => insertResult((record) => pollResultPage(raw, aspectOf(record)), '저장할 투표 결과를 확인해 주세요.');
+  // 퀴즈: 이 발표의 점수판 하나(퀴즈 장마다 점수가 쌓인다). 학생 휴대폰은 "질문 · 반응" 통로로 잇는다(호스트가 quiz 를 알 때만).
+  const quizBoard = createQuizBoard(), quizListeners = new Set();
+  const quizLive = showAudience ? {
+    connected: () => typeof audience?.quiz === 'function',
+    connect: async () => { await openAudience(); if (typeof audience?.quiz !== 'function') throw Error('학생 휴대폰을 잇지 못했어요. 발표 막대의 "질문 · 반응"을 열어 보세요.'); },
+    send: (state) => { try { audience?.quiz?.(state); } catch (error) { console.warn(error); } },
+    listen: (fn) => { quizListeners.add(fn); return () => quizListeners.delete(fn); },
+  } : null;
+  const onQuiz = (message) => { for (const fn of [...quizListeners]) { try { fn(message); } catch (error) { console.warn(error); } } };
   const openAudience = async () => {
     if (!showAudience || closed) return;
     if (audience) { audience.show?.(); return; }
     if (audienceJob) return;
-    try { audienceJob = showAudience.open({ state: audienceState, root: overlay, savePoll }); audience = await audienceJob; if (closed) { audience?.close?.(); audience = null; } else tellAudience(); }
+    try { audienceJob = showAudience.open({ state: audienceState, root: overlay, savePoll, onQuiz }); audience = await audienceJob; if (closed) { audience?.close?.(); audience = null; } else { tellAudience(); pixel?.refresh?.(); } }
     catch (error) { toast(String(error?.message || '질문 · 반응을 열지 못했어요.').slice(0, 200), 4500); }
     finally { audienceJob = null; }
   };
@@ -1953,6 +2027,12 @@ async function present(O) {
     if(design.activity){
       for(const n of [...stage.children])drop(n);film?.pause();for(const p of tube)p.pause();film=null;tube=[];markFilm();parts=null;
       const host=el('section',{class:'cv-show-activity',dataset:{pixelApp:''}});stage.append(host);
+      // 퀴즈: 발표의 "다음"이 시작 → 정답 공개 → 순위를 먼저 넘긴다(go 가 pixel.step 을 먼저 부른다)
+      if(design.activity.kind==='quiz'){
+        host.dataset.quiz='';
+        pixel=mountQuiz(host,{activity:design.activity,board:quizBoard,live:quizLive,aspect:ar,onSave:(page)=>insertResult(()=>page)});
+        ease(host,[{opacity:0,transform:'scale(.965)'},{opacity:1,transform:'scale(1)'}],260);return;
+      }
       const gai=design.activity.kind==='gai-app',activity=gai?{...design.activity,state:working.get(design.id)||design.activity.state}:{...design.activity,cells:working.get(design.id)||design.activity.cells};
       pixel=(gai?mountGaiApp:mountPixelArt)(host,{activity,onKey:appKey,onChange:value=>working.set(design.id,value),onSave:async cells=>{
         if(savingActivity||closed)return;
@@ -2002,6 +2082,7 @@ async function present(O) {
   };
   const go = (step) => {
     if(savingActivity)return;
+    if (step > 0 && pixel?.step?.()) return;   // 퀴즈 장: 시작 → 정답 공개 → 순위
     if (step > 0) {
       // 움직이는 중에 넘기면 그 움직임은 바로 끝낸다. 누를 때 나오는 것이 남아 있으면 그것부터 하나 나타나게 한다.
       settle();
@@ -2040,7 +2121,7 @@ async function present(O) {
   const appKey = (key) => { if (['PageDown', 'PageUp', 'Escape'].includes(key)) tools?.handle({ key, code: key }); };
   const onKey = (e) => {
     // 앱·그림판 안에서 치는 글쇠는 앱의 것이다. 프레젠터의 넘기기(PageDown · PageUp)와 Esc 만 발표가 듣는다.
-    if(e.target?.closest?.('.cv-show-activity')&&!['Escape','PageDown','PageUp'].includes(e.key))return;
+    if(e.target?.closest?.('.cv-show-activity:not([data-quiz])')&&!['Escape','PageDown','PageUp'].includes(e.key))return;
     // 발표 위에 호스트가 띄운 칸(GBE-AI Lab 투표 만들기 같은)의 글 칸에서 치는 글쇠는 그 칸의 것이다. 프레젠터의 넘기기와 Esc 만 발표가 듣는다.
     if (!['Escape', 'PageDown', 'PageUp'].includes(e.key) && e.target?.closest?.('input, textarea, select, [contenteditable=""], [contenteditable="true"]')) return;
     // 아래 막대의 단추에 초점이 있을 때 스페이스 · 엔터는 그 단추를 누르는 글쇠다(다음 장으로 넘기지 않는다).
@@ -2067,7 +2148,7 @@ async function present(O) {
     if(savingActivity)return;
     closed=true;clearTimeout(leavingLooks);leavingLooks=0;pixel?.destroy();pixel=null;dropWeb();
     try { remote?.close?.(); } catch (error) { console.warn(error); } remote = null;
-    try { audience?.close?.(); } catch (error) { console.warn(error); } audience = null;
+    try { audience?.close?.(); } catch (error) { console.warn(error); } audience = null; quizListeners.clear();
     tools?.destroy();tools=null;
     settle();
     parts?.stop();parts=null;
