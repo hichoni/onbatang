@@ -259,7 +259,8 @@ export function createdOf(record) {
   return ms > Date.UTC(2020, 0, 1) && ms < Date.now() + 864e5 ? ms : 0;
 }
 const PART_NAME = /^(.*\S)\s*·\s*(\d{1,3})$/;
-const isPpt = (record) => record?.source?.kind === 'pptx';
+// 가져온 자료(PPT · PDF): 파트로 나뉘어 있으면 한 칸으로 묶고, "PPT · PDF" 로 거른다.
+const isPpt = (record) => record?.source?.kind === 'pptx' || record?.source?.kind === 'pdf';
 /**
  * 첫 화면 "내 그림"의 칸들. 한 PPT 를 나눠 담은 파트들(이름 끝이 " · 2" 처럼 번호)은 한 칸으로 묶는다.
  * groups: 호스트가 아는 묶음 [{ id, title, documents: [그림 id…], createdAt? }](가져온 한 번 = 한 묶음). 없으면 같은 PPT 파일 · 같은 이름끼리 묶되,
@@ -313,7 +314,7 @@ export function homeEntries(records, groups = []) {
   return out;
 }
 export const HOME_SORTS = Object.freeze([['recent', '최근 고친 순'], ['made', '만든 순'], ['name', '이름 순']]);
-export const HOME_KINDS = Object.freeze([['all', '전체'], ['ppt', 'PPT'], ['mine', '직접 만든 것']]);
+export const HOME_KINDS = Object.freeze([['all', '전체'], ['ppt', 'PPT · PDF'], ['mine', '직접 만든 것']]);
 const squash = (text) => String(text || '').toLocaleLowerCase('ko').replace(/\s+/g, '');
 /** 거르고(kind · 이름 찾기) 늘어놓는다(sort). 날짜를 모르는 것은 뒤로, 같으면 이름 차례. */
 export function arrangeEntries(entries, { kind = 'all', sort = 'recent', query = '' } = {}) {

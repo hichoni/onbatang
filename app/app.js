@@ -474,6 +474,7 @@ function render() {
         cloudAction ? el('button',{class:'btn cv-cloud-btn',type:'button',disabled:loading,dataset:{cloudAction:''},title:cloudAction.title||'',onClick:()=>openAccountFromHome(cloudAction)},...face('cloud',cloudAction.label)) : null,
         accountAction ? el('button',{class:'btn cv-account-btn',type:'button',disabled:loading,dataset:{accountAction:''},onClick:()=>openAccountFromHome()},accountAction.label) : null,
         ...fileOpenButton(loading),
+        ...pdfOpenButton(loading),
         accountBridge && !sync ? el('button', { class: 'btn cv-bridge-btn', type: 'button', disabled: loading, dataset: { accountBridge: '' }, title: '집에서 만든 그림을 학교에서: GBE-AI Lab 선생님 계정에 올리고 가져와요', onClick: () => openBridgeFromHome() }, ...face('cloud', 'GBE-AI Lab 계정으로 이어 쓰기')) : null,
         full ? el('p', { class: 'cv-hero-full', text: `그림은 ${MAX_DESIGNS}개까지 저장돼요(PPT 하나는 파트가 여럿이어도 1개). 안 쓰는 그림을 지워 주세요.` }) : null),
       el('p', { class: 'cv-hero-tag', text: `작은 생각도 멋진 작품이 되도록 · ${sync ? '내 계정에 자동 저장' : '이 기기에 자동 저장'}` })),
@@ -672,7 +673,7 @@ function deckCards(entry, paint) {
   const when = whenText(entry.updatedAt || entry.createdAt);
   const card = el('article', { class: 'cv-item cv-deck', dataset: { id: first.id, deck: entry.key } },
     el('button', { class: 'cv-thumb', type: 'button', 'aria-label': `${entry.name} 열기`, onClick: () => openEntry(first, edit) }, thumb(first),
-      el('span', { class: 'cv-pages', text: `${entry.pages}장` }), el('span', { class: 'cv-deck-badge', text: 'PPT' })),
+      el('span', { class: 'cv-pages', text: `${entry.pages}장` }), el('span', { class: 'cv-deck-badge', text: first.source?.kind === 'pdf' ? 'PDF' : 'PPT' })),
     el('div', { class: 'cv-item-body' },
       el('span', { class: 'cv-item-name', text: entry.name, title: entry.name }),
       el('span', { class: 'cv-item-when' }, el('span', { text: `파트 ${entry.records.length}개` }), when ? el('span', { text: when }) : null),
@@ -3436,6 +3437,83 @@ function fileOpenButton(loading) {
   } });
   const button = el('button', { class: 'btn cv-file-open-btn', type: 'button', disabled: loading, dataset: { onbatangFileOpen: '' }, title: '온바탕에서 내려받은 온바탕 파일(.onbatang)을 고친 그대로 열어요', onClick: () => input.click() }, ...face('upload', '온바탕 파일 열기'));
   return [button, input];
+}
+
+// ---------- PDF 가져오기(pdf-import.js): 쪽마다 그 쪽 그림(잠금) 한 장 · 고르면 쪽의 글은 발표자 노트로. 20쪽이 넘으면 파트로 ----------
+function pdfOpenButton(loading) {
+  const input = el('input', { type: 'file', hidden: true, accept: '.pdf,application/pdf', dataset: { pdfInput: '' }, onChange: async () => {
+    const file = input.files?.[0]; input.value = '';
+    if (file) { button.disabled = true; try { await importPdf(file); } finally { button.disabled = false; } }
+  } });
+  const button = el('button', { class: 'btn cv-pdf-open-btn', type: 'button', disabled: loading, dataset: { pdfOpen: '' }, title: 'PDF 의 쪽마다 장을 만들어요(교과서 · 공문 · 학습지). PDF 는 이 기기 안에서만 열어요', onClick: () => input.click() }, ...face('upload', 'PDF 가져오기'));
+  return [button, input];
+}
+// 가져올 쪽 · 노트를 고르는 창. 고르면 { pages, notes }, 닫으면 null.
+function askPdf(kit, name, count) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (value) => { if (done) return; done = true; resolve(value); if (value) closeModal(); };
+    const many = count > kit.PDF_LIMITS.pages;
+    const range = el('input', { class: 'cv-find-input', type: 'text', dataset: { pdfPages: '' }, value: many ? `1-${kit.PDF_LIMITS.pages}` : '', placeholder: `비우면 모든 쪽(1-${count})`, 'aria-label': '가져올 쪽', inputmode: 'numeric' });
+    const notes = el('input', { type: 'checkbox', checked: true, dataset: { pdfNotes: '' } });
+    const status = el('p', { class: 'cv-down-note', role: 'status', 'aria-live': 'polite' });
+    const go = el('button', { class: 'btn btn-primary', type: 'button', dataset: { pdfImport: '' } }, '가져오기');
+    const submit = () => {
+      let pages;
+      try { pages = kit.parsePages(range.value, count); } catch (error) { status.textContent = error.message; range.focus(); return; }
+      if (pages.length > kit.PDF_LIMITS.pages) { status.textContent = `한 번에 ${kit.PDF_LIMITS.pages}쪽까지 가져올 수 있어요. 나눠서 가져와 주세요(예: 1-${kit.PDF_LIMITS.pages}).`; return; }
+      finish({ pages, notes: notes.checked });
+    };
+    go.addEventListener('click', submit);
+    range.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
+    openModal(el('section', { class: 'cv-find-box', 'aria-labelledby': 'cv-pdf-title', onKeydown: escCloses },
+      el('h2', { id: 'cv-pdf-title', text: 'PDF 가져오기' }),
+      el('p', { class: 'cv-down-note', text: `"${name}" · ${count}쪽. 쪽마다 그 쪽 그림이 깔린 장을 만들어요. 그림은 잠가 두어 위에 글 · 도형 · 펜을 얹어도 밀리지 않아요. ${count > MAX_SLIDES ? `20쪽이 넘으면 파트로 나눠 내 그림에서 한 칸으로 묶어요.` : ''}` }),
+      el('label', { class: 'cv-find-row' }, el('span', { text: '가져올 쪽' }), range),
+      many ? el('p', { class: 'cv-down-note', text: `한 번에 ${kit.PDF_LIMITS.pages}쪽까지 가져와요. 나머지는 다시 가져오며 "${kit.PDF_LIMITS.pages + 1}-${count}" 처럼 적어요.` }) : null,
+      el('div', { class: 'cv-find-opts' }, el('label', {}, notes, ' 쪽의 글을 발표자 노트에 넣기(찾기 · 옮겨 쓰기용)')),
+      status,
+      el('div', { class: 'cv-find-actions' }, el('button', { class: 'btn btn-ghost', type: 'button', onClick: closeModal }, '취소'), go)), { onClose: () => finish(null) });
+    requestAnimationFrame(() => range.focus());
+  });
+}
+async function importPdf(file) {
+  if (S.open || moving || !file) return false;
+  if (!/\.pdf$/i.test(file.name || '') && file.type !== 'application/pdf') { toast('PDF 파일(.pdf)을 골라 주세요.', 4000); return false; }
+  const list = S.list || [];
+  if (homeEntries(list, homeGroups(list)).length >= MAX_DESIGNS) { toast(`이 브라우저에는 그림을 ${MAX_DESIGNS}개까지 둘 수 있어요. 안 쓰는 그림을 지우고 다시 가져와 주세요.`, 7000); return false; }
+  const loading = onbatangLoading({ title: 'PDF 를 열고 있어요', detail: '쪽 수와 모양을 살펴봐요. PDF 는 이 기기 안에서만 열어요.' });
+  loading.node.classList.add('cv-copy-loading');
+  const wasInert = app.inert;
+  const busy = (on) => { if (on) document.body.append(loading.node); else loading.node.remove(); app.inert = on || wasInert; };
+  busy(true);
+  let kit, pdf;
+  try { kit = await import('./pdf-import.js'); pdf = await kit.openPdf(file); }
+  catch (error) { console.warn(error); busy(false); toast(error?.message || 'PDF 를 열지 못했어요.', 7000); return false; }
+  busy(false);
+  try {
+    const choice = await askPdf(kit, file.name, pdf.pageCount);
+    if (!choice || S.open) return false;
+    busy(true);
+    const pages = [];
+    for (const [i, n] of choice.pages.entries()) {
+      loading.update({ title: 'PDF 쪽을 장으로 옮기고 있어요', detail: `${n}쪽 · ${i + 1} / ${choice.pages.length}`, completed: i, total: choice.pages.length });
+      pages.push(await pdf.page(n, { text: choice.notes }));
+    }
+    loading.update({ detail: '이 브라우저에 저장하고 있어요', completed: choice.pages.length, total: choice.pages.length });
+    const records = kit.pdfRecords({ filename: file.name, pages, notes: choice.notes, now: Date.now() });
+    for (const record of records) { const saved = await putDesign(record); upsert(saved); if (accountFor(saved)) pusher.queue(saved); }
+    S.list = await listDesigns();
+    busy(false);
+    if (S.open) return true;
+    openDesign(S.list.find((r) => r.id === records[0].id) || records[0], false);
+    toast(`PDF ${pages.length}쪽을 가져왔어요${records.length > 1 ? `(파트 ${records.length}개)` : ''}. 쪽 그림은 잠겨 있어 위에 글 · 펜을 얹을 수 있어요.`, 6500);
+    return true;
+  } catch (error) {
+    console.warn(error);
+    toast(error?.code ? `PDF 를 가져오지 못했어요 (${error.code}). 저장 공간을 확인해 주세요.` : error?.message || 'PDF 를 가져오지 못했어요.', 7000);
+    return false;
+  } finally { busy(false); pdf?.close?.(); }
 }
 
 // GIF: 숨기지 않은 장마다 그림 한 장을 만들어 GIF 하나로 잇는다(app/gif.js. 바깥 라이브러리 없음). 크기는 첫 장의 비율을 따르고,

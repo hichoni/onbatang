@@ -1,0 +1,140 @@
+{
+ "product": "onbatang-pdf-import",
+ "packages": {
+  "pdfjs-dist": "6.4.299"
+ },
+ "files": {
+  "pdf.min.mjs": {
+   "bytes": 523774,
+   "sha256": "bccc24ea711db8e44503629519904a5292d73b9daaa214bbe7cdcc282b0f4259"
+  },
+  "pdf.worker.min.mjs": {
+   "bytes": 1321307,
+   "sha256": "145d2dd3ab0c86151011dba95acfa2d5336e2accd59388ea43dbee0efddaaec6"
+  },
+  "wasm/openjpeg.wasm": {
+   "bytes": 251131,
+   "sha256": "95e5002597af0824004aa57b1900fe019715db389e37640b1e58395e42f00cc5"
+  },
+  "wasm/jbig2.wasm": {
+   "bytes": 103671,
+   "sha256": "466f45c2a61a698152fb5400c27e56ff2ceb73dcb71fde3fc366a502308eaab0"
+  },
+  "licenses/pdfjs-LICENSE.txt": {
+   "bytes": 10174,
+   "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
+  },
+  "licenses/LICENSE_JBIG2.txt": {
+   "bytes": 12862,
+   "sha256": "9e66b7f1b934a28b37f3bc4dac97915de1674271e79a0a88182a18ed9731b4d1"
+  },
+  "licenses/LICENSE_OPENJPEG.txt": {
+   "bytes": 2112,
+   "sha256": "a6af136f3e15038a666b61f376612a07d9a4e48cb7c01adbf3e33b3f14ab49b6"
+  },
+  "licenses/LICENSE_PDFJS_JBIG2.txt": {
+   "bytes": 555,
+   "sha256": "aad3cce09842e00e9e11ad5e8fef8cc02fbc3a3768fe2f007443b9cee37aaee5"
+  },
+  "licenses/LICENSE_PDFJS_OPENJPEG.txt": {
+   "bytes": 1285,
+   "sha256": "717fc62da03292dbb4dd0c8280bd4ce7bb8550dcf31d772bc93455fb50313425"
+  },
+  "cmaps/Adobe-Korea1-0.bcmap": {
+   "bytes": 241,
+   "sha256": "dfb8c3874f0e5a8c3acf597d2c12d2b63e90bc5e4f0fce990ec4c56077d80b32"
+  },
+  "cmaps/Adobe-Korea1-1.bcmap": {
+   "bytes": 386,
+   "sha256": "62f277b7b1c441c007797ae707d5c37258d029ce4661a2b911e2e1ee35e6adc1"
+  },
+  "cmaps/Adobe-Korea1-2.bcmap": {
+   "bytes": 391,
+   "sha256": "1d77068af462f96d7ad28ad7e7d43eef6423c685b479d7dc25ff5df38db0380d"
+  },
+  "cmaps/Adobe-Korea1-UCS2.bcmap": {
+   "bytes": 23293,
+   "sha256": "857b723088be97255053562bfa41bd1075a7f7910d3bab59a0645c8bbc7060ff"
+  },
+  "cmaps/KSC-EUC-H.bcmap": {
+   "bytes": 1848,
+   "sha256": "6784e16dbc5861c036c23d3e55f0d4ba0975a3e464da0ee8e49bcfff0be070c4"
+  },
+  "cmaps/KSC-EUC-V.bcmap": {
+   "bytes": 164,
+   "sha256": "fdb36bad85e9924823d49db374067988e024cf80fc894711f2c9178951cbbe95"
+  },
+  "cmaps/KSC-H.bcmap": {
+   "bytes": 1831,
+   "sha256": "c1f6d61f1d3304fd539a65ae72624fa567ecc3853bf52e283958a7a2515b3eee"
+  },
+  "cmaps/KSC-Johab-H.bcmap": {
+   "bytes": 16791,
+   "sha256": "939993d213f68db763bf156217c217ae23af082b91a0eacecf3d11eb4ff8ef8c"
+  },
+  "cmaps/KSC-Johab-V.bcmap": {
+   "bytes": 166,
+   "sha256": "5d61967aac0e666def721e8b8d0fed8f95a879a14f2e76ce516c3d11c621e519"
+  },
+  "cmaps/KSC-V.bcmap": {
+   "bytes": 160,
+   "sha256": "d7da5afd9f1fe74816d79c9325f0139a4efb6438664ebfdf9a7aa92f3034360f"
+  },
+  "cmaps/KSCms-UHC-H.bcmap": {
+   "bytes": 2787,
+   "sha256": "5b70d8f6a4fa9e2283dc649f0ff95d906d56efbee50a20e8d2faec3a8fed078e"
+  },
+  "cmaps/KSCms-UHC-HW-H.bcmap": {
+   "bytes": 2789,
+   "sha256": "a5e6ba22aceb02fdedee11bfb9ed138463d89e85b87810b9f075b469d936f8ec"
+  },
+  "cmaps/KSCms-UHC-HW-V.bcmap": {
+   "bytes": 169,
+   "sha256": "890332a6a26880d463a12f2a6ff048bf9cf7e45077cfb1ca8815b89baa7bf411"
+  },
+  "cmaps/KSCms-UHC-V.bcmap": {
+   "bytes": 166,
+   "sha256": "1631b531c9a40c8cbe24c2317dba107362e49fa6e18af620414d627c111d570c"
+  },
+  "cmaps/KSCpc-EUC-H.bcmap": {
+   "bytes": 2024,
+   "sha256": "709480682c55cedbb0124b9960d78e28febeee0df2e34607d61aac6601647ec7"
+  },
+  "cmaps/KSCpc-EUC-V.bcmap": {
+   "bytes": 166,
+   "sha256": "031707887d6fc2378a36cdb6775334fd7a236c3f95048d8436abf43fe26fc49d"
+  },
+  "cmaps/UniKS-UCS2-H.bcmap": {
+   "bytes": 25783,
+   "sha256": "a1081396ab4adb6f4a5b6c15f896963c244c1c9bcb65ce5616d06096a1b9811c"
+  },
+  "cmaps/UniKS-UCS2-V.bcmap": {
+   "bytes": 178,
+   "sha256": "6cab547431958fbdc1d401d06ebd4dd61a73f5509a10f974df32bcbca11a2e43"
+  },
+  "cmaps/UniKS-UTF16-H.bcmap": {
+   "bytes": 26327,
+   "sha256": "42d35b396286499dfae1737a07adb3a64500df37b426580bfb1d3ea872938519"
+  },
+  "cmaps/UniKS-UTF16-V.bcmap": {
+   "bytes": 164,
+   "sha256": "5bdb7390c80dcc136cb47d41dc7460082560969c17322ee739fe3020fb642410"
+  },
+  "cmaps/UniKS-UTF32-H.bcmap": {
+   "bytes": 26451,
+   "sha256": "3a01ec51ed1b828101351e337ffb8250abe11880032e5210f881170fed2588de"
+  },
+  "cmaps/UniKS-UTF32-V.bcmap": {
+   "bytes": 168,
+   "sha256": "dfda895eceaed081af030dbbb962b49629eea817fc3c02bae15db93d0c68acd7"
+  },
+  "cmaps/UniKS-UTF8-H.bcmap": {
+   "bytes": 27790,
+   "sha256": "3fac9c65145f72d7d42157a3b9c5ed6904632184e6a0888f2b828699afd2002f"
+  },
+  "cmaps/UniKS-UTF8-V.bcmap": {
+   "bytes": 169,
+   "sha256": "9ecc6cf30dd354b9778ddba163b6cc7302b087ce9f39d1ba73472d2b75ed13ca"
+  }
+ }
+}
