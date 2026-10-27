@@ -1,5 +1,12 @@
 # 온바탕 — 생각을 펼치는 따뜻한 디자인 공간
 
+## v0.98.0 · 차트 (2026-10-27)
+
+- 새 조각 `chart`(`src/chart.js`): 표(항목 12개 · 계열 3개까지)와 꾸밈(종류 bar · hbar · line · pie · donut, 제목 40자, 단위 6자, 색 묶음 basic · warm · cool · mono, 값 보이기 `vals`, 글자 색 `color`)만 저장하고 그림은 그릴 때마다 만든다(`chartView`). 기록(`app/designs.js`)도 차트 내용을 `cleanChart` 로 정리해 둔다.
+- 그림: 상자(`.fi-chart`, container-type: size) 안에서 막대 · 선은 SVG(viewBox 0~100, 비율 무시, 선 굵기는 non-scaling-stroke), 글자(눈금 · 항목 · 값 · 범례)는 같은 % 자리의 HTML. 글자 크기는 `min(3.4cqw, 7cqh)`. 원 · 도넛은 비율 글과 옆 범례(세로로 긴 상자에서는 아래). 눈금은 0 을 품고 1 · 2 · 5 × 10ⁿ(정수 자료는 2.5 를 쓰지 않음). 화면 읽기용 설명(`chartSummary`, role=img).
+- 편집기: 꾸미기 칸 "차트"(`data-add-chart`) → 보기 표로 놓고 "차트 고치기" 창(`src/chart-dialog.js`, `<dialog>`): 종류 · 제목 · 단위 · 값 보이기 · 색 묶음 · 표(+ 항목 · + 계열 · 빼기) · 미리 보기. 표의 칸에 탭 · 줄 바꿈이 든 글을 붙여 넣으면 표 전체를 바꾼다(`chartFromText`, 첫 줄이 이름이면 계열 이름). 숫자가 아닌 칸은 빨갛게 두고 적용하지 않는다. 두 번 누르기 · 도구의 "차트 고치기"로 다시 연다. 글자 색은 도구 막대에서. 뒤집지 않는다.
+- 내보내기: 그림 · PDF · 영상 · GIF · HTML 수업 · 공유 재생기는 화면 그대로. PPTX 는 그림으로 넣고 `CHART_AS_PICTURE` 로 알린다.
+
 ## v0.97.0 · PDF 가져오기 (2026-10-27)
 
 - 첫 화면 "PDF 가져오기"(`data-pdf-open`): PDF 를 이 기기 안에서 열어(`app/pdf-import.js`, 서버로 보내지 않음) 가져올 쪽(`parsePages`: 비우면 모든 쪽, "1-5, 8")과 "쪽의 글을 발표자 노트에 넣기"를 고른다. 한 번에 100쪽, 파일 200MB 까지.

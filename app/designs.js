@@ -16,6 +16,7 @@ import {cleanCrop} from '../src/crop.js';
 import {cleanRuns} from '../src/runs.js';
 import {designWeb} from '../src/web.js';
 import {designLive} from '../src/live.js';
+import {cleanChart} from '../src/chart.js';
 export { SCHEMA_VERSION, DocumentError };
 
 export const RATIOS = [
@@ -152,7 +153,9 @@ const cleanSlide = (d, index, documentId) => {
     for (const k of ITEM_FIELDS) if (['string', 'number', 'boolean'].includes(typeof item[k])) out[k] = item[k];
     const crop=item.t==='image'?cleanCrop(item.crop):null;
     const runs=item.t==='text'&&Array.isArray(item.runs)&&item.runs.length?cleanRuns(String(item.text??''),item.runs,item):[];
-    return { ...out, ...(crop?{crop}:{}), ...(runs.length?{runs}:{}), ...(item.layout==='slide'?{layout:'slide'}:{}), ...metadata({ ...item, id: item.id ?? legacyId('e', `${documentId}:${pageId}:${i}`) }, { identity: true }) };
+    // 차트: 표(항목 · 계열)와 꾸밈(종류 · 제목 · 단위 · 색 묶음 · 값 보이기)은 chart.js 가 정리한다.
+    const chart=item.t==='chart'?cleanChart(item):null;
+    return { ...out, ...(crop?{crop}:{}), ...(runs.length?{runs}:{}), ...(chart||{}), ...(item.layout==='slide'?{layout:'slide'}:{}), ...metadata({ ...item, id: item.id ?? legacyId('e', `${documentId}:${pageId}:${i}`) }, { identity: true }) };
   }) };
 };
 /**

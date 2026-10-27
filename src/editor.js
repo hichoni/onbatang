@@ -6,7 +6,7 @@ import { el, toast } from './dom.js';
 import { newId, cleanNotes, NOTES_LIMIT, cleanTopic } from './document.js';
 import {
   COLORS, SHAPES, SHAPE_GROUPS, MASKS, OPACITY, TEXT_PRESETS, settings, configure, reshapeItems, backgroundOf, fontList, fontFamilyOf, layoutList, textLimit, newText, clip, DEFAULT_FONT,
-  cleanBg, cleanItems, cleanDesign, emptyDesign, cleanItem, cleanImg, moveLayer, newPresetText, newEmoji, newShape, newArt, newYouTube, newWebBox, newPhoto, moveItem, rotateItem,
+  cleanBg, cleanItems, cleanDesign, emptyDesign, cleanItem, cleanImg, moveLayer, newPresetText, newEmoji, newShape, newArt, newYouTube, newWebBox, newChart, newPhoto, moveItem, rotateItem,
   designMotion, reorder, duplicateItem, pasteItem, itemLabel, sizeOf, resizeTo, sizeRange, alignItem, coverItem, layoutItems, EDGE, canEdge, canRound, cornerOf, THICK, isLine, thickOf, thicken,
   designVideo, cleanVideo, trimVideo, videoSeconds, videoTime, VIDEO_FITS, MIN_VIDEO, rebaseItems, alignBoxes, distributeBoxes, clampShift, scaleItems, regroup, newGroupId,
   styleOf, applyStyle, LINE_SPACINGS, ALT_LIMIT,
@@ -17,6 +17,8 @@ import { ART_PACKS, artSvg, artColorable, artReady, loadArt, searchArt } from '.
 import { designView, itemView, placeItem, paintCard, shapeThumb, webCard } from './render.js';
 import { designWeb, embedOf, blockedSite, isYouTubePage, webHost } from './web.js';
 import { styleRuns, runsAll, dropRunKey, shiftRuns } from './runs.js';
+import { CHART_KINDS } from './chart.js';
+import { openChartDialog, chartKindIcon } from './chart-dialog.js';
 // 부분 서식으로 입힐 수 있는 것: 도구 막대의 값 이름 → 구간의 열쇠(runs.js)
 const RUN_KEYS = [['bold', 'b'], ['italic', 'i'], ['under', 'u'], ['color', 'c']];
 import { layoutLinks, relink, LINK_LINE, LINK_SHAPES, LINK_LABEL_MAX, linkSvg, linkHandle, dragLinkHandle, linkLabelSize, linkLabelT, linkEnds, endSpot, pieceNear, boxOfItem } from './links.js';
@@ -49,7 +51,7 @@ const tabList = () => (settings().motion ? [...TABS, MOTION_TAB] : TABS);
 const VIDEO_LIMITS = { maxSeconds: 60, maxFileSeconds: 300, maxBytes: 200 * 1024 * 1024 };
 const ALIGN_NAME = { l: '왼쪽', c: '가운데', r: '오른쪽' };
 const ALIGN_ICON = { l: 'alignL', c: 'alignC', r: 'alignR' };
-const ITEM_ICON = { text: 'text', emoji: 'shapes', shape: 'shapes', art: 'shapes', image: 'image', yt: 'video' };
+const ITEM_ICON = { text: 'text', emoji: 'shapes', shape: 'shapes', art: 'shapes', image: 'image', yt: 'video', chart: 'chart' };
 const NEXT_ALIGN = { l: 'c', c: 'r', r: 'l' };
 const LONG_PRESS = 550;       // 손가락으로 이만큼(ms) 누르고 있으면 오른쪽 누르기 메뉴가 열린다
 // 복사해 둔 요소들(이 화면 안에서만 쓰는 클립보드. 다른 카드에 붙여 넣을 수 있다). 여럿을 함께 복사하면 여럿이 들어 있다.
@@ -1642,7 +1644,7 @@ export function createEditor({
           row('toBack', '맨 뒤로', '', () => order('bottom', { keepOpen: false }), { disabled: sel === 0 }),
         ],
         // 글상자는 뒤집지 않는다(도구 막대와 같은 기준)
-        it.t === 'text' || it.t === 'yt' || it.t === 'web' ? [] : [
+        it.t === 'text' || it.t === 'yt' || it.t === 'web' || it.t === 'chart' ? [] : [
           row('flipH', '좌우 뒤집기', '', () => change({ fx: !cur().fx }, { keepPop: false })),
           row('flipV', '상하 뒤집기', '', () => change({ fy: !cur().fy }, { keepPop: false })),
         ],
@@ -2325,6 +2327,8 @@ export function createEditor({
     if (it?.t === 'link' && !it.lock && itemAt(e.clientX, e.clientY) === sel) { if (pop !== 'llabel') toggle('llabel'); return; }
     // 유튜브 영상을 두 번 누르면 재생 설정(주소 · 시작 · 끝 · 화면 가득 · 자막 · 미리 보기)을 연다.
     if (it?.t === 'yt' && !it.lock && itemAt(e.clientX, e.clientY) === sel) { if (pop !== 'ytstart') toggle('ytstart'); return; }
+    // 차트를 두 번 누르면 표 고치기 창을 연다.
+    if (it?.t === 'chart' && !it.lock && itemAt(e.clientX, e.clientY) === sel) { editChart(); return; }
     const box = nodes[sel]?.getBoundingClientRect();
     if (!it || !['text','image'].includes(it.t) || !box) return;
     if (e.clientX >= box.left && e.clientX <= box.right && e.clientY >= box.top && e.clientY <= box.bottom) {
@@ -2970,6 +2974,13 @@ export function createEditor({
         pick('thick', '굵기', 'lthick', { title: '선의 굵기' }),
         pick('right', '화살표', 'arrow', { title: '선 꾸미기: 모양 모음 · 화살표 머리 · 점선 · 곧게/둥글게/꺾어서 · 붙는 곳' }),
         pick('text', '선 위 글', 'llabel', { title: '선 위에 짧은 글 붙이기 (예: 예 · 아니오 · 다음). 선을 두 번 눌러도 돼요' }));
+    } else if (it.t === 'chart') {
+      // 차트: 표 · 종류 · 제목 · 색은 "차트 고치기" 창에서(차트를 두 번 눌러도 열린다). 글자 색은 여기서.
+      const ink = el('span', { class: 'fe-ink dot' });
+      ink.style.background = it.color || '#273f3a';
+      own.push(
+        tb(lab('chart', '차트 고치기'), editChart, { title: '표 · 종류 · 제목 · 단위 · 색 고치기 (차트를 두 번 눌러도 돼요)', name: '차트 고치기', cls: 'chart-edit' }),
+        tb([icon('palette'), el('span', { class: 'fe-lbl', text: '글자 색' }), ink], () => toggle('color'), { title: '차트 글자 색', name: '글자 색', on: pop === 'color', cls: 'has-pop color' }));
     } else if (it.t === 'web') {
       // 웹사이트 상자: 발표할 때 그 자리에서 사이트가 열린다. 주소를 바꾸고, 새 창에서 미리 본다.
       own.push(
@@ -2997,7 +3008,7 @@ export function createEditor({
       el('span', { class: 'fe-sep' }),
       group('배치',
         it.t === 'text' || it.t === 'link' ? null : pick('resize', '크기', 'size', { title: '조각의 크기 (가로세로 비율은 그대로)' }),      // 텍스트는 − 숫자 + 로 바꾼다
-        it.t === 'text' || it.t === 'yt' || it.t === 'web' || it.t === 'link' ? null : pick('flipH', '뒤집기', 'flip', { title: '좌우·상하 뒤집기, 바로 세우기' }),
+        it.t === 'text' || it.t === 'yt' || it.t === 'web' || it.t === 'chart' || it.t === 'link' ? null : pick('flipH', '뒤집기', 'flip', { title: '좌우·상하 뒤집기, 바로 세우기' }),
         pick('layers', '위치', 'pos', { title: '겹치는 순서와 페이지 정렬' })),
       el('span', { class: 'fe-sep' }),
       group('작업',
@@ -3040,8 +3051,8 @@ export function createEditor({
       body = [el('div', { class: 'fe-poshead', text: '채우기 색' }),
         swatches(it.hollow ? '' : it.color, fillWith, { none: true, noneName: '채우기 없음 (테두리만)', label: '채우기 색' })];
     } else if (pop === 'color' && it.t !== 'image' && it.t !== 'emoji' && it.t !== 'yt' && it.t !== 'web' && (it.t !== 'art' || it.color)) {
-      const label = it.t === 'text' ? '글자 색' : it.t === 'art' ? '그림 색' : it.t === 'link' ? '선 색' : '도형 색';
-      body = [el('div', { class: 'fe-poshead', text: label }), swatches(it.color, (hex) => change({ color: hex }), { label })];
+      const label = it.t === 'text' || it.t === 'chart' ? '글자 색' : it.t === 'art' ? '그림 색' : it.t === 'link' ? '선 색' : '도형 색';
+      body = [el('div', { class: 'fe-poshead', text: label }), swatches(it.t === 'chart' ? it.color || '#273f3a' : it.color, (hex) => change({ color: hex }), { label })];
     } else if (pop === 'edge' && canEdge(it)) {
       body = [el('div', { class: 'fe-poshead', text: '테두리 색' }),
         swatches(it.line ? it.lc : '', edgeWith, { none: true, noneName: '테두리 없음', label: '테두리 색' }),
@@ -3159,7 +3170,7 @@ export function createEditor({
         el('p', { class: 'fe-note', text: '발표할 때 이 상자 안에서 사이트를 바로 누르고 써요. 상자 밖을 누르거나 → 를 치면 다음 장으로 가요.' })];
     } else if (pop === 'ytstart' && it.t === 'yt') {
       body = ytStartBody(it);
-    } else if (pop === 'flip' && it.t !== 'text' && it.t !== 'yt' && it.t !== 'web') {
+    } else if (pop === 'flip' && it.t !== 'text' && it.t !== 'yt' && it.t !== 'web' && it.t !== 'chart') {
       body = [
         el('div', { class: 'fe-poshead', text: '뒤집기' }),
         el('div', { class: 'fe-grid two' },
@@ -3915,6 +3926,11 @@ export function createEditor({
         el('button', { class: 'fe-link-start', type: 'button', dataset: { startLink: '' }, onClick: () => startLinking(sel) },
           el('span', { class: 'fe-link-start-art', html: linkArt }),
           el('span', { class: 'fe-link-start-text' }, el('b', { text: '연결선' }), el('small', { text: '두 조각을 화살표로 이어요. 조각을 옮기면 선이 따라와요 (순서도 · 마인드맵)' }))),
+        // 차트: 종류를 누르면 보기 표로 놓고 바로 표 고치기 창을 연다(엑셀 · 구글 시트에서 붙여 넣어도 된다).
+        el('div', { class: 'fe-head', text: '차트' }),
+        el('div', { class: 'fe-chart-adds', role: 'group', 'aria-label': '차트 넣기' }, ...CHART_KINDS.map(([kind, name]) => el('button', {
+          class: 'fe-chart-kind', type: 'button', dataset: { addChart: kind }, title: `${name} 차트 넣기: 표를 적거나 엑셀에서 붙여 넣어요`, onClick: () => addChart(kind),
+        }, el('span', { class: 'fe-chart-kind-art', html: chartKindIcon(kind) }), el('span', { text: name })))),
         el('div', { class: 'fe-head', text: '그림' }),
         artPicker((p) => add(p.emoji ? newEmoji(p.emoji) : newArt(p.art, artColorable(p.art) ? { color: backgroundOf(card.bg).ink } : {}))),
         ...shapePicker((shape) => add(newShape(shape, visibleColor(shape)))),
@@ -4116,6 +4132,23 @@ export function createEditor({
     onChange();
     const blocked = blockedSite(url);
     notify(blocked ? `${blocked}은(는) 다른 화면 안에 넣는 것을 막아 두었어요. 발표할 때는 "새 창으로 열기"로 열려요.` : '이 장을 웹사이트로 만들었어요. 발표할 때 실제 사이트가 열려요.', 5000);
+  }
+  // 차트: 보기 표로 놓고 표 고치기 창을 연다. 창에서 "취소"해도 놓은 차트는 남는다(지우거나 다시 고친다).
+  function addChart(kind) {
+    if (!card) return;
+    const before = items().length;
+    add(newChart(kind));
+    if (items().length > before) editChart();
+  }
+  function editChart() {
+    const it = cur();
+    if (!it || it.t !== 'chart' || it.lock) return;
+    const at = sel;
+    openChartDialog({
+      value: it, aspect: (it.w / it.h) * (settings().aspect || 1),
+      onApply: (chart) => { if (sel !== at || cur()?.t !== 'chart') select(at); change(chart, { keepPop: false }); },
+      onClose: () => focusStage(),
+    });
   }
   // 장 안에 웹사이트 상자를 놓는다(발표할 때 그 자리에 실제 사이트가 열리고, 바로 누르고 쓸 수 있다).
   function addWebBox(raw) {

@@ -902,3 +902,92 @@
 .fe-look-name { line-height: 1.25; word-break: keep-all; }
 .fe-look-tile.on { border-color: var(--fe-accent, #267565); box-shadow: 0 0 0 2px var(--fe-accent, #267565) inset; font-weight: 700; }
 .fe-look-tile:focus-visible { outline: 3px solid #8cc7b8; outline-offset: 2px; }
+
+/* 차트 조각(chart.js): 상자 안에서 제목 · 그림 · 범례. 글자는 상자의 짧은 변을 따른다(container-type: size → cqmin). */
+.fi-chart { container-type: size; overflow: hidden; }
+.fc-in { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 2cqmin; padding: 3cqmin 3.4cqmin 2.4cqmin; box-sizing: border-box; font-size: min(3.4cqw, 7cqh); line-height: 1.2; font-weight: 600; }
+.fc-title { flex: none; text-align: center; font-weight: 800; font-size: 1.3em; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fc-body { flex: 1; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: 1.4cqmin 1.8cqmin; }
+.fc-up { grid-template-columns: auto minmax(0, 1fr); }
+.fc-across { grid-template-columns: auto minmax(0, 1fr); }
+.fc-plot { position: relative; min-height: 0; }
+.fc-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.fc-grid { stroke: currentColor; stroke-opacity: .16; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.fc-zero { stroke: currentColor; stroke-opacity: .55; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.fc-line { fill: none; stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.fc-dot { position: absolute; width: 1.6cqmin; height: 1.6cqmin; border-radius: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 0 .5cqmin #fff; }
+.fc-values { position: absolute; inset: 0; pointer-events: none; }
+.fc-val { position: absolute; white-space: nowrap; font-size: .82em; font-weight: 800; }
+.fc-val-up { transform: translate(-50%, calc(-100% - .5cqmin)); }
+.fc-val-down { transform: translate(-50%, .5cqmin); }
+.fc-val-right { transform: translate(.8cqmin, -50%); }
+.fc-val-left { transform: translate(calc(-100% - .8cqmin), -50%); }
+.fc-ticks { position: relative; font-size: .72em; font-weight: 500; opacity: .75; font-variant-numeric: tabular-nums; }
+.fc-up .fc-ticks span { position: absolute; right: 0; transform: translateY(-50%); white-space: nowrap; }
+.fc-across .fc-ticks { height: 1.2em; }
+.fc-across .fc-ticks span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.fc-names { display: flex; font-size: .8em; }
+.fc-names span { flex: 1 1 0; min-width: 0; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 .2em; }
+.fc-across .fc-names { flex-direction: column; }
+.fc-across .fc-names span { display: flex; align-items: center; justify-content: flex-end; text-align: right; }
+.fc-legend { flex: none; display: flex; flex-wrap: wrap; justify-content: center; gap: .3em 1em; font-size: .78em; }
+.fc-key { display: inline-flex; align-items: center; gap: .35em; white-space: nowrap; }
+.fc-key i { width: .8em; height: .8em; border-radius: .2em; flex: none; }
+.fc-key b { font-weight: 800; }
+.fc-round { display: flex; grid-template-rows: none; align-items: center; justify-content: center; gap: 3cqmin; }
+.fc-pie-box { height: 100%; aspect-ratio: 1; max-width: 62%; display: grid; place-items: center; }
+.fc-pie { width: 100%; height: 100%; }
+.fc-pie-val { font-size: 17px; font-weight: 800; fill: #fff; text-anchor: middle; dominant-baseline: central; }
+.fc-side { flex-direction: column; flex-wrap: nowrap; align-items: flex-start; gap: .35em; font-size: .86em; min-width: 0; }
+.fc-side .fc-key span { overflow: hidden; text-overflow: ellipsis; }
+@container (max-aspect-ratio: 1/1) { .fc-round { flex-direction: column; } .fc-pie-box { height: auto; width: 70%; max-width: none; flex: 1 1 0; min-height: 0; } .fc-side { flex-direction: row; flex-wrap: wrap; justify-content: center; } }
+
+/* 차트 고치기 창(chart-dialog.js): 왼쪽 표 · 오른쪽 미리 보기, 좁은 화면에서는 위아래로 */
+.fe-chart-dlg { width: min(980px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); padding: 0; border: 0; border-radius: 18px; background: #fff; color: var(--fe-text); box-shadow: var(--fe-shadow-pop); font-family: var(--fe-font, inherit); }
+.fe-chart-dlg::backdrop { background: rgba(23, 28, 44, .45); }
+.fe-chart-form { display: flex; flex-direction: column; max-height: calc(100dvh - 24px); }
+.fe-chart-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px 8px; }
+.fe-chart-head h2 { margin: 0; font-size: 1.15rem; }
+.fe-chart-close { width: 36px; height: 36px; border: 0; border-radius: 50%; background: var(--fe-soft); color: var(--fe-text); font-size: 1rem; cursor: pointer; }
+.fe-chart-main { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 18px; padding: 4px 18px 12px; overflow: auto; }
+.fe-chart-side { display: grid; gap: 10px; align-content: start; min-width: 0; }
+.fe-chart-kinds { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.fe-chart-kind { display: grid; justify-items: center; gap: 3px; padding: 7px 2px 6px; border: 2px solid var(--fe-line); border-radius: 12px; background: #fff; color: var(--fe-text); font: inherit; font-size: .8rem; font-weight: 700; cursor: pointer; }
+.fe-chart-kind.on { border-color: var(--fe-primary); background: var(--fe-soft); color: var(--fe-primary-dark); }
+.fe-chart-kind-art svg { width: 24px; height: 24px; display: block; }
+.fe-chart-field { display: grid; gap: 4px; font-size: .85rem; font-weight: 700; min-width: 0; }
+.fe-chart-row { display: flex; align-items: end; gap: 12px; }
+.fe-chart-row .fe-chart-field { flex: 0 1 140px; }
+.fe-chart-check { display: inline-flex; align-items: center; gap: 4px; padding-bottom: 8px; font-size: .88rem; font-weight: 600; }
+.fe-chart-input, .fe-chart-paste { box-sizing: border-box; width: 100%; padding: 8px 10px; border: 1.5px solid var(--fe-line); border-radius: 9px; font: inherit; font-weight: 500; color: var(--fe-text); background: #fff; }
+.fe-chart-palettes { display: flex; flex-wrap: wrap; gap: 6px; }
+.fe-chart-palette { display: inline-flex; align-items: center; gap: 2px; padding: 5px 9px; border: 2px solid var(--fe-line); border-radius: 999px; background: #fff; font: inherit; font-size: .8rem; font-weight: 600; color: var(--fe-text); cursor: pointer; }
+.fe-chart-palette i { width: 10px; height: 10px; border-radius: 3px; }
+.fe-chart-palette span { margin-left: 5px; }
+.fe-chart-palette.on { border-color: var(--fe-primary); background: var(--fe-soft); }
+.fe-chart-tablewrap { overflow: auto; max-height: 300px; border: 1.5px solid var(--fe-line); border-radius: 12px; }
+.fe-chart-table { border-collapse: collapse; width: 100%; font-size: .88rem; }
+.fe-chart-table th, .fe-chart-table td { padding: 3px; border-bottom: 1px solid #eef1f6; text-align: left; vertical-align: middle; }
+.fe-chart-table thead th { position: sticky; top: 0; z-index: 1; background: #f6f8fc; font-size: .8rem; color: var(--fe-muted); }
+.fe-chart-table .off { opacity: .45; }
+.fe-chart-cell { box-sizing: border-box; width: 100%; min-width: 64px; padding: 6px 8px; border: 1.5px solid transparent; border-radius: 7px; background: transparent; font: inherit; color: var(--fe-text); }
+.fe-chart-cell:hover { border-color: var(--fe-line); }
+.fe-chart-cell:focus { outline: none; border-color: var(--fe-primary); background: #fff; }
+.fe-chart-cell[aria-invalid] { border-color: var(--fe-danger); background: var(--fe-danger-soft); }
+td .fe-chart-cell[inputmode] { text-align: right; font-variant-numeric: tabular-nums; }
+.fe-chart-series { display: flex; align-items: center; gap: 2px; }
+.fe-chart-x { flex: none; width: 26px; height: 26px; border: 0; border-radius: 50%; background: transparent; color: var(--fe-muted); font-size: .95rem; cursor: pointer; }
+.fe-chart-x:hover { background: var(--fe-danger-soft); color: var(--fe-danger); }
+.fe-chart-add { padding: 5px 10px; border: 1.5px dashed var(--fe-line); border-radius: 8px; background: #fff; color: var(--fe-primary-dark); font: inherit; font-size: .82rem; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.fe-chart-note { min-height: 1.3em; margin: 0; }
+.fe-chart-pastebox summary { cursor: pointer; font-size: .86rem; font-weight: 700; color: var(--fe-primary-dark); }
+.fe-chart-pastebox[open] { display: grid; gap: 6px; }
+.fe-chart-view { display: grid; align-content: start; gap: 6px; min-width: 0; }
+.fe-chart-label { font-size: .8rem; font-weight: 700; color: var(--fe-muted); }
+.fe-chart-preview { position: relative; container-type: inline-size; width: 100%; max-height: 60vh; border: 1.5px solid var(--fe-line); border-radius: 12px; background: #fff; }
+.fe-chart-preview > .fi-chart { position: absolute; inset: 0; width: 100%; height: 100%; }
+.fe-chart-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 18px 16px; border-top: 1px solid #eef1f6; }
+@media (max-width: 760px) { .fe-chart-main { grid-template-columns: 1fr; } .fe-chart-view { order: -1; } .fe-chart-preview { max-height: 34vh; } .fe-chart-kinds { gap: 4px; } }
+/* 꾸미기 칸의 차트 넣기 단추 */
+.fe-chart-adds { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.fe-chart-adds .fe-chart-kind { font-size: .74rem; }
