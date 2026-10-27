@@ -134,8 +134,10 @@ export function quizResultPage(quiz, answers, aspect = 16 / 9, { ranking = [], a
     text('퀴즈 결과', 50, 8, 90, wide ? 2.2 : 3, { color: '#286f62', bold: true }),
     text(q.question, 50, 18, 90, q.question.length > 60 ? (wide ? 3 : 3.6) : (wide ? 3.8 : 4.6), { bold: true }),
   ];
-  const board = wide && ranking.length, left = 4, width = board ? 58 : 92, label = board ? 22 : 30, track = width - label - 14;
-  const top = 32, bottom = 84, step = (bottom - top) / q.choices.length, h = Math.min(step * 0.55, wide ? 9 : 6);
+  // 순위는 넓은 그림이면 오른쪽, 정사각 · 세로 그림이면 막대 아래
+  const rows = ranking.slice(0, 5), side = wide && rows.length > 0, under = !wide && rows.length > 0;
+  const left = 4, width = side ? 58 : 92, label = side ? 22 : 30, track = width - label - 14;
+  const top = 32, bottom = under ? 52 : 84, step = (bottom - top) / q.choices.length, h = Math.min(step * 0.55, wide ? 9 : 6);
   q.choices.forEach((name, k) => {
     const y = top + step * (k + 0.5), n = counts[k], pct = total ? Math.round((n * 100) / total) : 0, right = k === q.answer, fill = (track * pct) / 100;
     items.push(text(`${QUIZ_CHOICES[k].mark} ${name}${right ? ' ✓' : ''}`, left + label / 2, y, label - 1, wide ? 2.2 : 2.8, { bold: right, color: right ? '#1f7a44' : '#273f3a' }));
@@ -143,10 +145,17 @@ export function quizResultPage(quiz, answers, aspect = 16 / 9, { ranking = [], a
     if (fill >= 0.5) items.push(box(left + label + fill / 2, y, fill, h, right ? '#30a46c' : '#a7b8b2'));
     items.push(text(`${n}명 · ${pct}%`, left + label + track + 7, y, 13, wide ? 2 : 2.6, { bold: right }));
   });
-  if (board) {
+  const line = (r) => `${r.rank}. ${r.name} · ${r.score.toLocaleString('ko-KR')}점`;
+  if (side) {
     items.push(box(81, 58, 34, 56, '#ffffff'));
     items.push(text('지금까지 순위', 81, 35, 30, 2.2, { bold: true, color: '#286f62' }));
-    ranking.slice(0, 5).forEach((r, k) => items.push(text(`${r.rank}. ${r.name} · ${r.score.toLocaleString('ko-KR')}점`, 81, 44 + k * 8, 30, 2.1, { bold: k === 0 })));
+    rows.forEach((r, k) => items.push(text(line(r), 81, 44 + k * 8, 30, 2.1, { bold: k === 0 })));
+  }
+  if (under) {
+    const end = 61.5 + rows.length * 4;   // 칸 55 ~ end(해설 88 · 참여 93 줄과 겹치지 않는다)
+    items.push(box(50, (55 + end) / 2, 92, end - 55, '#ffffff'));
+    items.push(text('지금까지 순위', 50, 58, 88, 2.8, { bold: true, color: '#286f62' }));
+    rows.forEach((r, k) => items.push(text(line(r), 50, 62.5 + k * 4, 88, 2.6, { bold: k === 0 })));
   }
   const day = new Date(at), date = Number.isNaN(day.getTime()) ? '' : ` · ${day.getFullYear()}. ${day.getMonth() + 1}. ${day.getDate()}.`;
   items.push(text(`${total}명 참여 · 맞힌 비율 ${rate}%${date}`, 50, 93, 90, wide ? 1.8 : 2.4, { color: '#5d6b66' }));

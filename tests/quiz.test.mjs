@@ -84,6 +84,15 @@ test('the result page shows bars with the answer marked, the accuracy, the expla
   assert.ok(texts.includes('해설: 양분을 만들어요.'));
   assert.deepEqual(texts.filter(t => /^\d\. 학생/.test(t)).length, 5);
   assert.ok(cleanDesign(page).items.length === page.items.length);
+  // 정사각 · 세로 그림에서도 순위가 빠지지 않는다: 막대 아래, 해설 · 참여 줄 위
+  for (const aspect of [1, 9 / 16]) {
+    const square = quizResultPage(q, [{ choice: 0 }, { choice: 1 }], aspect, { ranking });
+    const rows = square.items.filter(i => i.t === 'text' && /^\d\. 학생/.test(i.text));
+    assert.equal(rows.length, 5);
+    const bars = square.items.filter(i => i.t === 'shape' && i.w < 92);
+    assert.ok(Math.max(...bars.map(b => b.y + b.h / 2)) < Math.min(...rows.map(r => r.y)) - 4, 'ranking sits under the bars');
+    assert.ok(Math.max(...rows.map(r => r.y)) < 84, 'and above the explanation line');
+  }
 });
 
 test('GAI answers become quizzes: Q lines, 2–4 choices with one starred answer, optional explanation; broken ones are dropped', () => {

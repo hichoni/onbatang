@@ -34,7 +34,7 @@
     "src/links.js": "b1900f5a82be0132590e8abb5d0eebe974e5873a524b5264f8f413272d94a70b",
     "src/live.js": "0fa7d700bf2ac2f5737df9f723775639707360f387ee99881a5ff64cae8071c3",
     "src/pixel-art.js": "533a61b81f49c6bbf8e33b65681d5db76853a2a37c7d9d089f6c00c0c0ec0089",
-    "src/quiz.js": "abacf8f2ff9fecaf4dee77f372741199d74be5f6a761def954464241be88078a",
+    "src/quiz.js": "20d6c7811d8cff1037bab98ec91aa5b2dda8c40bd461cbf0642da7cec7c12916",
     "src/runs.js": "22b07d3ed775fe24dfd20f1678ce369e45fc6e36792daa6e7d4b997474d6a65f",
     "src/web.js": "498fed652433abb37a5cf9ceb780f8e21e962a8afecbae0fcb7a98cee889ad25",
     "tools/build-pptx-import.mjs": "54e7e3e87ecf933018338d5d77ecb8eec7318ce8fd95ff1c0c3096ecadcb0b5b"
