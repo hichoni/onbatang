@@ -1,5 +1,14 @@
 # 온바탕 — 생각을 펼치는 따뜻한 디자인 공간
 
+## v0.95.0 · 퀴즈 장 · 실시간 점수판 (2026-10-27)
+
+- 새 활동 `quiz`(`src/quiz.js`): 문제 하나 · 보기 2~4개 · 정답 · 제한 시간(없음 · 10 · 20 · 30 · 60초) · 해설. 표지는 보통 요소(글 · 도형)라 그림 · PDF · PPTX 로 내보내도 문제와 보기가 보이고 정답은 보이지 않는다.
+- 꾸미는 화면: 장 띠의 "···" 메뉴와 장 오른쪽 클릭 메뉴의 "퀴즈 넣기", 퀴즈 장의 "퀴즈 고치기"(`app/quiz.js` 의 `createQuizSetup`). 모든 곳에서 쓴다(활동 만들기 권한과 따로).
+- 발표(`mountQuiz`): 발표의 "다음"(→ · 스페이스 · 클리커 · 휴대폰 리모컨)이 시작 → 정답 공개 → 순위를 먼저 넘기고 그다음 장으로 간다. 시간이 다 되면 정답을 연다. HTML 수업 파일에서는 혼자 풀어 보는 판으로 돈다.
+- 호스트 계약(`showAudience`): `open({..., onQuiz})` 에 `onQuiz({id, answers:[{from,name,choice,ms}]})` 를 넘기고, 돌려받은 판에 `quiz(state|null)` 가 있으면 퀴즈 상태(`{id, question, choices, seconds, phase, endsAt?, answer?, results?, top?}`)를 알린다. 점수는 온바탕이 매긴다(맞히면 1000점에서 시간이 다 가면 500점까지, 기기마다 첫 답만, 발표 한 번 동안 쌓인다). GBE-AI Lab 은 학생 휴대폰에 보기 단추와 내 점수 · 등수를 보여 준다.
+- 가이X(`appMaker`가 있는 곳): 퀴즈 넣기 칸의 "가이X에게 부탁하기"가 `generate({kind:'quiz', prompt, count, context?})` 로 문제를 받아(`{kind:'quiz', quiz: 글}`) `quizzesFromAnswer` 로 읽고, 고른 문제만 장으로 넣는다.
+- 결과 장(`quizResultPage`): 보기마다 막대(정답 ✓) · 맞힌 비율 · 해설 · 지금까지 순위 5등까지. 투표 결과와 같은 길(`insertResult`)로 지금 장 다음에 넣는다.
+
 ## v0.94.3 · 들여쓰기 — 모든 장 PNG 돌려주기 (2026-10-26)
 
 - `Onbatang.open({ png: { pages: 'all' } })` 이면 "다 했어요" 때 첫 장(`png`)과 함께 **모든 장**(숨긴 장 제외, `EMBED_MAX_PAGES` 40장까지)을 `pngs`(Blob 배열)로 돌려줍니다. 기본은 전처럼 첫 장만(`pngs` 는 `[png]`). 풍풍 꿈마당(학교장 인증제 앱)의 공모전 양식이 '온바탕으로 만들기'로 발표 자료 전체를 붙이는 데 씁니다(`app/embed-host.js` · `app/embed.js` · `docs/embed-2026-10-22.md`).

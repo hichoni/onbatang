@@ -1,0 +1,66 @@
+/* 퀴즈 장: 편집기의 퀴즈 넣기 칸(.quiz-setup)과 발표 화면의 퀴즈(.quiz-app). 보기 색은 --quiz-c. */
+.quiz-setup{box-sizing:border-box;width:min(720px,100%);margin:auto;padding:22px 24px;background:#fffdf8;border:1px solid #d7e3d8;border-radius:18px;color:#273f3a;display:grid;gap:12px;box-shadow:0 10px 40px #0002}
+.quiz-setup *{box-sizing:border-box}
+.quiz-setup h2{margin:0;font-size:1.25rem}
+.quiz-setup h3{margin:4px 0 0;font-size:1rem}
+.quiz-setup-lead{margin:0;color:#4d625a;font-size:.9rem;line-height:1.55}
+.quiz-setup-field{display:grid;gap:6px;font-weight:700;font-size:.9rem}
+.quiz-setup-field textarea,.quiz-setup-field input,.quiz-setup-field select,.quiz-setup-ai select,.quiz-setup-ai input[type=text]{font:inherit;font-weight:400;padding:10px 12px;border:1px solid #c7d6cd;border-radius:10px;background:#fff;color:#273f3a;min-height:42px}
+.quiz-setup-choices{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.quiz-setup-choice{display:grid;grid-template-columns:38px 1fr auto;align-items:center;gap:8px}
+.quiz-setup-choice input[type=text]{border:2px solid var(--quiz-c)!important}
+.quiz-setup-mark{display:grid;place-items:center;width:38px;height:38px;border-radius:10px;background:var(--quiz-c);color:#fff;font-weight:900}
+.quiz-setup-right{display:flex;align-items:center;gap:4px;font-weight:600;font-size:.85rem;white-space:nowrap}
+.quiz-setup-row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
+.quiz-setup-grow{flex:1;min-width:220px}
+.quiz-setup-actions{display:flex;justify-content:flex-end;gap:8px}
+.quiz-setup-status{margin:0;min-height:1.3em;font-size:.88rem;color:#3d5a50}
+.quiz-setup-ai{display:grid;gap:10px;padding:14px;border-radius:14px;background:#f2f6ff;border:1px solid #d5ddf5}
+.quiz-setup-check{font-size:.9rem;font-weight:600}
+.quiz-setup-or{border-top:1px dashed #c7d6cd;padding-top:12px}
+.quiz-setup-picks{margin:0;padding:0;list-style:none;display:grid;gap:8px;max-height:280px;overflow:auto}
+.quiz-setup-pick{padding:10px 12px;border-radius:12px;background:#fff;border:1px solid #d7e3d8}
+.quiz-setup-pick ul{margin:6px 0 0;padding-left:22px;font-size:.88rem}
+.quiz-setup-right-choice{font-weight:800;color:#1f7a44}
+.quiz-setup-explain{margin:6px 0 0;font-size:.82rem;color:#4d625a}
+
+.quiz-app{box-sizing:border-box;width:100%;min-height:100%;margin:auto;padding:clamp(14px,3vw,48px);display:flex;flex-direction:column;gap:clamp(10px,1.6vw,24px);background:#f6f8fb;color:#1f2d3d;font-family:inherit}
+.quiz-app *{box-sizing:border-box}
+.quiz-head{display:flex;align-items:center;gap:14px}
+.quiz-kicker{padding:6px 16px;border-radius:999px;background:#273f3a;color:#fff;font-weight:800;font-size:clamp(14px,1.4vw,22px)}
+.quiz-clock{margin-left:auto;min-width:2.4em;text-align:center;font-size:clamp(22px,3vw,52px);font-weight:900;font-variant-numeric:tabular-nums;color:#273f3a}
+.quiz-count{font-weight:700;font-size:clamp(13px,1.3vw,22px);color:#3d5a50}
+.quiz-question{margin:0;font-size:clamp(22px,3.4vw,60px);line-height:1.25;font-weight:900;text-align:center;overflow-wrap:anywhere}
+.quiz-bar{height:clamp(8px,.8vw,14px);border-radius:99px;background:#dde5ef;overflow:hidden}
+.quiz-bar-fill{display:block;height:100%;background:linear-gradient(90deg,#22d3ee,#7c3aed);transform-origin:left;transition:transform .2s linear}
+.quiz-tiles{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:clamp(8px,1.2vw,20px);flex:1}
+.quiz-tiles-2{grid-template-rows:1fr}
+.quiz-tile{position:relative;display:flex;align-items:center;gap:clamp(10px,1.2vw,22px);min-height:clamp(64px,10vh,160px);padding:clamp(12px,1.6vw,28px);border-radius:clamp(12px,1.4vw,24px);background:var(--quiz-c);color:#fff;font-weight:800;font-size:clamp(18px,2.3vw,42px);line-height:1.2;box-shadow:0 6px 0 #0002;transition:opacity .25s,transform .25s,filter .25s}
+.quiz-mark{font-size:1.1em;flex:none;opacity:.95}
+.quiz-text{flex:1;overflow-wrap:anywhere}
+.quiz-n{flex:none;font-size:.8em;background:#ffffff33;border-radius:999px;padding:2px 12px}
+.quiz-n:empty{display:none}
+.quiz-tile.quiz-right{transform:scale(1.02);box-shadow:0 0 0 clamp(4px,.5vw,8px) #ffffff,0 0 0 clamp(8px,.9vw,14px) #30a46c,0 10px 24px #0003}
+.quiz-tile.quiz-right::after{content:'✓';position:absolute;right:clamp(10px,1.2vw,22px);top:50%;transform:translateY(-50%);font-size:1.3em}
+.quiz-tile.quiz-right .quiz-n{margin-right:1.6em}
+.quiz-tile.quiz-dim{opacity:.35;filter:saturate(.4)}
+.quiz-explain{margin:0;text-align:center;font-size:clamp(16px,1.8vw,30px);font-weight:700;color:#1f7a44}
+.quiz-rank{margin:0 auto;padding:0;list-style:none;display:grid;gap:clamp(6px,.8vw,12px);width:min(900px,100%)}
+.quiz-rank-row{display:grid;grid-template-columns:5em 1fr auto;align-items:center;gap:12px;padding:clamp(10px,1.1vw,18px) clamp(14px,1.6vw,26px);border-radius:16px;background:#fff;font-size:clamp(16px,2vw,34px);font-weight:700;box-shadow:0 3px 12px #0001}
+.quiz-rank-1{background:linear-gradient(90deg,#fff4c2,#ffffff);border:2px solid #e9a23b}
+.quiz-rank-2{border:2px solid #b6c2cf}
+.quiz-rank-3{border:2px solid #d8a47f}
+.quiz-app[data-phase=ranking] .quiz-tiles,.quiz-app[data-phase=ranking] .quiz-bar{display:none}
+.quiz-app[data-phase=shown] .quiz-bar,.quiz-app[data-phase=ready] .quiz-bar{visibility:hidden}
+.quiz-tiles-3 .quiz-tile:last-child{grid-column:1/-1;justify-self:center;width:calc(50% - clamp(4px,.6vw,10px))}
+.quiz-actions{display:flex;justify-content:center;gap:12px;flex-wrap:wrap}
+/* 발표 막대 단추(.cv-show-key)의 모양을 이긴다: 밝은 퀴즈 판 위의 큰 단추 */
+.quiz-app .quiz-btn{display:inline-flex;align-items:center;justify-content:center;font:inherit;font-weight:800;font-size:clamp(15px,1.4vw,24px);min-height:clamp(44px,4.6vw,64px);padding:10px clamp(18px,2vw,32px);border-radius:999px;border:2px solid #273f3a;background:#fff;color:#273f3a;cursor:pointer}
+.quiz-app .quiz-btn:hover{background:#eef3f0}
+.quiz-app .quiz-btn.quiz-primary{background:#273f3a;color:#fff}
+.quiz-app .quiz-btn.quiz-primary:hover{background:#1c2f2b}
+.quiz-app .quiz-btn:disabled{opacity:.5;cursor:default}
+.quiz-btn:focus-visible{outline:3px solid #d99512;outline-offset:3px}
+.quiz-status{margin:0;min-height:1.4em;text-align:center;font-size:clamp(14px,1.3vw,22px);color:#3d5a50}
+@media(max-width:680px){.quiz-tiles{grid-template-columns:1fr}.quiz-setup{padding:16px}.quiz-setup-choice{grid-template-columns:32px 1fr auto}}
+@media(prefers-reduced-motion:reduce){.quiz-tile,.quiz-bar-fill{transition:none}}
