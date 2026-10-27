@@ -87,3 +87,9 @@ The approved B Onbatang symbol, custom wordmark contours and application brandin
    - OpenJPEG(JPEG 2000 그림 풀개, wasm/openjpeg.wasm) — BSD 2-Clause · app/pdf/vendor/licenses/LICENSE_OPENJPEG.txt · LICENSE_PDFJS_OPENJPEG.txt
    - JBIG2 그림 풀개(wasm/jbig2.wasm, PDFium 에서) — BSD 3-Clause(The PDFium Authors) · app/pdf/vendor/licenses/LICENSE_JBIG2.txt · LICENSE_PDFJS_JBIG2.txt
    사용자가 가져온 PDF 의 내용(글 · 그림 · 글꼴)의 이용 조건은 이 라이브러리 라이선스와 별개입니다.
+
+8. 수식 · MathJax 배포본 — src/mathjax/
+   수식 창에서 TeX 를 SVG 로 그립니다(브라우저 안에서, 수식 창을 처음 열 때만 받습니다). 그린 모양은 자료에 저장해 보는 쪽은 MathJax 없이 그립니다.
+   도구: tools/build-mathjax.mjs · 버전/크기/SHA-256: src/mathjax/BUILD.json. 파일은 고치지 않고 그대로 옮겼습니다.
+   - MathJax 3.2.2(es5/tex-svg-full.js: TeX 입력 · SVG 출력 · mhchem 등 TeX 확장 · MathJax TeX 글꼴 모양) — MathJax Consortium — Apache License 2.0
+     https://github.com/mathjax/MathJax · 전문: src/mathjax/LICENSE.txt

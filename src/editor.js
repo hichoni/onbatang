@@ -6,7 +6,7 @@ import { el, toast } from './dom.js';
 import { newId, cleanNotes, NOTES_LIMIT, cleanTopic } from './document.js';
 import {
   COLORS, SHAPES, SHAPE_GROUPS, MASKS, OPACITY, TEXT_PRESETS, settings, configure, reshapeItems, backgroundOf, fontList, fontFamilyOf, layoutList, textLimit, newText, clip, DEFAULT_FONT,
-  cleanBg, cleanItems, cleanDesign, emptyDesign, cleanItem, cleanImg, moveLayer, newPresetText, newEmoji, newShape, newArt, newYouTube, newWebBox, newChart, newPhoto, moveItem, rotateItem,
+  cleanBg, cleanItems, cleanDesign, emptyDesign, cleanItem, cleanImg, moveLayer, newPresetText, newEmoji, newShape, newArt, newYouTube, newWebBox, newChart, newMath, refitMath, newPhoto, moveItem, rotateItem,
   designMotion, reorder, duplicateItem, pasteItem, itemLabel, sizeOf, resizeTo, sizeRange, alignItem, coverItem, layoutItems, EDGE, canEdge, canRound, cornerOf, THICK, isLine, thickOf, thicken,
   designVideo, cleanVideo, trimVideo, videoSeconds, videoTime, VIDEO_FITS, MIN_VIDEO, rebaseItems, alignBoxes, distributeBoxes, clampShift, scaleItems, regroup, newGroupId,
   styleOf, applyStyle, LINE_SPACINGS, ALT_LIMIT,
@@ -19,6 +19,7 @@ import { designWeb, embedOf, blockedSite, isYouTubePage, webHost } from './web.j
 import { styleRuns, runsAll, dropRunKey, shiftRuns } from './runs.js';
 import { CHART_KINDS } from './chart.js';
 import { openChartDialog, chartKindIcon } from './chart-dialog.js';
+import { openMathDialog } from './math-dialog.js';
 // 부분 서식으로 입힐 수 있는 것: 도구 막대의 값 이름 → 구간의 열쇠(runs.js)
 const RUN_KEYS = [['bold', 'b'], ['italic', 'i'], ['under', 'u'], ['color', 'c']];
 import { layoutLinks, relink, LINK_LINE, LINK_SHAPES, LINK_LABEL_MAX, linkSvg, linkHandle, dragLinkHandle, linkLabelSize, linkLabelT, linkEnds, endSpot, pieceNear, boxOfItem } from './links.js';
@@ -51,7 +52,7 @@ const tabList = () => (settings().motion ? [...TABS, MOTION_TAB] : TABS);
 const VIDEO_LIMITS = { maxSeconds: 60, maxFileSeconds: 300, maxBytes: 200 * 1024 * 1024 };
 const ALIGN_NAME = { l: '왼쪽', c: '가운데', r: '오른쪽' };
 const ALIGN_ICON = { l: 'alignL', c: 'alignC', r: 'alignR' };
-const ITEM_ICON = { text: 'text', emoji: 'shapes', shape: 'shapes', art: 'shapes', image: 'image', yt: 'video', chart: 'chart' };
+const ITEM_ICON = { text: 'text', emoji: 'shapes', shape: 'shapes', art: 'shapes', image: 'image', yt: 'video', chart: 'chart', math: 'math' };
 const NEXT_ALIGN = { l: 'c', c: 'r', r: 'l' };
 const LONG_PRESS = 550;       // 손가락으로 이만큼(ms) 누르고 있으면 오른쪽 누르기 메뉴가 열린다
 // 복사해 둔 요소들(이 화면 안에서만 쓰는 클립보드. 다른 카드에 붙여 넣을 수 있다). 여럿을 함께 복사하면 여럿이 들어 있다.
@@ -908,8 +909,8 @@ export function createEditor({
     const tiny = it.t === 'shape' && w < least && h < least;
     selBox.style.transform = `translate(-50%, -50%) rotate(${it.rot}deg)`;
     selBox.classList.toggle('locked', it.lock);
-    hWide.hidden = it.t === 'emoji' || tiny;
-    hTall.hidden = it.t === 'emoji' || (it.t === 'text' && !Number.isFinite(it.h)) || tiny;
+    hWide.hidden = it.t === 'emoji' || it.t === 'math' || tiny;      // 수식은 비율 그대로 키우고 줄인다(모서리)
+    hTall.hidden = it.t === 'emoji' || it.t === 'math' || (it.t === 'text' && !Number.isFinite(it.h)) || tiny;
     const hint = it.t === 'emoji' ? '이모지 크기 바꾸기 · 모양 비율 유지 · Ctrl: 가운데 기준'
       : it.t === 'text' && !Number.isFinite(it.h) ? '글상자 너비 바꾸기 · Shift: 글자도 함께 확대 · Ctrl: 가운데 기준' : resizeHint;
     selBox.querySelectorAll('[data-h="scale"]').forEach(h => { h.title = hint; });
@@ -1644,7 +1645,7 @@ export function createEditor({
           row('toBack', '맨 뒤로', '', () => order('bottom', { keepOpen: false }), { disabled: sel === 0 }),
         ],
         // 글상자는 뒤집지 않는다(도구 막대와 같은 기준)
-        it.t === 'text' || it.t === 'yt' || it.t === 'web' || it.t === 'chart' ? [] : [
+        it.t === 'text' || it.t === 'yt' || it.t === 'web' || it.t === 'chart' || it.t === 'math' ? [] : [
           row('flipH', '좌우 뒤집기', '', () => change({ fx: !cur().fx }, { keepPop: false })),
           row('flipV', '상하 뒤집기', '', () => change({ fy: !cur().fy }, { keepPop: false })),
         ],
@@ -2327,8 +2328,9 @@ export function createEditor({
     if (it?.t === 'link' && !it.lock && itemAt(e.clientX, e.clientY) === sel) { if (pop !== 'llabel') toggle('llabel'); return; }
     // 유튜브 영상을 두 번 누르면 재생 설정(주소 · 시작 · 끝 · 화면 가득 · 자막 · 미리 보기)을 연다.
     if (it?.t === 'yt' && !it.lock && itemAt(e.clientX, e.clientY) === sel) { if (pop !== 'ytstart') toggle('ytstart'); return; }
-    // 차트를 두 번 누르면 표 고치기 창을 연다.
+    // 차트를 두 번 누르면 표 고치기 창을, 수식은 수식 창을 연다.
     if (it?.t === 'chart' && !it.lock && itemAt(e.clientX, e.clientY) === sel) { editChart(); return; }
+    if (it?.t === 'math' && !it.lock && itemAt(e.clientX, e.clientY) === sel) { editMath(); return; }
     const box = nodes[sel]?.getBoundingClientRect();
     if (!it || !['text','image'].includes(it.t) || !box) return;
     if (e.clientX >= box.left && e.clientX <= box.right && e.clientY >= box.top && e.clientY <= box.bottom) {
@@ -2974,6 +2976,13 @@ export function createEditor({
         pick('thick', '굵기', 'lthick', { title: '선의 굵기' }),
         pick('right', '화살표', 'arrow', { title: '선 꾸미기: 모양 모음 · 화살표 머리 · 점선 · 곧게/둥글게/꺾어서 · 붙는 곳' }),
         pick('text', '선 위 글', 'llabel', { title: '선 위에 짧은 글 붙이기 (예: 예 · 아니오 · 다음). 선을 두 번 눌러도 돼요' }));
+    } else if (it.t === 'math') {
+      // 수식: "수식 고치기" 창에서 TeX 를 고친다(수식을 두 번 눌러도 열린다). 색은 글자색처럼.
+      const ink = el('span', { class: 'fe-ink dot' });
+      ink.style.background = it.color;
+      own.push(
+        tb(lab('math', '수식 고치기'), editMath, { title: '수식 고치기 (수식을 두 번 눌러도 돼요)', name: '수식 고치기', cls: 'math-edit' }),
+        tb([icon('palette'), el('span', { class: 'fe-lbl', text: '색' }), ink], () => toggle('color'), { title: '수식 색', name: '수식 색', on: pop === 'color', cls: 'has-pop color' }));
     } else if (it.t === 'chart') {
       // 차트: 표 · 종류 · 제목 · 색은 "차트 고치기" 창에서(차트를 두 번 눌러도 열린다). 글자 색은 여기서.
       const ink = el('span', { class: 'fe-ink dot' });
@@ -3008,7 +3017,7 @@ export function createEditor({
       el('span', { class: 'fe-sep' }),
       group('배치',
         it.t === 'text' || it.t === 'link' ? null : pick('resize', '크기', 'size', { title: '조각의 크기 (가로세로 비율은 그대로)' }),      // 텍스트는 − 숫자 + 로 바꾼다
-        it.t === 'text' || it.t === 'yt' || it.t === 'web' || it.t === 'chart' || it.t === 'link' ? null : pick('flipH', '뒤집기', 'flip', { title: '좌우·상하 뒤집기, 바로 세우기' }),
+        it.t === 'text' || it.t === 'yt' || it.t === 'web' || it.t === 'chart' || it.t === 'math' || it.t === 'link' ? null : pick('flipH', '뒤집기', 'flip', { title: '좌우·상하 뒤집기, 바로 세우기' }),
         pick('layers', '위치', 'pos', { title: '겹치는 순서와 페이지 정렬' })),
       el('span', { class: 'fe-sep' }),
       group('작업',
@@ -3051,7 +3060,7 @@ export function createEditor({
       body = [el('div', { class: 'fe-poshead', text: '채우기 색' }),
         swatches(it.hollow ? '' : it.color, fillWith, { none: true, noneName: '채우기 없음 (테두리만)', label: '채우기 색' })];
     } else if (pop === 'color' && it.t !== 'image' && it.t !== 'emoji' && it.t !== 'yt' && it.t !== 'web' && (it.t !== 'art' || it.color)) {
-      const label = it.t === 'text' || it.t === 'chart' ? '글자 색' : it.t === 'art' ? '그림 색' : it.t === 'link' ? '선 색' : '도형 색';
+      const label = it.t === 'text' || it.t === 'chart' ? '글자 색' : it.t === 'math' ? '수식 색' : it.t === 'art' ? '그림 색' : it.t === 'link' ? '선 색' : '도형 색';
       body = [el('div', { class: 'fe-poshead', text: label }), swatches(it.t === 'chart' ? it.color || '#273f3a' : it.color, (hex) => change({ color: hex }), { label })];
     } else if (pop === 'edge' && canEdge(it)) {
       body = [el('div', { class: 'fe-poshead', text: '테두리 색' }),
@@ -3170,7 +3179,7 @@ export function createEditor({
         el('p', { class: 'fe-note', text: '발표할 때 이 상자 안에서 사이트를 바로 누르고 써요. 상자 밖을 누르거나 → 를 치면 다음 장으로 가요.' })];
     } else if (pop === 'ytstart' && it.t === 'yt') {
       body = ytStartBody(it);
-    } else if (pop === 'flip' && it.t !== 'text' && it.t !== 'yt' && it.t !== 'web' && it.t !== 'chart') {
+    } else if (pop === 'flip' && it.t !== 'text' && it.t !== 'yt' && it.t !== 'web' && it.t !== 'chart' && it.t !== 'math') {
       body = [
         el('div', { class: 'fe-poshead', text: '뒤집기' }),
         el('div', { class: 'fe-grid two' },
@@ -3916,6 +3925,11 @@ export function createEditor({
           class: `fe-textadd ${p.id}`, type: 'button', onClick: () => add(newPresetText(p.id, { color: backgroundOf(card.bg).ink })),
         }, p.name))),
         el('p', { class: 'fe-note', text: '터치 화면에서는 글을 고른 뒤 한 번 더 누르면 고칠 수 있어요. 글꼴·크기·색은 도구 막대에서 바꿔요.' }),
+        // 수식: 분수 · 루트 · 화학식(TeX). 창에서 적고 미리 본 뒤 넣는다.
+        el('div', { class: 'fe-head', text: '수식' }),
+        el('button', { class: 'fe-math-add', type: 'button', dataset: { addMath: '' }, onClick: addMath },
+          el('span', { class: 'fe-math-add-art', 'aria-hidden': 'true', text: '√x' }),
+          el('span', {}, el('b', { text: '수식 넣기' }), el('small', { text: '분수 · 제곱 · 루트 · 화학식(H₂O)을 단추로 넣어요' }))),
       ];
     }
     if (tab === 'element') {
@@ -4132,6 +4146,21 @@ export function createEditor({
     onChange();
     const blocked = blockedSite(url);
     notify(blocked ? `${blocked}은(는) 다른 화면 안에 넣는 것을 막아 두었어요. 발표할 때는 "새 창으로 열기"로 열려요.` : '이 장을 웹사이트로 만들었어요. 발표할 때 실제 사이트가 열려요.', 5000);
+  }
+  // 수식: 창에서 적고 미리 본 뒤 넣는다(글 색은 바탕에 맞춘 글자색). 고칠 때는 글자 크기를 그대로 두고 모양만 바꾼다.
+  function addMath() {
+    if (!card) return;
+    openMathDialog({ onApply: (content) => add(newMath(content, { color: backgroundOf(card.bg).ink })), onClose: () => focusStage() });
+  }
+  function editMath() {
+    const it = cur();
+    if (!it || it.t !== 'math' || it.lock) return;
+    const at = sel;
+    openMathDialog({
+      tex: it.tex,
+      onApply: (content) => { if (sel !== at || cur()?.t !== 'math') select(at); const next = refitMath(cur(), content); if (next) change(next, { keepPop: false }); },
+      onClose: () => focusStage(),
+    });
   }
   // 차트: 보기 표로 놓고 표 고치기 창을 연다. 창에서 "취소"해도 놓은 차트는 남는다(지우거나 다시 고친다).
   function addChart(kind) {

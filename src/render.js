@@ -10,6 +10,7 @@ import { linkSvg } from './links.js';
 import { runPieces } from './runs.js';
 import { webHost, blockedSite } from './web.js';
 import { chartView } from './chart.js';
+import { mathView } from './math.js';
 
 // 유튜브 영상의 재생 단추(유튜브의 빨간 단추 모양)
 const YT_PLAY = '<svg viewBox="0 0 68 48" aria-hidden="true" focusable="false"><path d="M66.5 7.7A8.5 8.5 0 0 0 60.5 1.7C55.2.3 34 .3 34 .3s-21.2 0-26.5 1.4A8.5 8.5 0 0 0 1.5 7.7C.1 13 .1 24 .1 24s0 11 1.4 16.3a8.5 8.5 0 0 0 6 6C12.8 47.7 34 47.7 34 47.7s21.2 0 26.5-1.4a8.5 8.5 0 0 0 6-6C67.9 35 67.9 24 67.9 24s0-11-1.4-16.3z" fill="#f03"/><path d="M45 24 27 14v20z" fill="#fff"/></svg>';
@@ -57,6 +58,9 @@ export function itemView(item) {
     // 발표 화면에서는 youTubePlayers 가 영상을 미리 불러 두고 스페이스 바(또는 누르기)로 튼다.
     const thumb = el('img', { class: 'fi-yt-thumb', src: ytThumb(item.yt), alt: '', draggable: 'false', decoding: 'async', referrerPolicy: 'no-referrer', onError: () => thumb.remove() });
     node = el('div', { class: `fi fi-yt${item.full ? ' full' : ''}`, dataset: { yt: item.yt, start: String(item.start || 0), end: String(item.end || 0), cc: item.cc || '', auto: item.auto ? '1' : '0', loop: item.loop ? '1' : '0', full: item.full ? '1' : '0' } }, thumb, el('span', { class: 'fi-yt-play', html: YT_PLAY }));
+  } else if (item.t === 'math') {
+    // 수식: 고칠 때 MathJax 로 그려 저장해 둔 모양(math.js). 상자에 맞춰 비율 그대로 들어간다.
+    node = mathView(item);
   } else if (item.t === 'chart') {
     // 차트: 표로 그린 막대 · 꺾은선 · 원(chart.js). 상자 크기를 따라 늘고 준다.
     node = chartView(item);
