@@ -78,3 +78,12 @@ The approved B Onbatang symbol, custom wordmark contours and application brandin
    - tslib — 0BSD · vendor/licenses/tslib-CopyrightNotice.txt 및 tslib-LICENSE.txt
    위 vendor/ 상대 경로의 기준은 app/pptx-import/입니다. 각 배포 파일의 원문 고지를 따릅니다.
    사용자가 가져온 PPT에 포함된 글꼴·사진의 이용 조건은 이 라이브러리 라이선스와 별개입니다.
+
+7. PDF 가져오기 · pdf.js 배포본 — app/pdf/vendor/
+   PDF 는 브라우저 안에서 열어 쪽마다 그림으로 그립니다(서버로 보내지 않습니다). 처음 PDF 를 가져올 때만 받습니다.
+   도구: tools/build-pdf-import.mjs · 버전/크기/SHA-256: app/pdf/vendor/BUILD.json. 파일은 고치지 않고 그대로 옮겼습니다.
+   - pdf.js(pdfjs-dist 6.4.299 legacy 판: pdf.min.mjs · pdf.worker.min.mjs · cmaps 의 한글 글꼴 표) — Mozilla Foundation — Apache License 2.0
+     https://github.com/mozilla/pdf.js · 전문: app/pdf/vendor/licenses/pdfjs-LICENSE.txt
+   - OpenJPEG(JPEG 2000 그림 풀개, wasm/openjpeg.wasm) — BSD 2-Clause · app/pdf/vendor/licenses/LICENSE_OPENJPEG.txt · LICENSE_PDFJS_OPENJPEG.txt
+   - JBIG2 그림 풀개(wasm/jbig2.wasm, PDFium 에서) — BSD 3-Clause(The PDFium Authors) · app/pdf/vendor/licenses/LICENSE_JBIG2.txt · LICENSE_PDFJS_JBIG2.txt
+   사용자가 가져온 PDF 의 내용(글 · 그림 · 글꼴)의 이용 조건은 이 라이브러리 라이선스와 별개입니다.

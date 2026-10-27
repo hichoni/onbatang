@@ -1,5 +1,12 @@
 # 온바탕 — 생각을 펼치는 따뜻한 디자인 공간
 
+## v0.97.0 · PDF 가져오기 (2026-10-27)
+
+- 첫 화면 "PDF 가져오기"(`data-pdf-open`): PDF 를 이 기기 안에서 열어(`app/pdf-import.js`, 서버로 보내지 않음) 가져올 쪽(`parsePages`: 비우면 모든 쪽, "1-5, 8")과 "쪽의 글을 발표자 노트에 넣기"를 고른다. 한 번에 100쪽, 파일 200MB 까지.
+- 쪽마다 장 하나: 그 쪽을 긴 변 2000px 로 그려 WebP(안 되는 브라우저는 JPEG) 260KB 안으로 줄인 그림 한 장(잠금 · 그림 설명 "이름 n쪽")을 깐다. 그림의 모양은 첫 쪽(pt, 정수)을 따르고 모양이 다른 쪽은 가운데에 맞춘다. 장 · 그림에 `source: {kind:'pdf', sourceDocumentId, pageNumber}`.
+- 20쪽이 넘으면 "이름 · 1", "이름 · 2" 파트. PPT 파트처럼 내 그림에서 한 칸(뱃지 "PDF")으로 묶이고, 거르기는 "PPT · PDF".
+- pdf.js(`pdfjs-dist` 6.4.299 legacy 판 · 한글 CMap · JPEG2000 · JBIG2 wasm)는 `app/pdf/vendor/` 에 그대로 두고(`tools/build-pdf-import.mjs`, BUILD.json 의 SHA-256), PDF 를 처음 가져올 때만 받는다. 사용 조건은 NOTICE 7.
+
 ## v0.96.0 · 버전 기록 · 예전 판으로 되돌리기 (2026-10-27)
 
 - 판 저장소(`app/history.js`): 이 기기의 IndexedDB `<저장소 이름>-history`(그림 저장소와 따로, 서버로 보내지 않음). `versions`(그림마다 판: 때 · 까닭 · 내용 SHA-256 · 장 수 · 사진 열쇠 · 그림) · `assets`(사진 data 주소를 SHA-256 열쇠로 한 번만, 쓰는 판 수 `n` 을 세어 0 이면 지움).
