@@ -1,5 +1,12 @@
 # 온바탕 — 생각을 펼치는 따뜻한 디자인 공간
 
+## v0.99.1 · 공용 온바탕이 더 빨리 열려요 — 스크립트 묶기 (2026-10-28)
+
+- Firebase 배포본(`tools/build-firebase-hosting.mjs`)을 만들 때 `tools/bundle-app.mjs` 가 `app/index.html` 의 시작 스크립트와 그 아래 모듈 100개를 `app/index.bundle.js` · `app/chunk-*.js` 로 묶고, 모두 처음부터 함께 받게(modulepreload) 한다. 화면을 열 때 받는 스크립트 94개(모듈을 한 단계씩 따라가며) → 21개(한꺼번에). HTTP/1.1 로만 오가는 학교 보안 장비 · 프록시 망에서 효과가 크다.
+- 모듈의 `import.meta.url` 과 계산된 상대 import(`./art/${이름}`)는 원래 파일 주소로 바꿔 넣어(acorn) 글꼴 · 그림 · 워커 · MathJax · PDF 주소가 그대로다. 배포본(`vendor/` · `html-lesson-bundle.js`)과 원래 파일은 그대로 두어 `embed.html` · 내보낸 수업 · 워커가 쓴다.
+- 묶지 않은 모듈이 묶인 모듈을 따로 부르면(같은 모듈 두 벌) · 글로 꺼내 쓰는 함수(`이름.toString()`)의 이름이 바뀌면 · 이름이 바뀐 함수의 `.name` 을 읽으면 배포본을 만들지 않는다. keepNames 는 쓰지 않는다(글로 꺼내 쓰는 함수 안에 `__name(…)` 이 들어가 내려받은 앱 · 수업이 깨진다).
+- 저장소의 `app/index.html` 과 모듈은 그대로라 개발 · 시험 · GBE-AI Lab 동기화는 바뀌지 않는다(GBE-AI Lab 은 v0.150.1 에서 따로 묶는다). 시험: `tests/bundle-app.test.mjs`, `tests/browser/bundle-app.test.mjs`.
+
 ## v0.99.0 · 수식 (2026-10-27)
 
 - 새 조각 `math`(`src/math.js`): TeX 글(`tex`, 600자)과 고칠 때 MathJax 가 그린 모양(`m`: viewBox `vb` 와 그림 나무 `n`)을 함께 저장한다. 보는 쪽(꾸미기 판 · 발표 · 공유 재생기 · 그림/PDF/영상 내보내기)은 MathJax 없이 저장한 모양만 그려(`mathView`) 어디서나 같다. 색은 글자색(`color`, currentColor)을 따른다.
