@@ -3,7 +3,7 @@
 // 계산과 규칙은 model.js·cutout.js(순수 함수)에 있고, 여기는 화면과 손가락·마우스·키보드만 다룬다.
 // 저장소는 모른다: 사진을 어디에 올릴지는 uploadImage 로, 무엇이 바뀌었는지는 onChange 로 프로젝트가 정한다.
 import { el, toast } from './dom.js';
-import { newId, cleanNotes, NOTES_LIMIT, cleanTopic } from './document.js';
+import { newId, cleanNotes, NOTES_LIMIT, cleanTopic, cleanVoice } from './document.js';
 import {
   COLORS, SHAPES, SHAPE_GROUPS, MASKS, OPACITY, TEXT_PRESETS, settings, configure, reshapeItems, backgroundOf, fontList, fontFamilyOf, layoutList, textLimit, newText, clip, DEFAULT_FONT,
   cleanBg, cleanItems, cleanDesign, emptyDesign, cleanItem, cleanImg, moveLayer, newPresetText, newEmoji, newShape, newArt, newYouTube, newWebBox, newChart, newMath, refitMath, newPhoto, moveItem, rotateItem,
@@ -4669,12 +4669,13 @@ export function createEditor({
     stage, toolbar, panel, mount, setDesign,
     /** 발표자 노트 칸(접고 펴는 칸). 프로젝트가 그림 아래 등 원하는 자리에 놓는다. 놓지 않으면 노트는 그대로 저장만 된다. */
     notes,
-    /** 장(슬라이드) 자체의 표시를 바꾼다: 지금은 hidden(발표에서 건너뛰기)만. 그림이 아니라서 되돌리기 기록에는 넣지 않는다. */
+    /** 장(슬라이드) 자체의 표시를 바꾼다: hidden(발표에서 건너뛰기) · topic · dur(리허설 시간) · voice(녹음한 목소리). 그림이 아니라서 되돌리기 기록에는 넣지 않는다. */
     patchSlide: (patch) => {
       if (!card || !patch || typeof patch !== 'object') return;
       if ('hidden' in patch) { if (patch.hidden === true) card.hidden = true; else delete card.hidden; }
       if ('topic' in patch) { const topic = cleanTopic(patch.topic); if (topic) card.topic = topic; else delete card.topic; }
       if ('dur' in patch) { if (Number.isInteger(patch.dur) && patch.dur >= 1) card.dur = patch.dur; else delete card.dur; }
+      if ('voice' in patch) { const voice = cleanVoice(patch.voice); if (voice) card.voice = voice; else delete card.voice; }
       onChange();
     },
     /** 카드 밖(그림 둘레의 빈 곳)을 우클릭했을 때: 고르기를 풀고 카드의 빈 곳 메뉴(붙여넣기 · 되돌리기 · slideMenu)를 띄운다. */

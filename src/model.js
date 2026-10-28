@@ -15,7 +15,7 @@ import { SHAPE_ASSETS, SHAPE_GROUPS, shapeAsset } from './shapes.js';
 import { isArtId, artColorable, artAspect, artPack, artName } from './art.js';
 import { isYouTubeId, ytStart, ytTime, YT_CC } from './youtube.js';
 import { ENTER_IDS, COMBO_IDS, TRANSITION_IDS, EMPHASIS_IDS, IDLE_IDS, EXIT_IDS, SPEED_IDS, DELAY_MAX, STILL } from './motion.js';
-import { metadata, newId, fail, validatePageInput, isSlideItem, itemTextLimit, pageLimits, slideNotes, slideHidden, slideTopic, slideDur, cleanAlt, ALT_LIMIT } from './document.js';
+import { metadata, newId, fail, validatePageInput, isSlideItem, itemTextLimit, pageLimits, slideNotes, slideHidden, slideTopic, slideDur, slideVoice, cleanAlt, ALT_LIMIT } from './document.js';
 export { cleanAlt, ALT_LIMIT };
 import { cleanActivity } from './activity.js';
 import { cleanCrop } from './crop.js';
@@ -75,6 +75,7 @@ const config = {
   motion: false,              // 참이면 편집기에 움직임(애니메이션)을 고르는 칸이 나온다(발표 화면이 있는 프로젝트만 켠다)
   motionNote: '',             // 움직임 칸 아래의 안내 글(비우면 기본 글). 움직임이 어디에서 보이는지는 프로젝트마다 다르다
   loadVideo: null,            // 영상 장면의 파일을 꺼내 주는 함수(열쇠 → Blob 또는 null). 영상 장면을 쓰는 프로젝트만 준다
+  loadVoice: null,            // 녹음한 목소리 파일을 꺼내 주는 함수(열쇠 → Blob 또는 null). 영상 만들기가 목소리를 담을 때 쓴다
 };
 
 /**
@@ -94,6 +95,7 @@ const config = {
  * - motionNote: 움직임 칸 아래에 적을 안내 글(120자까지). 움직임이 어디에서 보이는지 알려 준다. 비우면 "발표를 누르면 보여요 …" 가 나온다.
  * - loadVideo(src): 영상 장면의 파일(Blob)을 돌려주는 함수(비동기 가능. 이 기기에 없으면 null). 디자인에는 파일의 열쇠(src)만 들어 있어서,
  *                   영상 장면을 그리거나 트는 곳(scene.js)이 이것으로 파일을 꺼낸다. 주지 않으면 영상 장면은 "영상이 없어요"로 보인다.
+ * - loadVoice(src): 녹음한 목소리 파일(Blob)을 돌려주는 함수(비동기 가능. 없으면 null). 장의 voice.src 로 꺼낸다(영상 만들기 video.js).
  * - layouts: 템플릿 목록(LAYOUTS 와 같은 모양). items 는 목록 대신 함수여도 된다: items(aspect) 가 그 모양(가로 ÷ 세로)에 맞는 요소들을 돌려준다
  *            (정사각형과 가로로 긴 카드의 배치를 달리할 때).
  */
@@ -113,6 +115,7 @@ export function configure(next = {}) {
   if (typeof next.motion === 'boolean') config.motion = next.motion;
   if (typeof next.motionNote === 'string') config.motionNote = next.motionNote.trim().slice(0, 120);
   if (typeof next.loadVideo === 'function' || next.loadVideo === null) config.loadVideo = next.loadVideo;
+  if (typeof next.loadVoice === 'function' || next.loadVoice === null) config.loadVoice = next.loadVoice;
   return settings();
 }
 /** 지금 설정(읽기용 사본). */
@@ -450,7 +453,7 @@ export function cleanItems(items, opts) {
 export function cleanDesign(design, opts) {
   const d = design && typeof design === 'object' ? design : {};
   const options = d.id ? { ...opts, strict: true, keepSpaces: true } : opts;
-  return { ...metadata(d, { identity: true }), bg: cleanBg(d.bg), items: cleanItems(d.items, options), ...designMotion(d), ...designVideo(d), ...designLive(d), ...designWeb(d), ...slideNotes(d), ...slideHidden(d), ...slideTopic(d), ...slideDur(d), ...(d.activity === undefined ? {} : {activity:cleanActivity(d.activity)}) };
+  return { ...metadata(d, { identity: true }), bg: cleanBg(d.bg), items: cleanItems(d.items, options), ...designMotion(d), ...designVideo(d), ...designLive(d), ...designWeb(d), ...slideNotes(d), ...slideHidden(d), ...slideTopic(d), ...slideDur(d), ...slideVoice(d), ...(d.activity === undefined ? {} : {activity:cleanActivity(d.activity)}) };
 }
 /**
  * 디자인의 움직임: pa(요소들의 조합 효과) · tr(이 장이 넘어올 때의 전환 효과). 정해 둔 것만 담아 돌려준다(없으면 빈 객체).
