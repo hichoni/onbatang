@@ -91,5 +91,19 @@ test('math: add from the text tab, preview with MathJax, apply, edit by double c
  assert.match(slide,/<mc:Fallback><p:pic>/,'a picture for programs without equations');
  assert.equal(Object.keys(zip).filter(k=>k.startsWith('ppt/media/')).length,1);
  assert.ok(served.some(p=>p.endsWith('/src/mathjax/tex-svg-full.js')));
+ // 그 PPTX 를 다시 가져오면: 변환기(작업 창)가 PowerPoint 수식을 TeX 로 읽고, 화면 쪽이 MathJax 로 그려 온바탕 수식 조각으로 바꾼다
+ const back=await page.evaluate(async data=>{
+  const bytes=Uint8Array.from(atob(data),c=>c.charCodeAt(0)),{convertPptx}=await import('/app/pptx-import/client.js'),{renderImportedMath}=await import('/app/pptx-import/workflow.js');
+  const converted=await convertPptx(new File([bytes],'back.pptx',{type:'application/vnd.openxmlformats-officedocument.presentationml.presentation'}));
+  const document=structuredClone(converted.document),stand=document.slides[0].items.find(i=>i.id===converted.maths?.[0]?.id)?.t;
+  const result=await renderImportedMath(document,converted.maths);
+  const item=document.slides[0].items.find(i=>i.t==='math');
+  return {tex:converted.maths.map(m=>m.tex),stand,result,codes:converted.report.warnings.map(w=>w.code),item:item&&{tex:item.tex,paths:JSON.stringify(item.m).split('"t":"path"').length-1,texts:JSON.stringify(item.m).split('"t":"text"').length-1,w:item.w,h:item.h}};
+ },Buffer.from(file).toString('base64'));
+ assert.deepEqual(back.tex,['\\text{속력}=\\frac{\\text{거리}}{\\text{시간}}']);
+ assert.equal(back.stand,'image','the original equation picture holds the place until it is drawn');
+ assert.deepEqual(back.result,{done:1,failed:0});assert.ok(back.codes.includes('MATH_IMPORTED'),back.codes.join());
+ assert.equal(back.item.tex,back.tex[0]);assert.ok(back.item.texts>=3&&back.item.paths>=1,'drawn again: the words and the fraction bar');
+ assert.ok(back.item.w>back.item.h,'it lies wide like the original');
  assert.deepEqual(errors,[]);
 });
