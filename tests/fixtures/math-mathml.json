@@ -1,0 +1,198 @@
+[
+ {
+  "tex": "x=\\frac{-b\\pm\\sqrt{b^2-4ac}}{2a}",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <mi>x</mi>\n  <mo>=</mo>\n  <mfrac>\n    <mrow>\n      <mo>&#x2212;</mo>\n      <mi>b</mi>\n      <mo>&#xB1;</mo>\n      <msqrt>\n        <msup>\n          <mi>b</mi>\n          <mn>2</mn>\n        </msup>\n        <mo>&#x2212;</mo>\n        <mn>4</mn>\n        <mi>a</mi>\n        <mi>c</mi>\n      </msqrt>\n    </mrow>\n    <mrow>\n      <mn>2</mn>\n      <mi>a</mi>\n    </mrow>\n  </mfrac>\n</math>"
+ },
+ {
+  "tex": "a^2+b^2=c^2",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <msup>\n    <mi>a</mi>\n    <mn>2</mn>\n  </msup>\n  <mo>+</mo>\n  <msup>\n    <mi>b</mi>\n    <mn>2</mn>\n  </msup>\n  <mo>=</mo>\n  <msup>\n    <mi>c</mi>\n    <mn>2</mn>\n  </msup>\n</math>"
+ },
+ {
+  "tex": "S=\\pi r^2",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <mi>S</mi>\n  <mo>=</mo>\n  <mi>&#x3C0;</mi>\n  <msup>\n    <mi>r</mi>\n    <mn>2</mn>\n  </msup>\n</math>"
+ },
+ {
+  "tex": "\\text{속력}=\\frac{\\text{거리}}{\\text{시간}}",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <mtext>&#xC18D;&#xB825;</mtext>\n  <mo>=</mo>\n  <mfrac>\n    <mtext>&#xAC70;&#xB9AC;</mtext>\n    <mtext>&#xC2DC;&#xAC04;</mtext>\n  </mfrac>\n</math>"
+ },
+ {
+  "tex": "\\frac{1}{2}+\\frac{1}{3}=\\frac{5}{6}",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <mfrac>\n    <mn>1</mn>\n    <mn>2</mn>\n  </mfrac>\n  <mo>+</mo>\n  <mfrac>\n    <mn>1</mn>\n    <mn>3</mn>\n  </mfrac>\n  <mo>=</mo>\n  <mfrac>\n    <mn>5</mn>\n    <mn>6</mn>\n  </mfrac>\n</math>"
+ },
+ {
+  "tex": "\\begin{cases} x+y=5 \\\\ x-y=1 \\end{cases}",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <mrow data-mjx-texclass=\"INNER\">\n    <mo data-mjx-texclass=\"OPEN\">{</mo>\n    <mtable columnalign=\"left left\" columnspacing=\"1em\" rowspacing=\".2em\">\n      <mtr>\n        <mtd>\n          <mi>x</mi>\n          <mo>+</mo>\n          <mi>y</mi>\n          <mo>=</mo>\n          <mn>5</mn>\n        </mtd>\n      </mtr>\n      <mtr>\n        <mtd>\n          <mi>x</mi>\n          <mo>&#x2212;</mo>\n          <mi>y</mi>\n          <mo>=</mo>\n          <mn>1</mn>\n        </mtd>\n      </mtr>\n    </mtable>\n    <mo data-mjx-texclass=\"CLOSE\" fence=\"true\" stretchy=\"true\" symmetric=\"true\"></mo>\n  </mrow>\n</math>"
+ },
+ {
+  "tex": "\\ce{2H2 + O2 -> 2H2O}",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <mrow data-mjx-texclass=\"ORD\">\n    <mn>2</mn>\n    <mstyle scriptlevel=\"0\">\n      <mspace width=\"0.167em\"></mspace>\n    </mstyle>\n    <mrow data-mjx-texclass=\"ORD\">\n      <mi mathvariant=\"normal\">H</mi>\n    </mrow>\n    <msub>\n      <mrow data-mjx-texclass=\"ORD\">\n        <mrow data-mjx-texclass=\"ORD\">\n          <mpadded width=\"0\">\n            <mphantom>\n              <mi>A</mi>\n            </mphantom>\n          </mpadded>\n        </mrow>\n      </mrow>\n      <mrow data-mjx-texclass=\"ORD\">\n        <mrow data-mjx-texclass=\"ORD\">\n          <mpadded height=\"0\">\n            <mn>2</mn>\n          </mpadded>\n        </mrow>\n      </mrow>\n    </msub>\n    <mrow data-mjx-texclass=\"ORD\"></mrow>\n    <mo>+</mo>\n    <mrow data-mjx-texclass=\"ORD\"></mrow>\n    <mrow data-mjx-texclass=\"ORD\">\n      <mi mathvariant=\"normal\">O</mi>\n    </mrow>\n    <msub>\n      <mrow data-mjx-texclass=\"ORD\">\n        <mrow data-mjx-texclass=\"ORD\">\n          <mpadded width=\"0\">\n            <mphantom>\n              <mi>A</mi>\n            </mphantom>\n          </mpadded>\n        </mrow>\n      </mrow>\n      <mrow data-mjx-texclass=\"ORD\">\n        <mrow data-mjx-texclass=\"ORD\">\n          <mpadded height=\"0\">\n            <mn>2</mn>\n          </mpadded>\n        </mrow>\n      </mrow>\n    </msub>\n    <mrow data-mjx-texclass=\"ORD\"></mrow>\n    <mrow data-mjx-texclass=\"REL\">\n      <mo stretchy=\"false\">&#x27F6;</mo>\n    </mrow>\n    <mrow data-mjx-texclass=\"ORD\"></mrow>\n    <mn>2</mn>\n    <mstyle scriptlevel=\"0\">\n      <mspace width=\"0.167em\"></mspace>\n    </mstyle>\n    <mrow data-mjx-texclass=\"ORD\">\n      <mi mathvariant=\"normal\">H</mi>\n    </mrow>\n    <msub>\n      <mrow data-mjx-texclass=\"ORD\">\n        <mrow data-mjx-texclass=\"ORD\">\n          <mpadded width=\"0\">\n            <mphantom>\n              <mi>A</mi>\n            </mphantom>\n          </mpadded>\n        </mrow>\n      </mrow>\n      <mrow data-mjx-texclass=\"ORD\">\n        <mrow data-mjx-texclass=\"ORD\">\n          <mpadded height=\"0\">\n            <mn>2</mn>\n          </mpadded>\n        </mrow>\n      </mrow>\n    </msub>\n    <mrow data-mjx-texclass=\"ORD\">\n      <mi mathvariant=\"normal\">O</mi>\n    </mrow>\n  </mrow>\n</math>"
+ },
+ {
+  "tex": "\\ce{6CO2 + 6H2O -> C6H12O6 + 6O2}",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <mrow data-mjx-texclass=\"ORD\">\n    <mn>6</mn>\n    <mstyle scriptlevel=\"0\">\n      <mspace width=\"0.167em\"></mspace>\n    </mstyle>\n    <mrow data-mjx-texclass=\"ORD\">\n      <mi data-mjx-auto-op=\"false\">CO</mi>\n    </mrow>\n    <msub>\n      <mrow data-mjx-texclass=\"ORD\">\n        <mrow data-mjx-texclass=\"ORD\">\n          <mpadded width=\"0\">\n            <mphantom>\n              <mi>A</mi>\n            </mphantom>\n          </mpadded>\n        </mrow>\n      </mrow>\n      <mrow data-mjx-texclass=\"ORD\">\n        <mrow data-mjx-texclass=\"ORD\">\n          <mpadded height=\"0\">\n            <mn>2</mn>\n          </mpadded>\n        </mrow>\n      </mrow>\n    </msub>\n    <mrow data-mjx-texclass=\"ORD\"></mrow>\n    <mo>+</mo>\n    <mrow data-mjx-texclass=\"ORD\"></mrow>\n    <mn>6</mn>\n    <mstyle scriptlevel=\"0\">\n      <mspace width=\"0.167em\"></mspace>\n    </mstyle>\n    <mrow data-mjx-texclass=\"ORD\">\n      <mi mathvariant=\"normal\">H</mi>\n    </mrow>\n    <msub>\n      <mrow data-mjx-texclass=\"ORD\">\n        <mrow data-mjx-texclass=\"ORD\">\n          <mpadded width=\"0\">\n            <mphantom>\n              <mi>A</mi>\n            </mphantom>\n          </mpadded>\n        </mrow>\n      </mrow>\n      <mrow data-mjx-texclass=\"ORD\">\n        <mrow data-mjx-texclass=\"ORD\">\n          <mpadded height=\"0\">\n            <mn>2</mn>\n          </mpadded>\n        </mrow>\n      </mrow>\n    </msub>\n    <mrow data-mjx-texclass=\"ORD\">\n      <mi mathvariant=\"normal\">O</mi>\n    </mrow>\n    <mrow data-mjx-texclass=\"ORD\"></mrow>\n    <mrow data-mjx-texclass=\"REL\">\n      <mo stretchy=\"false\">&#x27F6;</mo>\n    </mrow>\n    <mrow data-mjx-texclass=\"ORD\"></mrow>\n    <mrow data-mjx-texclass=\"ORD\">\n      <mi mathvariant=\"normal\">C</mi>\n    </mrow>\n    <msub>\n      <mrow data-mjx-texclass=\"ORD\">\n        <mrow data-mjx-texclass=\"ORD\">\n          <mpadded width=\"0\">\n            <mphantom>\n              <mi>A</mi>\n            </mphantom>\n          </mpadded>\n        </mrow>\n      </mrow>\n      <mrow data-mjx-texclass=\"ORD\">\n        <mrow data-mjx-texclass=\"ORD\">\n          <mpadded height=\"0\">\n            <mn>6</mn>\n          </mpadded>\n        </mrow>\n      </mrow>\n    </msub>\n    <mrow data-mjx-texclass=\"ORD\">\n      <mi mathvariant=\"normal\">H</mi>\n    </mrow>\n    <msub>\n      <mrow data-mjx-texclass=\"ORD\">\n        <mrow data-mjx-texclass=\"ORD\">\n          <mpadded width=\"0\">\n            <mphantom>\n              <mi>A</mi>\n            </mphantom>\n          </mpadded>\n        </mrow>\n      </mrow>\n      <mrow data-mjx-texclass=\"ORD\">\n        <mrow data-mjx-texclass=\"ORD\">\n          <mpadded height=\"0\">\n            <mn>12</mn>\n          </mpadded>\n        </mrow>\n      </mrow>\n    </msub>\n    <mrow data-mjx-texclass=\"ORD\">\n      <mi mathvariant=\"normal\">O</mi>\n    </mrow>\n    <msub>\n      <mrow data-mjx-texclass=\"ORD\">\n        <mrow data-mjx-texclass=\"ORD\">\n          <mpadded width=\"0\">\n            <mphantom>\n              <mi>A</mi>\n            </mphantom>\n          </mpadded>\n        </mrow>\n      </mrow>\n      <mrow data-mjx-texclass=\"ORD\">\n        <mrow data-mjx-texclass=\"ORD\">\n          <mpadded height=\"0\">\n            <mn>6</mn>\n          </mpadded>\n        </mrow>\n      </mrow>\n    </msub>\n    <mrow data-mjx-texclass=\"ORD\"></mrow>\n    <mo>+</mo>\n    <mrow data-mjx-texclass=\"ORD\"></mrow>\n    <mn>6</mn>\n    <mstyle scriptlevel=\"0\">\n      <mspace width=\"0.167em\"></mspace>\n    </mstyle>\n    <mrow data-mjx-texclass=\"ORD\">\n      <mi mathvariant=\"normal\">O</mi>\n    </mrow>\n    <msub>\n      <mrow data-mjx-texclass=\"ORD\">\n        <mrow data-mjx-texclass=\"ORD\">\n          <mpadded width=\"0\">\n            <mphantom>\n              <mi>A</mi>\n            </mphantom>\n          </mpadded>\n        </mrow>\n      </mrow>\n      <mrow data-mjx-texclass=\"ORD\">\n        <mrow data-mjx-texclass=\"ORD\">\n          <mpadded height=\"0\">\n            <mn>2</mn>\n          </mpadded>\n        </mrow>\n      </mrow>\n    </msub>\n  </mrow>\n</math>"
+ },
+ {
+  "tex": "\\frac{x}{x}",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <mfrac>\n    <mi>x</mi>\n    <mi>x</mi>\n  </mfrac>\n</math>"
+ },
+ {
+  "tex": "^{x}",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <msup>\n    <mi></mi>\n    <mrow data-mjx-texclass=\"ORD\">\n      <mi>x</mi>\n    </mrow>\n  </msup>\n</math>"
+ },
+ {
+  "tex": "_{x}",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <msub>\n    <mi></mi>\n    <mrow data-mjx-texclass=\"ORD\">\n      <mi>x</mi>\n    </mrow>\n  </msub>\n</math>"
+ },
+ {
+  "tex": "\\sqrt{x}",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <msqrt>\n    <mi>x</mi>\n  </msqrt>\n</math>"
+ },
+ {
+  "tex": "\\sqrt[3]{8}",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <mroot>\n    <mn>8</mn>\n    <mn>3</mn>\n  </mroot>\n</math>"
+ },
+ {
+  "tex": "\\times",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <mo>&#xD7;</mo>\n</math>"
+ },
+ {
+  "tex": "\\div",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <mo>&#xF7;</mo>\n</math>"
+ },
+ {
+  "tex": "\\pm",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <mo>&#xB1;</mo>\n</math>"
+ },
+ {
+  "tex": "\\neq",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <mo>&#x2260;</mo>\n</math>"
+ },
+ {
+  "tex": "\\le",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <mo>&#x2264;</mo>\n</math>"
+ },
+ {
+  "tex": "\\ge",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <mo>&#x2265;</mo>\n</math>"
+ },
+ {
+  "tex": "\\approx",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <mo>&#x2248;</mo>\n</math>"
+ },
+ {
+  "tex": "\\pi",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <mi>&#x3C0;</mi>\n</math>"
+ },
+ {
+  "tex": "\\theta",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <mi>&#x3B8;</mi>\n</math>"
+ },
+ {
+  "tex": "\\alpha",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <mi>&#x3B1;</mi>\n</math>"
+ },
+ {
+  "tex": "\\infty",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <mi mathvariant=\"normal\">&#x221E;</mi>\n</math>"
+ },
+ {
+  "tex": "^\\circ",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <msup>\n    <mi></mi>\n    <mo>&#x2218;</mo>\n  </msup>\n</math>"
+ },
+ {
+  "tex": "\\angle",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <mi mathvariant=\"normal\">&#x2220;</mi>\n</math>"
+ },
+ {
+  "tex": "\\sum_{i=1}^{n} y",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <munderover>\n    <mo data-mjx-texclass=\"OP\">&#x2211;</mo>\n    <mrow data-mjx-texclass=\"ORD\">\n      <mi>i</mi>\n      <mo>=</mo>\n      <mn>1</mn>\n    </mrow>\n    <mrow data-mjx-texclass=\"ORD\">\n      <mi>n</mi>\n    </mrow>\n  </munderover>\n  <mi>y</mi>\n</math>"
+ },
+ {
+  "tex": "\\int_{a}^{b} y",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <msubsup>\n    <mo data-mjx-texclass=\"OP\">&#x222B;</mo>\n    <mrow data-mjx-texclass=\"ORD\">\n      <mi>a</mi>\n    </mrow>\n    <mrow data-mjx-texclass=\"ORD\">\n      <mi>b</mi>\n    </mrow>\n  </msubsup>\n  <mi>y</mi>\n</math>"
+ },
+ {
+  "tex": "\\lim_{x \\to 0} y",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <munder>\n    <mo data-mjx-texclass=\"OP\" movablelimits=\"true\">lim</mo>\n    <mrow data-mjx-texclass=\"ORD\">\n      <mi>x</mi>\n      <mo accent=\"false\" stretchy=\"false\">&#x2192;</mo>\n      <mn>0</mn>\n    </mrow>\n  </munder>\n  <mi>y</mi>\n</math>"
+ },
+ {
+  "tex": "\\left( a+b \\right)",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <mrow data-mjx-texclass=\"INNER\">\n    <mo data-mjx-texclass=\"OPEN\">(</mo>\n    <mi>a</mi>\n    <mo>+</mo>\n    <mi>b</mi>\n    <mo data-mjx-texclass=\"CLOSE\">)</mo>\n  </mrow>\n</math>"
+ },
+ {
+  "tex": "\\rightarrow",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <mo stretchy=\"false\">&#x2192;</mo>\n</math>"
+ },
+ {
+  "tex": "\\vec{x}",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <mrow data-mjx-texclass=\"ORD\">\n    <mover>\n      <mi>x</mi>\n      <mo stretchy=\"false\">&#x2192;</mo>\n    </mover>\n  </mrow>\n</math>"
+ },
+ {
+  "tex": "\\text{가나}",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <mtext>&#xAC00;&#xB098;</mtext>\n</math>"
+ },
+ {
+  "tex": "\\ce{H2SO4}",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <mrow data-mjx-texclass=\"ORD\">\n    <mrow data-mjx-texclass=\"ORD\">\n      <mi mathvariant=\"normal\">H</mi>\n    </mrow>\n    <msub>\n      <mrow data-mjx-texclass=\"ORD\">\n        <mrow data-mjx-texclass=\"ORD\">\n          <mpadded width=\"0\">\n            <mphantom>\n              <mi>A</mi>\n            </mphantom>\n          </mpadded>\n        </mrow>\n      </mrow>\n      <mrow data-mjx-texclass=\"ORD\">\n        <mrow data-mjx-texclass=\"ORD\">\n          <mpadded height=\"0\">\n            <mn>2</mn>\n          </mpadded>\n        </mrow>\n      </mrow>\n    </msub>\n    <mrow data-mjx-texclass=\"ORD\">\n      <mi data-mjx-auto-op=\"false\">SO</mi>\n    </mrow>\n    <msub>\n      <mrow data-mjx-texclass=\"ORD\">\n        <mrow data-mjx-texclass=\"ORD\">\n          <mpadded width=\"0\">\n            <mphantom>\n              <mi>A</mi>\n            </mphantom>\n          </mpadded>\n        </mrow>\n      </mrow>\n      <mrow data-mjx-texclass=\"ORD\">\n        <mrow data-mjx-texclass=\"ORD\">\n          <mpadded height=\"0\">\n            <mn>4</mn>\n          </mpadded>\n        </mrow>\n      </mrow>\n    </msub>\n  </mrow>\n</math>"
+ },
+ {
+  "tex": "\\binom{n}{k}",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <mrow data-mjx-texclass=\"ORD\">\n    <mrow data-mjx-texclass=\"OPEN\">\n      <mo minsize=\"2.047em\" maxsize=\"2.047em\">(</mo>\n    </mrow>\n    <mfrac linethickness=\"0\">\n      <mi>n</mi>\n      <mi>k</mi>\n    </mfrac>\n    <mrow data-mjx-texclass=\"CLOSE\">\n      <mo minsize=\"2.047em\" maxsize=\"2.047em\">)</mo>\n    </mrow>\n  </mrow>\n</math>"
+ },
+ {
+  "tex": "\\begin{pmatrix} 1 & 2 \\\\ 3 & 4 \\end{pmatrix}",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <mrow data-mjx-texclass=\"INNER\">\n    <mo data-mjx-texclass=\"OPEN\">(</mo>\n    <mtable columnspacing=\"1em\" rowspacing=\"4pt\">\n      <mtr>\n        <mtd>\n          <mn>1</mn>\n        </mtd>\n        <mtd>\n          <mn>2</mn>\n        </mtd>\n      </mtr>\n      <mtr>\n        <mtd>\n          <mn>3</mn>\n        </mtd>\n        <mtd>\n          <mn>4</mn>\n        </mtd>\n      </mtr>\n    </mtable>\n    <mo data-mjx-texclass=\"CLOSE\">)</mo>\n  </mrow>\n</math>"
+ },
+ {
+  "tex": "f(x)=\\begin{cases} 1 & x>0 \\\\ 0 & x\\le 0 \\end{cases}",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <mi>f</mi>\n  <mo stretchy=\"false\">(</mo>\n  <mi>x</mi>\n  <mo stretchy=\"false\">)</mo>\n  <mo>=</mo>\n  <mrow data-mjx-texclass=\"INNER\">\n    <mo data-mjx-texclass=\"OPEN\">{</mo>\n    <mtable columnalign=\"left left\" columnspacing=\"1em\" rowspacing=\".2em\">\n      <mtr>\n        <mtd>\n          <mn>1</mn>\n        </mtd>\n        <mtd>\n          <mi>x</mi>\n          <mo>&gt;</mo>\n          <mn>0</mn>\n        </mtd>\n      </mtr>\n      <mtr>\n        <mtd>\n          <mn>0</mn>\n        </mtd>\n        <mtd>\n          <mi>x</mi>\n          <mo>&#x2264;</mo>\n          <mn>0</mn>\n        </mtd>\n      </mtr>\n    </mtable>\n    <mo data-mjx-texclass=\"CLOSE\" fence=\"true\" stretchy=\"true\" symmetric=\"true\"></mo>\n  </mrow>\n</math>"
+ },
+ {
+  "tex": "\\cancel{x}",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <menclose notation=\"updiagonalstrike\">\n    <mi>x</mi>\n  </menclose>\n</math>"
+ },
+ {
+  "tex": "\\overline{AB}",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <mover>\n    <mrow>\n      <mi>A</mi>\n      <mi>B</mi>\n    </mrow>\n    <mo accent=\"true\">&#x2015;</mo>\n  </mover>\n</math>"
+ },
+ {
+  "tex": "\\color{#e03131}{x}+1",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <mstyle mathcolor=\"#e03131\">\n    <mrow data-mjx-texclass=\"ORD\">\n      <mi>x</mi>\n    </mrow>\n    <mo>+</mo>\n    <mn>1</mn>\n  </mstyle>\n</math>"
+ },
+ {
+  "tex": "\\mathbb{R}",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <mrow data-mjx-texclass=\"ORD\">\n    <mi mathvariant=\"double-struck\">R</mi>\n  </mrow>\n</math>"
+ },
+ {
+  "tex": "\\mathbf{F}=m\\mathbf{a}",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <mrow data-mjx-texclass=\"ORD\">\n    <mi mathvariant=\"bold\">F</mi>\n  </mrow>\n  <mo>=</mo>\n  <mi>m</mi>\n  <mrow data-mjx-texclass=\"ORD\">\n    <mi mathvariant=\"bold\">a</mi>\n  </mrow>\n</math>"
+ },
+ {
+  "tex": "x'",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <msup>\n    <mi>x</mi>\n    <mo data-mjx-alternate=\"1\">&#x2032;</mo>\n  </msup>\n</math>"
+ },
+ {
+  "tex": "\\sin^2\\theta+\\cos^2\\theta=1",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <msup>\n    <mi>sin</mi>\n    <mn>2</mn>\n  </msup>\n  <mo data-mjx-texclass=\"NONE\">&#x2061;</mo>\n  <mi>&#x3B8;</mi>\n  <mo>+</mo>\n  <msup>\n    <mi>cos</mi>\n    <mn>2</mn>\n  </msup>\n  <mo data-mjx-texclass=\"NONE\">&#x2061;</mo>\n  <mi>&#x3B8;</mi>\n  <mo>=</mo>\n  <mn>1</mn>\n</math>"
+ },
+ {
+  "tex": "\\ce{CH4 + 2O2 -> CO2 + 2H2O}",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <mrow data-mjx-texclass=\"ORD\">\n    <mrow data-mjx-texclass=\"ORD\">\n      <mi data-mjx-auto-op=\"false\">CH</mi>\n    </mrow>\n    <msub>\n      <mrow data-mjx-texclass=\"ORD\">\n        <mrow data-mjx-texclass=\"ORD\">\n          <mpadded width=\"0\">\n            <mphantom>\n              <mi>A</mi>\n            </mphantom>\n          </mpadded>\n        </mrow>\n      </mrow>\n      <mrow data-mjx-texclass=\"ORD\">\n        <mrow data-mjx-texclass=\"ORD\">\n          <mpadded height=\"0\">\n            <mn>4</mn>\n          </mpadded>\n        </mrow>\n      </mrow>\n    </msub>\n    <mrow data-mjx-texclass=\"ORD\"></mrow>\n    <mo>+</mo>\n    <mrow data-mjx-texclass=\"ORD\"></mrow>\n    <mn>2</mn>\n    <mstyle scriptlevel=\"0\">\n      <mspace width=\"0.167em\"></mspace>\n    </mstyle>\n    <mrow data-mjx-texclass=\"ORD\">\n      <mi mathvariant=\"normal\">O</mi>\n    </mrow>\n    <msub>\n      <mrow data-mjx-texclass=\"ORD\">\n        <mrow data-mjx-texclass=\"ORD\">\n          <mpadded width=\"0\">\n            <mphantom>\n              <mi>A</mi>\n            </mphantom>\n          </mpadded>\n        </mrow>\n      </mrow>\n      <mrow data-mjx-texclass=\"ORD\">\n        <mrow data-mjx-texclass=\"ORD\">\n          <mpadded height=\"0\">\n            <mn>2</mn>\n          </mpadded>\n        </mrow>\n      </mrow>\n    </msub>\n    <mrow data-mjx-texclass=\"ORD\"></mrow>\n    <mrow data-mjx-texclass=\"REL\">\n      <mo stretchy=\"false\">&#x27F6;</mo>\n    </mrow>\n    <mrow data-mjx-texclass=\"ORD\"></mrow>\n    <mrow data-mjx-texclass=\"ORD\">\n      <mi data-mjx-auto-op=\"false\">CO</mi>\n    </mrow>\n    <msub>\n      <mrow data-mjx-texclass=\"ORD\">\n        <mrow data-mjx-texclass=\"ORD\">\n          <mpadded width=\"0\">\n            <mphantom>\n              <mi>A</mi>\n            </mphantom>\n          </mpadded>\n        </mrow>\n      </mrow>\n      <mrow data-mjx-texclass=\"ORD\">\n        <mrow data-mjx-texclass=\"ORD\">\n          <mpadded height=\"0\">\n            <mn>2</mn>\n          </mpadded>\n        </mrow>\n      </mrow>\n    </msub>\n    <mrow data-mjx-texclass=\"ORD\"></mrow>\n    <mo>+</mo>\n    <mrow data-mjx-texclass=\"ORD\"></mrow>\n    <mn>2</mn>\n    <mstyle scriptlevel=\"0\">\n      <mspace width=\"0.167em\"></mspace>\n    </mstyle>\n    <mrow data-mjx-texclass=\"ORD\">\n      <mi mathvariant=\"normal\">H</mi>\n    </mrow>\n    <msub>\n      <mrow data-mjx-texclass=\"ORD\">\n        <mrow data-mjx-texclass=\"ORD\">\n          <mpadded width=\"0\">\n            <mphantom>\n              <mi>A</mi>\n            </mphantom>\n          </mpadded>\n        </mrow>\n      </mrow>\n      <mrow data-mjx-texclass=\"ORD\">\n        <mrow data-mjx-texclass=\"ORD\">\n          <mpadded height=\"0\">\n            <mn>2</mn>\n          </mpadded>\n        </mrow>\n      </mrow>\n    </msub>\n    <mrow data-mjx-texclass=\"ORD\">\n      <mi mathvariant=\"normal\">O</mi>\n    </mrow>\n  </mrow>\n</math>"
+ },
+ {
+  "tex": "\\ce{Fe^{3+}}",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <mrow data-mjx-texclass=\"ORD\">\n    <mrow data-mjx-texclass=\"ORD\">\n      <mi data-mjx-auto-op=\"false\">Fe</mi>\n    </mrow>\n    <msup>\n      <mrow data-mjx-texclass=\"ORD\">\n        <mrow data-mjx-texclass=\"ORD\">\n          <mpadded width=\"0\">\n            <mphantom>\n              <mi>A</mi>\n            </mphantom>\n          </mpadded>\n        </mrow>\n      </mrow>\n      <mrow data-mjx-texclass=\"ORD\">\n        <mn>3</mn>\n        <mo>+</mo>\n      </mrow>\n    </msup>\n  </mrow>\n</math>"
+ },
+ {
+  "tex": "\\log_2 8 = 3",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <msub>\n    <mi>log</mi>\n    <mn>2</mn>\n  </msub>\n  <mo data-mjx-texclass=\"NONE\">&#x2061;</mo>\n  <mn>8</mn>\n  <mo>=</mo>\n  <mn>3</mn>\n</math>"
+ },
+ {
+  "tex": "e^{i\\pi}+1=0",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <msup>\n    <mi>e</mi>\n    <mrow data-mjx-texclass=\"ORD\">\n      <mi>i</mi>\n      <mi>&#x3C0;</mi>\n    </mrow>\n  </msup>\n  <mo>+</mo>\n  <mn>1</mn>\n  <mo>=</mo>\n  <mn>0</mn>\n</math>"
+ },
+ {
+  "tex": "\\iint_D f\\,dA",
+  "mathml": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">\n  <msub>\n    <mo data-mjx-texclass=\"OP\">&#x222C;</mo>\n    <mi>D</mi>\n  </msub>\n  <mi>f</mi>\n  <mstyle scriptlevel=\"0\">\n    <mspace width=\"0.167em\"></mspace>\n  </mstyle>\n  <mi>d</mi>\n  <mi>A</mi>\n</math>"
+ }
+]
