@@ -4541,7 +4541,8 @@ export function createEditor({
   }
   /**
    * 다른 사람이 바꾼 것을 끼워 넣는다(되돌리기 기록에 남기지 않고, onChange 도 부르지 않는다). 부르기 전에 idle() 을 본다.
-   * next: 끼워 넣은 뒤의 디자인 { bg, items(이름표가 붙은), pa?, tr? } · patch: rebase 와 같다(다른 사람의 것으로 바꾼 것들).
+   * next: 끼워 넣은 뒤의 디자인 { bg, items(이름표가 붙은), pa?, tr?, … } · patch: rebase 와 같다(다른 사람의 것으로 바꾼 것들).
+   *   patch.fields: 다른 사람이 바꾼 장 자체의 칸 이름들(notes · hidden · topic · video · web …). 그 칸은 next 의 것으로 바꾼다.
    * 고른 요소는 이름표로 다시 찾아 그대로 둔다(그 요소가 지워졌으면 고르기를 푼다).
    */
   function merge(next, patch = { items: new Map() }) {
@@ -4565,6 +4566,15 @@ export function createEditor({
     const bgChanged = next.bg !== undefined && cleanBg(next.bg) !== card.bg;
     if (next.bg !== undefined) card.bg = cleanBg(next.bg);
     setMotion(next);
+    // 장 자체의 칸(patch.fields: 노트 · 숨김 · 주제 · 영상 장면 · 웹사이트 …)도 다른 사람의 것으로 바꾼다
+    for (const key of patch.fields || []) {
+      if (['id', 'items', 'bg', 'pa', 'tr'].includes(key)) continue;
+      if (key === 'video') setVideo(next);
+      else if (key === 'web') setWeb(next);
+      else if (key in next) card[key] = next[key];
+      else delete card[key];
+      if (key === 'notes') { if (cleanNotes(card.notes)) card.notes = cleanNotes(card.notes); else delete card.notes; notesInput.value = card.notes || ''; }
+    }
     sel = selId ? card.items.findIndex((it) => it.id === selId) : -1;
     many = [];                         // 다른 사람이 바꾼 것을 끼워 넣으면 번호가 달라진다: 여럿 고른 것은 푼다
     if (selId && sel < 0) { pop = null; cut = null; }

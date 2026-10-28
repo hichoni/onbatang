@@ -1280,3 +1280,37 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero-go { display: flex
 /* 공용 온바탕의 휴대폰 리모컨 판(GBE-AI Lab 판을 작은 창으로): 발표 화면 오른쪽 위 */
 .cv-phone-remote{position:absolute;right:16px;top:16px;z-index:40;width:min(300px,calc(100% - 32px));height:420px;border:0;border-radius:16px;background:#fff;box-shadow:0 12px 40px #0006;color-scheme:light}
 .cv-phone-remote[hidden]{display:none}
+/* ---- 같이 고치기: 위 막대 단추(사람들의 색 점) · 옆에 뜨는 판 · 띠의 색 점 ---- */
+.cv-co-btn { position: relative; }
+.btn.cv-co-btn.on { border-color: #2f9e44; background: #ebfbee; color: #1b5e2b; }
+.cv-co-dots { display: inline-flex; margin-left: 2px; }
+.cv-co-dots:empty { display: none; }
+.cv-co-dots i, .cv-slide-co i, .cv-co-people i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; box-shadow: 0 0 0 2px #fff; }
+.cv-co-dots i + i { margin-left: -3px; }
+.cv-co-panel {
+  position: fixed; right: 16px; top: 64px; z-index: 30; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; width: min(340px, calc(100vw - 32px)); max-height: calc(100vh - 88px); overflow: auto; box-sizing: border-box;
+  padding: 16px 16px 14px; border: 1px solid var(--cv-line); border-radius: var(--cv-r-l); background: #fff; box-shadow: var(--cv-shadow); color: var(--text);
+}
+.cv-co-panel h2 { margin: 0 32px 0 0; font-size: 1.05rem; }
+.cv-co-panel p { margin: 0; line-height: 1.55; }
+.cv-co-panel .small { font-size: var(--cv-fs-s); }
+.cv-co-x { position: absolute; right: 8px; top: 8px; min-height: 32px; padding: 4px 8px; }
+.cv-co-field { display: grid; gap: 6px; font-weight: 600; font-size: var(--cv-fs-s); }
+.cv-co-field input, .cv-co-link input { min-width: 0; font: inherit; font-weight: 400; padding: 9px 11px; border: 1px solid var(--cv-line); border-radius: var(--cv-r-m); }
+.cv-co-link { display: flex; gap: 6px; }
+.cv-co-link input { flex: 1; font-size: var(--cv-fs-s); }
+.cv-co-qr { justify-self: center; width: 168px; }
+.cv-co-qr svg { display: block; width: 100%; height: auto; }
+.cv-co-people { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.cv-co-people li { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 7px 10px; border-radius: var(--cv-r-m); background: var(--cv-desk); }
+.cv-co-people b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cv-co-people small { margin-left: auto; flex: none; color: var(--muted, #5d6b66); }
+.cv-co-lost { padding: 8px 10px; border-radius: var(--cv-r-m); background: #fff4e6; color: #9a4b00; }
+.btn.cv-co-end { justify-self: start; }
+.cv-slide-co { position: absolute; right: 4px; top: 4px; z-index: 1; display: flex; gap: 2px; pointer-events: none; }
+.cv-co-ask { max-width: 440px; display: grid; gap: 12px; }
+.cv-co-ask h2, .cv-co-ask p { margin: 0; }
+.cv-co-ask .row { justify-content: flex-end; gap: 8px; }
+/* 공용 온바탕: 같이 고치기의 다리(GBE-AI Lab)는 보이지 않는 작은 창 */
+.cv-co-relay { position: fixed; left: 0; top: 0; width: 1px; height: 1px; border: 0; opacity: 0; pointer-events: none; }
+@media (max-width: 860px) { .cv-co-btn:not(.on) .cv-lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; } }
