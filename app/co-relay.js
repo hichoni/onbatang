@@ -4,7 +4,8 @@
 import { el } from './ui.js';
 
 /** startMinican({ coEdit }) 의 open 과 같은 것을 돌려준다: { send(message), on(fn) → 끊기, close(), qr(url) → svg(약속) } */
-export async function openCoRelay(code, { url = 'https://gbe.ai.kr/onbatang-co-relay.html', host = globalThis.window, timeoutMs = 20000 } = {}) {
+// 다리 창은 쪽 · 스크립트 · 실시간 연결을 차례로 받는다. 학교의 보안 장비를 거치는 느린 망에서도 기다리도록 넉넉히 둔다(timeoutMs).
+export async function openCoRelay(code, { url = 'https://gbe.ai.kr/onbatang-co-relay.html', host = globalThis.window, timeoutMs = 45000 } = {}) {
   const endpoint = new URL(url);
   if (endpoint.protocol !== 'https:' && !(endpoint.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(endpoint.hostname))) throw Error('같이 고치기 다리 주소를 확인해 주세요.');
   if (!/^[0-9a-f]{40}$/.test(code)) throw Error('같이 고치기 링크를 확인해 주세요.');
@@ -15,11 +16,12 @@ export async function openCoRelay(code, { url = 'https://gbe.ai.kr/onbatang-co-r
   const asks = new Map();
   let done = null;
   let closed = false;
-  const post = (action, payload = {}) => { if (!closed) frame.contentWindow?.postMessage({ type: 'onbatang-co-relay', channel, action, ...payload }, endpoint.origin); };
+  let loaded = false;               // 다리 쪽이 다 열렸는지(그 전에는 창이 아직 이 주소의 빈 쪽이라 보내지 않는다)
+  const post = (action, payload = {}) => { if (!closed && loaded) frame.contentWindow?.postMessage({ type: 'onbatang-co-relay', channel, action, ...payload }, endpoint.origin); };
   const onMessage = (e) => {
     const data = e.data;
     if (e.origin !== endpoint.origin || e.source !== frame.contentWindow || data?.type !== 'onbatang-co-relay' || data.channel !== channel) return;
-    if (data.event === 'loaded') post('open');
+    if (data.event === 'loaded') { loaded = true; post('open'); }
     else if (data.event === 'ready') { done?.resolve(); done = null; }
     else if (data.event === 'error') { done?.reject(Error(String(data.message || '같이 고치기 통로를 열지 못했어요.').slice(0, 200))); done = null; }
     else if (data.event === 'msg') { for (const fn of listeners) { try { fn(data.payload); } catch (error) { console.warn(error); } } }
