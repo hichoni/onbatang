@@ -9,7 +9,7 @@
 // 그림은 이 기기(브라우저의 IndexedDB, store.js)에만 저장된다. 서버로는 아무것도 보내지 않는다.
 
 /** 고를 수 있는 화면 비율(aspect 는 가로 ÷ 세로). */
-import { SCHEMA_VERSION, DOCUMENT_LIMITS, DocumentError, fail, isId, newId, legacyId, cleanSize, metadata, cleanAssets, validatePageInput, validateReferences, slideNotes, slideHidden, slideTopic, slideDur } from '../src/document.js';
+import { SCHEMA_VERSION, DOCUMENT_LIMITS, DocumentError, fail, isId, newId, legacyId, cleanSize, metadata, cleanAssets, validatePageInput, validateReferences, slideNotes, slideHidden, slideTopic, slideDur, slideVoice } from '../src/document.js';
 import { relink } from '../src/links.js';
 import { cleanActivity } from '../src/activity.js';
 import {cleanCrop} from '../src/crop.js';
@@ -118,7 +118,7 @@ export function slideVideo(slide) {
   return { video };
 }
 /** 장에 딸린 것 모두(움직임 · 영상 장면 · 발표자 노트). 슬라이드를 새로 짜 맞추는 곳({ bg, items } 를 만드는 곳)마다 함께 펼쳐 넣는다(빠뜨리면 저장하면서 사라진다). */
-export const slideExtra = (slide) => ({ ...metadata(slide, { identity: true }), ...slideMotion(slide), ...slideVideo(slide), ...designLive(slide), ...designWeb(slide), ...slideNotes(slide), ...slideHidden(slide), ...slideTopic(slide), ...slideDur(slide), ...(slide?.activity === undefined ? {} : {activity:cleanActivity(slide.activity)}) });
+export const slideExtra = (slide) => ({ ...metadata(slide, { identity: true }), ...slideMotion(slide), ...slideVideo(slide), ...designLive(slide), ...designWeb(slide), ...slideNotes(slide), ...slideHidden(slide), ...slideTopic(slide), ...slideDur(slide), ...slideVoice(slide), ...(slide?.activity === undefined ? {} : {activity:cleanActivity(slide.activity)}) });
 export function withSlideMotion(slide, motion) {
   const { pa, tr, ...extra } = slideExtra(slide);
   return { bg: slide.bg, items: slide.items, ...extra, ...slideMotion(motion) };
@@ -128,6 +128,10 @@ export const hasVideo = (slide) => !!slideVideo(slide).video;
 /** 슬라이드들이 쓰는 영상 파일의 열쇠들(같은 파일은 한 번만). */
 export function deckVideos(slides) {
   return [...new Set((Array.isArray(slides) ? slides : []).map((d) => slideVideo(d).video?.src).filter(Boolean))];
+}
+/** 슬라이드들이 쓰는 녹음 파일의 열쇠들(같은 파일은 한 번만). 녹음 파일도 unusedVideos 와 같은 규칙으로 정리한다. */
+export function deckVoices(slides) {
+  return [...new Set((Array.isArray(slides) ? slides : []).map((d) => slideVoice(d).voice?.src).filter(Boolean))];
 }
 /**
  * 그 그림(designId)에 딸린 영상 파일 가운데 이제 아무 데서도 쓰지 않는 것들의 열쇠(이 기기에서 지워도 되는 것).

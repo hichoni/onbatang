@@ -20,6 +20,7 @@ import {openLessonResults} from './lesson-results-ui.js';
 import {cleanGaiActivity,gaiAppCover,gaiAppResult} from '../src/gai-app.js';
 import {mountGaiApp} from './gai-app.js';
 import {createShowTools} from './show-tools.js';
+import {startVoice,canRecordVoice,voiceSlides} from './voice-record.js';
 import {spokenNotes} from './show-keys.js';
 import {webFrame, liveWebBoxes} from '../src/render.js';
 import {blockedSite, webHost} from '../src/web.js';
@@ -47,10 +48,11 @@ import { createCamera, canRecord } from './camera.js';
 import {
   RATIOS, RATIO_KEY, NOTES_OPEN_KEY, MAX_DESIGNS, MAX_SLIDES, MAX_NAME, EXPORT_SIZES, DEFAULT_EXPORT, EXPORT_KEY, VIDEO_SIZES, DEFAULT_VIDEO, exportSize, ratioOf, newRecord, nextNumber,
   isBlank, fileName, whenText, sortRecords, homeEntries, arrangeEntries, createdOf, HOME_SORTS, HOME_KINDS, addSlide, copySlide, removeSlide, moveSlide,
-  libraryOf, dropPhoto, slideMotion, slideVideo, slideExtra, hasVideo, deckVideos, unusedVideos, cleanBrand,
+  libraryOf, dropPhoto, slideMotion, slideVideo, slideExtra, hasVideo, deckVideos, deckVoices, unusedVideos, cleanBrand,
   migrateRecord, aspectOf, canvasRatioOf, copyRecord, withSlideMotion,
 } from './designs.js';
 import { saveVideo, listVideos, removeVideos, placeVideo } from './videos.js';
+import { saveVoice, loadVoice, listVoices, removeVoices } from './voices.js';
 import { zipStore } from './zip.js';
 import { createPptx } from './pptx.js';
 import { listDesigns, getDesign, putDesign, replaceDesignIfUnchanged, removeDesign, setStorageName, storageName, listDesignIssues, getOriginalDesign } from './store.js';
@@ -693,6 +695,7 @@ async function dropRecord(record) {
   }
   if (S.list) S.list = S.list.filter((r) => r.id !== record.id);
   tidyVideos(record.id, [], deckVideos(record.slides));      // 그 그림에 딸린 영상 파일도 이 기기에서 지운다
+  tidyVoices(record.id, [], deckVoices(record.slides));      // 녹음 파일도
   dropHistory(record.id).catch((error) => console.warn(error));   // 그 그림의 버전 기록도
   return true;
 }
@@ -945,7 +948,7 @@ function slideView(design, aspect, sceneEdge = 640) {
 }
 // 띠의 작은 그림에 붙이는 이름: 몇 번째 장인지 + 영상 장면 · 움직임이 있는지.
 function slideLabel(i, design) {
-  const marks = [design.topic ? `주제 ${design.topic}` : '', design.dur ? `리허설 ${design.dur}초` : '', design.hidden ? '발표에서 숨김' : '', hasVideo(design) ? '영상 있음' : '', design.web ? '웹사이트' : '', hasMotion(design) ? '움직임 있음' : ''].filter(Boolean);
+  const marks = [design.topic ? `주제 ${design.topic}` : '', design.voice ? `녹음 ${voiceClock(design.voice.ms)}` : '', design.dur ? `리허설 ${design.dur}초` : '', design.hidden ? '발표에서 숨김' : '', hasVideo(design) ? '영상 있음' : '', design.web ? '웹사이트' : '', hasMotion(design) ? '움직임 있음' : ''].filter(Boolean);
   return `${i + 1}번째 장${marks.length ? ` (${marks.join(' · ')})` : ''}`;
 }
 function renderStrip(O) {
@@ -1190,7 +1193,7 @@ async function navigateMaterialPage(O,value) {
     const ready=migrateRecord(record);
     if(ready.slides[value.index]?.id!==value.page.id)throw Error('DOCUMENT_CHANGED');
     const leaving=O.record.id,kept=currentSlides(O);
-    setTimeout(()=>{tidyVideos(leaving,kept).catch(()=>{});},0);
+    setTimeout(()=>{tidyVideos(leaving,kept).catch(()=>{});tidyVoices(leaving,kept).catch(()=>{});},0);
     // The editor's render normalization is not a saved draft. Keep the exact
     // snapshot written by this editor as the CAS basis when another part later
     // needs room for an activity/result. Foreign drafts must still conflict.
@@ -1263,6 +1266,11 @@ function slideMenuGroups(O, { strip = false } = {}) {
       { icon: 'play', label: '이 장부터 발표', run: () => present(O) },
       // 주제(구역): 이 장부터 새 주제. 발표의 전체 보기(G)가 주제로 묶이고, PPTX 에는 PowerPoint 의 구역으로 들어간다.
       { icon: 'template', label: O.editor.getDesign().topic ? '주제 이름 고치기' : '여기서 주제 시작', run: () => openTopic(O) },
+      // 녹음한 목소리: 들어 보기 · 지우기(녹음 파일은 다른 장이 쓰지 않으면 이 기기에서도 지운다).
+      ...(O.editor.getDesign().voice ? [
+        { icon: 'sound', label: `녹음 듣기 (${voiceClock(O.editor.getDesign().voice.ms)})`, run: () => playVoice(O.editor.getDesign().voice) },
+        { icon: 'trash', label: '녹음 지우기', run: () => { stopVoicePlay(); O.editor.patchSlide({ voice: null }); renderStrip(O); touched(O); toast('이 장의 녹음을 지웠어요. 영상에서는 고른 머무는 시간을 써요.'); } },
+      ] : []),
       ...(O.editor.getDesign().dur ? [{ icon: 'trash', label: `리허설 시간 지우기 (${O.editor.getDesign().dur}초)`, run: () => { O.editor.patchSlide({ dur: null }); renderStrip(O); toast('이 장의 리허설 시간을 지웠어요. 자동 넘기기·영상에서 기본 시간을 써요.'); } }] : []),
       // 숨긴 장: 지우지 않고 발표 · HTML 수업 · PDF 에서만 건너뛴다(정답 장, 예비 앱 장 등). PPTX 에는 숨긴 슬라이드로 들어간다.
       O.editor.getDesign().hidden
@@ -1462,6 +1470,69 @@ function openOutline(O) {
     el('div', { class: 'cv-find-actions' }, el('button', { class: 'btn btn-ghost', type: 'button', onClick: closeModal }, '닫기'), make)), { wide: true, onClose: () => { asking?.abort(); clearTimeout(thumbTimer); O.editor.refresh(); } });
   update();
   requestAnimationFrame(() => (ai ? ai.querySelector('textarea') : input).focus());
+}
+// 녹음한 목소리의 길이 m:ss
+const voiceClock = (ms) => { const sec = Math.max(0, Math.round(ms / 1000)); return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`; };
+// 장 메뉴의 "녹음 듣기": 그 장의 구간만 튼다. 다시 누르거나 다른 장의 녹음을 들으면 앞 것은 멈춘다.
+let voicePlay = null;
+function stopVoicePlay() {
+  if (!voicePlay) return;
+  clearTimeout(voicePlay.timer); voicePlay.audio.pause(); URL.revokeObjectURL(voicePlay.url); voicePlay = null;
+}
+async function playVoice(v) {
+  const again = voicePlay?.src === v?.src && voicePlay?.at === v?.at;
+  stopVoicePlay();
+  if (again || !v) return;
+  const blob = await loadVoice(v.src);
+  if (!blob) { toast('이 기기에는 이 장의 녹음 파일이 없어요. 녹음한 기기에서 들을 수 있어요.'); return; }
+  const url = URL.createObjectURL(blob), audio = new Audio(url), mine = { src: v.src, at: v.at, audio, url, timer: 0 };
+  voicePlay = mine;
+  const start = () => { try { audio.currentTime = v.at; } catch { /* 처음부터 */ } audio.play().catch(() => {}); mine.timer = setTimeout(() => { if (voicePlay === mine) stopVoicePlay(); }, v.ms); };
+  if (audio.readyState >= 1) start(); else audio.addEventListener('loadedmetadata', start, { once: true });
+  toast(`이 장의 녹음을 들려줘요 (${voiceClock(v.ms)}). 다시 누르면 멈춰요.`);
+}
+// 녹음을 마치면: 장마다 녹음한 시간을 보여 주고 저장할지 묻는다. 저장하면 녹음 파일은 이 기기에, 장에는 그 파일의 구간(voice)이 남고,
+// 영상으로 내려받으면 녹음한 장은 녹음한 시간만큼 머물며 목소리가 함께 들어간다. takes: 이번 발표의 녹음들(차례대로) · ids: 발표한 쪽들의 장 id.
+function offerVoice(O, takes, ids) {
+  if (O.closed) return;
+  // 장마다 마지막 녹음의 구간(여러 번 녹음했으면 나중 것)
+  const got = new Map();
+  takes.forEach((take, t) => { for (const [k, part] of voiceSlides(take.visits)) if (ids[k]) got.set(ids[k], { take: t, ...part }); });
+  const mine = new Map([...got].filter(([id]) => O.slides.some((p) => p.id === id)));
+  const total = [...got.values()].reduce((sum, v) => sum + v.ms, 0);
+  const rows = O.slides.map((p, i) => (mine.has(p.id) ? el('li', {}, el('b', { text: `${i + 1}장` }), el('span', { text: voiceClock(mine.get(p.id).ms) })) : null)).filter(Boolean);
+  let busy = false;
+  const save = async (thenVideo) => {
+    if (busy || O.closed) return;
+    busy = true;
+    try {
+      const keys = new Map();          // 녹음 번호 → 저장한 파일의 열쇠(이 그림에서 쓰는 녹음만 저장한다)
+      for (const t of new Set([...mine.values()].map((v) => v.take))) keys.set(t, await saveVoice({ blob: takes[t].blob, design: O.record.id, seconds: takes[t].seconds }));
+      closeModal();
+      if (O.closed) return;
+      O.slides[O.at] = O.editor.getDesign();
+      O.slides = O.slides.map((p) => { const v = mine.get(p.id); return v ? { ...p, voice: { src: keys.get(v.take), at: v.at, ms: v.ms, ...(v.steps ? { steps: v.steps } : {}) } } : p; });
+      O.editor.setDesign(O.slides[O.at]);
+      renderStrip(O);
+      touched(O);
+      toast('장마다 녹음을 저장했어요. 영상으로 내려받으면 목소리가 함께 들어가요. 장 메뉴에서 장마다 듣거나 지울 수 있어요.', 5000);
+      if (thenVideo && canMakeVideo()) { rememberExport({ video: true }); askDownload(O, document.querySelector('.cv-down-btn')); }
+    } catch (ex) {
+      console.warn(ex);
+      busy = false;
+      toast('녹음을 저장하지 못했어요. 이 기기의 저장 공간을 확인해 주세요.', 5000);
+    }
+  };
+  openModal(el('section', { class: 'cv-find-box', 'aria-labelledby': 'cv-voice-title', onKeydown: escCloses, dataset: { voiceOffer: '' } },
+    el('h2', { id: 'cv-voice-title', text: `녹음 · 모두 ${voiceClock(total)}` }),
+    el('ol', { class: 'cv-rehearse-list' }, ...rows),
+    got.size > mine.size ? el('p', { class: 'cv-down-note', text: '다른 파트의 장은 그 파트를 열고 녹음해야 저장돼요.' }) : null,
+    mine.size ? null : el('p', { class: 'cv-down-note', text: '1초 넘게 머물며 녹음한 장이 없어요.' }),
+    el('p', { class: 'cv-down-note', text: '녹음은 이 기기에만 저장돼요. 영상으로 내려받으면 녹음한 장은 녹음한 시간만큼 머물고, 누른 때에 요소가 나와요.' }),
+    el('div', { class: 'cv-find-actions' },
+      el('button', { class: 'btn btn-ghost', type: 'button', onClick: closeModal }, '버리기'),
+      el('button', { class: 'btn', type: 'button', onClick: () => save(false), disabled: !mine.size, dataset: { voiceSave: '' } }, '장마다 저장'),
+      canMakeVideo() ? el('button', { class: 'btn btn-primary', type: 'button', onClick: () => save(true), disabled: !mine.size, dataset: { voiceVideo: '' } }, '저장하고 영상 만들기') : null)));
 }
 // 리허설이 끝나면: 장마다 잰 시간을 보여 주고 저장할지 묻는다. 저장한 시간은 자동 넘기기와 영상 만들기에서 그 장의 머무는 시간이 된다.
 function offerRehearsal(O, list) {
@@ -1961,6 +2032,32 @@ async function present(O) {
   // 틀던 전환을 바로 끝내고 나가던 장을 뗀다.
   const shownDesigns = new WeakMap();   // 발표 화면에 그린 카드 → 그 장의 디자인(이어 움직이기가 짝을 찾는다)
   let rehearsed = null;                 // 리허설로 잰 시간 [[장 id, 초]] (발표를 끝낸 뒤 저장할지 묻는다)
+  // 목소리 녹음(V): 마이크 소리를 한 줄로 녹음하며 장이 바뀐 때 · 누른 때를 적는다. 녹음을 멈추거나 발표를 끝내면 그 녹음(take)을 모아 두고,
+  // 발표를 끝낸 뒤 장마다 저장할지 묻는다. 여러 번 녹음하면 장마다 나중 것을 쓴다.
+  let voice = null, voiceTick = 0, starting = false;
+  const takes = [], stopping = [];
+  const voiceBadge = el('div', { class: 'cv-voice-rec', role: 'status', 'aria-live': 'off', hidden: true });
+  const paintVoice = () => { if (voice) voiceBadge.textContent = `● 녹음 중 · 이 장 ${voiceClock(voice.here())} · 전체 ${voiceClock(voice.all())}`; };
+  const stopVoice = () => {
+    if (!voice) return;
+    const rec = voice;
+    voice = null; clearInterval(voiceTick); voiceBadge.hidden = true;
+    voiceBtn?.classList.remove('on'); voiceBtn?.setAttribute('aria-pressed', 'false');
+    stopping.push(rec.stop().then((take) => { if (take?.blob?.size && take.visits.length) takes.push(take); }).catch((ex) => console.warn(ex)));
+  };
+  const toggleVoice = async () => {
+    if (starting) return;
+    if (voice) { stopVoice(); toast('녹음을 멈췄어요. 발표를 끝내면 장마다 저장할지 물어요. 다시 녹음하려면 V 를 눌러요.'); return; }
+    if (!canRecordVoice()) { toast('이 브라우저에서는 목소리를 녹음할 수 없어요. 크롬이나 엣지에서 해 봐요.'); return; }
+    starting = true;
+    try { voice = await startVoice({ index: i }); }
+    catch (ex) { console.warn(ex); toast(ex?.name === 'NotAllowedError' ? '마이크를 쓸 수 없어요. 주소창 옆의 자물쇠에서 마이크를 허용해 주세요.' : '마이크를 찾지 못했어요. 마이크가 꽂혀 있는지 확인해 주세요.', 5000); return; }
+    finally { starting = false; }
+    if (closed) { voice.cancel(); voice = null; return; }
+    voiceBadge.hidden = false; paintVoice(); voiceTick = setInterval(paintVoice, 500);
+    voiceBtn?.classList.add('on'); voiceBtn?.setAttribute('aria-pressed', 'true');
+    toast('녹음을 시작했어요. 평소처럼 말하며 넘기면 장마다 목소리와 넘긴 때가 함께 남아요. V 로 멈춰요.', 4500);
+  };
   const settle = () => {
     turning?.finish();
     turning = null;
@@ -2021,6 +2118,7 @@ async function present(O) {
     settle();
     parts?.stop();             // 떠나는 장의 "계속 움직이기"를 멈춘다(흔적이 없다)
     tools?.changed();
+    voice?.changed(i);         // 녹음 중이면 장이 바뀐 때를 적는다
     const design = slides[i];
     const ar=aspectOf(entries[i].record);
     overlay.style.setProperty('--cv-show-ratio',String(ar));
@@ -2096,7 +2194,7 @@ async function present(O) {
       parts?.finish();
       // 누를 때 트는 바탕 영상이 기다리고 있으면 그것부터 튼다(PowerPoint 의 "클릭할 때"처럼 영상도 발표의 한 차례다).
       if (startWaitingFilm()) return;
-      if (parts?.next()) return;
+      if (parts?.next()) { voice?.step(); return; }        // 녹음 중이면 누른 때를 적는다(영상에서 그때 나온다)
       // 아직 틀지 않은 유튜브 영상이 있으면 그것을 튼다(영상도 발표의 한 차례다).
       const waiting = tube.find((p) => !p.started);
       if (waiting) { waiting.play(); return; }
@@ -2138,6 +2236,8 @@ async function present(O) {
     // 유튜브를 틀었으면 스페이스 바는 멈추기 · 다시 틀기다(다음 장은 → · PageDown · 누르기).
     if (e.key === ' ' && tubeNow()) { e.preventDefault(); e.stopPropagation(); tubeNow().toggle(); return; }
     // 넘기기 · 번호로 가기 · 검은 화면 · 펜 · 전체 보기 · 발표자 화면 · K(영상) … 글쇠 약속은 show-keys.js 에 있다(HTML 수업과 같다).
+    // V: 목소리 녹음 켜기 · 끄기
+    if ((e.key === 'v' || e.key === 'V') && !e.ctrlKey && !e.metaKey && !e.altKey && voiceBtn) { e.preventDefault(); e.stopPropagation(); toggleVoice(); return; }
     if (!tools?.handle(e)) return;
     e.preventDefault();
     e.stopPropagation();          // 발표하는 동안에는 글쇠가 편집기로 가지 않게 한다
@@ -2148,8 +2248,9 @@ async function present(O) {
     if (document.fullscreenElement === overlay) { overlay.dataset.full = '1'; return; }
     if (document.fullscreenElement || overlay.dataset.full !== '1') return;
     overlay.dataset.full = '0';
-    // 발표자 화면 창을 열거나 카메라 허락을 묻는 동안 브라우저가 전체 화면을 풀 수 있다: 그때는 창 안에서 이어 간다(F 로 다시 켠다).
-    if (!tools?.presenting() && !tools?.camera()) close();
+    // 발표자 화면 창을 열거나 카메라 · 마이크 허락을 묻는 동안 브라우저가 전체 화면을 풀 수 있다: 그때는 창 안에서 이어 간다(F 로 다시 켠다).
+    // 녹음하는 중에도 끝내지 않는다(녹음을 잃지 않게. Esc 나 끝내기로 끝낸다).
+    if (!tools?.presenting() && !tools?.camera() && !starting && !voice) close();
   };
   function close() {
     if(savingActivity)return;
@@ -2171,6 +2272,8 @@ async function present(O) {
     document.body.classList.remove('modal-open');
     if(O.recoveryRequired){closeDesign(O);return;}
     if(rehearsed?.length)offerRehearsal(O,rehearsed);
+    stopVoice();clearInterval(voiceTick);
+    if(stopping.length)Promise.all(stopping).then(()=>{if(takes.length)offerVoice(O,takes,entries.map((v)=>v.page.id));});
   }
   const overlay = el('div', { class: `cv-show${slides.some(page=>page.activity)?' cv-show-lesson':''}`, role: 'dialog', 'aria-label': '발표 화면', tabindex: '-1', onClick: e => {if(tools?.claimClick(e))return;if(!e.composedPath().some(n=>n.classList?.contains('cv-show-activity')))go(1);} },
     stage,
@@ -2195,8 +2298,12 @@ async function present(O) {
   const remoteBtn = showRemote ? btn([ic('screen'), word('휴대폰 리모컨')], '휴대폰으로 장 넘기기(QR 을 찍어요)', openRemote) : null;
   if (remoteBtn) remoteBtn.dataset.showRemote = '';
   const audienceBtn = showAudience ? btn([ic('people'), word('질문 · 반응')], '학생이 QR 로 반응 · 질문을 보내요', openAudience) : null;
+  // 녹음: 이 브라우저가 녹음할 수 있고 저장할 그림이 있을 때만(발표를 끝내면 장마다 저장할지 묻는다).
+  const voiceBtn = canRecordVoice() ? btn([ic('record'), word('녹음')], '목소리 녹음하며 발표: 영상으로 내려받으면 목소리가 함께 들어가요 (V)', toggleVoice) : null;
+  if (voiceBtn) { voiceBtn.dataset.showVoice = ''; voiceBtn.setAttribute('aria-pressed', 'false'); }
+  overlay.append(voiceBadge);
   if (audienceBtn) audienceBtn.dataset.showAudience = '';
-  overlay.querySelector('.cv-show-bar').append(...tools.buttons, ...(remoteBtn ? [remoteBtn] : []), ...(audienceBtn ? [audienceBtn] : []), btn([ic('close'), word('끝내기')], '발표 끝내기 (Esc)', close));
+  overlay.querySelector('.cv-show-bar').append(...tools.buttons, ...(voiceBtn ? [voiceBtn] : []), ...(remoteBtn ? [remoteBtn] : []), ...(audienceBtn ? [audienceBtn] : []), btn([ic('close'), word('끝내기')], '발표 끝내기 (Esc)', close));
   overlay.addEventListener('pointermove', takeKeys);       // 웹사이트를 조작하다 마우스가 사이트 밖으로 나오면 글쇠를 돌려받는다
   document.body.append(overlay);
   document.body.classList.add('modal-open');
@@ -2365,7 +2472,7 @@ async function leaveEditor(O, { requireSaved = false, waitForSync = false, tidy 
   // 영상을 빼거나 바꿔서 이제 쓰지 않는 영상 파일을 이 기기에서 지운다(나가면 실행 취소로 되살릴 수 없다).
   // 지금 모습이 이 기기에 적힌 것이 확실할 때에만 지운다. 적히지 못했으면 예전 모습의 그림이 남아 있고,
   // 그 그림은 지우려던 영상을 아직 쓰고 있을 수 있다.
-  if (tidy && ok && !O.dirty && O.localOk !== false) await tidyVideos(O.record.id, currentSlides(O));
+  if (tidy && ok && !O.dirty && O.localOk !== false) { await tidyVideos(O.record.id, currentSlides(O)); await tidyVoices(O.record.id, currentSlides(O)); }
   O.closed = true;
   forgetOpen();
   O.activityConfig?.remove();O.activityConfig=null;
@@ -2389,6 +2496,18 @@ async function leaveEditor(O, { requireSaved = false, waitForSync = false, tidy 
  * slides: 그 그림의 지금 슬라이드들(그림을 지웠으면 빈 목록) · more: 그 밖에 살펴볼 열쇠들(지운 그림이 쓰던 것).
  * 이 기기의 다른 그림이 쓰는 파일은 지우지 않는다. 다른 그림들을 읽지 못했으면 아무것도 지우지 않는다.
  */
+/** 그 그림에 딸린 녹음 파일 가운데 이제 아무 장도 쓰지 않는 것을 이 기기에서 지운다(다시 녹음했거나 지운 녹음 · 지운 그림). 규칙은 영상 파일과 같다. */
+async function tidyVoices(designId, slides, more = []) {
+  try {
+    const files = await listVoices();
+    if (!files.some((f) => f.design === designId) && !more.length) return;
+    const others = [...(await listDesigns()), ...(S.list || [])].filter((r) => r.id !== designId);
+    const gone = unusedVideos(files, designId, [...deckVoices(slides), ...others.flatMap((r) => deckVoices(r.slides))], more);
+    if (gone.length) await removeVoices(gone);
+  } catch (ex) {
+    console.warn(ex);
+  }
+}
 async function tidyVideos(designId, slides, more = []) {
   try {
     const files = await listVideos();
@@ -3025,7 +3144,7 @@ function askDownload(O, btn) {
   let filmAll;
   try { filmAll = lessonPages(O).map((v) => v.page); } catch { filmAll = currentSlides(O); }
   const pick = { kind: pref.video && can ? 'video' : pref.jpg ? 'jpg' : 'png', all: pref.all && n > 1, stay: pref.stay, pptxMode: 'editable', htmlNotes: false, printLayout: 'slides', gifWidth: 480, size: pref.size, vsize: pref.vsize,
-    range: false, from: 1, to: filmAll.length, readFit: true };
+    range: false, from: 1, to: filmAll.length, readFit: true, voice: true };
   // 장마다 바탕에 깐 영상이 있는지: ''(없다) · 'yes'(있다) · 'gone'(있는데 그 파일이 이 기기에 없다. 조금 뒤에 알게 된다)
   const scenes = currentSlides(O).map((d) => (hasVideo(d) ? 'yes' : ''));
   currentSlides(O).forEach((d, i) => {
@@ -3062,6 +3181,7 @@ function askDownload(O, btn) {
     const designs = entries.map(({ page }) => {
       const clean = cleanDesign(page, { keepSpaces: true });
       if (filmScenes.get(page.id) === 'gone') delete clean.video;
+      if (!pick.voice) delete clean.voice;        // 목소리 빼기: 녹음한 장도 고른 머무는 시간으로
       return clean;
     });
     const check = readCheck(designs, { stay, scenes: live });
@@ -3220,6 +3340,12 @@ function askDownload(O, btn) {
       rows.push(section('장마다 머무는 시간', el('div', {class: 'cv-down-chips'}, ...STAYS.map((sec) => chip(`${sec}초`, pick.stay === sec, () => set({stay: sec}), {stay: String(sec)}))),
         el('p', {class: 'cv-down-note', text: '바탕에 깐 영상이 있는 장은 그 영상이 끝날 때까지 이어져요.'}),
         film.entries.some((v) => v.page.dur) ? el('p', {class: 'cv-down-note', text: '리허설로 잰 시간이 있는 장은 그 시간만큼 머물러요.'}) : null));
+      // 녹음한 목소리: 녹음한 장은 녹음한 시간만큼 머물고 그 장의 목소리가 함께 들어간다(빼면 그 장도 고른 시간으로).
+      const voiced = film.entries.filter((v) => v.page.voice).length;
+      if (voiced) rows.push(section('녹음한 목소리', el('div', {class: 'cv-down-chips'},
+        chip('목소리 넣기', pick.voice, () => set({voice: true}), {voice: 'on'}),
+        chip('목소리 빼기', !pick.voice, () => set({voice: false}), {voice: 'off'})),
+        el('p', {class: 'cv-down-note', dataset: {voiceCount: String(voiced)}, text: pick.voice ? `녹음한 ${voiced}쪽은 녹음한 시간만큼 머물고, 그 목소리가 영상에 함께 들어가요. 누를 때 나오는 요소는 녹음하며 누른 때에 나와요.` : '녹음한 쪽도 고른 머무는 시간으로 담고 목소리는 빼요.'})));
       // 읽기 시간 점검: 장마다 머무는 시간 안에 글을 다 읽을 수 있는지. 모자란 장은 영상에서만 더 머물게 한다(편집 자료는 그대로).
       const short = film.check.short;
       if (short.length) {
@@ -3768,6 +3894,7 @@ async function makeVideo(O, { vsize, stay, designs = null }) {
     // MP4 에 Opus 소리를 담았을 때(이 기기에 AAC 인코더가 없다): 그림은 어디서나 나오지만 소리는 못 트는 프로그램이 있다.
     if (made.sound === 'opus' && made.ext === 'mp4') notes.push('소리는 크롬 · 엣지 · 안드로이드에서 잘 들려요. 다른 프로그램에서는 그림만 나오고 소리가 안 날 수 있어요.');
     if (made.soundLost) notes.push(made.sound ? '소리를 풀지 못한 영상이 있어서, 그 영상의 소리는 빠졌어요.' : '이 기기에서는 바탕에 깐 영상의 소리를 담지 못했어요. 그림만 들어 있어요.');
+    if (made.soundLost && slides.some((d) => d.voice)) notes.push('녹음 파일이 이 기기에 없는 장은 목소리 없이 들어갔어요(녹음한 기기에서 만들면 담겨요).');
     if (made.stills) notes.push(canFilmScenes() ? '읽지 못한 바탕 영상은 멈춘 그림으로 들어갔어요.' : '이 브라우저에서는 바탕에 깐 영상이 멈춘 그림으로 들어갔어요.');
     if (made.missingFonts.length) notes.push(`글꼴(${made.missingFonts.join(', ')})을 받지 못해 기본 글꼴로 나왔어요. 인터넷을 확인하고 다시 만들어 봐요.`);
     const done = el('div', { class: 'cv-film-stage' }, view);

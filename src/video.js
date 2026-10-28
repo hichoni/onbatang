@@ -19,7 +19,7 @@
 // 메모리를 아끼려고 지금 장과 그 앞뒤 장의 그림만 들고 있는다.
 import { el } from './dom.js';
 import { itemView, paintCard } from './render.js';
-import { cleanDesign, fontFamilyOf } from './model.js';
+import { cleanDesign, fontFamilyOf, settings } from './model.js';
 import { designSheet } from './export.js';
 import { transitionPose, clipInsets, typePoints, measureType, TURN_DEPTH, tweenItem, contentChanged } from './motion.js';
 import { filmPlan, slidePoses, slideLoops, filmCells, packCells, DEFAULT_STAY, MAX_FILM_SECONDS } from './film.js';
@@ -525,7 +525,7 @@ function drawMorph(ctx, W, H, from, to, turn, p, flat, n) {
  *                   전환 효과가 도는 동안이면 앞 장도 준비되어 있어야 한다(없으면 전환 없이 그린다)
  *   drop(n):        n 번째 장의 그림을 버린다(메모리를 돌려준다)
  *   close():        모두 버린다
- *   sound({ signal }): 영상 장면들의 소리를 시간표대로 한 줄로 섞는다(약속). 돌려주는 것: { track(sound.js 의 큰 줄. 들릴 소리가 없으면 null), lost(소리가 있는데 풀지 못한 영상이 있었는지) }
+ *   sound({ signal }): 영상 장면들의 소리와 녹음한 목소리를 시간표대로 한 줄로 섞는다(약속). 돌려주는 것: { track(sound.js 의 큰 줄. 들릴 소리가 없으면 null), lost(소리가 있는데 풀지 못한 영상 · 이 기기에 없는 녹음이 있었는지) }
  *   missingFonts(): 받지 못해 기본 글꼴로 그린 글꼴의 이름들
  * }
  */
@@ -640,9 +640,24 @@ export function createFilm(designs, { width = 1920, height = 1080, stay = DEFAUL
     // 풀어 낸 소리는 크다(1분에 20MB 쯤). 그 파일을 쓰는 마지막 장까지 섞고 나면 바로 놓아준다.
     const lastUse = new Map();
     plan.slides.forEach((_, n) => { const v = heard(n); if (v) lastUse.set(v.src, n); });
+    // 녹음한 목소리: 발표하며 녹음한 파일(여러 장이 한 파일의 다른 구간을 쓴다)을 한 번 풀어, 장마다 제 구간을 그 장이 시작하는 때에 넣는다.
+    const voices = new Map();
+    const voiceClip = (src) => {
+      if (!voices.has(src)) voices.set(src, Promise.resolve().then(() => settings().loadVoice?.(src)).catch(() => null)
+        .then(async (blob) => { const clip = blob instanceof Blob && blob.size ? await decodeSound(blob) : null; if (!clip) lost = true; return clip; }));
+      return voices.get(src);
+    };
     let base = 0;
     for (let n = 0; n < plan.slides.length; n++) {
       const slide = plan.slides[n];
+      if (slide.voice) {
+        if (signal?.aborted) return null;
+        const clip = await voiceClip(slide.voice.src);
+        if (clip) {
+          master ||= soundTrack(plan.ms / 1000);
+          mixSound(master, clip, { at: base / 1000, from: slide.voice.at, to: slide.voice.at + slide.voice.ms / 1000, gain: 1 });
+        }
+      }
       const video = heard(n);
       if (video) {
         if (signal?.aborted) return null;

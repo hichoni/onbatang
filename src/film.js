@@ -48,7 +48,7 @@ export function readCheck(designs, { stay = DEFAULT_STAY, scenes = true } = {}) 
   const plan = filmPlan(list, { stay, scenes }), short = [];
   const fit = list.map((d, index) => {
     const need = readSeconds(d), slide = plan.slides[index], have = (slide.ms - slide.lead) / 1000;
-    if (!need || need <= have + 0.05) return d;
+    if (!need || need <= have + 0.05 || slide.voice) return d;      // 목소리를 녹음한 장은 녹음한 시간 그대로다
     short.push({ index, need: Math.round(need * 10) / 10, have: Math.round(have * 10) / 10 });
     return { ...d, dur: Math.min(600, Math.ceil(need)) };
   });
@@ -75,6 +75,7 @@ const staySeconds = (stay) => (Number.isFinite(stay) ? Math.min(30, Math.max(1, 
  *     turn.pairs: 이어 움직이기로 앞 장에서 옮겨 오는 요소의 짝 [[앞 장 번호, 이 장 번호]]
  *     turn.changed: 그 가운데 내용·꾸밈이 달라진 것(이 장 번호). 옮기며 앞 것이 사라지고 새것이 나타난다
  *   }],
+ *     voice:  (목소리를 녹음한 장만) 담을 목소리 { src, at(파일에서 이 장이 시작한 때, 초), ms(쓰는 길이) }. 이 장의 길이는 녹음한 시간이다
  *   ms: 영상 전체의 길이
  * }
  * scenes: 거짓이면 영상 장면을 틀지 않는 것으로 짠다(멈춘 그림으로 담을 때: 그 장도 다른 장처럼 머무는 시간만큼만 이어진다).
@@ -84,8 +85,9 @@ export function filmPlan(designs, { stay = DEFAULT_STAY, scenes = true } = {}) {
   const stayAll = staySeconds(stay) * 1000;
   const slides = (Array.isArray(designs) ? designs : []).map((design, n) => {
     const plan = planMotion(design);
-    // 리허설로 잰 시간이 있는 장은 그 시간만큼 머문다(고른 머무는 시간 대신).
-    const stayMs = Number.isInteger(design?.dur) && design.dur >= 1 ? Math.min(design.dur, 600) * 1000 : stayAll;
+    // 목소리를 녹음한 장은 녹음할 때 머문 시간만큼(그 구간의 목소리가 함께 담긴다), 리허설로 잰 시간이 있는 장은 그 시간만큼 머문다(고른 머무는 시간 대신).
+    const voice = design?.voice && design.voice.ms > 0 ? design.voice : null;
+    const stayMs = voice ? voice.ms : Number.isInteger(design?.dur) && design.dur >= 1 ? Math.min(design.dur, 600) * 1000 : stayAll;
     const pose = n > 0 ? transitionPose(design?.tr) : null;
     // 이어 움직이기: 앞 장과 짝이 된 요소는 전환 동안 옮겨 가고, 장이 열린 뒤에 다시 나타나지 않는다(발표 화면과 같다).
     // 누를 때 나타나는 요소는 짝짓지 않는다(그 차례에 나타난다).
@@ -100,8 +102,12 @@ export function filmPlan(designs, { stay = DEFAULT_STAY, scenes = true } = {}) {
     if (count) {
       const least = Math.max(STEP_LEAST, Math.min(STEP_MIN, CLICKS_MAX / count));
       const step = Math.round(Math.max(least, Math.min(STEP_MAX, (stayMs - plan.ms - TAIL) / count)));
+      // 녹음한 장: 녹음할 때 누른 때에 나온다(누르지 않고 넘긴 것은 마지막으로 누른 때 뒤로 고르게).
+      const pressed = (voice?.steps || []).slice(0, count);
+      const after = pressed.length ? pressed[pressed.length - 1] : lead + plan.ms;
+      const rest = Math.round(Math.max(least, Math.min(STEP_MAX, (stayMs - after - TAIL) / Math.max(1, count - pressed.length))));
       plan.clicks.forEach((c, k) => {
-        const start = lead + plan.ms + step * (k + 1);
+        const start = voice ? (k < pressed.length ? Math.max(lead, pressed[k]) : after + rest * (k - pressed.length + 1)) : lead + plan.ms + step * (k + 1);
         const it = items[c.i];
         moves.push(c.emphasis ? { i: c.i, emphasis: c.emphasis, start, ms: emphasisTime(c.emphasis, it), click: true }
           : c.exit ? { i: c.i, exit: c.exit, start, ms: exitTime(c.exit, it), click: true }
@@ -117,8 +123,10 @@ export function filmPlan(designs, { stay = DEFAULT_STAY, scenes = true } = {}) {
     const video = scenes && design?.video && design.video.out > design.video.in ? design.video : null;
     const opened = turn ? turn.ms : n === 0 ? FIRST_LEAD : 0;
     const scene = video ? { start: video.auto ? opened : Math.max(opened, lead + plan.ms) + SCENE_WAIT, ms: Math.round((video.out - video.in) * 1000) } : null;
-    const ms = Math.round(Math.max(lead + Math.max(stayMs, settle - lead + (moves.length ? TAIL : 0)), scene ? scene.start + scene.ms + SCENE_TAIL : 0));
-    const slide = { turn, lead, moves, settle, ms, ...(loops.length ? { loops } : {}), ...(scene ? { scene } : {}) };
+    // 녹음한 장은 녹음한 길이 그대로(목소리가 다음 장과 어긋나지 않게). 움직임이 그보다 늦게 끝날 때만 그만큼 늘린다.
+    const ms = voice ? Math.round(Math.max(voice.ms, settle, scene ? scene.start + scene.ms : 0))
+      : Math.round(Math.max(lead + Math.max(stayMs, settle - lead + (moves.length ? TAIL : 0)), scene ? scene.start + scene.ms + SCENE_TAIL : 0));
+    const slide = { turn, lead, moves, settle, ms, ...(loops.length ? { loops } : {}), ...(scene ? { scene } : {}), ...(voice ? { voice: { src: voice.src, at: voice.at, ms: voice.ms } } : {}) };
     Object.defineProperty(slide, 'items', { value: items, enumerable: false });
     // 글자 효과의 사라지는 움직임: 다음 장이 있고(마지막 장은 그대로 끝난다) 이어 움직이기 전환이 아니며 그 장에서 끄지 않았으면,
     // 장이 끝나기 조금 앞에서 효과 글이 사라진다(발표 화면에서 넘길 때와 같다. video.js).

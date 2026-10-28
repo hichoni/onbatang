@@ -20,6 +20,20 @@ export const slideHidden = slide => (slide?.hidden === true ? { hidden: true } :
 /** 리허설로 잰 그 장의 머무는 시간(초, 1~3600 의 정수). 자동 넘기기와 영상 만들기가 쓴다. 없거나 틀리면 {}. */
 export const DUR_LIMIT = 3600;
 export const slideDur = slide => (Number.isInteger(slide?.dur) && slide.dur >= 1 && slide.dur <= DUR_LIMIT ? { dur: slide.dur } : {});
+/**
+ * 녹음한 목소리: 발표하며 녹음한 파일(이 기기에 둔다. 장에는 열쇠만)에서 이 장의 구간.
+ * { src(파일 열쇠), at(파일에서 이 장이 시작한 때, 초), ms(이 장에 머문 시간), steps(누를 때 나오는 요소를 누른 때들. 이 장이 시작한 때부터 ms) }
+ * 영상 만들기는 이 장을 ms 만큼 보여 주고 그 구간의 목소리를 함께 담는다. 모양이 틀리면 null.
+ */
+export const VOICE_LIMITS = Object.freeze({ ms: DUR_LIMIT * 1000, at: 36000, steps: 100 });
+export function cleanVoice(v) {
+  if (!v || typeof v !== 'object' || Array.isArray(v) || typeof v.src !== 'string' || !/^[A-Za-z0-9_-]{4,64}$/.test(v.src)) return null;
+  const ms = Math.round(Number(v.ms)), at = Math.round(Number(v.at) * 1000) / 1000;
+  if (!(ms >= 300 && ms <= VOICE_LIMITS.ms) || !(at >= 0 && at <= VOICE_LIMITS.at)) return null;
+  const steps = (Array.isArray(v.steps) ? v.steps : []).map((t) => Math.round(Number(t))).filter((t) => t >= 0 && t <= ms).sort((a, b) => a - b).slice(0, VOICE_LIMITS.steps);
+  return { src: v.src, at, ms, ...(steps.length ? { steps } : {}) };
+}
+export const slideVoice = slide => { const voice = cleanVoice(slide?.voice); return voice ? { voice } : {}; };
 /** 주제(구역) 이름: 이 장부터 새 주제가 시작된다(PowerPoint 의 구역). 한 줄 글로 40자까지. 비면 ''. */
 export const TOPIC_LIMIT = 40;
 export function cleanTopic(value) {

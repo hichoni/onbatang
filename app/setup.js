@@ -5,6 +5,7 @@ import { ratioOf, aspectOf, PHOTO_MAX_CHARS, MAX_CARD_PHOTOS, MAX_UPLOADS } from
 import { SHARED_LAYOUTS, MAX_CARD_ITEMS, BASIC_GROUP } from './layouts.js';
 import { setTitleFont } from './templates.js';
 import { loadVideo } from './videos.js';
+import { loadVoice } from './voices.js';
 
 export { BASIC_GROUP };
 
@@ -36,7 +37,7 @@ export function setupApp(ratio = null) {
     // 움직임은 발표 화면과, 영상으로 내려받은 파일에 담긴다(움직임 칸 아래의 안내 글).
     configure({ motionNote: '움직임은 "발표"를 누르거나 영상으로 내려받으면 보여요. 그림으로 내려받으면 다 나온 모습이에요.' });
     // 영상 장면의 파일은 이 기기에 따로 둔다(videos.js). 그리거나 트는 곳이 열쇠로 꺼내 쓴다.
-    configure({ loadVideo });
+    configure({ loadVideo, loadVoice });
     registerFonts(fonts);
   }
   if (ratio) configure({ aspect: typeof ratio === 'object' ? aspectOf(ratio) : ratioOf(ratio).aspect });
