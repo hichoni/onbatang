@@ -4093,8 +4093,12 @@ async function makePptx(O, {all, mode}) {
       progress.max=selected.length;
       selected=orderPages(selected,withNewPages(O.materialDeck.pageOrder,parts));
     }
+    // 수식이 있으면 PowerPoint 에서 고칠 수 있는 수식으로 넣는다: TeX → MathML 은 MathJax(수식 창과 같은 것)를 이때 한 번만 받아 쓴다.
+    let mathJax = null;
+    const mathml = mode === 'editable' && selected.some((d) => d.items?.some((it) => it.t === 'math'))
+      ? async (tex) => (await (mathJax ||= import('../src/math-dialog.js').then((m) => m.loadMathJax()))).tex2mml(tex, { display: true }) : null;
     const result = await createPptx({slides: selected, aspect: aspectOf(O.record), size: O.record.size,
-      title: O.record.name || '온바탕', mode, signal: controller.signal,
+      title: O.record.name || '온바탕', mode, signal: controller.signal, mathml,
       onProgress: ({completed, total}) => { progress.value = completed; label.textContent = `${completed} / ${total}장을 만들었어요…`; }});
     if (controller.signal.aborted) return;
     const name = (O.record.name || '온바탕').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').slice(0, 100);

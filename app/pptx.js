@@ -7,6 +7,7 @@ import {itemView, paintCard} from '../src/render.js';
 import {sceneFrame} from '../src/scene.js';
 import {runPieces} from '../src/runs.js';
 import { linkEnds, linkControl, linkCorners, linkLabelAt, linkLabelSize } from '../src/links.js';
+import { texMathmlToOmml } from '../src/omml.js';
 
 export const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 export const PPTX_MAX_SLIDES = 200;
@@ -158,6 +159,22 @@ function nativeText(item, box, id, size, warn) {
 function picture(box, id, relation, name, item = {}, crop = '') {
   return `<p:pic><p:nvPicPr><p:cNvPr id="${id}" name="${xml(name)}"${item.alt ? ` descr="${xml(item.alt)}"` : ''}/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="${relation}">${item.op < 100 ? `<a:alphaModFix amt="${Math.round(item.op * 1000)}"/>` : ''}</a:blip>${crop}<a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr>${transform(box, item)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:ln><a:noFill/></a:ln></p:spPr></p:pic>`;
 }
+// 수식 → PowerPoint 수식(고칠 수 있다). PowerPoint 가 스스로 쓰는 모양 그대로: 수식을 모르는 프로그램은 대신 그림(fallback)을 쓴다.
+// 글상자는 수식 조각의 자리 · 크기 · 돌림을 그대로 쓰고, 수식은 가운데에 놓는다. 그림은 지금 보이는 모양이다(설명 글은 TeX).
+const MC = 'http://schemas.openxmlformats.org/markup-compatibility/2006', A14 = 'http://schemas.microsoft.com/office/drawing/2010/main';
+function equation(box, id, relation, pictureBox, omml, item, name, size) {
+  const descr = ` descr="${xml(`수식: ${item.tex}`.slice(0, 1000))}"`;
+  const shape = `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${xml(name)}"${descr}/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr>${transform(box, item)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr>`
+    + `<p:txBody><a:bodyPr wrap="none" lIns="0" tIns="0" rIns="0" bIns="0" rtlCol="0" anchor="ctr"><a:noAutofit/></a:bodyPr><a:lstStyle/><a:p><a:pPr algn="ctr"/><a14:m>${omml}</a14:m><a:endParaRPr lang="ko-KR" sz="${size}" dirty="0"/></a:p></p:txBody></p:sp>`;
+  return `<mc:AlternateContent xmlns:mc="${MC}"><mc:Choice xmlns:a14="${A14}" Requires="a14">${shape}</mc:Choice><mc:Fallback>${picture(pictureBox, id, relation, name, {...item, alt: `수식: ${item.tex}`})}</mc:Fallback></mc:AlternateContent>`;
+}
+/** 수식 글자 크기(1/100 pt): 저장한 모양(1000 = 1em)이 수식 상자에 들어간 배율에서 1em 의 높이. */
+export function equationSize(item, box) {
+  const [, , w, h] = item.m?.vb || [];
+  if (!(w > 0 && h > 0)) return 2800;
+  const em = Math.min(box.w / w, box.h / h) * 1000;   // EMU
+  return Math.max(100, Math.min(400000, Math.round(em / 12700 * 100)));
+}
 function canvasBlob(canvas) {
   return new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new PptxExportError('RASTER_FAILED', '그림을 파일로 만들지 못했어요.')), 'image/png'));
 }
@@ -280,7 +297,10 @@ export function sectionList(topics) {
   const guid = (n) => `{${String(n + 1).padStart(8, '0')}-0000-4000-8000-${String(n + 1).padStart(12, '0')}}`;
   return `<p:extLst><p:ext uri="${SECTION_URI}"><p14:sectionLst xmlns:p14="${P14}">${groups.map((g, n) => `<p14:section name="${xml(g.name)}" id="${guid(n)}"><p14:sldIdLst>${g.ids.map((id) => `<p14:sldId id="${id}"/>`).join('')}</p14:sldIdLst></p14:section>`).join('')}</p14:sectionLst></p:ext></p:extLst>`;
 }
-export async function createPptx({slides, aspect = 16 / 9, size, title = '온바탕', mode = 'editable', signal, onProgress, renderSlide = renderWhole, renderItem = renderElement} = {}) {
+/**
+ * mathml(tex) → MathML 글(약속): 주면 수식을 PowerPoint 에서 고칠 수 있는 수식으로 넣는다(src/omml.js). 없거나 옮기지 못하면 그림으로 넣는다.
+ */
+export async function createPptx({slides, aspect = 16 / 9, size, title = '온바탕', mode = 'editable', signal, onProgress, renderSlide = renderWhole, renderItem = renderElement, mathml = null} = {}) {
   abort(signal);
   if (!Array.isArray(slides) || !slides.length || slides.length > PPTX_MAX_SLIDES) fail('SLIDE_LIMIT', '슬라이드를 1~200쪽 선택해 주세요.');
   if (!['editable', 'image'].includes(mode)) fail('INVALID_MODE', '편집 가능한 PPTX 또는 그림 PPTX를 선택해 주세요.');
@@ -316,6 +336,18 @@ export async function createPptx({slides, aspect = 16 / 9, size, title = '온바
       shapes.push(picture(box, shapes.length + 2, relation, name, item, crop));
     }
     const options = {aspect: slideSize.aspect, signal, pageNumber};
+    // 수식 하나를 PowerPoint 수식으로: TeX → MathML(mathml) → OMML. 옮기지 못하면 false(부르는 쪽이 그림으로 넣는다).
+    async function equationOf(item, itemIndex, id) {
+      const box = itemBox(item, slideSize), sz = equationSize(item, box);
+      let omml = '';
+      try { omml = texMathmlToOmml(await cancellable(Promise.resolve(mathml(item.tex)), signal), {size: sz, color: item.color, alpha: item.op ?? 100}); }
+      catch (error) { if (error?.name === 'AbortError') throw error; return false; }
+      const rendered = await cancellable(renderItem(design, itemIndex, options), signal);
+      const mediaName = await addImage(rendered, warn(pageNumber, item.id));
+      const relation = `rId${relations.length + 1}`; relations.push([relation, 'image', `../media/${mediaName}`]);
+      shapes.push(equation(box, id, relation, rasterBox(rendered, slideSize), omml, item, item.id || `수식 ${id}`, sz));
+      return true;
+    }
     if (design.video || design.pa || design.tr || design.items.some(item => (item.an && item.an !== 'none') || item.em || item.ex || item.aw || (item.lp && item.lp !== 'none'))) pageWarn('STATIC_EXPORT', '움직임과 소리는 포함하지 않고 현재 그림을 저장해요.');
     // 웹사이트 장: PowerPoint 에는 사이트가 들어가지 않는다(표지 그림 · 주소만).
     if (design.web) pageWarn('WEB_AS_PICTURE', `웹사이트 장은 표지 그림으로 저장해요. 주소: ${design.web.url}`);
@@ -335,9 +367,11 @@ export async function createPptx({slides, aspect = 16 / 9, size, title = '온바
           const horizontal = sourceAspect > targetAspect, crop = Math.max(0, Math.round((1 - (horizontal ? targetAspect / sourceAspect : sourceAspect / targetAspect)) * 50000));
           const c=item.crop,explicit=c?`<a:srcRect l="${Math.round(c.x*100000)}" t="${Math.round(c.y*100000)}" r="${Math.round((1-c.x-c.w)*100000)}" b="${Math.round((1-c.y-c.h)*100000)}"/>`:null;
           await raster(loaded, item.id || `사진 ${id}`, item, box, explicit??(crop ? `<a:srcRect ${horizontal ? `l="${crop}" r="${crop}"` : `t="${crop}" b="${crop}"`}/>` : ''));
+        } else if (item.t === 'math' && typeof mathml === 'function' && await equationOf(item, itemIndex, id)) {
+          // 고칠 수 있는 수식으로 넣었다(그림은 수식을 모르는 프로그램이 쓴다)
         } else {
           if (item.t === 'web') itemWarn('WEB_AS_PICTURE', `웹사이트 상자는 표지 그림으로 저장해요. 주소: ${item.url}`);
-          else if (item.t === 'math') itemWarn('MATH_AS_PICTURE', '수식은 보이는 그대로 그림으로 저장해요. 고치려면 온바탕에서 고쳐 다시 내려받아요.');
+          else if (item.t === 'math') itemWarn('MATH_AS_PICTURE', 'PowerPoint 수식으로 옮기지 못한 수식은 보이는 그대로 그림으로 저장해요. 고치려면 온바탕에서 고쳐 다시 내려받아요.');
           else if (item.t === 'chart') itemWarn('CHART_AS_PICTURE', `차트${item.title ? ` '${item.title}'` : ''}는 보이는 그대로 그림으로 저장해요. 숫자를 고치려면 온바탕에서 고쳐 다시 내려받아요.`);
           else itemWarn('ELEMENT_RASTERIZED', '이 요소는 모양을 보존한 그림으로 저장해요.', {type: item.t, ...(item.shape ? {shape: item.shape} : {})});
           const rendered = await cancellable(renderItem(design, itemIndex, options), signal);

@@ -80,5 +80,16 @@ test('math: add from the text tab, preview with MathJax, apply, edit by double c
  assert.ok(check.ink>500,`the stored shape is painted into pictures (${check.ink})`);
  assert.deepEqual([check.hit,check.bad,check.paths],[0,false,1],'only the clean path survives');
  if(process.env.MATH_SHOT)await page.screenshot({path:process.env.MATH_SHOT+'-editor.png'});
+ // 고칠 수 있는 PPTX: 수식은 PowerPoint 수식(a14:m · OMML)으로, 수식을 모르는 프로그램을 위해 그림도 함께
+ await page.locator('.cv-down-btn').click();const down=page.getByRole('dialog',{name:'내려받기',exact:true});
+ await down.locator('[data-type=pptx]').click();if(await down.locator('[data-scope=all]').count())await down.locator('[data-scope=all]').click();await down.locator('[data-pptx=editable]').click();
+ const pending=page.waitForEvent('download',{timeout:90000});await down.locator('[data-pptx-save]').click();
+ const file=await readFile(await (await pending).path()),{unzipSync}=await import('fflate'),zip=unzipSync(new Uint8Array(file));
+ const slide=new TextDecoder().decode(zip['ppt/slides/slide1.xml']);
+ assert.match(slide,/<mc:Choice xmlns:a14="http:\/\/schemas\.microsoft\.com\/office\/drawing\/2010\/main" Requires="a14"><p:sp>.*<a14:m><m:oMathPara /s,'an editable PowerPoint equation');
+ assert.match(slide,/<m:f><m:fPr>.*<m:num>.*속력|속력.*<m:f><m:fPr>.*<m:num>.*거리.*<m:den>.*시간/s,'the fraction with the Korean words');
+ assert.match(slide,/<mc:Fallback><p:pic>/,'a picture for programs without equations');
+ assert.equal(Object.keys(zip).filter(k=>k.startsWith('ppt/media/')).length,1);
+ assert.ok(served.some(p=>p.endsWith('/src/mathjax/tex-svg-full.js')));
  assert.deepEqual(errors,[]);
 });
