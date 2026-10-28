@@ -73,6 +73,7 @@ let copyAction = null;             // 내보내기의 "링크 공유": 받은 �
 let copyLink = null;               // 공용 온바탕: 복사 링크(?copy=코드)를 받는 곳(app/copy-link.js). 없으면 링크를 열지 않는다.
 let showRemote = null;             // 발표의 휴대폰 리모컨(호스트가 연결 · QR 을 맡는다). 없으면 단추도 없다.
 let showAudience = null;           // 발표의 실시간 질문 · 반응(호스트가 연결 · QR · 질문 판을 맡는다). 없으면 단추도 없다.
+let coEdit = null;                 // 같이 고치기의 통로 { open(code) → { send, on, close, qr? }, link?(code) }(app/co-edit.js). 없으면 단추도 없다.
 let accountBridge = null;          // 공용 온바탕: GBE-AI Lab 계정으로 이어 쓰기(연결 창 주소 등). 계정 저장(sync)이 있으면 쓰지 않는다.
 let bridge = null;
 let accountHome = null;
@@ -181,6 +182,7 @@ function accountNote() {
 async function refresh() {
   const resume = S.phase === 'boot' && resumeOpen ? readOpen() : null;
   const copyAt = S.phase === 'boot' && copyLink ? copyParam() : '';
+  const coAt = S.phase === 'boot' && coEdit && !copyAt ? coParam() : '';
   S.list = null;
   render();
   if (S.phase === 'boot') { await recoverDrafts(); await loadFileFonts(); }
@@ -198,6 +200,8 @@ async function refresh() {
   // 복사 링크로 열었으면 그 자료를 이 브라우저에 사본으로 받아 바로 연다.
   // 여는 화면을 오래 붙잡지 않게 첫 화면을 먼저 그리고, 받는 동안은 따로 진행 화면을 띄운다.
   if (copyAt) { render(); syncAccount(); openCopyLink(copyAt).catch((error) => console.warn(error)); return; }
+  // 같이 고치기 링크(?co=코드): 첫 화면을 그린 뒤 이름을 묻고 들어간다(시작한 사람의 그림을 이 기기에 사본으로 받아 함께 고친다).
+  if (coAt) { render(); syncAccount(); joinCo(coAt).catch((error) => console.warn(error)); return; }
   // 새로 고침하기 전에 꾸미던 그림이 있으면 첫 화면을 거치지 않고 그 그림 · 그 장을 다시 연다.
   const again = resume && S.list.find((r) => r.id === resume.id);
   if (again && !S.open) {
@@ -740,6 +744,9 @@ function openDesign(record, isNew) {
     design: O.slides[0],
     onChange: () => touched(O),
     uploadImage: photoToData,
+    // 같이 고치기: 내가 고른 것을 알리고, 다른 사람이 고르고 있는 것은 고르지 못한다(그 사람의 색 테두리).
+    onSelect: () => coSelect(O),
+    lockedBy: (item) => (O.co && item?.id ? O.co.lockedBy(O.slides[O.at]?.id || '', item.id)?.name || '' : ''),
     documentImport: importAction?.editorLabel ? {
       label: importAction.editorLabel,
       description: importAction.editorDescription || '지금 그림을 저장한 뒤 PPT 자료를 가져와요.',
@@ -787,6 +794,7 @@ function openDesign(record, isNew) {
   const accountLibrary=accountAction?el('button',{class:'btn cv-account-btn',type:'button',dataset:{accountAction:''},onClick:()=>openLessonFromEditor(O,accountAction)},accountAction.label):null;
   const share = shareAction ? el('button', { class: 'btn cv-share-btn', type: 'button', dataset: { shareAction: '' }, title: shareAction.title || '보기 전용 링크로 나눠요', onClick: () => openShareFromEditor(O) }, ...face('link', shareAction.label)) : null;
   const show = el('button', { class: 'btn cv-show-btn', type: 'button', title: '화면 가득 보여 줘요', onClick: () => present(O) }, ...face('play', '발표'));
+  const co = O.coButton = coEdit && !embedMode ? el('button', { class: 'btn cv-co-btn', type: 'button', dataset: { coEdit: '' }, title: '링크를 받은 사람과 이 그림을 함께 고쳐요', 'aria-expanded': 'false', onClick: () => toggleCoPanel(O) }, ...face('people', '같이 고치기'), el('span', { class: 'cv-co-dots', 'aria-hidden': 'true' })) : null;
   // 그림의 모양: 꾸미는 화면 안에서 바로 바꾼다. 놓아 둔 도형과 사진은 찌그러지지 않게 편집기가 맞춰 준다.
   const shapes = el('div', { class: 'cv-shapes', role: 'group', 'aria-label': '그림의 모양' }, ...RATIOS.map((r) => {
     const icon = el('span', { class: 'cv-shape-icon', 'aria-hidden': 'true' });
@@ -822,7 +830,7 @@ function openDesign(record, isNew) {
     ...(mark ? [mark, el('span', { class: 'cv-bar-sep cv-brand-sep', 'aria-hidden': 'true' })] : []),
     el('button', { class: 'btn btn-ghost cv-back', type: 'button', title: '저장하고 내 그림으로 돌아가요', onClick: (e) => closeDesign(O, e.currentTarget) }, ...face('back', '내 그림')),
     el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' }),
-    name, O.status, historyButton(O), ...(material ? [material] : []), ...(lesson?[lesson]:[]), ...(accountLibrary?[accountLibrary]:[]), el('span', { class: 'cv-bar-gap' }), shapes, el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' }), tourButton('editor', O), ...(share ? [share] : []), show, down);
+    name, O.status, historyButton(O), ...(material ? [material] : []), ...(lesson?[lesson]:[]), ...(accountLibrary?[accountLibrary]:[]), el('span', { class: 'cv-bar-gap' }), shapes, el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' }), tourButton('editor', O), ...(share ? [share] : []), ...(co ? [co] : []), show, down);
   // 들여쓰기 막대는 보통 막대 뒤에 만든다(이름 칸 · 저장 상태는 한 곳에만 놓일 수 있다).
   const embedHeader = embedBar ? el('header', { class: 'cv-bar cv-embed-bar' },
     el('span', { class: 'onba-editor-logo' }, onbatangLogo()), ...(embedBar.close ? [embedBar.close, el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' })] : []),
@@ -1017,6 +1025,7 @@ function renderStrip(O) {
       el('button',{class:'btn cv-activity-add',type:'button',dataset:{importLessonResults:''},onClick:()=>importLessonResults(O)},'HTML 수업 결과 가져오기'),
       el('button',{class:'btn cv-activity-edit',type:'button',dataset:{editActivity:''},onClick:()=>configureActivity(O,true)},'활동 설정')));
   updateActivityTools(O);
+  if (O.co) paintCo(O);                  // 같이 고치는 중: 다른 사람이 보는 장에 그 사람의 색 점 · 내가 보는 장을 알린다
   // 띠를 다시 그려도 옆으로 넘겨 둔 자리는 그대로 두고, 고른 장이 안 보일 때에만 그쪽으로 (부드럽게) 넘긴다.
   const list = O.strip.querySelector('.cv-slide-list');
   const on = list.querySelector('.cv-slide.on');
@@ -2411,6 +2420,7 @@ function setStatus(O, text, cls = '') {
 }
 function touched(O) {
   if (O.closed||O.recoveryRequired) return;
+  O.co?.changed();                       // 같이 고치는 중이면 고친 것을 조금 모았다가 나눈다
   clearTimeout(O.thumbTimer);
   O.thumbTimer = setTimeout(() => refreshThumb(O), 300);
   O.dirty = true;
@@ -2473,6 +2483,9 @@ async function leaveEditor(O, { requireSaved = false, waitForSync = false, tidy 
   // 지금 모습이 이 기기에 적힌 것이 확실할 때에만 지운다. 적히지 못했으면 예전 모습의 그림이 남아 있고,
   // 그 그림은 지우려던 영상을 아직 쓰고 있을 수 있다.
   if (tidy && ok && !O.dirty && O.localOk !== false) { await tidyVideos(O.record.id, currentSlides(O)); await tidyVoices(O.record.id, currentSlides(O)); }
+  if (O.co) { O.coLeaving = true; O.co.close(); }   // 같이 고치기: 시작한 사람은 끝내고, 들어온 사람은 나간다
+  O.coAway?.();
+  clearTimeout(O.coStrip);
   O.closed = true;
   forgetOpen();
   O.activityConfig?.remove();O.activityConfig=null;
@@ -2693,6 +2706,326 @@ async function openCopyLink(code) {
     toast(kit.copyMessage(error), 7000); return false;
   }
   finally { loading.node.remove(); app.inert = wasInert; }
+}
+// ---------- 같이 고치기: 링크를 받은 사람과 한 그림을 동시에 고친다(app/co-edit.js) ----------
+// 통로는 들여 쓰는 곳이 준다(coEdit). 시작한 사람의 화면이 기준이고, 들어온 사람의 기기에는 그 그림의 사본이 생겨 함께 바뀐다(끝난 뒤에도 남는다).
+// 다른 사람이 고르고 있는 요소는 그 사람의 색 테두리가 둘러지고 고를 수 없다. 녹음한 목소리는 나누지 않는다(이 기기의 파일).
+const CO_NAME_KEY = 'onbatang-co-name';
+const CO_JOIN_KEY = 'onbatang-co-joined';       // 링크 코드 → 이 기기에 만든 사본의 id(다시 열면 같은 사본에 이어 받는다)
+const coSavedName = () => { try { return localStorage.getItem(CO_NAME_KEY) || ''; } catch { return ''; } };
+const coKeepName = (name) => { try { localStorage.setItem(CO_NAME_KEY, name); } catch { /* 기억하지 못해도 된다 */ } };
+function coJoined(code, id) {
+  try {
+    const all = JSON.parse(localStorage.getItem(CO_JOIN_KEY) || '{}') || {};
+    if (id === undefined) return typeof all[code] === 'string' ? all[code] : '';
+    delete all[code];
+    all[code] = id;
+    const keys = Object.keys(all);
+    for (const k of keys.slice(0, Math.max(0, keys.length - 20))) delete all[k];
+    localStorage.setItem(CO_JOIN_KEY, JSON.stringify(all));
+  } catch { /* 기억하지 못하면 다음에 새 사본을 받는다 */ }
+  return id || '';
+}
+function coParam() {
+  try { const code = String(new URL(location.href).searchParams.get('co') || '').trim().toLowerCase(); return /^[0-9a-f]{40}$/.test(code) ? code : ''; } catch { return ''; }
+}
+function coDropParam() {
+  try { const url = new URL(location.href); if (!url.searchParams.has('co')) return; url.searchParams.delete('co'); history.replaceState(history.state, '', url.pathname + url.search + url.hash); } catch { /* 주소를 바꾸지 못해도 된다 */ }
+}
+function coLink(code) {
+  try { const v = coEdit.link?.(code); if (typeof v === 'string' && /^https?:\/\//.test(v)) return v; } catch (error) { console.warn(error); }
+  const url = new URL(location.href);
+  url.search = ''; url.hash = '';
+  url.searchParams.set('co', code);
+  return url.href;
+}
+// 남이 보낸 장은 이 앱의 규칙으로 다시 정리한다(O.slides 의 모양).
+function coSlide(d) { const c = cleanDesign(d); return { bg: c.bg, items: c.items, ...slideExtra(c) }; }
+function coRatio(O, state) {
+  const ratio = String(state.ratio || '');
+  if (!/^\d{1,9}:\d{1,9}$/.test(ratio)) return false;
+  const [w, h] = ratio.split(':').map(Number);
+  const size = state.size && Number(state.size.width) > 0 && Number(state.size.height) > 0
+    ? { width: Number(state.size.width), height: Number(state.size.height), unit: typeof state.size.unit === 'string' ? state.size.unit.slice(0, 8) : 'px' }
+    : w > 0 && h > 0 ? { width: w, height: h, unit: 'px' } : null;
+  if (!size || (O.record.ratio === ratio && JSON.stringify(O.record.size) === JSON.stringify(size))) return false;
+  O.record.ratio = ratio;
+  O.record.size = size;
+  configure({ aspect: aspectOf(O.record) });
+  markRatio(O, O.shapes);
+  return true;
+}
+/** 모임(co-edit.js)이 보는 그림 쪽. ctx.O 는 들어온 사람이면 그림을 받은 뒤에 생긴다. */
+function coDoc(ctx, kit, { code = '' } = {}) {
+  return {
+    read: () => { const O = ctx.O; return { ratio: O.record.ratio, size: O.record.size, slides: currentSlides(O).map(kit.shareSlide) }; },
+    // 끄는 중 · 메뉴가 열린 중 · 영상을 찍는 중에는 기다린다(손 밑의 것이 바뀌지 않게)
+    ready: () => !ctx.O || ctx.O.closed || (ctx.O.editor.idle() && !ctx.O.editor.busy()),
+    apply: (ops) => coApply(ctx.O, kit, ops),
+    replace: (state) => coReplace(ctx.O, state),
+    info: () => ({ name: ctx.O?.record.name || '' }),
+    open: (state, info) => coOpen(ctx, code, state, info),
+  };
+}
+function coApply(O, kit, ops) {
+  if (!O || O.closed || S.open !== O) return;
+  const before = { ratio: O.record.ratio, size: O.record.size, slides: currentSlides(O) };
+  const { state, changed, slides: moved, ratio } = kit.applyOps(before, ops);
+  const old = new Set(before.slides);
+  const list = state.slides.map((d) => (old.has(d) ? d : coSlide(d))).filter((d) => d.id).slice(0, MAX_SLIDES);
+  if (!list.length) return;                   // 마지막 장까지 지우지는 않는다
+  const reshaped = ratio && coRatio(O, state);
+  const cur = before.slides[O.at]?.id;
+  let at = list.findIndex((d) => d.id === cur);
+  const gone = at < 0;
+  if (gone) at = Math.min(O.at, list.length - 1);
+  O.slides = list;
+  O.at = at;
+  const c = changed.get(cur);
+  if (gone || reshaped || c?.whole) O.editor.setDesign(list[at]);
+  else if (c) {
+    const next = list[at];
+    const patch = { items: new Map([...c.items].map((id) => [id, next.items.find((it) => it.id === id) || null])), added: c.added, order: next.items.map((it) => it.id), fields: [...c.fields] };
+    if (c.fields.has('bg')) patch.bg = next.bg;
+    for (const k of ['pa', 'tr']) if (c.fields.has(k)) patch[k] = next[k];
+    O.editor.merge(next, patch);
+  }
+  if (gone) toast('보던 장을 다른 사람이 지웠어요. 옆 장을 열었어요.', 3500);
+  // 띠: 장의 차례 · 수가 바뀌었으면 바로, 내용만 바뀌었으면 조금 모았다가 다시 그린다(자주 바뀌어도 가볍게)
+  clearTimeout(O.coStrip);
+  if (moved || gone || reshaped) renderStrip(O);
+  else O.coStrip = setTimeout(() => renderStrip(O), 250);
+  touched(O);                                 // 이 기기에도 저장한다(나눌 것은 없다: 받은 그대로다)
+}
+function coReplace(O, state) {
+  if (!O || O.closed || S.open !== O) return;
+  const voices = new Map(currentSlides(O).filter((d) => d.voice).map((d) => [d.id, d.voice]));
+  const list = state.slides.map(coSlide).filter((d) => d.id).slice(0, MAX_SLIDES).map((d) => (voices.has(d.id) ? { ...d, voice: voices.get(d.id) } : d));
+  if (!list.length) return;
+  coRatio(O, state);
+  const cur = O.slides[O.at]?.id;
+  O.slides = list;
+  O.at = Math.max(0, list.findIndex((d) => d.id === cur));
+  O.editor.setDesign(list[O.at]);
+  renderStrip(O);
+  touched(O);
+}
+// 들어온 사람: 처음 받은 그림을 이 기기에 사본으로 두고 연다(같은 링크로 전에 받은 사본이 있으면 그것을 이어 쓴다).
+async function coOpen(ctx, code, state, info) {
+  const slides = state.slides.map(coSlide).filter((d) => d.id).slice(0, MAX_SLIDES);
+  if (!slides.length) throw Error('받은 그림이 비어 있어요.');
+  const keptId = coJoined(code);
+  const kept = keptId ? S.list?.find((r) => r.id === keptId) || await getDesign(keptId).catch(() => null) : null;
+  if (!kept && homeEntries(S.list || [], homeGroups(S.list || [])).length >= MAX_DESIGNS) throw Error(`이 브라우저에는 그림을 ${MAX_DESIGNS}개까지 둘 수 있어요. 안 쓰는 그림을 지우고 링크를 다시 열어 주세요.`);
+  const fresh = kept ? migrateRecord(kept) : newRecord('16:9');
+  const title = Array.from(`(같이 고치기) ${String(info.name || '').trim() || '그림'}`).slice(0, MAX_NAME).join('');
+  const draft = { ...fresh, name: kept ? fresh.name : title, slides, revision: (fresh.revision || 0) + 1, updatedAt: Date.now(), synced: false };
+  // 그림의 모양은 시작한 사람의 것(이상한 값이면 이 기기의 기본 모양)
+  let record;
+  try { record = /^\d{1,9}:\d{1,9}$/.test(String(state.ratio)) ? migrateRecord({ ...draft, ratio: state.ratio, size: state.size }) : migrateRecord(draft); }
+  catch { record = migrateRecord(draft); }
+  await putDesign(record);
+  coJoined(code, record.id);
+  try { S.list = await listDesigns(); } catch { /* 목록은 다음에 다시 읽는다 */ }
+  const saved = S.list?.find((r) => r.id === record.id) || record;
+  if (S.open) await leaveEditor(S.open);
+  openDesign(saved, false);
+  const O = S.open;
+  ctx.O = O;
+  O.co = ctx.session;
+  O.coCode = code;
+  paintCo(O);
+}
+function coEvents(ctx) {
+  return {
+    peers: () => { if (ctx.O) paintCo(ctx.O); },
+    join: (p) => toast(`${p.name} 님이 들어왔어요`, 2500),
+    leave: (p) => toast(`${p.name} 님이 나갔어요`, 2500),
+    status: (s) => { if (ctx.O) { ctx.O.coLost = s === 'lost'; paintCoPanel(ctx.O); } },
+    error: (message) => { ctx.error = message; },
+    end: (reason) => {
+      const O = ctx.O;
+      if (O && O.co === ctx.session) {
+        O.co = null;
+        O.coQr = '';
+        O.coLost = false;
+        if (!O.closed) { O.editor.markOthers([]); paintCo(O); }
+      }
+      if (ctx.session?.role === 'guest' && (reason === 'host' || O?.coLeaving || ctx.leaving)) coDropParam();
+      if (reason === 'host') toast('시작한 사람이 같이 고치기를 끝냈어요. 지금까지 고친 것은 이 기기에 사본으로 남아요.', 6000);
+    },
+  };
+}
+/** 내가 보는 장 · 고른 요소를 알린다. */
+function coSelect(O) {
+  if (!O.co || O.closed) return;
+  O.co.select(O.slides[O.at]?.id || '', O.editor.selectedId());
+}
+function paintCo(O) {
+  if (!O || O.closed || S.open !== O) return;
+  const peers = O.co ? O.co.peers() : [];
+  const slide = O.slides[O.at]?.id || '';
+  O.editor.markOthers(peers.filter((p) => !p.me && p.slide === slide && p.sel).map((p) => ({ id: p.sel, name: p.name, color: p.color })));
+  for (const tile of O.strip?.querySelectorAll('.cv-slide[data-slide]') || []) {
+    tile.querySelector('.cv-slide-co')?.remove();
+    const id = O.slides[Number(tile.dataset.slide)]?.id;
+    const here = peers.filter((p) => !p.me && p.slide === id);
+    if (here.length) tile.append(el('span', { class: 'cv-slide-co', 'aria-hidden': 'true' }, ...here.slice(0, 4).map((p) => { const dot = el('i', { title: p.name }); dot.style.background = p.color; return dot; })));
+  }
+  const btn = O.coButton;
+  if (btn) {
+    btn.classList.toggle('on', !!O.co);
+    relabel(btn, O.co ? `같이 고치는 중 · ${peers.length}명` : '같이 고치기');
+    btn.querySelector('.cv-co-dots').replaceChildren(...peers.filter((p) => !p.me).slice(0, 3).map((p) => { const dot = el('i', { title: p.name }); dot.style.background = p.color; return dot; }));
+  }
+  coSelect(O);
+  paintCoPanel(O);
+}
+function toggleCoPanel(O, open = !O.coPanel) {
+  if (O.closed) return;
+  O.coPanel?.remove();
+  O.coPanel = null;
+  O.coAway?.();
+  O.coButton?.setAttribute('aria-expanded', String(open));
+  if (!open) return;
+  O.coPanel = el('section', { class: 'cv-co-panel', dataset: { coPanel: '' }, 'aria-label': '같이 고치기' });
+  O.coPanel.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); toggleCoPanel(O, false); O.coButton?.focus(); } });
+  // 판 밖(그림 · 도구)을 누르면 접는다: 그림을 가리지 않게. 다시 보려면 위 막대의 단추를 누른다.
+  const away = (e) => { if (!O.coPanel?.contains(e.target) && !O.coButton?.contains(e.target)) toggleCoPanel(O, false); };
+  document.addEventListener('pointerdown', away, true);
+  O.coAway = () => { document.removeEventListener('pointerdown', away, true); O.coAway = null; };
+  O.shell.append(O.coPanel);
+  paintCoPanel(O);
+  O.coPanel.querySelector('input, button:not(.cv-co-x)')?.focus();
+}
+function paintCoPanel(O) {
+  const box = O.coPanel;
+  if (!box || O.closed) return;
+  const x = el('button', { class: 'btn btn-ghost cv-co-x', type: 'button', title: '닫기', 'aria-label': '닫기', onClick: () => toggleCoPanel(O, false) }, ic('close'));
+  if (!O.co) {
+    if (O.materialDeck) {
+      box.replaceChildren(x, el('h2', { text: '같이 고치기' }), el('p', { class: 'muted', text: 'PPT 전체 자료(여러 파트)는 같이 고칠 수 없어요. 함께 고칠 장을 새 그림으로 옮겨서 해요.' }));
+      return;
+    }
+    const name = el('input', { type: 'text', class: 'cv-co-name', maxlength: '16', value: coSavedName(), placeholder: '예: 김선생', 'aria-label': '내 이름', dataset: { coName: '' } });
+    const start = el('button', { class: 'btn btn-primary', type: 'button', dataset: { coStart: '' }, disabled: !!O.coBusy, onClick: () => coStart(O, name.value) }, ...face('people', O.coBusy ? '여는 중…' : '시작하기'));
+    name.addEventListener('keydown', (e) => { if (e.key === 'Enter') start.click(); });
+    box.replaceChildren(x, el('h2', { text: '같이 고치기' }),
+      el('p', { text: '링크를 받은 사람이 로그인 없이 이 그림을 함께 고쳐요. 고친 것이 바로 서로의 화면에 보여요.' }),
+      el('label', { class: 'cv-co-field' }, el('span', { text: '다른 사람에게 보일 내 이름' }), name),
+      start,
+      el('p', { class: 'muted small', text: '내가 이 화면을 열어 두는 동안 이어져요(닫거나 새로 고치면 끝나요). 들어온 사람의 기기에는 사본이 저장돼요. 녹음한 목소리 · 이 기기에만 있는 영상 파일은 나누지 않아요.' }));
+    return;
+  }
+  const peers = O.co.peers();
+  const slideNo = (id) => { const i = O.slides.findIndex((d) => d.id === id); return i >= 0 ? `${i + 1}번째 장` : ''; };
+  const people = el('ul', { class: 'cv-co-people', dataset: { coPeople: String(peers.length) } }, ...peers.map((p) => {
+    const dot = el('i', { 'aria-hidden': 'true' });
+    dot.style.background = p.color;
+    return el('li', {}, dot, el('b', { text: p.name }), el('small', { text: [p.me ? '나' : '', p.host ? '시작한 사람' : '', slideNo(p.slide)].filter(Boolean).join(' · ') }));
+  }));
+  const host = O.co.role === 'host';
+  const parts = [x, el('h2', { text: `같이 고치는 중 · ${peers.length}명` })];
+  if (host) {
+    const link = coLink(O.coCode);
+    const field = el('input', { type: 'text', readonly: true, value: link, 'aria-label': '같이 고치기 링크', dataset: { coLink: '' }, onFocus: (e) => e.target.select() });
+    const copy = el('button', { class: 'btn', type: 'button', dataset: { coCopy: '' }, onClick: async () => {
+      try { await navigator.clipboard.writeText(link); toast('링크를 복사했어요. 함께 고칠 사람에게 보내요.'); } catch { field.select(); toast('링크를 골라 두었어요. Ctrl+C 로 복사해요.'); }
+    } }, ...face('copy', '복사'));
+    parts.push(el('p', { text: '이 링크를 함께 고칠 사람에게 보내요. 링크를 가진 사람은 누구나 들어와 고칠 수 있어요.' }), el('div', { class: 'cv-co-link' }, field, copy));
+    if (O.coQr) { const qr = el('div', { class: 'cv-co-qr', dataset: { coQr: '' } }); qr.innerHTML = O.coQr; parts.push(qr); }
+  } else {
+    parts.push(el('p', { text: '시작한 사람의 그림을 함께 고치고 있어요. 고친 것은 이 기기에도 사본으로 저장돼요.' }));
+  }
+  if (O.coLost) parts.push(el('p', { class: 'cv-co-lost', role: 'status', text: '시작한 사람과 연결이 끊긴 것 같아요. 다시 이어지면 이어서 나눠요.' }));
+  parts.push(people, el('p', { class: 'muted small', text: '다른 사람이 고른 요소는 그 사람의 색 테두리가 둘러지고, 그동안은 고를 수 없어요.' }),
+    el('button', { class: 'btn cv-co-end', type: 'button', dataset: host ? { coEnd: '' } : { coLeave: '' }, onClick: () => coStop(O) }, ...face(host ? 'close' : 'back', host ? '같이 고치기 끝내기' : '나가기')));
+  box.replaceChildren(...parts);
+}
+async function coStart(O, name) {
+  if (O.co || O.coBusy || !coEdit || O.closed || S.open !== O || O.materialDeck || videoBusy(O)) return;
+  O.coBusy = true;
+  paintCoPanel(O);
+  let channel = null;
+  try {
+    const kit = await import('./co-edit.js');
+    const code = kit.newCoCode();
+    const me = { id: kit.newPeerId(), name: kit.cleanName(name) || '시작한 사람' };
+    coKeepName(me.name);
+    channel = await coEdit.open(code);
+    if (O.closed || S.open !== O) { channel.close?.(); return; }
+    const ctx = { O };
+    ctx.session = O.co = kit.createCoSession({ role: 'host', wire: kit.createWire(channel, { me: me.id, max: 40000 }), me, doc: coDoc(ctx, kit), on: coEvents(ctx) });
+    O.coCode = code;
+    if (typeof channel.qr === 'function') channel.qr(coLink(code)).then((svg) => { if (O.co === ctx.session && typeof svg === 'string' && svg.startsWith('<svg')) { O.coQr = svg; paintCoPanel(O); } }).catch((error) => console.warn(error));
+  } catch (error) {
+    console.warn(error);
+    try { channel?.close?.(); } catch { /* 이미 닫혔다 */ }
+    toast(String(error?.message || '같이 고치기를 시작하지 못했어요. 인터넷을 확인하고 다시 해 주세요.').slice(0, 200), 5000);
+  } finally {
+    O.coBusy = false;
+    paintCo(O);
+  }
+}
+function coStop(O) {
+  if (!O.co) return;
+  O.coLeaving = true;
+  O.co.close();
+  O.coLeaving = false;
+  toggleCoPanel(O, false);
+  toast(O.coButton ? '같이 고치기를 마쳤어요. 고친 것은 이 기기에 저장돼 있어요.' : '같이 고치기를 마쳤어요.', 3500);
+}
+// 링크로 들어온 사람: 이름을 묻고 → 통로를 열고 → 시작한 사람의 그림을 받아 사본으로 연다.
+async function joinCo(code) {
+  const name = await askCoName();
+  if (name === null) { coDropParam(); return false; }
+  coKeepName(name);
+  const loading = onbatangLoading({ title: '같이 고칠 그림을 받고 있어요', detail: '시작한 사람의 화면에서 그림을 받아요. 사진이 많으면 조금 걸려요.' });
+  loading.node.classList.add('cv-copy-loading');
+  document.body.append(loading.node);
+  const wasInert = app.inert; app.inert = true;
+  const ctx = { O: null };
+  let channel = null;
+  try {
+    const kit = await import('./co-edit.js');
+    const me = { id: kit.newPeerId(), name: kit.cleanName(name) || '친구' };
+    channel = await coEdit.open(code);
+    const wire = kit.createWire(channel, { me: me.id, max: 40000 });
+    wire.progress((p) => loading.update({ detail: `그림 받는 중 · ${Math.round((p.got / p.of) * 100)}%`, completed: p.got, total: p.of }));
+    await new Promise((resolve, reject) => {
+      const on = coEvents(ctx);
+      ctx.session = kit.createCoSession({ role: 'guest', wire, me, doc: coDoc(ctx, kit, { code }), on: {
+        ...on,
+        status: (s) => { on.status(s); if (s === 'ok') resolve(); },
+        error: (message) => reject(Error(message)),
+        end: (reason) => { on.end(reason); reject(Error(reason === 'host' ? '시작한 사람이 같이 고치기를 끝냈어요.' : '같이 고치기를 열지 못했어요.')); },
+      } });
+    });
+    toast(`'${ctx.O.record.name}' 그림을 함께 고쳐요. 다른 사람이 고른 것은 그 사람의 색 테두리로 보여요.`, 5000);
+    return true;
+  } catch (error) {
+    console.warn(error);
+    try { if (!ctx.session) channel?.close?.(); } catch { /* 이미 닫혔다 */ }
+    coDropParam();
+    toast(String(error?.message || '같이 고치기에 들어가지 못했어요. 링크를 다시 열어 주세요.').slice(0, 200), 7000);
+    return false;
+  } finally { loading.node.remove(); app.inert = wasInert; }
+}
+function askCoName() {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (v) => { if (done) return; done = true; resolve(v); };
+    const input = el('input', { type: 'text', class: 'cv-co-name', maxlength: '16', value: coSavedName(), placeholder: '예: 3모둠 민지', 'aria-label': '내 이름', dataset: { coName: '' } });
+    const go = el('button', { class: 'btn btn-primary', type: 'button', dataset: { coJoin: '' }, onClick: () => { finish(input.value.trim()); closeModal(); } }, ...face('people', '들어가기'));
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') go.click(); });
+    openModal(el('div', { class: 'cv-co-ask' },
+      el('h2', { text: '같이 고치기에 들어가요' }),
+      el('p', { text: '링크를 보낸 사람의 그림을 함께 고쳐요. 고친 것은 바로 서로의 화면에 보이고, 이 기기에도 사본이 저장돼요.' }),
+      el('label', { class: 'cv-co-field' }, el('span', { text: '다른 사람에게 보일 내 이름' }), input),
+      el('div', { class: 'row' }, el('button', { class: 'btn btn-ghost', type: 'button', onClick: () => { finish(null); closeModal(); } }, '그만두기'), go)),
+    { onClose: () => finish(null) });
+    setTimeout(() => input.focus(), 0);
+  });
 }
 // 링크 공유(내보내기): 저장을 마친 뒤 호스트의 링크 창을 연다. records() 는 이 자료의 모든 파트(이 기기에 저장된 것)를 차례대로 준다.
 async function openCopyFromEditor(O) {
@@ -3991,12 +4324,15 @@ function readOpen() {
  *   savePoll({question,options,counts}): 투표 결과 장(app/poll-result.js)을 지금 장 다음에 저장하고 그 장으로 간다 → {at,total}.
  * - phoneRemote: {url?}; 공용 온바탕이 켠다. showRemote 가 없으면 GBE-AI Lab의 리모컨 판(onbatang-remote-relay.html)을 발표 화면에 작은 창으로 띄워 휴대폰으로 넘긴다(app/phone-remote.js).
  * - showRemote: {open({state(),command(cmd),root})→{update(state),show?(),close()}}; 발표 막대의 "휴대폰 리모컨". cmd: {action:'next'|'prev'|'go'(at)|'black'|'state'}. 기본값은 숨김.
+ * - coEdit: {open(code)→{send(message),on(fn)→끊기,close(),qr?(url)→svg},link?(code)}; 편집기 위 막대의 "같이 고치기"(실시간으로 여럿이 고친다. app/co-edit.js).
+ *   code 는 40자리 무작위 값이다. link 가 없으면 이 주소에 ?co=코드 를 붙인다. 주소의 ?co=코드 를 열면 그 모임에 들어간다. 기본값은 숨김.
+ * - coRelay: {url?}; 공용 온바탕이 켠다. coEdit 이 없으면 GBE-AI Lab의 다리(onbatang-co-relay.html)를 보이지 않는 작은 창으로 띄워 통로로 쓴다(app/co-relay.js).
  * - accountBridge: {url?}; 공용 온바탕 첫 화면의 "GBE-AI Lab 계정으로 이어 쓰기"(GBE-AI Lab 연결 창으로 그림을 올리고 가져온다). sync 가 있으면 숨김.
  * - copyAction: {open({designId,title,records()})}; 내보내기 창의 "링크 공유"(받은 사람이 링크를 열어 자기 브라우저에 사본을 받아 고친다). 없으면 그 칸은 "GBE-AI Lab 회원만"이라고 알리고 막힌다.
  * - copyLink: {url?,key?}; 공용 온바탕이 켠다. 주소의 ?copy=코드를 열면 그 자료를 이 기기에 사본으로 받아 바로 연다(app/copy-link.js).
  * - shareAction: {label,title?,open({designId,flush(),goTo(slideIndex,{upload})}),saved?(record)}; 편집기 위 막대의 공유 단추(GBE-AI Lab의 보기 전용 링크). saved 는 이 기기에 저장할 때마다 불린다(링크에 반영은 호스트가 모아서). 기본값은 숨김.
  */
-export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, accountAction: accountLibrary = null, cloudAction: cloudLibrary = null, shareAction: sharing = null, copyAction: copying = null, copyLink: copyIntake = null, accountBridge: bridging = null, showRemote: remoting = null, phoneRemote: phoning = null, showAudience: audiencing = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false, resume = false, embed = null, syncDelay = null } = {}) {
+export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, accountAction: accountLibrary = null, cloudAction: cloudLibrary = null, shareAction: sharing = null, copyAction: copying = null, copyLink: copyIntake = null, accountBridge: bridging = null, showRemote: remoting = null, phoneRemote: phoning = null, coEdit: coing = null, coRelay: relaying = null, showAudience: audiencing = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false, resume = false, embed = null, syncDelay = null } = {}) {
   if (app) throw new Error('minican already started');
   if (!root) throw new Error('minican root');
   app = root;
@@ -4017,6 +4353,9 @@ export function startMinican({ root = document.getElementById('app'), fonts = []
   // 공용 온바탕: 호스트의 리모컨이 없으면 GBE-AI Lab의 리모컨 판(로그인 없음)을 작은 창으로 띄운다(app/phone-remote.js).
   else if (phoning && typeof phoning === 'object' && !embed) { const opts = typeof phoning.url === 'string' ? { url: phoning.url } : {}; showRemote = { open: async (context) => (await import('./phone-remote.js')).createPhoneRemote(opts).open(context) }; }
   if (audiencing && typeof audiencing.open === 'function') showAudience = audiencing;
+  // 같이 고치기: 호스트의 통로가 없으면 공용 온바탕은 GBE-AI Lab의 다리(로그인 없음)를 쓴다(app/co-relay.js).
+  if (coing && typeof coing.open === 'function' && !embed) coEdit = { open: coing.open, ...(typeof coing.link === 'function' ? { link: coing.link } : {}) };
+  else if (relaying && typeof relaying === 'object' && !embed) { const opts = typeof relaying.url === 'string' ? { url: relaying.url } : {}; coEdit = { open: async (code) => (await import('./co-relay.js')).openCoRelay(code, opts) }; }
   if (bridging && typeof bridging === 'object' && !embed) accountBridge = { ...(typeof bridging.url === 'string' ? { url: bridging.url } : {}) };
   activityAuthoring=authoring===true;
   resumeOpen=resume===true;
@@ -4034,6 +4373,9 @@ export function startMinican({ root = document.getElementById('app'), fonts = []
   useFonts(fonts, titleFont);
   setupApp();
   window.addEventListener('pagehide', flush);
+  // 창을 닫으면 같이 고치기도 끝낸다(들어온 사람은 다시 열면 이어 들어온다). 창이 앞으로 돌아오면 다시 알린다(뒤에 숨은 동안 신호가 뜸했다).
+  window.addEventListener('pagehide', () => S.open?.co?.close());
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') S.open?.co?.ping(); });
   document.addEventListener('contextmenu', onPageMenu);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
   S.phase = 'boot';
