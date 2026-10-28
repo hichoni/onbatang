@@ -19,13 +19,13 @@
     "app/designs.js": "a1ec6826bedf82ef4848bd5960dc6443476e7ed27e74b931848e111022fa3c2d",
     "app/import-document.js": "c44c87c8bc22e18725e705a8887c79c14bd14bada41084ce33e71d6badd128e6",
     "app/pptx-import/bullets.js": "7f19b7f374bf31645195ad97c24569e1840c6517af46cd8782d245f70a32634b",
-    "app/pptx-import/converter.js": "c563b9a9441534a6a4ccac4278a173f680be02c463279f6059e3b62ef9ac06b3",
+    "app/pptx-import/converter.js": "f0598476f6b45527c1b5f16fa64d92d482fdc7a09168eef87b30ba1f275a5ef4",
     "app/pptx-import/preview-frame.html": "3794dd7c33957ef86d232f80560ea428eff72128f59b994eb245451d1c17e127",
     "app/pptx-import/preview-frame.js": "70b93c775814114a118d05442d7cf15e4bf472bb30267f938a0981e46fc7a8b6",
     "app/pptx-import/preview-punctuation.js": "8ff4f855942dde60b6302e775e5a06b58b411e34b015c129088157533934c90e",
     "app/pptx-import/worker.js": "e4ea8c3a9237c1e1b2fc8dc93f57389cbb2f7966134252b8078ab44ef01dc14c",
     "app/zip.js": "c7c09e5385bab4e403509ab734acb182d15ff017c469e731b05a5d1f3eead18e",
-    "package-lock.json": "e758e8a789e9ddbdd962ad28ab85f5b2ae0d5d712105b17dee863075af4dfeb1",
+    "package-lock.json": "6fcb597d1b7b97a80060ef6744b494f6d37fb6db818cb61965d9804ad838f2e8",
     "src/activity.js": "7e6ff97046d62a8b63f6dd4a85ba2cc0760fc74605e9ae308eaa73d4b25ae29f",
     "src/chart.js": "ec041e78d1221d41f66e304ecdff4173ec0f23d4394632a409dc2dc7d83eb407",
     "src/crop.js": "ec9159574565f560476ede8f5292609ab74eae42d130fe0bf59a1ad8844ac1fb",
@@ -35,6 +35,7 @@
     "src/links.js": "b1900f5a82be0132590e8abb5d0eebe974e5873a524b5264f8f413272d94a70b",
     "src/live.js": "0fa7d700bf2ac2f5737df9f723775639707360f387ee99881a5ff64cae8071c3",
     "src/math.js": "dd8c86de304220b56502f7e8c93a89afcd3114e993d7387b8d1859f989fb81e6",
+    "src/omml-tex.js": "2f8c5d29e60cb2fa0d213f85d8a8a8a6487ac9eef83fdecee63fab765524de17",
     "src/pixel-art.js": "533a61b81f49c6bbf8e33b65681d5db76853a2a37c7d9d089f6c00c0c0ec0089",
     "src/quiz.js": "20d6c7811d8cff1037bab98ec91aa5b2dda8c40bd461cbf0642da7cec7c12916",
     "src/runs.js": "22b07d3ed775fe24dfd20f1678ce369e45fc6e36792daa6e7d4b997474d6a65f",
@@ -95,8 +96,8 @@
       "sha256": "a681e9d183c72b4af4856935893805eb48c08f0f5a3f260203db7444c20fb98a"
     },
     "pptx-worker.js": {
-      "bytes": 210435,
-      "sha256": "5482ff5a0580c2979416c4341fc45ac4b418d1a440ccf8e9b357067603533663"
+      "bytes": 226246,
+      "sha256": "2bb6be3a96dc2a0d38829a9f89a73378bd476945c451012bf6826fa6a1ec9aab"
     },
     "preview-frame.html": {
       "bytes": 1243897,

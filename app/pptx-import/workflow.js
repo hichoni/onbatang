@@ -12,6 +12,36 @@ const cancelled=signal=>{if(signal?.aborted)fail('CANCELLED','가져오기를 �
 const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(k=>[k,canonical(value[k])])):value;
 async function sha(file){return [...new Uint8Array(await crypto.subtle.digest('SHA-256',await file.arrayBuffer()))].map(n=>n.toString(16).padStart(2,'0')).join('');}
 
+/**
+ * PPT 수식 → 온바탕 수식: 변환기(converter.js)가 문서에는 원본의 수식 그림(또는 한 줄 글)을 넣어 두고, 그 자리 · 크기 · TeX 를 maths 로 준다.
+ * 여기서 수식 창과 같은 MathJax 로 그려 온바탕 수식 조각으로 바꾼다(같은 이름표). 그리지 못한 것은 원본 그림이 그대로 남는다.
+ * 글자 크기(emH: 장 높이의 %)로 크기를 정하고, 원본 글상자 안의 맞춤(ax · ay)과 여백으로 자리를 정한다. 돌아간 글상자는 가운데에 둔다.
+ */
+export async function renderImportedMath(document,maths,{signal,load=async()=>{const kit=await import('../../src/math-dialog.js');return {MathJax:await kit.loadMathJax(),renderTex:kit.renderTex};}}={}){
+ if(!Array.isArray(maths)||!maths.length)return {done:0,failed:0};
+ let kit;
+ try{kit=await load();}catch(error){console.warn(error);return {done:0,failed:maths.length};}
+ let done=0,failed=0;
+ for(const m of maths){
+  cancelled(signal);
+  const slide=document.slides.find(page=>page?.source?.pageNumber===m.pageNumber),at=slide?slide.items.findIndex(item=>item.id===m.id):-1;
+  if(at<0){failed++;continue;}
+  let got;try{got=kit.renderTex(kit.MathJax,m.tex);}catch(error){console.warn(error);got={};}
+  if(!got?.m){failed++;continue;}
+  const [,,vw,vh]=got.m.vb;
+  let h=vh/1000*m.emH,w=vw/1000*m.emH/m.aspect;
+  const fit=Math.min(1,98/w,98/h);w*=fit;h*=fit;
+  const box=m.box,left=box.x-box.w/2+m.inset.l,right=box.x+box.w/2-m.inset.r,top=box.y-box.h/2+m.inset.t,bottom=box.y+box.h/2-m.inset.b;
+  const turned=!!m.rot;
+  const x=turned?box.x:m.ax==='l'?left+w/2:m.ax==='r'?right-w/2:box.x,y=turned?box.y:m.ay==='t'?top+h/2:m.ay==='b'?bottom-h/2:box.y;
+  const old=slide.items[at],round=v=>Math.round(v*100)/100;
+  slide.items[at]={id:old.id,layout:old.layout,source:old.source,assetRefs:old.assetRefs,t:'math',x:round(Math.max(0,Math.min(100,x))),y:round(Math.max(0,Math.min(100,y))),
+   w:Math.max(1,round(w)),h:Math.max(0.5,round(h)),rot:m.rot||0,color:m.color,tex:m.tex,m:got.m};
+  done++;
+ }
+ return {done,failed};
+}
+
 /** Contiguous parts keep the selected source order. No page is silently dropped. */
 export function planImportParts(inspection,selectedPages,importModes={}){
  if(!Array.isArray(inspection?.pages)||!Array.isArray(selectedPages)||!selectedPages.length||selectedPages.length>200
@@ -78,7 +108,7 @@ export async function blankPicture(dataUrl){
 }
 
 /** One user operation, multiple fixed documents when needed. Retry reuses exact inputs. */
-export function createPptxImportWorkflow({imports,convert=convertPptx,applyFonts=applyFontPlan,loadFonts=loadImportFontAssets,keepVideo=keepVideoDefault,isBlank=blankPicture}={}){
+export function createPptxImportWorkflow({imports,convert=convertPptx,applyFonts=applyFontPlan,loadFonts=loadImportFontAssets,keepVideo=keepVideoDefault,isBlank=blankPicture,renderMath=renderImportedMath}={}){
  if(typeof imports?.saveConvertedDocument!=='function')throw new TypeError('imports.saveConvertedDocument is required');
  const jobs=new Map();
  async function saveAll(options={}){
@@ -130,6 +160,9 @@ export function createPptxImportWorkflow({imports,convert=convertPptx,applyFonts
       const converted=editable.length?await convert(file,{selectedPages:editable,signal}):null;
       const document=converted?clone(converted.document):shell(inspection);
       const pages=new Map(document.slides.map(p=>[p.source.pageNumber,p]));
+      // PPT 수식 → 온바탕 수식(그리지 못한 것은 원본 그림이 남는다)
+      let mathNote=null;
+      if(converted?.maths?.length){cancelled(signal);progress('math',part.pages);mathNote=await renderMath(document,converted.maths,{signal});}
       // 장을 채운 영상: 이 기기에 저장하고 그 장의 바탕 영상으로 깐다(표지 그림은 뺀다). 저장하지 못하면 표지 그림이 남는다.
       const videoNotes=[];
       for(const m of converted?.media||[]){
@@ -161,6 +194,7 @@ export function createPptxImportWorkflow({imports,convert=convertPptx,applyFonts
       report.importModes=Object.fromEntries(part.pages.map(n=>[n,switched.includes(n)?'editable':importModes[n]||'editable']));
       for(const n of switched)report.warnings.push({code:'BLANK_IMAGE_SWITCHED',message:`${n}쪽은 PPT 화면이 한 가지 색으로만 보여서(영상 · 나중에 나타나는 요소) 글 · 도형으로 가져왔어요.`,pageNumber:n});
       for(const n of blankPages.filter(n=>rendered.has(n)))report.warnings.push({code:'BLANK_IMAGE',message:`${n}쪽의 PPT 화면이 한 가지 색으로만 보여요. 원본과 비교해 주세요.`,pageNumber:n});
+      if(mathNote?.failed)report.warnings.push({code:'MATH_AS_PICTURE',message:`수식 ${mathNote.failed}개는 온바탕 수식으로 그리지 못해 원본의 그림으로 가져왔어요.`});
       for(const n of videoNotes)report.warnings.push({code:'VIDEO_NOT_SAVED',message:`${n}쪽의 영상을 이 기기에 저장하지 못해 표지 그림으로 가져왔어요. "바탕 영상"에서 다시 넣을 수 있어요.`,pageNumber:n});
       report.fontChanges=payload.slides.flatMap(p=>p.items.filter(e=>e.t==='text').flatMap(e=>{
        const old=before.slides.find(page=>page.id===p.id)?.items.find(i=>i.id===e.id);

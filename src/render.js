@@ -89,7 +89,10 @@ export function paintRuns(node, item) {
   // 밑줄은 자식이 지울 수 없다(부모의 밑줄이 자식에게도 그어진다). 밑줄 친 글상자의 한 구간만 밑줄을 뺐으면 조각마다 긋는다.
   const each = item.under && item.runs.some((r) => r.u === false);
   if (each) node.style.textDecorationLine = 'none';
-  node.replaceChildren(...runPieces(item.text, item.runs).map(({ text, run }) => {
+  // 한 덩어리(.fi-runs)로 감싼다: 높이가 있는 글상자(PPT 에서 가져온 것)는 세로 맞춤 때문에 세로 flex 라, 조각이 따로 놓이면 조각마다 줄이 나뉜다.
+  const flow = el('span', { class: 'fi-runs' });
+  node.replaceChildren(flow);
+  flow.append(...runPieces(item.text, item.runs).map(({ text, run }) => {
     if (!run && !each) return document.createTextNode(text);
     const span = el('span', { class: 'fi-run', text });
     if (run?.b !== undefined) span.style.fontWeight = run.b ? heavy : light;

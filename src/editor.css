@@ -67,7 +67,7 @@
 }
 /* Keep the punctuation visible while its advance hangs outside the line box.
    This is used only for slide text with hanging punctuation enabled. */
-.fi-text-flow { min-width: 0; }
+.fi-text-flow, .fi-runs { min-width: 0; }
 .fi-text-hang { display: inline-block; width: 0; white-space: pre; text-decoration: inherit; }
 /* The flow inherits decoration by propagation. Redeclaring it on that wrapper
    paints ordinary letters twice; only the atomic punctuation needs its own. */

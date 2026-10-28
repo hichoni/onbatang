@@ -103,6 +103,17 @@ test('style only the chosen letters from the toolbar and with Ctrl+B, keep them 
   await page.locator('.cv-show-btn').click();
   await page.locator('.cv-show-stage .fi-run').first().waitFor();
   assert.equal(await page.locator('.cv-show-stage .fi-run').first().textContent(), '[선택]!');
+  // 높이가 있는 글상자(PPT 에서 가져온 것: 세로 맞춤 때문에 세로 flex)에서도 조각이 한 줄에 이어진다
+  const lines = await page.evaluate(async () => {
+    const { designView } = await import('/src/render.js');
+    const card = designView({ bg: '#fff', items: [{ t: 'text', id: 'etall00001', text: '가나다 라마바 사아자', x: 50, y: 50, w: 90, h: 40, size: 4, color: '#222222', valign: 'middle', layout: 'slide', runs: [{ s: 4, e: 7, i: true }] }] });
+    card.style.width = '800px'; document.body.append(card);
+    const walk = document.createTreeWalker(card.querySelector('.fi-text'), 4), tops = [];
+    for (let t = walk.nextNode(); t; t = walk.nextNode()) { const r = document.createRange(); r.selectNodeContents(t); tops.push(Math.round(r.getBoundingClientRect().top)); }
+    card.remove();
+    return new Set(tops).size;
+  });
+  assert.equal(lines, 1, 'a styled piece stays on the same line as its sentence');
   assert.deepEqual(errors, []);
   void picked;
 });

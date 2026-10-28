@@ -4,9 +4,10 @@ import {crc32} from '../zip.js';
 import {cleanSize,DOCUMENT_LIMITS,SLIDE_LIMITS,legacyId,cleanNotes,slideNotes,cleanAlt,cleanTopic} from '../../src/document.js';
 import {importConvertedDocument} from '../import-document.js';
 import {bulletChar,autoNumber} from './bullets.js';
+import {ommlTex,ommlText,textArg,M_NS} from '../../src/omml-tex.js';
 
 export const PPTX_MIME='application/vnd.openxmlformats-officedocument.presentationml.presentation';
-export const PPTX_CONVERTER_VERSION='1.3.2';
+export const PPTX_CONVERTER_VERSION='1.4.0';
 export const PPTX_LIMITS=Object.freeze({zipBytes:52428800,uncompressedBytes:104857600,files:2000,partBytes:33554432,xmlBytes:2097152,xmlTotalBytes:8388608,xmlNodes:100000,xmlTotalNodes:50000,xmlDepth:64,pages:200,imageBytes:256000,imageEdge:8192,imagePixels:16777216,documentBytes:524288});
 const NS={p:'http://schemas.openxmlformats.org/presentationml/2006/main',a:'http://schemas.openxmlformats.org/drawingml/2006/main',r:'http://schemas.openxmlformats.org/officeDocument/2006/relationships',rels:'http://schemas.openxmlformats.org/package/2006/relationships'};
 export class PptxConversionError extends Error {
@@ -16,6 +17,8 @@ const fail=(code,message,details)=>{throw new PptxConversionError(code,message,d
 const children=node=>Array.from(node?.childNodes||[]).filter(n=>n.nodeType===1);
 const direct=(node,name,ns=NS.a)=>children(node).find(n=>n.localName===name&&n.namespaceURI===ns);
 const P14='http://schemas.microsoft.com/office/powerpoint/2010/main';
+// PowerPoint 수식: mc:AlternateContent 의 Choice(Requires="a14") 안 글상자에 a14:m(OMML)이 있고, Fallback 은 그 수식의 그림이다.
+const MC='http://schemas.openxmlformats.org/markup-compatibility/2006',A14='http://schemas.microsoft.com/office/drawing/2010/main';
 const all=(node,name,ns=NS.a)=>Array.from(node?.getElementsByTagNameNS(ns,name)||[]);
 const attr=(node,key)=>node?.getAttribute(key)||'';
 const relationId=node=>node?.getAttributeNS(NS.r,'id')||'';
@@ -257,8 +260,32 @@ function* slideObjects(tree,warn,reject,matrix=IDENTITY,depth=0){
     if(object.namespaceURI===NS.p&&object.localName==='grpSp'){
       try{if(['1','true'].includes(attr(direct(direct(object,'nvGrpSpPr',NS.p),'cNvPr',NS.p),'hidden')))fail('UNSUPPORTED_HIDDEN_OBJECT','숨긴 그룹이 있는 장은 아직 가져올 수 없어요.');if(depth>=12)fail('GROUP_LIMIT','그룹이 너무 깊게 중첩되어 있어요.');const next=matrixProduct(matrix,groupMatrix(object));warn('GROUP_FLATTENED','그룹의 위치·크기·순서를 유지하고 개별 편집 요소로 옮겼어요.');yield* slideObjects(object,warn,reject,next,depth+1);}
       catch(error){if(error instanceof PptxConversionError)reject(error.code,error.message);else throw error;}
+    }else if(object.namespaceURI===MC&&object.localName==='AlternateContent'){
+      // 수식(a14)만 담은 Choice 는 그대로 읽는다(Fallback 그림은 수식을 옮기지 못할 때 쓴다). 그 밖의 새 요소(새 차트 · 잉크 · 3D …)는
+      // Fallback 이 "이 차트는 볼 수 없어요" 같은 글상자이기도 해서 전처럼 그 장을 고칠 수 있게 가져오지 않는다(장 그림).
+      const choice=children(object).find(n=>n.localName==='Choice'&&n.namespaceURI===MC),fallback=children(object).find(n=>n.localName==='Fallback'&&n.namespaceURI===MC);
+      const math=!!choice&&attr(choice,'Requires').split(/\s+/).every(r=>r==='a14')&&all(choice,'m',A14).length>0;
+      if(!math){reject('UNSUPPORTED_ELEMENT','지원하지 않는 슬라이드 요소가 있어요.');continue;}
+      for(const inner of slideObjects(choice,warn,reject,matrix,depth))yield {...inner,fallback};
     }else yield {object,matrix};
   }
+}
+// 수식만(또는 짧은 글과 수식) 담은 글상자 → TeX 한 개. 문단은 줄로(\\), 글 조각은 \text{}.
+function bodyTex(paragraphs){
+  const lines=[];
+  for(const p of paragraphs){
+    let line='';
+    const flush=()=>{if(line.trim())lines.push(line.trim());line='';};
+    for(const n of children(p)){
+      if(n.namespaceURI===A14&&n.localName==='m')line+=` ${ommlTex(n)} `;
+      else if(n.namespaceURI===NS.a&&['r','fld'].includes(n.localName)){const t=all(n,'t').map(t=>t.textContent).join('');if(t.trim())line+=`\\text{${textArg(t)}}`;else if(t)line+='\\ ';}
+      else if(n.namespaceURI===NS.a&&n.localName==='br')flush();
+    }
+    flush();
+  }
+  const tex=lines.length>1?`\\begin{gathered}${lines.join(' \\\\ ')}\\end{gathered}`:lines[0]||'';
+  if(!tex||tex.length>600)fail('MATH_UNSUPPORTED','수식을 옮기지 못했어요.');
+  return tex;
 }
 function geometry(properties,size,warn,{line=false,matrix=IDENTITY}={}){
   const transform=direct(properties,'xfrm'),off=direct(transform,'off'),ext=direct(transform,'ext');
@@ -554,8 +581,8 @@ async function pageData(context,path,pageNumber){
     else if(reference&&themeFill?.localName==='solidFill'){const ph=color(reference,'#ffffff',warn);bg=attr(direct(themeFill,'schemeClr'),'val')==='phClr'?ph:color(themeFill,ph,warn);}
     else reject('UNSUPPORTED_BACKGROUND','단색 외의 배경은 아직 가져올 수 없어요.');
   }
-  let photoCount=0;
-  for(const {object,matrix} of slideObjects(tree,warn,reject)){
+  let photoCount=0;const maths=[];   // 수식: 온바탕 수식으로 바꿀 것들(그리기는 화면 쪽에서 MathJax 로 한다: workflow 의 renderImportedMath)
+  for(const {object,matrix,fallback} of slideObjects(tree,warn,reject)){
     if(items.length>SLIDE_LIMITS.items){reject('ITEM_LIMIT',`쪽당 요소 ${SLIDE_LIMITS.items}개를 넘어요.`);break;}
     if(object.localName==='pic'&&++photoCount>SLIDE_LIMITS.photos){reject('PHOTO_LIMIT',`쪽당 사진 ${SLIDE_LIMITS.photos}장을 넘어요.`);break;}
     if(object.namespaceURI!==NS.p){reject('UNSUPPORTED_ELEMENT','지원하지 않는 슬라이드 요소가 있어요.');continue;}
@@ -594,7 +621,7 @@ async function pageData(context,path,pageNumber){
         }
         continue;
       }
-      const body=direct(object,'txBody',NS.p),value=body?extractText(body):'',solid=direct(props,'solidFill'),line=direct(props,'ln'),noFill=direct(props,'noFill');
+      const body=direct(object,'txBody',NS.p),solid=direct(props,'solidFill'),line=direct(props,'ln'),noFill=direct(props,'noFill');let value=body?extractText(body):'';
       const shapes={rect:'rect',roundRect:'round',ellipse:'circle',triangle:'tri',diamond:'diamond',rightArrow:'arrow',leftArrow:'arrow',wedgeRectCallout:'bubble'},custom=direct(props,'custGeom'),capsule=custom&&customCapsule(custom,g),stroke=visibleLine(line);
       const textBox=['1','true'].includes(attr(all(object,'cNvSpPr',NS.p)[0],'txBox'));
       if(custom&&!capsule||(!shapes[preset]&&!textBox&&!capsule&&preset!=='line'))fail('UNSUPPORTED_SHAPE','이 도형 종류는 아직 가져올 수 없어요.');
@@ -608,7 +635,54 @@ async function pageData(context,path,pageNumber){
         if(length<0.01||length>140||thickness<0.01||thickness>140)fail('UNSUPPORTED_GEOMETRY','선 크기가 편집 범위를 벗어났어요.');
         items.push({...meta('shape'),t:'shape',x:g.x,y:g.y,w:length,h:thickness,rot,shape:'rect',color:color(direct(line,'solidFill'),'#222222',warn)});continue;
       }
-      const hasShape=!!solid||(!noFill&&!textBox)||stroke,emptyShape=!!noFill&&!stroke&&!value;
+      // 수식(a14:m): 수식만 · 짧은 글과 수식인 글상자는 온바탕 수식 하나로. 긴 글 속의 수식은 한 줄 글로 바꿔 글상자에 그대로 둔다.
+      const mathNodes=body?all(body,'m',A14):[];let mathOnly=false;
+      if(mathNodes.length){
+        const paragraphs=children(body).filter(n=>n.localName==='p'&&n.namespaceURI===NS.a);
+        if(value.replace(/\s+/g,'').length<=30&&paragraphs.length<=4){
+          mathOnly=true;
+          let tex='';try{tex=bodyTex(paragraphs);}catch(error){if(!(error instanceof PptxConversionError)&&!/^OMML_/.test(error?.message))throw error;}
+          const runProps=all(mathNodes[0],'rPr')[0]||all(body,'endParaRPr')[0],points=Number(attr(runProps,'sz')||1800)/100;
+          const bodyPr=direct(body,'bodyPr'),inset=(key,base,scale,full)=>(attr(bodyPr,key)===''?base:Number(attr(bodyPr,key))||0)*scale/full*100;
+          const jc=attr(all(body,'jc',M_NS)[0],'m:val')||all(body,'jc',M_NS)[0]?.getAttributeNS(M_NS,'val')||'';
+          const display=all(body,'oMathPara',M_NS).length>0&&(!jc||['center','centerGroup'].includes(jc))&&!value.trim();
+          const algn=attr(direct(paragraphs[0],'pPr'),'algn');
+          const id=meta('math').id,mathColor=color(direct(runProps,'solidFill'),'#222222',warn);
+          // 옮기지 못하면 쓰는 것: 원본의 수식 그림(Fallback), 없으면 한 줄 글
+          let standIn=null;
+          const pic=fallback&&children(fallback).find(n=>n.namespaceURI===NS.p&&['pic','sp'].includes(n.localName));
+          const blip=pic&&(all(pic,'blip')[0]),rid=blip?.getAttributeNS(NS.r,'embed'),rel=rid&&pageRels.get(rid);
+          if(rel&&!rel.external&&rel.type==='image'&&files[rel.target]){
+            try{
+              const fg=geometry(direct(pic,'spPr',NS.p),size,warn,{matrix});
+              const {bytes,mime}=await rasterPicture(files[rel.target],rel.target,{crop:[0,0,0,0],aspect:fg.width/fg.height},warn);
+              standIn={id,layout:'slide',source:meta('math').source,assetRefs:meta('math').assetRefs,t:'image',...position(fg),url:`data:${mime};base64,${base64(bytes)}`,alt:cleanAlt(`수식: ${ommlText(mathNodes[0])}`.slice(0,200))};
+            }catch(error){if(!(error instanceof PptxConversionError))throw error;}
+          }
+          if(!standIn){
+            const linear=paragraphs.map(p=>children(p).map(n=>n.namespaceURI===A14&&n.localName==='m'?ommlText(n):all(n,'t').map(t=>t.textContent).join('')).join('')).join('\n').trim();
+            if(!linear||g.w<0.1||g.w>100)fail('MATH_UNSUPPORTED','수식을 옮기지 못했어요.');
+            standIn={id,layout:'slide',source:meta('math').source,assetRefs:meta('math').assetRefs,t:'text',x:g.x,y:g.y,w:g.w,rot:g.rot,size:Math.max(0.5,Math.min(30,points*g.scaleY/(size.width/12700)*100)),font:'gothic',color:mathColor,align:'c',text:linear.slice(0,SLIDE_LIMITS.text)};
+          }
+          items.push(standIn);
+          if(tex){
+            maths.push({id,tex,color:mathColor,rot:g.rot,aspect:size.width/size.height,emH:points*12700*g.scaleY/size.height*100,
+              ax:display?'c':{ctr:'c',r:'r'}[algn]||'l',ay:{ctr:'c',b:'b'}[attr(bodyPr,'anchor')]||'t',box:{x:g.x,y:g.y,w:g.w,h:g.h},
+              inset:{l:inset('lIns',91440,g.scaleX,size.width),r:inset('rIns',91440,g.scaleX,size.width),t:inset('tIns',45720,g.scaleY,size.height),b:inset('bIns',45720,g.scaleY,size.height)}});
+            warn('MATH_IMPORTED','수식은 고칠 수 있는 온바탕 수식으로 가져와요. 글꼴이 달라 크기 · 간격이 원본과 조금 다를 수 있어요.');
+          }else warn('MATH_AS_PICTURE','온바탕 수식으로 옮기지 못한 수식은 원본의 그림으로 가져와요.');
+        }else{
+          // 긴 글 속의 수식: 한 줄 글(x=(−b±√(b²−4ac))/2a)로 바꿔 그 자리에 넣는다
+          for(const m of mathNodes){
+            const run=doc.createElementNS(NS.a,'a:r'),props=all(m,'rPr')[0],t=doc.createElementNS(NS.a,'a:t');
+            if(props){const copy=props.cloneNode(true);for(const font of children(copy).filter(n=>['latin','ea','cs','sym'].includes(n.localName)))copy.removeChild(font);run.appendChild(copy);}   // 수식 글꼴(Cambria Math)은 글상자 글꼴이 되지 않게
+            t.appendChild(doc.createTextNode(ommlText(m)));run.appendChild(t);m.parentNode.replaceChild(run,m);
+          }
+          value=extractText(body);
+          warn('MATH_AS_TEXT','글 속의 수식은 한 줄 글(분수 a/b · 루트 √)로 가져왔어요. 수식으로 고치려면 "수식 넣기"로 다시 넣어요.');
+        }
+      }
+      const hasShape=!!solid||(!noFill&&!textBox)||stroke,emptyShape=!!noFill&&!stroke&&!value&&!mathOnly;
       if(hasShape||emptyShape){
         if(g.w<0.01||g.w>140||g.h<0.01||g.h>140)fail('UNSUPPORTED_GEOMETRY','도형 크기가 편집 범위를 벗어났어요.');
         const shape={...meta('shape'),t:'shape',...position(g),shape:capsule?'round':shapes[preset]||'rect',color:color(solid,'#d0ebff',warn)};
@@ -627,7 +701,7 @@ async function pageData(context,path,pageNumber){
         if(stroke){const width=lineWidth(line,size);shape.line=Math.max(0.01,Math.min(4,width));shape.lc=color(direct(line,'solidFill'),'#222222',warn);if(width!==shape.line)warn('LINE_WIDTH_ADJUSTED','선 굵기를 편집기가 지원하는 범위로 맞췄어요.');if(noFill)shape.hollow=true;}
         items.push(shape);
       }
-      if(value){
+      if(value&&!mathOnly){
         if(value.length>SLIDE_LIMITS.text)fail('TEXT_LIMIT',`한 글상자가 ${SLIDE_LIMITS.text}자를 넘어요. 전체 문구는 검사 결과와 원본에 남아 있어요.`);
         if(g.w<0.1||g.w>100)fail('UNSUPPORTED_GEOMETRY','글상자 너비가 편집 범위를 벗어났어요.');
         const paragraphs=children(body).filter(node=>node.localName==='p'&&node.namespaceURI===NS.a);
@@ -693,7 +767,7 @@ async function pageData(context,path,pageNumber){
   }
   if(itemBytes>PPTX_LIMITS.documentBytes-4096)reject('DOCUMENT_SIZE_LIMIT','이 장의 편집 데이터가 저장 한도를 넘어요.');
   return {pageNumber,title:text.split('\n').find(v=>v.trim())?.slice(0,80)||`${pageNumber}쪽`,text,notesText,fontUsage,warnings,canImport,estimatedBytes:itemBytes+1024,
-    ...(canImport&&media.length?{media}:{}),
+    ...(canImport&&media.length?{media}:{}),...(canImport&&maths.length?{maths}:{}),
     slide:{id:legacyId('p',`${source.sha256}:${pageNumber}`),bg,...slideNotes({notes:speakerNotes}),...(hidden?{hidden:true}:{}),source:{kind:'pptx',sourceDocumentId:source.sourceDocumentId,assetId:source.assetId,pageNumber,sha256:source.sha256},assetRefs:[source.assetId],items:canImport?items:[]}};
 }
 
@@ -764,5 +838,7 @@ export async function convertPptx(file,options={}){
   if(new TextEncoder().encode(JSON.stringify(record)).length>PPTX_LIMITS.documentBytes)fail('DOCUMENT_SIZE_LIMIT','선택한 쪽의 편집 데이터가 512KB 저장 한도를 넘어요. 쪽을 나누어 가져와 주세요.',{inspection:inspectionOf(parsed)});
   // 바탕 영상으로 쓸 영상 파일들(쪽 번호와 함께). 문서에는 싣지 않는다: 부르는 쪽이 저장하고 그 열쇠를 장에 적는다.
   const media=pages.flatMap(p=>(p.media||[]).map(m=>({...m,pageNumber:p.pageNumber})));
-  return {report,document:record,...(media.length?{media}:{})};
+  // 수식: 문서에는 원본 그림(또는 한 줄 글)을 넣어 두고, 부르는 쪽이 MathJax 로 그려 온바탕 수식으로 바꾼다(workflow 의 renderImportedMath).
+  const maths=pages.flatMap(p=>(p.maths||[]).map(m=>({...m,pageNumber:p.pageNumber})));
+  return {report,document:record,...(media.length?{media}:{}),...(maths.length?{maths}:{})};
 }
