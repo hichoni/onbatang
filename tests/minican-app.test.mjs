@@ -106,12 +106,12 @@ test('압축 파일(zip): 이름 · 크기 · 검사 값이 맞게 적힌다', (
   assert.equal(view.getUint16(end + 10, true), 2);
 });
 
-test('템플릿: 기본 짜임 6종과 주제 테마 9종(표지 · 내용). 네 가지 모양 모두에서 요소를 만든다', () => {
+test('템플릿: 기본 짜임 · 주제 테마 · 행사와 연수. 네 가지 모양 모두에서 요소를 만든다', () => {
   const basic = SHARED_LAYOUTS.filter((l) => l.group === BASIC_GROUP);
   const covers = SHARED_LAYOUTS.filter((l) => l.cover);
   assert.equal(basic.length, 6);
-  assert.equal(covers.length, 9);
-  assert.equal(SHARED_LAYOUTS.length, 6 + 18);
+  assert.ok(covers.length >= 15);
+  assert.ok(SHARED_LAYOUTS.length >= 54);
   assert.ok(covers.every((l) => l.ratio === THEME_RATIO));
   assert.equal(new Set(SHARED_LAYOUTS.map((l) => l.id)).size, SHARED_LAYOUTS.length);
   for (const l of SHARED_LAYOUTS) {

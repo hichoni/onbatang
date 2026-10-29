@@ -246,6 +246,7 @@ export function createShowTools(root, opts) {
     curtain = curtain === kind ? '' : kind;
     curtainEl.className = `ost-curtain${curtain ? ` ${curtain}` : ''}`;
     renderPresenter();
+    opts.stateChanged?.();
   }
 
   // ---------- 펜 · 레이저 ----------
@@ -543,6 +544,7 @@ export function createShowTools(root, opts) {
     handle, claimClick, buttons, openPresenter,
     presenting: () => !!presenter && !presenter.win.closed,
     camera: () => camEl.classList.contains('on'),
+    curtain: () => curtain,
     /** 쪽이 바뀐 뒤: 그린 것을 지우고, 열린 칸을 닫고, 발표자 화면을 맞춘다. */
     changed() {
       erase(); if (panel) closePanel();

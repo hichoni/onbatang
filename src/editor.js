@@ -95,7 +95,7 @@ const BLOB_CACHE = 12;         // 이번에 올린 사진의 파일 내용을 �
  */
 export function createEditor({
   design = null, onChange = () => {}, uploadImage = null, loadImageBlob = null, fonts = fontList, notify = toast, onAspect = () => {},
-  uploads = null, usedElsewhere = null, onRemoveUpload = null, onMotionAll = null, canPaste = () => true,
+  uploads = null, usedElsewhere = null, onRemoveUpload = null, onMotionAll = null, motionSets = null, canPaste = () => true,
   documentImport = null, colorPalettes = null,
   saveVideo = null, createCamera = null, videoLimits = null, videoNote = '', videoHint = '',
   onSelect = null, lockedBy = null, slideMenu = null, outline = null,
@@ -173,6 +173,7 @@ export function createEditor({
   let typed = false;          // 이번에 고치기 시작한 뒤 기록을 남겼는지(처음 한 번만 남긴다)
   let cut = null;             // 배경 제거 작업(openCut 의 job): 방식(AI · 단색) · 막대 값 · 붓질 · 미리보기
   let armed = null;           // 한 번 눌러 둔 템플릿(이미 꾸민 카드에서는 한 번 더 눌러야 바뀐다)
+  let layoutQuery = '', layoutGroup = '';
   let menu = null;            // 열려 있는 오른쪽 누르기 메뉴(없으면 null)
   let press = null;           // 길게 누르기를 기다리는 중: { id, x, y, timer }
   let library = [];           // 올린 파일 목록 [{ url, path? }] (올린 차례대로. configure({ maxUploads }) 가 1 이상일 때만 쓴다)
@@ -243,6 +244,27 @@ export function createEditor({
     class: 'fe-stage', tabindex: '0', role: 'group',
     'aria-label': '꾸미기 판. 조각을 누르면 고르고, 끌면 옮겨요. 화살표 키로도 옮길 수 있어요.',
   }, cardEl, overlay, cropLayer, linkHint);
+  let selectionSurface = null;
+  // Hosts can include the desk around the paper in rectangle selection. Listen
+  // only to its empty background: controls, touch scrolling and the paper keep
+  // their own input handling. Capture on stage shares the existing drag path.
+  function outsideSelection(e) {
+    if (e.target !== selectionSurface || e.button !== 0 || e.isPrimary === false || e.pointerType === 'touch' || !card || drag || cropJob || !stage.isConnected) return;
+    if (linking) { stopLinking(true); return; }
+    textRange = null;
+    endEdit();
+    stopPreview();
+    stopPress();
+    startMarquee(e, e.shiftKey);
+  }
+  function setSelectionSurface(surface) {
+    if (surface === selectionSurface) return;
+    selectionSurface?.removeEventListener('pointerdown', outsideSelection);
+    selectionSurface?.classList.remove('fe-selection-surface');
+    selectionSurface = surface || null;
+    selectionSurface?.addEventListener('pointerdown', outsideSelection);
+    selectionSurface?.classList.add('fe-selection-surface');
+  }
   const bar = el('div', { class: 'fe-bar', role: 'toolbar', 'aria-label': '고른 조각의 도구' });
   const popBox = el('div', { class: 'fe-pop', hidden: true });
   const toolbar = el('div', { class: 'fe-tools' }, bar, popBox);
@@ -3895,6 +3917,8 @@ export function createEditor({
       }, ALL) : null;
       const hint = it?.lock ? '잠근 조각은 잠금을 풀면 움직임을 정할 수 있어요. ' : it ? '' : '조각을 하나 고르면 그 조각만 다르게 움직이게 할 수 있어요. ';
       return [
+        typeof motionSets?.open === 'function' ? el('button', { class: 'fe-outline-start', type: 'button', dataset: { motionSets: '' }, onClick: () => motionSets.open() },
+          icon('motion'), el('span', {}, el('b', { text: '이야기가 이어지는 움직임 묶음' }), el('small', { text: '전체 지도 → 주제 확대 → 정리 · 숨 쉬는 요소' }))) : null,
         ...mine, ...motionTimeline(), ...combos, ...turns,
         el('div', { class: 'fe-row fe-motion-go' },
           el('button', { class: 'fe-btn primary', type: 'button', onClick: () => previewPage() }, icon('play'), '이 장 미리 보기'), all),
@@ -3913,11 +3937,37 @@ export function createEditor({
         el('button', { class: 'fe-outline-start', type: 'button', dataset: { outlineStart: '' }, onClick: () => outline.open() },
           icon('text'), el('span', {}, el('b', { text: '개요로 여러 장 만들기' }), el('small', { text: '차례를 적으면 장마다 제목 · 내용을 놓아 줘요' }))),
       ] : [];
-      return [...fromOutline, ...layoutGroups().flatMap((g) => [
-        g.name ? el('div', { class: 'fe-head', text: g.name }) : null,
-        el('div', { class: 'fe-layouts', role: 'group', 'aria-label': g.name ? `${g.name} 틀` : '틀' }, ...g.list.map(tile)),
-        armed && g.list.some((l) => l.id === armed) ? armNote() : null,
-      ])];
+      const groups = layoutGroups();
+      const result = el('p', { class: 'fe-note', role: 'status', 'aria-live': 'polite' });
+      const sections = groups.map(g => {
+        const tiles = g.list.map(l => ({ layout: l, node: tile(l) }));
+        const node = el('section', { class: 'fe-template-section' },
+          g.name ? el('div', { class: 'fe-head', text: g.name }) : null,
+          el('div', { class: 'fe-layouts', role: 'group', 'aria-label': g.name ? `${g.name} 틀` : '틀' }, ...tiles.map(t => t.node)),
+          armed && g.list.some(l => l.id === armed) ? armNote() : null);
+        return { name: g.name, tiles, node };
+      });
+      // Filter in place, keeping keyboard focus, the query and thumbnail DOM.
+      const filter = () => {
+        const words = layoutQuery.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+        let count = 0;
+        for (const group of sections) {
+          let found = 0;
+          for (const entry of group.tiles) {
+            const text = [entry.layout.name, group.name, ...(entry.layout.tags || [])].join(' ').toLocaleLowerCase();
+            const matches = (!layoutGroup || layoutGroup === group.name) && words.every(word => text.includes(word));
+            entry.node.hidden = !matches; if (matches) found++;
+          }
+          group.node.hidden = found === 0; count += found;
+        }
+        result.textContent = count ? `${count}개 틀 · 모든 글과 도형을 직접 고칠 수 있어요.` : '맞는 틀이 없어요. 다른 낱말이나 전체 분류로 찾아보세요.';
+      };
+      const search = el('input', { class: 'fe-template-search', type: 'search', value: layoutQuery, placeholder: '연수, 식순, 체육대회…', 'aria-label': '틀 찾기', onInput: e => { layoutQuery = e.target.value; filter(); } });
+      const category = el('select', { class: 'fe-template-category', 'aria-label': '틀 분류', onChange: e => { layoutGroup = e.target.value; filter(); } },
+        el('option', { value: '' }, '전체 분류'), ...groups.filter(g => g.name).map(g => el('option', { value: g.name }, g.name)));
+      if (!groups.some(g => g.name === layoutGroup)) layoutGroup = '';
+      category.value = layoutGroup; filter();
+      return [...fromOutline, el('div', { class: 'fe-template-filters' }, search, category), result, ...sections.map(g => g.node)];
     }
     if (tab === 'text') {
       return [
@@ -4676,7 +4726,7 @@ export function createEditor({
   }
 
   const api = {
-    stage, toolbar, panel, mount, setDesign,
+    stage, toolbar, panel, mount, setDesign, setSelectionSurface,
     /** 발표자 노트 칸(접고 펴는 칸). 프로젝트가 그림 아래 등 원하는 자리에 놓는다. 놓지 않으면 노트는 그대로 저장만 된다. */
     notes,
     /** 장(슬라이드) 자체의 표시를 바꾼다: hidden(발표에서 건너뛰기) · topic · dur(리허설 시간) · voice(녹음한 목소리). 그림이 아니라서 되돌리기 기록에는 넣지 않는다. */
@@ -4728,6 +4778,7 @@ export function createEditor({
     forget: () => { past = []; future = []; if (card) renderBar(); },
     /** 편집기를 치운다(열린 메뉴와 지켜보던 것들을 정리한다). 화면 조각은 프로젝트가 떼어 낸다. */
     destroy: () => {
+      setSelectionSurface(null);
       dismissCrop();
       document.removeEventListener('pointerdown',onCropOutside,true);
       sampling?.controller.abort();sampling=null;

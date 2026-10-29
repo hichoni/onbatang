@@ -221,6 +221,11 @@
 .fe-one { position: absolute; outline: 1.5px solid var(--fe-primary); outline-offset: 1px; }
 .fe-groupbox { position: absolute; outline: 1.5px dashed var(--fe-primary); outline-offset: 1px; }
 .fe-marquee { position: absolute; border: 1.5px solid var(--fe-primary); background: rgba(57, 73, 199, .1); border-radius: 2px; }
+.fe-selection-surface { user-select: none; -webkit-user-select: none; }
+.fe-template-filters { display: grid; gap: 8px; }
+.fe-template-search, .fe-template-category { width: 100%; min-height: 42px; padding: 9px 12px; border: 1px solid var(--fe-line); border-radius: 10px; background: var(--fe-paper, #fff); color: inherit; font: inherit; }
+.fe-template-section { display: grid; gap: 8px; }
+.fe-template-section[hidden], .fe-layout[hidden] { display: none !important; }
 .fe-sel.locked { outline: 1.5px dashed #868e96; }
 .fe-sel.locked .fe-h { display: none; }
 .fe-h {

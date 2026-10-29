@@ -10,7 +10,7 @@
 // 파일은 배포본의 { 경로: 바이트 } 에서 읽고 결과도 그렇게 돌려준다(디스크에 쓰지 않는다).
 import {build} from 'esbuild';
 import {parse} from 'acorn';
-import {posix} from 'node:path';
+import {posix, resolve, relative, sep, isAbsolute} from 'node:path';
 
 export const PAGE='app/index.html',ENTRY='app/index.bundle.js',CHUNK_PREFIX='app/chunk-';
 const OUT='app';
@@ -100,12 +100,15 @@ export async function bundleApp(files,{version=''}={}){
    return {contents:next??source,loader:'js'};
   });
  }};
+ // Native absolute paths are required by esbuild on Windows as well. Public
+ // archive names remain POSIX paths, independent of the workstation drive.
+ const bundleRoot=resolve('/'),siteFile=p=>isAbsolute(p)?relative(bundleRoot,p).split(sep).join('/'):p.replace(/^\//,'');
  const result=await build({entryPoints:[{in:'onbatang:start',out:'index.bundle'}],bundle:true,splitting:true,format:'esm',platform:'browser',target:'es2022',
-  absWorkingDir:'/',outdir:'/'+OUT,entryNames:'[name]',chunkNames:'chunk-[hash]',minifyWhitespace:true,charset:'utf8',legalComments:'eof',metafile:true,write:false,logLevel:'warning',
+  absWorkingDir:bundleRoot,outdir:resolve(bundleRoot,OUT),entryNames:'[name]',chunkNames:'chunk-[hash]',minifyWhitespace:true,charset:'utf8',legalComments:'eof',metafile:true,write:false,logLevel:'warning',
   plugins:[plugin]});
  const site=p=>p.replace(/^site:\//,'');
  const bundled=new Set(Object.keys(result.metafile.inputs).map(site).filter(p=>p!=='app/index.start.js'));
- const outputs=Object.entries(result.metafile.outputs).map(([f,o])=>({file:f.replace(/^\//,''),...o}));
+ const outputs=Object.entries(result.metafile.outputs).map(([f,o])=>({file:siteFile(f),...o}));
  const externals=[...new Set(outputs.flatMap(o=>o.imports.filter(i=>i.external).map(i=>posix.normalize(posix.join(OUT,i.path)))))];
  // 같은 화면에서 따로 부르는 다른 모듈 스크립트(<script type="module" src>)도 묶인 모듈을 따로 부르면 안 된다.
  const others=[...html.matchAll(/<script type="module" src="([^"?]+)[^"]*"><\/script>/g)].map(m=>posix.normalize(posix.join('app',m[1])));
@@ -120,6 +123,6 @@ export async function bundleApp(files,{version=''}={}){
  const v=version?'?v='+version:'',rel=f=>'./'+posix.relative(OUT,f);
  const links=preload.map(f=>`  <link rel="modulepreload" href="${rel(f)}${f===ENTRY?v:''}" />`).join('\n');
  const page=html.replace(scripts[0][0],`<script type="module" src="${rel(ENTRY)}${v}"></script>`).replace('</head>',links+'\n</head>');
- const out=Object.fromEntries(result.outputFiles.map(o=>[o.path.replace(/^\//,''),o.text]));
+ const out=Object.fromEntries(result.outputFiles.map(o=>[siteFile(o.path),o.text]));
  return {page,outputs:out,preload,modules:bundled.size,inputs:[...bundled],externals,pinned,serialized,renamed};
 }
