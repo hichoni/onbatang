@@ -291,7 +291,10 @@ function mountStartRail(track, previous, next) {
   track.addEventListener('scroll', schedule, { passive: true });
   track.addEventListener('focusin', (event) => {
     const card = event.target.closest('.cv-start');
-    if (!card) return;
+    // A mouse press also focuses a tile. Moving the rail before pointerup
+    // moves a different tile underneath the pointer and swallows that click.
+    // Only keyboard focus needs this automatic reveal.
+    if (!card || !card.matches(':focus-visible')) return;
     const bounds = track.getBoundingClientRect();
     const item = card.getBoundingClientRect();
     const shift = item.left < bounds.left + 4 ? item.left - bounds.left - 4
