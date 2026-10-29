@@ -42,7 +42,7 @@ async function awaitSaved(page,name,check){
     const record=await savedRecord(page,name);if(record&&check(record))return record;
     await page.waitForTimeout(100);
   }
-  assert.fail(`saved record did not match: ${name}; records=${JSON.stringify((await page.evaluate(()=>window.readRecords())).map(r=>({name:r.name,pages:r.slides.length})))}; ui=${(await page.locator('.cv-save').allTextContents()).join(' ')}`);
+  assert.fail(`saved record did not match: ${name}; records=${JSON.stringify((await page.evaluate(()=>window.readRecords())).map(r=>({name:r.name,pages:r.slides.length})))}; ui=${(await page.locator('.cv-status').allTextContents()).join(' ')}`);
 }
 
 for(const [label,profile] of [['desktop',{viewport:{width:1440,height:1000}}],['mobile',{viewport:{width:390,height:844},isMobile:true,hasTouch:true}]]){
@@ -127,3 +127,25 @@ for(const [label,profile] of [['desktop',{viewport:{width:1440,height:1000}}],['
     assert.deepEqual(errors,[]);
   });
 }
+
+test('desktop: an occasion cover at the visible rail edge opens on its first click and Tab still reveals it',options,async t=>{
+  const{page,origin,errors,screenshot}=await setup(t,{viewport:{width:1440,height:1000}});
+  await page.locator('[data-starts="occasion"]').click();
+  await page.evaluate(()=>{window.edgeEvents=[];for(const type of ['pointerdown','pointerup'])document.addEventListener(type,e=>{const rail=document.querySelector('.cv-start-list');window.edgeEvents.push({type,layout:e.target.closest?.('.cv-start')?.dataset.layout,scroll:rail?.scrollLeft});},true);});
+  await page.locator('.cv-start[data-layout="occasion-training-cover"]').click();
+  await page.locator('.cv-canvas .fe-stage').waitFor({timeout:8000});
+  const pointer=await page.evaluate(()=>window.edgeEvents);
+  assert.equal(pointer[0].layout,'occasion-training-cover');
+  assert.equal(pointer[1].layout,pointer[0].layout,'pointer target stays still while clicking');
+  assert.equal(pointer[1].scroll,pointer[0].scroll,'focus does not move the rail during a mouse click');
+  assert.ok(await page.locator('.cv-canvas .fe-stage .fi-text').filter({hasText:'배우고 만들고'}).count());
+  await screenshot('rail-edge-cover');
+  await page.goto(origin+'/fixture.html');await page.waitForFunction(()=>window.ready);
+  await page.locator('[data-starts="occasion"]').click();
+  await page.locator('.cv-start[data-layout="occasion-event-opening"]').focus();
+  for(let i=0;i<6;i++)await page.keyboard.press('Tab');
+  const focused=await page.evaluate(()=>{const card=document.activeElement,rail=document.querySelector('.cv-start-list'),b=card.getBoundingClientRect(),r=rail.getBoundingClientRect();return{layout:card.dataset.layout,visible:card.matches(':focus-visible'),scroll:rail.scrollLeft,inside:b.left>=r.left-1&&b.right<=r.right+1};});
+  assert.equal(focused.layout,'occasion-training-cover');
+  assert.equal(focused.visible,true);assert.ok(focused.scroll>0);assert.equal(focused.inside,true);
+  assert.deepEqual(errors,[]);
+});
