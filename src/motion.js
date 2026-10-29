@@ -882,7 +882,10 @@ export function playIdle(node, item, id, { delay = 0, phase = 0, scale = 1 } = {
   // (빠르기는 idleKeyframes 가 요소의 sp 로 입힌다.)
   const k = idleKeyframes(item, id, { scale });
   if (!k || !node || typeof node.animate !== 'function' || calm()) return null;
-  return node.animate(k.keyframes, { duration: k.ms, delay: delay - phase, easing: k.easing, iterations: Infinity });
+  // Phase is an offset within the loop, never a subtraction from its gate.
+  // A negative delay used to start a new idle *during* a morph and override
+  // that morph's transform, making an otherwise paired object jump in place.
+  return node.animate(k.keyframes, { duration: k.ms, delay, iterationStart: Math.max(0, phase) / k.ms, easing: k.easing, iterations: Infinity });
 }
 
 /**
@@ -926,7 +929,7 @@ export function playDesign(card, design, { delay = 0, still = false } = {}) {
   const waiting = plan.clicks.filter((c) => nodes[c.i]);
   for (const c of waiting) if (c.enter) nodes[c.i].style.visibility = 'hidden';
   const clicked = new Set(waiting.filter((c) => c.enter).map((c) => c.i));
-  for (const l of plan.loops) if (nodes[l.i] && !entered.has(l.i) && !clicked.has(l.i)) loop(l.i, { delay, phase: idlePhase(l.i, l.loop, items[l.i]) });
+  for (const l of plan.loops) if (nodes[l.i] && !entered.has(l.i) && !clicked.has(l.i)) loop(l.i, { delay, phase: delay > 0 ? 0 : idlePhase(l.i, l.loop, items[l.i]) });
   // 앞 장으로 돌아왔을 때(still): 사라지는 효과까지 다 한 모습이므로 사라질 요소는 숨겨 둔다.
   if (still) for (const r of planMotion(design).clicks) if (r.exit && nodes[r.i]) nodes[r.i].style.visibility = 'hidden';
   const show = (c, animate) => {
@@ -942,7 +945,23 @@ export function playDesign(card, design, { delay = 0, still = false } = {}) {
     chain(animate ? keep(playEnter(nodes[c.i], items[c.i], c.enter, { mirror: c.mirror })) : null, c.i);
   };
   const finish = () => { for (const a of running.splice(0)) { try { a.finish(); } catch { /* 이미 끝났다 */ } } };
-  const stop = () => { stopped = true; for (const a of loops.splice(0)) { try { a.cancel(); } catch { /* 이미 걷혔다 */ } } };
+  const held = new Map();
+  const stop = ({ freeze = false } = {}) => {
+    stopped = true;
+    if (freeze) {
+      // Hold the visible outgoing pose until its card is removed. Cancelling
+      // an active idle to its neutral pose before measuring it makes a snap.
+      for (const a of loops) {
+        const node = a.effect?.target;
+        if (!node?.style || held.has(node)) continue;
+        const current = getComputedStyle(node);
+        held.set(node, { transform: node.style.transform, opacity: node.style.opacity, filter: node.style.filter });
+        const pose = { transform: current.transform, opacity: current.opacity, filter: current.filter };
+        Object.assign(node.style, pose);
+      }
+    }
+    for (const a of loops.splice(0)) { try { a.cancel(); } catch { /* 이미 걷혔다 */ } }
+  };
   return {
     left: () => waiting.length,
     next() {
@@ -960,6 +979,8 @@ export function playDesign(card, design, { delay = 0, still = false } = {}) {
     },
     restore() {
       stop();
+      for (const [node, style] of held) Object.assign(node.style, style);
+      held.clear();
       waiting.splice(0);
       for (const a of running.splice(0)) { try { a.cancel(); } catch { /* 이미 걷혔다 */ } }
       for (const n of nodes) n.style.visibility = '';
@@ -1013,7 +1034,19 @@ const morphTransform = (dx, dy, item) => `translate(${round(dx)}px, ${round(dy)}
 export function morphFrames(oldNode, newNode, oldItem, newItem) {
   const [ox, oy] = centerOf(oldNode), [nx, ny] = centerOf(newNode);
   const a = getComputedStyle(oldNode), b = getComputedStyle(newNode);
-  const start = { transform: morphTransform(ox - nx, oy - ny, oldItem) }, end = { transform: morphTransform(0, 0, newItem) };
+  // The outgoing node may be held halfway through a subtle idle. Its rendered
+  // linear matrix preserves that scale/rotation; item data only knows rest.
+  const presented = (node, style, item, dx, dy) => {
+    const Matrix = node.ownerDocument?.defaultView?.DOMMatrixReadOnly;
+    if (Matrix && style.transform && style.transform !== 'none') {
+      try {
+        const m = new Matrix(style.transform);
+        if (m.is2D) return `translate(${round(dx)}px, ${round(dy)}px) translate(-50%, -50%) matrix(${m.a}, ${m.b}, ${m.c}, ${m.d}, 0, 0)`;
+      } catch { /* A host without matrix support keeps the neutral transform. */ }
+    }
+    return morphTransform(dx, dy, item);
+  };
+  const start = { transform: presented(oldNode, a, oldItem, ox - nx, oy - ny) }, end = { transform: presented(newNode, b, newItem, 0, 0) };
   for (const k of MORPH_PROPS) if (a[k] !== b[k]) { start[k] = a[k]; end[k] = b[k]; }
   for (const k of MORPH_VARS) {
     const [va, vb] = [a.getPropertyValue(k).trim(), b.getPropertyValue(k).trim()];
@@ -1054,7 +1087,7 @@ function playMorph(old, next, from, to) {
   const moved = new Set(pairs.map(([, j]) => j));
   const gone = new Set(pairs.map(([i]) => i));
   const frames = pairs.map(([i, j]) => morphFrames(was[i], now[j], from.items[i], to.items[j]));
-  const drop = lift([back, ...pairs.map(([, j]) => now[j])]);
+  const drop = lift([back, ...pairs.flatMap(([i, j]) => [was[i], now[j]])]);
   pairs.forEach(([i, j], k) => {
     now[j].dataset.moved = '1';
     if (looksChanged(from.items[i], to.items[j])) {

@@ -57,7 +57,7 @@ for(const [label,profile] of [['desktop',{viewport:{width:1440,height:1000}}],['
     const name=`연수 편집 검수 ${label}`;
     await page.locator('input.cv-name').fill(name);await page.locator('input.cv-name').press('Tab');
     await page.locator('.fe-tab[data-tab="layout"]').click();
-    assert.equal(await page.locator('.fe-layout').count(),54);
+    assert.equal(await page.locator('.fe-layout').count(),74);
     await page.getByRole('searchbox',{name:'틀 찾기',exact:true}).fill('식순');
     assert.equal(await visibleLayouts(page),1);
     await page.getByRole('searchbox',{name:'틀 찾기',exact:true}).fill('');
@@ -69,11 +69,11 @@ for(const [label,profile] of [['desktop',{viewport:{width:1440,height:1000}}],['
     const layout=page.locator('.fe-layout[data-layout="occasion-training-practice"]');
     await layout.click();await layout.click();
     const stage=page.locator('.cv-canvas .fe-stage');
-    await stage.locator('.fi-text').filter({hasText:'나만의 수업 도구 만들기'}).waitFor();
+    await stage.locator('.fi-text').filter({hasText:/나만의 수업\s*도구 만들기/}).waitFor();
     if(profile.isMobile){
       const fold=page.locator('.cv-fold');if(await fold.isVisible())await fold.click();
     }
-    const title=stage.locator('.fi-text').filter({hasText:'나만의 수업 도구 만들기'});
+    const title=stage.locator('.fi-text').filter({hasText:/나만의 수업\s*도구 만들기/});
     if(profile.isMobile){await title.tap();await title.tap();}else await title.dblclick();
     await stage.locator('.fi-text.editing').fill('교실에서 바로 쓰는 실습');await page.keyboard.press('Escape');
     const record=await awaitSaved(page,name,r=>r.slides[0].items.some(it=>it.text==='교실에서 바로 쓰는 실습'));
@@ -104,6 +104,7 @@ for(const [label,profile] of [['desktop',{viewport:{width:1440,height:1000}}],['
     await page.locator('.fe-tab[data-tab="motion"]').click();
     await page.locator('[data-motion-sets]').click();
     const motion=page.getByRole('dialog',{name:'움직임 묶음',exact:true});await motion.waitFor();
+    if(!profile.isMobile){const action=await motion.locator('.ms-create').boundingBox();assert.ok(action.y+action.height<profile.viewport.height-8,'new story action stays visible beside the desktop preview');}
     await screenshot('motion-story-dialog');
     await motion.getByRole('button',{name:'이야기 지도',exact:true}).click();
     await motion.locator('.ms-apply').click();await motion.waitFor({state:'hidden'});
@@ -147,5 +148,28 @@ test('desktop: an occasion cover at the visible rail edge opens on its first cli
   const focused=await page.evaluate(()=>{const card=document.activeElement,rail=document.querySelector('.cv-start-list'),b=card.getBoundingClientRect(),r=rail.getBoundingClientRect();return{layout:card.dataset.layout,visible:card.matches(':focus-visible'),scroll:rail.scrollLeft,inside:b.left>=r.left-1&&b.right<=r.right+1};});
   assert.equal(focused.layout,'occasion-training-cover');
   assert.equal(focused.visible,true);assert.ok(focused.scroll>0);assert.equal(focused.inside,true);
+  assert.deepEqual(errors,[]);
+});
+
+test('a coordinated design set opens five saved editable pages and keeps them after reopening',options,async t=>{
+  const{page,origin,errors,screenshot}=await setup(t,{viewport:{width:1440,height:1000}});
+  await page.locator('[data-starts="collection"]').click();
+  assert.equal(await page.locator('.cv-start').count(),4);
+  await page.locator('.cv-start[data-layout="collection-fieldnote-1"]').click();
+  await page.locator('.cv-canvas .fe-stage').waitFor();
+  const saved=await awaitSaved(page,'현장 노트',r=>r.slides.length===5);
+  assert.equal(new Set(saved.slides.flatMap(s=>s.items.map(i=>i.id))).size,saved.slides.reduce((n,s)=>n+s.items.length,0));
+  const title=page.locator('.cv-canvas .fi-text').filter({hasText:/현장에서\s*다시 배우다/});
+  await title.dblclick();await page.locator('.cv-canvas .fi-text.editing').fill('우리 교실에서\n새롭게 배우다');await page.keyboard.press('Escape');
+  await awaitSaved(page,'현장 노트',r=>r.slides.length===5&&r.slides[0].items.some(i=>i.text==='우리 교실에서\n새롭게 배우다'));
+  assert.equal((await savedRecord(page,'기존 자료 보존')).slides[0].items[0].text,'원본은 그대로');
+  await screenshot('coordinated-set-edited');
+  await page.goto(origin+'/fixture.html');await page.waitForFunction(()=>window.ready);
+  await page.locator('.cv-item').filter({hasText:'현장 노트'}).locator('.cv-item-open').click();
+  await page.locator('.cv-canvas .fi-text').filter({hasText:/우리 교실에서\s*새롭게 배우다/}).waitFor();
+  assert.equal(await page.locator('.cv-slide:not(.add)').count(),5);
+  await page.locator('.cv-slide:not(.add)').nth(2).click();
+  await page.locator('.cv-canvas .fi-text').filter({hasText:/작게 만들고,\s*함께 확인하기/}).waitFor();
+  await screenshot('coordinated-set-reopened');
   assert.deepEqual(errors,[]);
 });

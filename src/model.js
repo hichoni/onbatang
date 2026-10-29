@@ -259,7 +259,12 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
   const base = {
     ...metadata(it),
     ...(pptxItem(it) ? {layout:'slide'} : {}),
-    x: position(it.x, 50), y: position(it.y, 50), rot: Math.round(num(it.rot, -180, 180, 0)),
+    // Slide artwork may continue beyond the viewport (PPT bleed and a shared
+    // spatial story). Preserve bounded offstage coordinates instead of piling
+    // every camera-clipped element onto the edge of the paper.
+    x: pptxItem(it) ? num(it.x, -500, 500, 50, 10000) : position(it.x, 50),
+    y: pptxItem(it) ? num(it.y, -500, 500, 50, 10000) : position(it.y, 50),
+    rot: Math.round(num(it.rot, -180, 180, 0)),
     op: Math.round(num(it.op, pptxItem(it) ? 0 : OPACITY.min, OPACITY.max, OPACITY.max)), // 빈 PPT 객체도 이름표를 보존한다.
     lock: it.lock === true,                                                // 잠금(실수로 움직이지 않게)
   };

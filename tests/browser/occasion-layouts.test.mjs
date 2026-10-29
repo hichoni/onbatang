@@ -11,6 +11,7 @@ const html=`<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/s
 body{margin:0;padding:20px;background:#eceee8;font-family:Arial,sans-serif}main{display:grid;gap:18px;grid-template-columns:repeat(3,400px)}article{width:400px}h2{font-size:15px;margin:0 0 7px}.fe-card{width:400px;border-radius:0!important;box-shadow:0 2px 5px #0002}
 </style><main></main><script type="module">
 import {OCCASION_LAYOUTS} from '/app/occasion-layouts.js';import{configure,layoutItems}from'/src/model.js';import{designView}from'/src/render.js';
+import{ONBATANG_FONTS,ONBATANG_TITLE_FONT}from'/app/fonts.js';import{setTitleFont}from'/app/templates.js';import{registerFonts}from'/src/fonts.js';configure({fonts:ONBATANG_FONTS});setTitleFont(ONBATANG_TITLE_FONT);registerFonts(ONBATANG_FONTS);
 window.draw=aspect=>{configure({layouts:OCCASION_LAYOUTS,aspect,maxItems:40});const out=[];for(const l of OCCASION_LAYOUTS){const article=document.createElement('article'),heading=document.createElement('h2');heading.textContent=l.group+' · '+l.name;article.append(heading);const card=designView({bg:l.bg,items:layoutItems(l.id)});card.dataset.layout=l.id;card.style.setProperty('--fe-ratio',aspect);article.append(card);out.push(article);}document.querySelector('main').replaceChildren(...out);};draw(16/9);window.ready=true;
 </script>`;
 
@@ -32,6 +33,9 @@ test('all occasion templates render readable text within the page in wide and po
     assert.deepEqual(outside,[],name);
     assert.equal(await page.locator('.fe-card').count(),30);
     await page.screenshot({path:resolve(dir,`occasion-${name}.png`),fullPage:true});
+    for(const id of ['event-award','event-break','training-cover','training-practice','school-entrance','school-graduation','school-thanks','meeting-roadmap','guide-notice','guide-direction']){
+      await page.locator('[data-layout="occasion-'+id+'"]').screenshot({path:resolve(dir,name+'-'+id+'.png')});
+    }
   }
   assert.deepEqual(errors,[]);
 });

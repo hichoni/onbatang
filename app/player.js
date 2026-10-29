@@ -65,7 +65,7 @@ export function mountPlayer(stage, { slides = [], aspect = 16 / 9, onChange = ()
   };
   function draw(dir) {
     settle();
-    parts?.stop();             // 떠나는 장의 "계속 움직이기"를 멈춘다
+    parts?.stop({ freeze: true }); // 실제 보이던 자세를 다음 장으로 잇는다
     const design = pages[at], card = view(design), old = cards().at(-1) || null;
     shown.set(card, design);
     stage.append(card);
