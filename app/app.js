@@ -57,6 +57,8 @@ import { zipStore } from './zip.js';
 import { createPptx } from './pptx.js';
 import { listDesigns, getDesign, putDesign, replaceDesignIfUnchanged, removeDesign, setStorageName, storageName, listDesignIssues, getOriginalDesign } from './store.js';
 import { setupApp, useFonts, photoToData, BASIC_GROUP } from './setup.js';
+import { applyMotionSet, createMotionSequence, MOTION_SETS } from './motion-sets.js';
+import { openMotionSetPanel } from './motion-set-panel.js';
 import { addVersion, listVersions, readVersion, dropHistory, pruneHistory, restoredRecord, whenLabel, HISTORY_REASONS, HISTORY_GAP } from './history.js';
 import { mergeAccount, createPusher, syncsRecord } from './sync.js';
 
@@ -266,7 +268,7 @@ const FEATS = [
   ['template', '다양한 틀', 'sun'],
 ];
 // 첫 화면의 "템플릿으로 시작하기"는 두 칸이다: 주제 테마(표지 9종, 발표 화면 모양) · 기본 짜임(6종).
-const STARTS = [['theme', '주제 테마'], ['basic', '기본 짜임']];
+const STARTS = [['theme', '주제 테마'], ['basic', '기본 짜임'], ['occasion', '행사·연수']];
 let startTab = 'theme';
 let startScroll = 0;
 /** 한 줄 템플릿: 터치·트랙패드·키보드는 브라우저의 가로 스크롤을 그대로 쓴다. */
@@ -456,7 +458,8 @@ function render() {
   const full = entries.length >= MAX_DESIGNS;
   // 주제 테마는 표지만 보여 준다(내용 장은 꾸미는 화면의 템플릿 칸에서 넣는다). 이름은 테마의 이름.
   const starts = startTab === 'theme'
-    ? layoutList().filter((l) => l.cover).map((l) => [l, l.group])
+    ? layoutList().filter((l) => l.cover && !l.occasion).map((l) => [l, l.group])
+    : startTab === 'occasion' ? layoutList().filter(l => l.occasion).map(l => [l, l.name])
     : layoutList().filter((l) => l.group === BASIC_GROUP).map((l) => [l, l.name]);
   const newBtn = (cls) => el('button', { class: `btn ${cls}`, type: 'button', disabled: loading || full, onClick: () => startNew() }, ic('plus'), el('span', { text: '새 그림 만들기' }));
 
@@ -762,6 +765,7 @@ function openDesign(record, isNew) {
     // 올린 파일을 지웠다: 다른 장에서 쓴 것도 지운다(지금 장은 편집기가 지운다). 띠의 작은 그림을 다시 그린다.
     // 움직임 칸의 "모든 장에 똑같이"
     onMotionAll: (motion) => applyMotionAll(O, motion),
+    motionSets: { open: () => offerMotionSets(O) },
     // 카드의 빈 곳(과 그 둘레)을 우클릭하면 나오는 장(슬라이드) 메뉴
     slideMenu: () => slideMenuGroups(O),
     outline: { open: () => openOutline(O) },
@@ -920,6 +924,7 @@ function editorShell(O, bar) {
     O.editor.showMenu(e.clientX, e.clientY, slideMenuGroups(O, { strip: true }), { label: `${i + 1}번째 장 메뉴` });
   });
   const canvasBox = el('div', { class: 'cv-canvas' }, O.editor.stage);
+  O.editor.setSelectionSurface(canvasBox);
   const work = el('section', { class: 'cv-work', 'aria-label': '그림' },
     el('div', { class: 'cv-tools' }, O.editor.toolbar),
     canvasBox,
@@ -1627,6 +1632,38 @@ function changeSlides(O, change) {
 
 /** 움직임 칸의 "모든 장에 똑같이": 지금 장의 조합 효과와 전환 효과를 다른 장들에도 적는다(요소 하나하나의 효과는 그대로 둔다).
  * 여러 파트로 된 PPT 전체 자료이면 다른 파트의 장들에도 적고, 그 파트들을 이 기기(와 계정)에 저장한다. */
+function offerMotionSets(O) {
+  if (O.closed || O.motionAll || videoBusy(O)) return;
+  openMotionSetPanel({
+    aspect: aspectOf(O.record),
+    scopeLabel: `${O.materialDeck?.documents.length > 1 ? '현재 편집 중인 파트' : '현재 자료'} ${O.slides.length}장`,
+    onApply: async (id, options) => {
+      if (O.closed || S.open !== O || O.motionAll || videoBusy(O)) throw Error('편집 화면을 확인한 뒤 다시 열어 주세요.');
+      if (O.co) throw Error('함께 고치기를 마친 뒤 움직임 묶음을 적용해 주세요.');
+      await persistEditorAction(O);
+      const before = currentSlides(O);
+      O.slides = applyMotionSet(before, id, options);
+      O.editor.setDesign(O.slides[O.at]);
+      O.editor.forget();
+      touched(O); renderStrip(O);
+      if (!await save(O) || O.localOk === false) throw Error('움직임은 화면에 적용했지만 저장하지 못했어요. 저장 공간을 확인해 주세요.');
+      toast('글과 배치는 그대로 두고 움직임 묶음을 저장했어요. 발표에서 확인해 보세요.');
+    },
+    onCreate: async (id, options) => {
+      if (O.closed || S.open !== O || videoBusy(O)) throw Error('편집 화면에서 다시 열어 주세요.');
+      if (homeEntries(S.list || []).length >= MAX_DESIGNS) throw Error('새 그림을 둘 공간이 없어요. 내 그림 목록을 확인해 주세요.');
+      // The old PPT keeps every page/asset. The editable motion story starts as
+      // a separate document after the existing draft is safely saved.
+      const slides = createMotionSequence(id, { ...options, aspect: 16 / 9 });
+      if (!await leaveEditor(O, { requireSaved: true, tidy: false })) throw Error('현재 자료를 저장하지 못했어요. 저장 상태를 확인해 주세요.');
+      const record = newRecord('16:9', nextNumber(S.list || []));
+      record.name = MOTION_SETS.find(set => set.id === id).name;
+      record.slides = slides;
+      openDesign(record, true);
+    },
+  });
+}
+
 async function applyMotionAll(O, motion) {
   if (O.closed || O.motionAll) return;
   const parts = O.materialDeck ? O.materialDeck.documents.filter((row) => row.id !== O.record.id) : [];
@@ -1910,8 +1947,23 @@ async function present(O) {
   // 휴대폰 리모컨(호스트 · GBE-AI Lab): 휴대폰에서 다음 · 앞 · 그 장으로 · 검은 화면을 보내고, 발표는 지금 장 · 발표자 노트를 알려 준다.
   let remote = null, remoteJob = null;
   const pageTitle = (k) => { const t = (slides[k]?.items || []).filter((it) => it.t === 'text' && String(it.text || '').trim()).sort((a, b) => (Number(a.y) || 0) - (Number(b.y) || 0))[0]; return t ? Array.from(String(t.text).replace(/\s+/g, ' ').trim()).slice(0, 60).join('') : ''; };
-  const remoteState = () => ({ at: i, total: slides.length, title: O.record.name, page: pageTitle(i), next: i + 1 < slides.length ? pageTitle(i + 1) : '', notes: spokenNotes(slides[i]?.notes).slice(0, 2000) });
-  const tellRemote = () => { try { remote?.update?.(remoteState()); } catch (error) { console.warn(error); } };
+  const remoteThumbs = new WeakMap(), remoteThumbJobs = new WeakSet();
+  // Only rasterize the two teacher-visible pages when a remote is connected.
+  // No original PPT, app code, student state or source asset URLs are sent.
+  const warmRemotePreviews = () => {
+    for (const k of [i, i + 1]) {
+      const page = slides[k];
+      if (!page || remoteThumbJobs.has(page)) continue;
+      remoteThumbJobs.add(page);
+      void designToBlob(page, { width: 320, aspect: aspectOf(entries[k]?.record || O.record), type: 'image/jpeg', quality: .72 })
+        .then(({ blob }) => new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(reader.error); reader.readAsDataURL(blob); }))
+        .then(url => { if (closed || typeof url !== 'string' || url.length > 180000) return; remoteThumbs.set(page, url); tellRemote(); })
+        .catch(() => { /* A text-only remote remains usable if a page cannot be rasterized. */ });
+    }
+  };
+  const remoteState = () => ({ at: i, total: slides.length, title: O.record.name, page: pageTitle(i), next: i + 1 < slides.length ? pageTitle(i + 1) : '', notes: spokenNotes(slides[i]?.notes).slice(0, 2000),
+    preview: remoteThumbs.get(slides[i]) || '', nextPreview: remoteThumbs.get(slides[i + 1]) || '', black: tools?.curtain?.() === 'black', activity: !!slides[i]?.activity });
+  const tellRemote = () => { if (!remote || closed) return; warmRemotePreviews(); try { remote.update?.(remoteState()); } catch (error) { console.warn(error); } };
   const remoteCommand = (cmd) => {
     if (closed || !cmd || typeof cmd !== 'object') return;
     // 넘기기는 글쇠와 같은 길로(검은 화면이면 먼저 걷고, 펜 · 전체 보기 칸도 글쇠처럼 다룬다).
@@ -1925,6 +1977,7 @@ async function present(O) {
     if (!showRemote || closed) return;
     if (remote) { remote.show?.(); return; }
     if (remoteJob) return;
+    warmRemotePreviews();
     try { remoteJob = showRemote.open({ state: remoteState, command: remoteCommand, root: overlay }); remote = await remoteJob; if (closed) { remote?.close?.(); remote = null; } else tellRemote(); }
     catch (error) { toast(String(error?.message || '휴대폰 리모컨을 열지 못했어요.').slice(0, 200), 4500); }
     finally { remoteJob = null; }
@@ -2300,7 +2353,7 @@ async function present(O) {
     // 자동 넘기기: 리허설로 잰 시간(없으면 기본) · 누를 때 나오는 걸음 수. 리허설: 잰 시간을 발표가 끝난 뒤 저장할지 묻는다.
     dwell: (k) => slides[k]?.dur, steps: (k) => (slides[k] && !slides[k].activity ? planMotion(slides[k]).clicks.length : 0),
     saveTimes: (seconds) => { rehearsed = entries.map((v, k) => [v.page.id, seconds[k]]).filter(([, s]) => s != null); },
-    title: O.record.name, notify: toast, keyClass: 'cv-show-key',
+    title: O.record.name, notify: toast, keyClass: 'cv-show-key', stateChanged: tellRemote,
   });
   // 좁은 화면(휴대폰)에서는 막대가 여러 줄로 커져 장을 가리지 않게 이 단추들의 글자를 숨기고 그림만 둔다(app.css 의 .cv-show-word).
   const word = (text) => el('span', { class: 'cv-show-word', text });
