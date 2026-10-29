@@ -42,7 +42,8 @@
 ## 검증과 자료
 
 - 공통 전체 단위: **396/396 통과**. 실제 공유 공간/문구/형태/ID, 정리·저장·재열기 후 카메라 좌표, 6비율의 새 세트, 원본 내용/자산/앱 보존을 포함한다.
-- 로컬 Edge: 데스크톱·390px 모바일 UI의 틀 찾기→편집→저장/재열기, 모션 적용/새 예제 저장, 5장 디자인 세트 저장/편집/재열기, 실제 중간 프레임 및 반복/모핑 합성, 실제 글 bounding/겹침 검사를 수행한다. 최종 실행 수와 호스트 통합은 배포 확인 절에 기록한다.
+- 로컬 Edge **12/12 통과**: 데스크톱·390px 모바일 UI의 틀 찾기→편집→저장/재열기, 모션 적용/새 예제 저장, 5장 디자인 세트 저장/편집/재열기, 실제 중간 프레임 및 반복/모핑 합성, 실제 글 bounding/겹침 검사를 수행했다.
+- 가이랩 통합 후 전체 단위 **748/748**, 빌드 통과. 실제 복사본의 여백 선택·발표 미리보기 **2/2**, 운영용 묶음/원본 화면 비교 **1/1**, 리모컨 모바일 UI **1/1** 통과. 로컬 기본 빌드가 provider=local로 공개 Supabase 클라이언트 묶음을 치우므로, 보존한 Supabase 설정을 사용하는 브라우저 검수 전 해당 의존성을 정상 빌드했다. 운영 계정/통로 요청은 차단한 로컬 fixture다.
 - 시각 산출물(개인 PPT/계정 없음): `work/qa-creative-direction-2026-10-30/template-direction.png`, `work/motion-art-direction-2026-10-30/six-stories.png`, 세트별 중간 프레임, `work/qa-design-collections-2026-10-30/collections-wide.png`, 실제 모션 선택 창.
 - v104 기능 검증과 실제 계정의 과거 검수는 구분한다. 이번 후속에서 실제 계정/실제 휴대폰·태블릿/35명 동시 수업은 검수하지 않았다. 유료 QA와 AI 생성 호출은 0이다.
 
@@ -55,4 +56,15 @@
 
 ## 배포 확인
 
-공통 v0.105.0과 가이랩 v0.156.0을 검증된 원본 commit으로 반영한다. 운영 URL·원본 commit·파일 SHA-256·실제 표시 버전·배포 경계는 완료 후 이 절에 확정한다. 열려 있는 사용자의 편집 화면을 강제로 새로고침하지 않는다.
+- 공통 [PR #107](https://github.com/hichoni/onbatang/pull/107) main 병합: **`09eb31401389e4da3c935ad552dd110a96404bd5` / v0.105.0 / 252개 원본 파일**. 이 commit의 Git archive로 Firebase 공개 묶음(110모듈·25묶음·전체280파일)을 만들고 모든 배포 바이트 `--check` 통과 후 Hosting만 배포했다.
+- [공용 운영](https://onbatang.web.app/app/)에서 **온바탕 v0.105.0**, 디자인 세트4개를 실제 확인했고 [version.json](https://onbatang.web.app/version.json)의 version/commit/252파일도 일치한다. 사용자 기존 편집 탭을 새로고침하지 않고 별도 숨김 탭으로 확인했다. 기존 PPT/그림은 열어 수정하거나 삭제하지 않았다.
+- 가이랩 `dist/minican/SOURCE.json`은 같은 **v0.105.0 / `09eb31401389e4da3c935ad552dd110a96404bd5`**에 고정했다. 공식 sync `--check`로 **252개 Git blob 실제 바이트·commit·버전·SHA-256**이 일치한다. docs만 후속 갱신한 main HEAD와 제품 배포 원본 commit은 구분한다.
+- 가이랩은 기존 [PR #214](https://github.com/hichoni/g-ai-lab/pull/214)에 **v0.156.0**을 이어서 반영하고 main에 일반 병합했다(**`ab7d3928be7e9245ca9f8f5dd561d5626e4b1fb1`**, 제품 feature HEAD `4a8b3d8cb44f12964a11f3f49d7ed5f7cff9a8c2`). 기존 앞선 여백 선택·리모컨 commit도 이 병합에 포함됐다.
+- **가이랩 운영 배포 확인 미완료:** 최종 공개 version.json은 **v0.154.0 / `44df3c5ac056ecb210fc4b2b52275510d970ac4e`**였다. main Cloudflare 검사 **123567822727**은 Building, 배포 id **5af5a737-18b9-40ca-a77c-e83329067c9a**. 실제 preview URL/표시 버전이 확인되지 않아 가이랩 v0.156.0 운영 배포 완료로 기록하지 않는다. 앞선 PR 검사에는 Building/완료 상태가 혼재했다. GitHub verify(main 123567830208, feature 123567249338)는 계정 결제/지출한도 오류로 단계가 실행되지 않았다(steps=[]). 로컬 통과와 구분하며 관리자 병합·보호 규칙/요금 변경은 하지 않았다.
+- Cloudflare 로그 대시보드는 로그아웃 및 인증 확인 오류 상태였다. Chrome ‘🔎 온바탕 배포’ 창의 사용자 직접 로그인을 요청했으며 응답은 아직 없다. 마지막 Chrome 탭 연결도 끊어져 로그를 확인하지 못했다. 자격 증명 입력이나 보안 확인 우회를 하지 않았다. 다음 세션은 로그인된 대시보드에서 위 배포 로그를 읽고 원인을 해결한 후 정확한 main commit/표시 버전을 확인한다. 기존 main 코드를 다시 작성하거나 요금 설정을 변경할 필요가 있다는 뜻은 아니다.
+
+### 보존 확인
+
+- 공통 기존 draft PR #1: OPEN/DRAFT, `61bd156d239733be013cd5e695e75623e760b00d` 보존.
+- 가이랩 기존 draft PR #76: OPEN/DRAFT, `41a610388d6e8566af70f9676b64c9894e33ab1f` 보존.
+- 가이랩 시작 전 dirty 파일 SHA-256 유지: `community-config.js` = `FD6CB8F7ED1543197ED259D6C03EA0C338C06C7BF25DF08E50639C57722E1A83`, `release-times.json` = `44D8598A92748630D057A1ED91C1B31E3AE8D6DC2041C9827FC26DED875DDCEF`. 두 파일은 커밋하지 않았다.
