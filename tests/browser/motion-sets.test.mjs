@@ -20,7 +20,7 @@ configure({aspect:16/9});const picker=document.querySelector('#set');for(const s
 let p=null,record;const stage=document.querySelector('#stage');
 function draw(id){p?.destroy();record=id?{...newRecord('16:9'),slides:createMotionSequence(id)}:cleanRecord(JSON.parse(localStorage.getItem('motion-story')));p=mountPlayer(stage,{slides:record.slides,onChange:s=>document.querySelector('#position').textContent=(s.at+1)+' / '+s.total});window.player=p;window.story=record;}
 picker.onchange=()=>draw(picker.value);document.querySelector('#next').onclick=()=>p.next();document.querySelector('#prev').onclick=()=>p.prev();
-document.querySelector('#save').onclick=()=>{record.slides[1].items.find(x=>x.t==='text'&&x.text==='질문을 열어요').text='내 수업의 질문';localStorage.setItem('motion-story',JSON.stringify(cleanRecord(record)));};
+document.querySelector('#save').onclick=()=>{record.slides[1].items.find(x=>x.t==='text'&&x.text.startsWith('늘 걷던 길')).text='내 수업의 질문';localStorage.setItem('motion-story',JSON.stringify(cleanRecord(record)));};
 window.applyCalls=[];window.createCalls=[];document.querySelector('#panel').onclick=()=>openMotionSetPanel({aspect:16/9,scopeLabel:'현재 3장',onApply:async(id,opts)=>{window.applyCalls.push({id,opts});await new Promise(r=>setTimeout(r,100));if(window.applyCalls.length===1)throw Error('시험: 저장 실패');},onCreate:async(id,opts)=>window.createCalls.push({id,opts})});
 draw(localStorage.getItem('motion-story')?null:'atlas');window.ready=true;
 </script></html>`;
@@ -53,7 +53,8 @@ async function setup(t, reducedMotion = 'no-preference') {
 
 test('motion story actually morphs shared pieces, breathes, and keeps edited content after reopening', options, async t => {
   const { page, errors } = await setup(t);
-  const first = () => page.locator('#stage > .fe-card').last().locator('.fi-shape').first();
+  const symbolIndex = await page.evaluate(() => window.story.slides[0].items.findIndex(item => item.lp === 'breathe'));
+  const first = () => page.locator('#stage > .fe-card').last().locator(':scope > .fi').nth(symbolIndex);
   const before = await first().boundingBox();
   await page.getByRole('button', { name: '다음 장' }).click();
   await page.waitForFunction(() => document.querySelector('#stage').querySelectorAll(':scope > .fe-card').length === 2);
@@ -61,8 +62,8 @@ test('motion story actually morphs shared pieces, breathes, and keeps edited con
   assert.equal(moving, true, 'real Web Animations morph is running');
   await page.waitForFunction(() => document.querySelector('#stage').querySelectorAll(':scope > .fe-card').length === 1);
   const after = await first().boundingBox();
-  assert.ok(after.width > before.width * 2, 'same card grows from overview into focus');
-  assert.ok(after.x > before.x, 'same card moves into the focus position');
+  assert.ok(after.width > before.width * 1.7 && after.width < before.width * 2, 'same tiny landmark grows with the camera');
+  assert.ok(after.x > before.x, 'same landmark moves into the focus position');
   const idle = await first().evaluate(node => node.getAnimations().some(a => a.effect.getTiming().iterations === Infinity));
   assert.equal(idle, true, 'symbol keeps breathing after morph');
   await page.getByRole('button', { name: '예시 수정·저장' }).click();
@@ -81,7 +82,7 @@ test('all six stories run without losing content, and reduced-motion removes ani
     assert.equal(await page.locator('#position').textContent(), '2 / 5');
     assert.equal(await page.locator('#stage').evaluate(node => node.getAnimations({ subtree: true }).length), 0);
     await page.evaluate(() => window.player.go(4));
-    assert.match(await page.locator('#stage').textContent(), /다시 연결해 보세요/);
+    assert.match(await page.locator('#stage').textContent(), /05 — 05/);
   }
   assert.deepEqual(errors, []);
 });
@@ -105,7 +106,7 @@ test('motion set panel works at phone width, previews the real flow and preserve
   assert.equal(await dialog.getByLabel('요소 움직임 빠르기').inputValue(), 'slow');
   assert.equal(await dialog.getByLabel('차분하게', { exact: true }).isChecked(), true);
   assert.equal(await dialog.locator('.ms-tile[aria-pressed="true"]').getAttribute('aria-label'), '생각의 궤도');
-  assert.deepEqual(await page.evaluate(() => window.applyCalls[0]), { id: 'orbit', opts: { speed: 'slow', breathing: true, calm: true, topics: ['질문을 열어요', '함께 살펴봐요', '생각을 나눠요'] } });
+  assert.deepEqual(await page.evaluate(() => window.applyCalls[0]), { id: 'orbit', opts: { speed: 'slow', breathing: true, calm: true, topics: ['하나의 질문', '다른 관점', '새로운 가능성'] } });
   await page.evaluate(() => { window.oldStage = document.querySelector('.ms-stage'); document.querySelector('.ms-apply').click(); document.querySelector('.ms-apply').click(); });
   await dialog.waitFor({ state: 'detached' });
   assert.equal(await page.evaluate(() => window.applyCalls.length), 2, 'duplicate clicks are suppressed');

@@ -59,6 +59,7 @@ import { listDesigns, getDesign, putDesign, replaceDesignIfUnchanged, removeDesi
 import { setupApp, useFonts, photoToData, BASIC_GROUP } from './setup.js';
 import { applyMotionSet, createMotionSequence, MOTION_SETS } from './motion-sets.js';
 import { openMotionSetPanel } from './motion-set-panel.js';
+import { COLLECTIONS, createCollectionSlides } from './design-collections.js';
 import { addVersion, listVersions, readVersion, dropHistory, pruneHistory, restoredRecord, whenLabel, HISTORY_REASONS, HISTORY_GAP } from './history.js';
 import { mergeAccount, createPusher, syncsRecord } from './sync.js';
 
@@ -268,7 +269,7 @@ const FEATS = [
   ['template', '다양한 틀', 'sun'],
 ];
 // 첫 화면의 "템플릿으로 시작하기"는 두 칸이다: 주제 테마(표지 9종, 발표 화면 모양) · 기본 짜임(6종).
-const STARTS = [['theme', '주제 테마'], ['basic', '기본 짜임'], ['occasion', '행사·연수']];
+const STARTS = [['theme', '주제 테마'], ['basic', '기본 짜임'], ['occasion', '행사·연수'], ['collection', '디자인 세트']];
 let startTab = 'theme';
 let startScroll = 0;
 /** 한 줄 템플릿: 터치·트랙패드·키보드는 브라우저의 가로 스크롤을 그대로 쓴다. */
@@ -328,6 +329,7 @@ function layoutThumb(layout) {
 function startNew(layoutId = '', tile = null) {
   if (S.open || !S.list || moving) return;
   const layout = layoutId ? layoutList().find((l) => l.id === layoutId) : null;
+  if (layout?.collection && layout.cover) { void startCollection(layout.collection); return; }
   const record = newRecord(layout?.ratio || lastRatio(), nextNumber(S.list || []));
   if (layout) {
     setupApp(record.ratio);          // 템플릿의 도형 높이는 그림의 모양에 맞춰 만들어진다
@@ -336,6 +338,26 @@ function startNew(layoutId = '', tile = null) {
   // 작은 그림과 새 그림의 모양이 같을 때에만 그 그림을 키워서 연다(모양이 다르면 찌그러져 보인다).
   const from = Math.abs(aspectOf(record) - thumbAspect(layout)) < 0.01 ? tile?.querySelector('.fe-card') : null;
   transit(() => { if (!S.open) openDesign(record, true); }, 'open', from);
+}
+
+async function startCollection(id) {
+  if (S.open || !S.list || moving) return;
+  const collection = COLLECTIONS.find(value => value.id === id);
+  if (!collection) return;
+  if (homeEntries(S.list).length >= MAX_DESIGNS) { toast('새 그림을 둘 공간이 없어요. 내 그림 목록을 확인해 주세요.'); return; }
+  app.inert = true;
+  try {
+    const record = newRecord('16:9', nextNumber(S.list));
+    record.name = collection.name;
+    record.slides = createCollectionSlides(id, { aspect: 16 / 9 });
+    const saved = await putDesign(record);
+    upsert(saved);
+    if (accountFor(saved)) pusher.queue(saved);
+    openDesign(saved, false);
+  } catch (error) {
+    console.warn(error);
+    toast('디자인 세트를 저장하지 못했어요. 이 기기의 저장 공간을 확인해 주세요.', 5000);
+  } finally { app.inert = false; }
 }
 
 // 대문 오른쪽의 그림: 꾸미는 화면을 본뜬 창(가운데는 주제 테마의 표지, 오른쪽은 다른 표지들)과 둘레에 떠 있는 카드들.
@@ -461,7 +483,8 @@ function render() {
   const full = entries.length >= MAX_DESIGNS;
   // 주제 테마는 표지만 보여 준다(내용 장은 꾸미는 화면의 템플릿 칸에서 넣는다). 이름은 테마의 이름.
   const starts = startTab === 'theme'
-    ? layoutList().filter((l) => l.cover && !l.occasion).map((l) => [l, l.group])
+    ? layoutList().filter((l) => l.cover && !l.occasion && !l.collection).map((l) => [l, l.group])
+    : startTab === 'collection' ? layoutList().filter(l => l.collection && l.cover).map(l => [l, `${l.collectionName} · 5장`])
     : startTab === 'occasion' ? layoutList().filter(l => l.occasion).map(l => [l, l.name])
     : layoutList().filter((l) => l.group === BASIC_GROUP).map((l) => [l, l.name]);
   const newBtn = (cls) => el('button', { class: `btn ${cls}`, type: 'button', disabled: loading || full, onClick: () => startNew() }, ic('plus'), el('span', { text: '새 그림 만들기' }));
@@ -2187,7 +2210,7 @@ async function present(O) {
     pixel?.destroy();pixel=null;
     dropWeb();
     settle();
-    parts?.stop();             // 떠나는 장의 "계속 움직이기"를 멈춘다(흔적이 없다)
+    parts?.stop({ freeze: true }); // 숨쉬던 조각도 보이던 자세에서 다음 장으로 잇는다
     tools?.changed();
     voice?.changed(i);         // 녹음 중이면 장이 바뀐 때를 적는다
     const design = slides[i];
