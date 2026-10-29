@@ -1663,6 +1663,7 @@ function offerMotionSets(O) {
       // closing the old editor, so quota errors cannot strand either document.
       const saved = await putDesign(record);
       upsert(saved);
+      if (accountFor(saved)) pusher.queue(saved);
       if (!await leaveEditor(O, { requireSaved: true, tidy: false })) throw Error('예제는 내 그림에 저장했어요. 현재 자료의 저장 상태를 확인한 뒤 열어 주세요.');
       openDesign(saved, false);
     },
