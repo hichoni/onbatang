@@ -1655,11 +1655,16 @@ function offerMotionSets(O) {
       // The old PPT keeps every page/asset. The editable motion story starts as
       // a separate document after the existing draft is safely saved.
       const slides = createMotionSequence(id, { ...options, aspect: 16 / 9 });
-      if (!await leaveEditor(O, { requireSaved: true, tidy: false })) throw Error('현재 자료를 저장하지 못했어요. 저장 상태를 확인해 주세요.');
       const record = newRecord('16:9', nextNumber(S.list || []));
       record.name = MOTION_SETS.find(set => set.id === id).name;
       record.slides = slides;
-      openDesign(record, true);
+      await persistEditorAction(O);
+      // A ready-made story has no edit event to start autosave. Persist before
+      // closing the old editor, so quota errors cannot strand either document.
+      const saved = await putDesign(record);
+      upsert(saved);
+      if (!await leaveEditor(O, { requireSaved: true, tidy: false })) throw Error('예제는 내 그림에 저장했어요. 현재 자료의 저장 상태를 확인한 뒤 열어 주세요.');
+      openDesign(saved, false);
     },
   });
 }
