@@ -5,6 +5,7 @@
 // SVG 그림 안에서는 바깥 파일을 부를 수 없으므로, 스타일·글꼴·사진을 모두 그 안에 글자(data 주소)로 넣는다.
 // 최신 크롬·엣지에서 된다(사파리는 이렇게 그린 canvas 를 파일로 꺼내지 못하게 막을 수 있다. 그때는 오류를 던진다).
 import { el } from './dom.js';
+import { sceneContent } from './effect-scenes.js';
 import { designView, itemView, paintCard } from './render.js';
 import { sceneView, scenesReady } from './scene.js';
 import { cleanDesign, settings, fontList, fontFamilyOf } from './model.js';
@@ -128,7 +129,8 @@ function measureEffects(card,nodes,items,width,height) {
   try {
     return items.flatMap((item,i) => {
       if (!item.effect || !nodes[i]?.offsetWidth || !nodes[i].offsetHeight) return [];
-      return [{ effect:item.effect, x:item.x, y:item.y, w:nodes[i].offsetWidth / width * 100,
+      const content=sceneContent(item.effect.id,item);
+      return [{ effect:item.effect, ...(content?{content}:{}), x:item.x, y:item.y, w:nodes[i].offsetWidth / width * 100,
         h:nodes[i].offsetHeight / height * 100, rot:item.rot, label:(item.alt || item.text || '').slice(0,60) }];
     });
   } finally { box.remove(); }

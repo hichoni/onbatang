@@ -3838,7 +3838,8 @@ export function createEditor({
       const waits = items().filter((k) => k.aw || k.em || k.ex || k.lkem).length;
       // 고른 요소가 있으면 맨 위에 그 요소의 움직임이 나온다. 정하지 않은 요소는 장의 조합 효과를 따른다(조합 효과가 없으면 처음부터 보인다).
       const it = cur();
-      const graphics = motionPart('effectPicker', JSON.stringify([sel,it?.id,it?.t,it?.lock,it?.effect]), () => [
+      const graphics = motionPart('effectPicker', JSON.stringify([sel,it?.id,it?.t,it?.lock,it?.effect,it?.text,
+        it?.kind,it?.title,it?.unit,it?.labels,it?.series,it?.vals]), () => [
         it && !it.lock && effectable(it)
           ? effectPicker(it, effect => { stopPreview(); change({ effect }); })
           : el('p', { class:'fe-note', text:'글·그림·도형을 하나 고르면 HTML 그래픽 효과를 붙일 수 있어요.' }),

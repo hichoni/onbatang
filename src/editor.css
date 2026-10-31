@@ -1039,3 +1039,11 @@ td .fe-chart-cell[inputmode] { text-align: right; font-variant-numeric: tabular-
 .fe-fx-choice[aria-pressed=true] { border-color: #246b5e; box-shadow: inset 0 0 0 1px #246b5e; background: #edf6f1; }
 .fe-fx-icon { flex: none; width: 32px; height: 32px; border-radius: 6px; }
 [data-effect-trigger]:focus-visible { outline: 3px dashed #249486; outline-offset: 3px; }
+.fe-fx-group { grid-column:1/-1; margin:5px 0 2px; color:var(--fe-muted,#415e53); font-size:.82rem; }
+.fe-fx-choice:disabled { opacity:.58; cursor:default; }
+.fe-fx-choice small { display:block; font-size:.65rem; }
+.fe-fx-settings { display:grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap:6px; }
+.fe-fx-controls label { display:grid; gap:4px; font-size:.82rem; font-weight:650; }
+.fe-fx-preview-actions { display:flex; gap:8px; align-items:center; justify-content:space-between; }
+.fe-fx-preview-actions button { flex:none; }
+.fe-fx-sample { height:clamp(100px,14vh,150px); }

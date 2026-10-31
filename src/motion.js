@@ -904,7 +904,7 @@ export function playIdle(node, item, id, { delay = 0, phase = 0, scale = 1 } = {
 export function playDesign(card, design, { delay = 0, still = false } = {}) {
   const nodes = card ? [...card.children].filter((n) => n.classList.contains('fi')) : [];
   const items = Array.isArray(design?.items) ? design.items : [];
-  const stopEffects = mountEffectPlayer(card, items.flatMap((item,i) => item.effect ? [{ node:nodes[i], effect:item.effect }] : []), { delay });
+  const stopEffects = mountEffectPlayer(card, items.flatMap((item,i) => item.effect ? [{ node:nodes[i], effect:item.effect, content:item }] : []), { delay });
   const plan = planMotion(design);
   if (still) { plan.auto = []; plan.clicks = []; for (const l of plan.loops) l.after = 0; }
   const running = [];

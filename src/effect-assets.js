@@ -1,5 +1,7 @@
 // Each asset draws its own transparent SVG at rest. The small set of animation
 // primitives is shared by the picker, the presentation and the offline lesson.
+import { kineticTitle, chartFocus, titleExample, chartExample, sceneContent } from './effect-scenes.js';
+
 const NS = 'http://www.w3.org/2000/svg';
 function svg(tag, attributes) {
   const node = document.createElementNS(NS, tag);
@@ -71,42 +73,75 @@ function confetti({ part, ink }) {
   }
 }
 
+function underline({part,ink}) {
+  for (const [i,d] of ['M-91 42 Q-23 30 90 37','M-83 47 Q3 38 75 41'].entries()) {
+    part('path',{d,fill:'none',stroke:ink[i],'stroke-width':i?2:6,'stroke-linecap':'round',
+      pathLength:1,'stroke-dasharray':'1 1'},[
+      {strokeDashoffset:1,opacity:0},{strokeDashoffset:0,opacity:1,offset:.52},{strokeDashoffset:0,opacity:1,offset:.85},{opacity:0},
+    ],i*130,1110);
+  }
+}
+function constellation({part,ink}) {
+  const points=[[-77,20],[-48,-14],[-17,6],[14,-33],[44,-4],[76,-19]];
+  points.forEach(([x,y],i)=>{
+    if (i) part('path',{d:'M'+points[i-1].join(' ')+'L'+x+' '+y,fill:'none',stroke:ink[1],
+      'stroke-width':1.6,pathLength:1,'stroke-dasharray':'1 1'},[{strokeDashoffset:1},{strokeDashoffset:0}],(i-1)*125,370);
+    part('circle',{cx:x,cy:y,r:i===3?4.7:3,fill:ink[i%3]},[{opacity:0},{opacity:1}],i*125,210);
+    if(i===0||i===3||i===5)part('circle',{cx:x,cy:y,r:8,stroke:ink[0],'stroke-width':1,fill:'none'},
+      [{opacity:0},{opacity:.85,offset:.45},{opacity:0}],i*125,700);
+  });
+}
+
+export const EFFECT_PALETTES = Object.freeze({
+  lagoon:['#72f4d3','#66baff','#d3f7ac'], sunset:['#ffd678','#ff9480','#ffade2'], iris:['#b7a6ff','#ffb3e0','#79e5ff'],
+});
+export const paceFactor = pace => pace === 'slow' ? 1.55 : pace === 'fast' ? 0.7 : 1;
 export const EFFECT_ASSETS = Object.freeze([
   { id: 'prism', name: '프리즘 리본', hint: '빛 띠가 대각선으로 스쳐 가요', ink: ['#9071ff', '#53e6ff', '#ff86bc'], draw: prism },
   { id: 'orbit', name: '포커스 링', hint: '세 겹의 렌즈가 한 곳에 초점을 맞춰요', ink: ['#ffac45', '#fcea97', '#ff685a'], draw: orbit },
   { id: 'signal', name: '회로 신호', hint: '선을 따라 빛이 차례로 도착해요', ink: ['#35e3b8', '#73bdff', '#ab9bff'], draw: signal },
   { id: 'confetti', name: '별빛 파티클', hint: '별과 색종이가 피어올라 흩어져요', ink: ['#ffd44f', '#ff6197', '#54d9db'], draw: confetti },
+  { id:'underline', name:'빛 밑줄', hint:'빛나는 두 획이 왼쪽에서 오른쪽으로 그어져요', ink:['#ffd55e','#ff915b','#fff8c6'], draw:underline },
+  { id:'constellation', name:'별자리 연결', hint:'별을 하나씩 이어 개념 사이의 흐름을 보여줘요', ink:['#a8ddff','#a7a3ff','#ffbe88'], draw:constellation },
+  { id:'kinetic', name:'키네틱 타이틀', hint:'선택한 글의 첫 72자를 큰 무대에서 낱말 차례로 보여줘요', ink:EFFECT_PALETTES.lagoon, draw:kineticTitle, example:titleExample },
+  { id:'bars', name:'데이터 포커스', hint:'선택한 막대 차트의 항목과 수치가 큰 무대에서 차례로 자라요', ink:EFFECT_PALETTES.iris, draw:chartFocus, example:chartExample },
 ]);
 const registry = new Map(EFFECT_ASSETS.map(asset => [asset.id, asset]));
 export const effectable = item => ['text','shape','image','art','emoji','chart','math'].includes(item?.t);
-export function cleanEffect(raw) {
-  if (!registry.has(raw?.id)) return null;
+export function cleanEffect(raw, item) {
+  const asset=registry.get(raw?.id);
+  if (!asset || (item && asset.example && !sceneContent(asset.id,item))) return null;
   const note = typeof raw.note === 'string' ? Array.from(raw.note.trim()).slice(0, 120).join('') : '';
-  return { id: raw.id, when: raw.when === 'open' ? 'open' : 'press', ...(note ? { note } : {}) };
+  return { id: raw.id, when: raw.when === 'open' ? 'open' : 'press', ...(note ? { note } : {}),
+    ...(['slow','fast'].includes(raw.pace) ? {pace:raw.pace} : {}),
+    ...(typeof raw.palette==='string' && Object.hasOwn(EFFECT_PALETTES,raw.palette) ? {palette:raw.palette} : {}) };
 }
 
-export function effectArt(id, animate = false) {
+export function effectArt(id, animate = false, {pace,palette,content} = {}) {
   const asset = registry.get(id);
   if (!asset) return null;
-  const art = svg('svg', { viewBox: '-100 -70 200 140', 'aria-hidden': 'true', focusable: 'false' });
+  const art = svg('svg', { viewBox: asset.example?'0 0 720 360':'-100 -70 200 140', 'aria-hidden': 'true', focusable: 'false' });
   art.style.cssText = 'width:100%;height:100%;display:block;overflow:visible;pointer-events:none';
   const running = animate && !globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   function part(tag, attrs, frames, delay = 0, duration = 1050) {
     const group = svg('g', {});
-    group.append(svg(tag, attrs)); art.append(group);
-    if (running && group.animate) group.animate(frames || [{ opacity: 0 }, { opacity: 1, offset: .45 }, { opacity: 0 }], {
-      duration, delay, fill: 'both', easing: 'cubic-bezier(.22,.68,.32,1)',
+    const node=svg(tag,attrs);
+    group.append(node); art.append(group);
+    if (running && frames && group.animate) group.animate(frames, {
+      duration:duration*paceFactor(pace), delay:delay*paceFactor(pace), fill: 'both', easing: 'cubic-bezier(.22,.68,.32,1)',
     });
+    return node;
   }
-  asset.draw({ part, ink: asset.ink });
+  asset.draw({ part, ink:typeof palette==='string' && Object.hasOwn(EFFECT_PALETTES,palette)?EFFECT_PALETTES[palette]:asset.ink,
+    content:asset.example && (sceneContent(id,content) || asset.example) });
   return art;
 }
 
 // Keep the final gallery tile legible, including after rapid repeated clicks.
-export function previewEffect(container, id, animate = true) {
-  const art = effectArt(id, animate);
+export function previewEffect(container, id, animate = true, options) {
+  const art = effectArt(id, animate, options);
   if (!art) return;
   container.replaceChildren(art);
   if (animate) Promise.allSettled(art.getAnimations({ subtree:true }).map(animation => animation.finished))
-    .then(() => { if (container.firstChild === art) container.replaceChildren(effectArt(id)); });
+    .then(() => { if (container.firstChild === art) container.replaceChildren(effectArt(id,false,options)); });
 }

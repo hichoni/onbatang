@@ -271,7 +271,7 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
   };
   // 이름표(id)는 있을 때만 남긴다: 여럿이 함께 꾸미는 프로젝트가 요소를 가려낼 때 쓴다(틴커랩 미니캔의 "함께 만드는 그림"). 혼자 쓰는 그림에는 없다.
   if (typeof it.id === 'string' && /^[a-z][a-z0-9]{5,31}$/.test(it.id)) base.id = it.id;
-  const effect = effectable(it) && cleanEffect(it.effect);
+  const effect = effectable(it) && cleanEffect(it.effect,it);
   if (effect) base.effect = effect;
   // 그룹(g): 같은 표를 단 요소들은 한 번에 고르고 함께 옮긴다. 그룹으로 묶었을 때만 적는다.
   if (typeof it.g === 'string' && GROUP_ID.test(it.g)) base.g = it.g;

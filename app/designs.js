@@ -157,7 +157,7 @@ const cleanSlide = (d, index, documentId) => {
   return { bg: d.bg, ...slideExtra({ ...d, id: pageId }), items: items.map((item, i) => {
     const out = {};
     for (const k of ITEM_FIELDS) if (['string', 'number', 'boolean'].includes(typeof item[k])) out[k] = item[k];
-    const effect = effectable(item) && cleanEffect(item.effect);
+    const effect = effectable(item) && cleanEffect(item.effect,item);
     if (effect) out.effect = effect;
     const crop=item.t==='image'?cleanCrop(item.crop):null;
     const runs=item.t==='text'&&Array.isArray(item.runs)&&item.runs.length?cleanRuns(String(item.text??''),item.runs,item):[];

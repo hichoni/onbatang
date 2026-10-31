@@ -1,4 +1,5 @@
-import { cleanEffect, effectArt, EFFECT_ASSETS } from './effect-assets.js';
+import { cleanEffect, effectArt, EFFECT_ASSETS, paceFactor } from './effect-assets.js';
+import { sceneContent } from './effect-scenes.js';
 
 const labelOf = id => EFFECT_ASSETS.find(asset => asset.id === id)?.name || '';
 
@@ -6,10 +7,15 @@ const labelOf = id => EFFECT_ASSETS.find(asset => asset.id === id)?.name || '';
 // player with a transparent target measured against the exported picture.
 export function mountEffectPlayer(host, bindings, { delay = 0 } = {}) {
   const cleanups = [];
-  let closeNote = null;
-  for (const { node, effect: rawEffect } of bindings) {
+  let closeNote = null, closeScene = null, nextSceneAt = delay;
+  const queuedScenes = new Set();
+  for (const { node, effect: rawEffect, content } of bindings) {
     const effect = cleanEffect(rawEffect);
     if (!node || !effect) continue;
+    const scene = EFFECT_ASSETS.find(a => a.id === effect.id).example;
+    const data = scene && sceneContent(effect.id,content);
+    if (scene && !data) continue;
+    const duration=(scene ? 4600 : 1450)*paceFactor(effect.pace);
     let graphic, caption, timer, opening;
     const automatic = effect.when === 'open';
     function clear() {
@@ -18,10 +24,11 @@ export function mountEffectPlayer(host, bindings, { delay = 0 } = {}) {
       caption?.remove();
       graphic = caption = null;
       if (closeNote === clear) closeNote = null;
-      if (!automatic && effect.note) node.setAttribute('aria-expanded', 'false');
+      if (closeScene === clear) closeScene = null;
+      if (!automatic && (scene || effect.note)) node.setAttribute('aria-expanded', 'false');
     }
     function play() {
-      const wasOpen = !!caption;
+      const wasOpen = !!caption || (scene && !!graphic);
       clear();
       if (wasOpen && !automatic) return;
       const frame = host.getBoundingClientRect(), rect = node.getBoundingClientRect();
@@ -34,7 +41,26 @@ export function mountEffectPlayer(host, bindings, { delay = 0 } = {}) {
       Object.assign(graphic.style, { position:'absolute', pointerEvents:'none', zIndex:8, left:x+'%', top:y+'%',
         width:width+'%', aspectRatio:'10 / 7', transform:'translate(-50%, -50%)',
         filter:'drop-shadow(0 1px 2px #17213988)' });
-      graphic.append(effectArt(effect.id, true));
+      const art=effectArt(effect.id,true,{...effect,content:data});
+      if (scene) {
+        if (!automatic) { for (const timer of queuedScenes) clearTimeout(timer); queuedScenes.clear(); }
+        closeScene?.(); closeScene=clear;
+        Object.assign(graphic.style,{left:'5%',top:'6%',width:'90%',height:effect.note?'70%':'88%',aspectRatio:'auto',transform:'none',
+          zIndex:10,filter:'drop-shadow(0 8px 18px #06131d66)'});
+        const dismiss=document.createElement('button');
+        dismiss.type='button'; dismiss.textContent='닫기'; dismiss.setAttribute('aria-label','강조 화면 닫기');
+        dismiss.dataset.effectTrigger='close';
+        Object.assign(dismiss.style,{position:'absolute',right:'1%',top:'1%',minHeight:'44px',border:'1px solid #57747e',
+          borderRadius:'999px',background:'#18343d',color:'white',padding:'3px 12px',pointerEvents:'auto',cursor:'pointer'});
+        dismiss.addEventListener('click',e=>{e.stopPropagation();clear();if(!automatic)node.focus({preventScroll:true});});
+        graphic.append(dismiss);
+        if (!automatic) node.setAttribute('aria-expanded','true');
+      } else if (effect.id==='underline') {
+        Object.assign(graphic.style,{top:(rect.bottom-frame.top)/frame.height*100+'%',width:rect.width/frame.width*100+'%',
+          height:'2.5%',aspectRatio:'auto',transform:'translate(-50%, -10%)'});
+        art.setAttribute('viewBox','-100 30 200 24'); art.setAttribute('preserveAspectRatio','none');
+      }
+      graphic.append(art);
       host.append(graphic);
       if (effect.note) {
         closeNote?.();
@@ -43,18 +69,20 @@ export function mountEffectPlayer(host, bindings, { delay = 0 } = {}) {
         caption.dataset.effectNote = '';
         caption.setAttribute('role', 'status');
         caption.textContent = effect.note;
-        Object.assign(caption.style, { position:'absolute', pointerEvents:'none', zIndex:9,
-          left:'5%', right:'5%', [y < 50 ? 'bottom' : 'top']:'5%', margin:'auto', width:'fit-content',
-          maxWidth:'90%', maxHeight:'44%', overflow:'auto', boxSizing:'border-box', borderRadius:'.6em',
+        Object.assign(caption.style, { position:'absolute', pointerEvents:'none', zIndex:11,
+          left:'5%', right:'5%', [scene || y < 50 ? 'bottom' : 'top']:'5%', margin:'auto', width:'fit-content',
+          maxWidth:'90%', maxHeight:scene?'20%':'44%', overflow:'auto', boxSizing:'border-box', borderRadius:'.6em',
           padding:'.5em .9em', background:'#16242df2', color:'white', textAlign:'center',
           font:'600 clamp(12px,2.6cqw,36px)/1.45 system-ui,sans-serif', overflowWrap:'anywhere' });
         host.append(caption);
         if (!automatic) node.setAttribute('aria-expanded', 'true');
       }
-      timer = setTimeout(() => { graphic?.remove(); graphic = null; }, 1450);
+      if (scene && automatic) timer=setTimeout(clear,duration);
+      if (!scene) timer=setTimeout(() => { graphic?.remove(); graphic=null; },duration);
     }
     if (automatic) {
-      opening = setTimeout(play, delay);
+      opening = setTimeout(() => { queuedScenes.delete(opening); play(); }, scene?nextSceneAt:delay);
+      if (scene) { queuedScenes.add(opening); nextSceneAt+=duration+160; }
       cleanups.push(() => { clearTimeout(opening); clear(); });
       continue;
     }
@@ -68,7 +96,7 @@ export function mountEffectPlayer(host, bindings, { delay = 0 } = {}) {
     node.setAttribute('tabindex','0');
     node.setAttribute('aria-label', [node.getAttribute('aria-label') || node.getAttribute('alt') || node.textContent?.trim().slice(0,60),
       effect.note ? '설명 열기 또는 닫기' : labelOf(effect.id) + ' 재생'].filter(Boolean).join(' · '));
-    if (effect.note) node.setAttribute('aria-expanded','false');
+    if (scene || effect.note) node.setAttribute('aria-expanded','false');
     const click = event => { event.stopPropagation(); play(); };
     const key = event => {
       if (event.key !== 'Enter' && event.key !== ' ') return;
@@ -95,7 +123,9 @@ export function cleanEffectTargets(rows) {
     if (!effect || !['x','y','w','h','rot'].every(key => Number.isFinite(row[key])) ||
         Math.abs(row.x) > 550 || Math.abs(row.y) > 550 || row.w <= 0 || row.h <= 0 ||
         row.w > 1500 || row.h > 1500 || Math.abs(row.rot) > 180) return [];
-    return [{ x:row.x, y:row.y, w:row.w, h:row.h, rot:row.rot, effect,
+    const content=sceneContent(effect.id,row.content);
+    if (EFFECT_ASSETS.find(a=>a.id===effect.id).example && !content) return [];
+    return [{ x:row.x, y:row.y, w:row.w, h:row.h, rot:row.rot, effect, ...(content ? {content} : {}),
       label:typeof row.label === 'string' ? row.label.slice(0,60) : '' }];
   });
 }
@@ -107,7 +137,7 @@ export function mountOfflineEffects(host, targets) {
       height:row.h+'%', transform:`translate(-50%,-50%) rotate(${row.rot}deg)`, pointerEvents:'none' });
     if (row.label) node.setAttribute('aria-label',row.label);
     host.append(node);
-    return { node, effect:row.effect };
+    return { node, effect:row.effect, content:row.content };
   });
   const stop = mountEffectPlayer(host,bindings);
   return () => { stop(); for (const {node} of bindings) node.remove(); };

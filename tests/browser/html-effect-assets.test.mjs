@@ -42,6 +42,10 @@ test('element effects survive editor saves and run in the presenter and the down
       id:'eassets00'+i,t:'text',x:35,y:45,w:38,size:7,color:'#ffffff',text:i?'완성':'회로를 눌러요',
       ...(i ? {effect:{id:'confetti',when:'open',note:'완성했어요'}} : {}),
     }]}));
+    record.slides[0].items.push(
+      {id:'ekinetic01',t:'text',x:40,y:17,w:60,size:4,text:'작은 픽셀이 모인다',color:'#ffffff'},
+      {id:'ebarstory01',t:'chart',x:77,y:72,w:35,h:37,kind:'hbar',title:'모둠별 픽셀 변화',unit:'칸',
+        labels:['파랑','노랑','초록'],series:[{name:'1차',values:[-3,0,7]},{name:'2차',values:[2,4,9]}]});
     await store.putDesign(record);
     const tour=await import(base+'/app/tour.js'); tour.markTourSeen('editor'); tour.markTourSeen(tour.NEWS_KEY);
     return record.id;
@@ -51,11 +55,14 @@ test('element effects survive editor saves and run in the presenter and the down
   await page.locator('.cv-canvas .fe-stage .fi-text').first().click();
   await page.locator('.fe-tab[data-tab=motion]').click();
   await page.locator('.fe-fx-picker summary').click();
-  for (const id of ['prism','orbit','confetti','signal']) {
+  assert.ok(await page.locator('[data-effect-asset=bars]').isDisabled());
+  for (const id of ['prism','orbit','confetti','underline','constellation','signal']) {
     await page.locator('[data-effect-asset='+id+']').click();
-    assert.ok(await page.locator('.fe-fx-sample svg g').count() >= 3);
+    assert.ok(await page.locator('.fe-fx-sample svg g').count() >= 2);
   }
   await page.getByLabel('효과 설명').fill('전기가 흐르는 길');
+  await page.getByLabel('재생 속도',{exact:true}).selectOption('slow');
+  await page.getByLabel('효과 색감',{exact:true}).selectOption('sunset');
   await page.locator('[data-apply-effect]').click();
   await page.waitForFunction(async ({base,id}) => {
     const d=await (await import(base+'/app/store.js')).getDesign(id);
@@ -63,24 +70,58 @@ test('element effects survive editor saves and run in the presenter and the down
   },{base,id});
   await page.getByRole('button',{name:'이 장 미리 보기',exact:true}).click();
   await interact(page.locator('.cv-canvas .fe-stage'));
+  // Stop preview by reopening the motion tab, then author both content scenes.
+  await page.locator('.fe-tab[data-tab=motion]').click();
+  async function applyScene(item,asset) {
+    await item.click();
+    const tab=page.locator('.fe-tab[data-tab=motion]');
+    if (await tab.getAttribute('aria-selected')!=='true' || await page.locator('.cv-app.folded').count()) await tab.click();
+    const picker=page.locator('.fe-fx-picker');
+    if (await picker.getAttribute('open')===null) await picker.locator('summary').click();
+    await picker.locator('[data-effect-asset='+asset+']').click();
+    await picker.locator('[data-apply-effect]').click();
+  }
+  await applyScene(page.locator('.cv-canvas .fe-stage .fi-text').nth(1),'kinetic');
+  await applyScene(page.locator('.cv-canvas .fe-stage .fi-chart').first(),'bars');
+  await page.waitForFunction(async ({base,id}) => (await (await import(base+'/app/store.js')).getDesign(id))?.slides[0].items[2].effect?.id==='bars',{base,id});
   await page.reload();
   const reopen = page.getByRole('button',{name:'모션 에셋 수업 열기',exact:true});
   await reopen.or(page.locator('.cv-show-btn')).first().waitFor();
   if (await reopen.isVisible()) await reopen.click();
   await page.locator('.cv-canvas .fe-stage .fi-text').first().waitFor();
   const saved = await page.evaluate(async ({id,base}) => (await (await import(base+'/app/store.js')).getDesign(id)).slides[0].items[0].effect,{base,id});
-  assert.deepEqual(saved,{id:'signal',when:'press',note:'전기가 흐르는 길'});
+  assert.deepEqual(saved,{id:'signal',when:'press',note:'전기가 흐르는 길',pace:'slow',palette:'sunset'});
   await page.locator('.cv-show-btn').click();
   async function interact(surface) {
     const hit = surface.locator('[data-effect-trigger=signal]');
     await hit.click();
     assert.equal(await surface.locator('[data-effect-note]').textContent(),'전기가 흐르는 길');
+    const signal=surface.locator('[data-effect-playing=signal] svg');
+    assert.equal(await signal.locator('path').first().getAttribute('stroke'),'#ffd678');
+    const timing=await signal.evaluate(svg=>svg.getAnimations({subtree:true})[0]?.effect.getTiming().duration ?? null);
+    assert.equal(timing,await signal.evaluate(()=>matchMedia('(prefers-reduced-motion: reduce)').matches)?null:1080*1.55);
     assert.equal(await hit.getAttribute('aria-expanded'),'true');
     await hit.press('Enter');
     assert.equal(await hit.getAttribute('aria-expanded'),'false');
     assert.equal(await surface.locator('[data-effect-note]').count(),0);
   }
+  async function checkScenes(surface) {
+    await surface.locator('[data-effect-trigger=kinetic]').click();
+    const title=surface.locator('[data-effect-playing=kinetic]');
+    assert.deepEqual(await title.locator('text[font-weight="800"]').allTextContents(),['작은','픽셀이','모인다']);
+    await title.getByRole('button',{name:'강조 화면 닫기'}).click();
+    await surface.locator('[data-effect-trigger=bars]').click();
+    const chart=surface.locator('[data-effect-playing=bars]');
+    const labels=await chart.locator('svg text').allTextContents();
+    for (const text of ['모둠별 픽셀 변화','단위 · 칸','파랑','노랑','초록','1차','2차','-3','7','9']) assert.ok(labels.includes(text),text);
+    const bars=await chart.locator('rect').evaluateAll(nodes=>nodes.slice(1).map(n=>[Number(n.getAttribute('x')),Number(n.getAttribute('width'))]));
+    assert.equal(bars.length,6);
+    assert.equal(bars[2][1],0,'zero stays zero');
+    assert.ok(Math.abs(bars[0][0]+bars[0][1]-bars[1][0])<.001,'negative and positive bars meet at zero');
+    await chart.getByRole('button',{name:'강조 화면 닫기'}).click();
+  }
   await interact(page.locator('.cv-show-stage'));
+  await checkScenes(page.locator('.cv-show-stage'));
   await page.keyboard.press('ArrowRight');
   await page.locator('.cv-show-stage [data-effect-note]').filter({hasText:'완성했어요'}).waitFor();
   await page.keyboard.press('Escape');
@@ -98,6 +139,7 @@ test('element effects survive editor saves and run in the presenter and the down
   await opened.goto(pathToFileURL(file).href);
   const frame=opened.locator('.lesson-effects-frame');
   await interact(frame);
+  await checkScenes(frame);
   const geometry=await frame.evaluate(f => {
     const slide=f.querySelector('img').getBoundingClientRect(), hit=f.querySelector('[data-effect-trigger]').getBoundingClientRect();
     return [(hit.left+hit.width/2-slide.left)/slide.width,(hit.top+hit.height/2-slide.top)/slide.height];
