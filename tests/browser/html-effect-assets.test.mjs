@@ -255,3 +255,79 @@ test('a teacher starts a motion set, reopens it, presents its linked art and dow
   assert.ok(await next.isDisabled());
   assert.deepEqual(errors,[]);
 });
+
+test('a teacher edits a question on a text box, controls each clue, and reopens the downloaded lesson offline', {
+  skip:!process.env.MINICAN_PLAYWRIGHT_PATH, timeout:90000,
+}, async t=>{
+  const {hosted,base,origin,browser,page,errors}=await openBrowser(t);
+  await page.evaluate(async base=>{
+    const tour=await import(base+'/app/tour.js');
+    for(const id of ['home','editor',tour.NEWS_KEY])tour.markTourSeen(id);
+  },base);
+  await page.goto(origin+(hosted?'/minican-app.html':'/app/index.html'));
+  await page.locator('button[data-starts=collection]').click();
+  await page.locator('button[data-layout=collection-eclipse-1]').click();
+  const answer='픽셀 한 칸',prompt='화면을 확대하면 무엇이 보일까요?',hints=['작은 네모예요.','색 하나를 담아요.'];
+  const stage=page.locator('.cv-canvas .fe-stage');
+  const text=stage.locator('.fi-text').filter({hasText:'작은 달'});
+  await text.click();
+  const textTab=page.locator('.fe-tab[data-tab=text]');
+  if(await textTab.getAttribute('aria-selected')!=='true')await textTab.click();
+  await page.locator('[data-make-clue-card]').click();
+  await page.getByLabel('학생에게 보여 줄 질문').fill(prompt);
+  await page.getByLabel('힌트 1 (선택)').fill(hints[0]);
+  await page.getByLabel('힌트 3 (선택)').fill(hints[1]);
+  await page.getByLabel('그래픽 효과 재생 시점').selectOption('open');
+  await page.locator('[data-apply-effect]').click();
+  await text.dblclick();await stage.locator('.fi-text.editing').fill(answer);await page.keyboard.press('Escape');
+  await page.waitForFunction(async ({base,answer})=>{
+    const [d]=await (await import(base+'/app/store.js')).listDesigns();
+    return d.slides[0].items.some(it=>it.text===answer && it.effect?.hints?.length===2);
+  },{base,answer});
+  await page.reload();
+  const open=page.getByRole('button',{name:'해를 가리는 달 열기',exact:true});
+  await open.or(page.locator('.cv-show-btn')).first().waitFor();
+  if(await open.isVisible())await open.click();
+  await page.locator('.cv-show-btn').click();
+  async function check(surface,advance,rewind){
+    const panel=surface.locator('[data-effect-playing=cluecard]');
+    await panel.waitFor();assert.equal(await panel.getAttribute('data-step'),'0');
+    const art=panel.locator('svg');
+    assert.match(await art.getAttribute('aria-label'),/화면을 확대하면/);
+    assert.doesNotMatch(await panel.textContent(),/작은 네모|색 하나|픽셀/);
+    await advance();assert.equal(await panel.getAttribute('data-step'),'1');
+    assert.match(await art.textContent(),/작은 네모/);assert.doesNotMatch(await art.textContent(),/색 하나|픽셀/);
+    await advance();assert.equal(await panel.getAttribute('data-step'),'2');
+    assert.match(await art.textContent(),/색 하나/);assert.doesNotMatch(await art.textContent(),/픽셀/);
+    await rewind();assert.equal(await panel.getAttribute('data-step'),'1');
+    await advance();await advance();assert.match(await art.textContent(),/픽셀 한 칸/);
+    await advance();assert.equal(await panel.count(),0);
+    const cover=surface.locator('[data-effect-trigger=cluecard]');
+    await cover.click();assert.equal(await panel.getAttribute('data-step'),'0');
+    await panel.getByRole('button',{name:'정답 바로 보기'}).click();
+    assert.match(await art.textContent(),/화면을 확대하면/);assert.match(await art.textContent(),/픽셀 한 칸/);
+    await panel.getByRole('button',{name:'이전 단계'}).click();assert.equal(await panel.getAttribute('data-step'),'2');
+    await panel.getByRole('button',{name:'닫기',exact:true}).click();
+  }
+  const live=page.locator('.cv-show-stage');
+  await live.locator('[data-question-panel]').waitFor();
+  await page.clock.install();
+  const auto=page.locator('.cv-show').getByRole('button',{name:/자동 넘기기/});
+  await auto.click();await page.clock.fastForward(120000);
+  assert.equal(await live.locator('[data-question-panel]').getAttribute('data-step'),'0');
+  await auto.click();
+  await check(live,()=>page.getByRole('button',{name:'다음 장',exact:true}).click(),()=>page.keyboard.press('PageUp'));
+  await page.keyboard.press('Escape');
+  await page.locator('.cv-down-btn').click();await page.locator('[data-type=html]').click();
+  const ready=page.waitForEvent('download');await page.locator('[data-download-save]').click();
+  const dir=await mkdtemp(join(tmpdir(),'onbatang-clues-')),file=join(dir,'lesson.html');
+  t.after(async()=>{await rm(file,{force:true});await rmdir(dir);});await (await ready).saveAs(file);
+  const offline=await browser.newContext({offline:true,reducedMotion:'reduce',viewport:{width:390,height:844}});
+  const opened=await offline.newPage();opened.on('pageerror',e=>errors.push(e.message));
+  await opened.goto(pathToFileURL(file).href);
+  const nav=opened.locator('.lesson-navigation'),next=nav.getByRole('button',{name:'다음',exact:true});
+  await check(opened.locator('.lesson-effects-frame'),()=>next.click(),()=>nav.getByRole('button',{name:'이전',exact:true}).click());
+  assert.ok(await nav.getByRole('button',{name:'이전',exact:true}).isDisabled());await next.click();
+  assert.match(await nav.textContent(),/2 \/ 5/);
+  assert.deepEqual(errors,[]);
+});

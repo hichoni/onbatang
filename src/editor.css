@@ -1044,6 +1044,10 @@ td .fe-chart-cell[inputmode] { text-align: right; font-variant-numeric: tabular-
 .fe-fx-choice:disabled { opacity:.58; cursor:default; }
 .fe-fx-choice small { display:block; font-size:.65rem; }
 .fe-fx-settings { display:grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap:6px; }
+.fe-clue-fields { min-width:0; margin:0; padding:10px; border:1px solid #b2cec1; border-radius:8px; background:#f5faf6; }
+.fe-clue-fields:not([hidden]) { display:grid; gap:8px; }
+.fe-clue-fields legend { font-weight:700; padding:0 4px; }
+.fe-clue-fields p { overflow-wrap:anywhere;white-space:pre-wrap; }
 .fe-fx-controls label { display:grid; gap:4px; font-size:.82rem; font-weight:650; }
 .fe-fx-preview-actions { display:flex; gap:8px; align-items:center; justify-content:space-between; }
 .fe-fx-preview-actions button { flex:none; }

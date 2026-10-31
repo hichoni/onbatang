@@ -4,6 +4,23 @@ import { cleanEffect } from '../src/effect-assets.js';
 import { sceneContent, chartExample } from '../src/effect-scenes.js';
 import { cleanEffectTargets } from '../src/effect-player.js';
 import { REVEALS } from '../src/reveal-scenes.js';
+import { CLUE_CARD } from '../src/clue-card.js';
+
+test('authored clue cards keep bounded questions and ordered clues; the current text box supplies the answer',()=>{
+  const item={t:'text',text:'  RGB  색상 '};
+  const effect=cleanEffect({id:'cluecard',when:'open',prompt:'🍏'.repeat(82),hints:[' 첫 단서  ','','두'.repeat(70),'초과']},item);
+  assert.equal(effect.when,'open');assert.equal(Array.from(effect.prompt).length,80);
+  assert.deepEqual(effect.hints,['첫 단서','두'.repeat(64)]);
+  assert.equal(CLUE_CARD.last(item,effect),3);
+  const row={x:50,y:20,w:16,h:5,rot:0,effect,content:item};
+  assert.deepEqual(cleanEffectTargets([row])[0].content,{t:'text',text:'RGB 색상'});
+  assert.deepEqual(cleanEffectTargets([{...row,content:{...item,text:'바꾼 답'}}])[0].effect,effect);
+  for(const text of ['', '글'.repeat(81)])assert.equal(cleanEffect({id:'cluecard'},{t:'text',text}),null);
+  assert.equal(cleanEffect({id:'cluecard'},{t:'image'}),null);
+  const direct=cleanEffect({id:'cluecard',prompt:[],hints:'x'},item);
+  assert.deepEqual(direct,{id:'cluecard',when:'press'});assert.equal(CLUE_CARD.next(0,item,direct),'정답 공개');
+  assert.deepEqual(cleanEffect({...effect,id:'signal'},item),{id:'signal',when:'open'});
+});
 
 test('scene content follows the selected item, with bounded text and signed chart values',()=>{
   const text={t:'text',text:'🍎'.repeat(73)};

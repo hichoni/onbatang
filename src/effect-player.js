@@ -3,8 +3,19 @@ import { sceneContent } from './effect-scenes.js';
 
 const labelOf = id => EFFECT_ASSETS.find(asset => asset.id === id)?.name || '';
 
+// Presenter buttons, keyboard and remote use the same controls as a tap.
+// At either end, return to the slide before the next navigation command.
+export function stepOpenQuestion(stage,direction) {
+  const panel=stage?.querySelector('[data-question-panel]:not([inert])');
+  if(!panel)return false;
+  const button=panel.querySelector(direction>0?'[data-question-next]':'[data-question-back]');
+  if(button.disabled || (direction>0 && panel.dataset.last==='true'))panel.querySelector('[data-question-close]').click();
+  else button.click();
+  return true;
+}
+
 // A question covers its answer even before the presenter opens the large view.
-function mountQuestion(host, {node,content,slide}, effect, asset, data, activate) {
+function mountQuestion(host, {node,content,slide}, effect, asset, data, activate,onQuestionChange) {
   const cover=document.createElement('button');
   cover.type='button'; cover.textContent=asset.name;
   cover.dataset.effectTrigger=effect.id;
@@ -23,16 +34,17 @@ function mountQuestion(host, {node,content,slide}, effect, asset, data, activate
   node.setAttribute('aria-hidden','true');
   node.after(cover);
   let panel;
-  const close=()=>{panel?.remove();panel=null;cover.setAttribute('aria-expanded','false');};
+  const close=()=>{if(!panel)return;panel.remove();panel=null;cover.setAttribute('aria-expanded','false');onQuestionChange?.(false);};
   cover.onclick=event=>{
     event.stopPropagation();
     if (panel) { close(); return; }
     activate(close);
     cover.setAttribute('aria-expanded','true');
     let step=0;
-    const last=asset.last(data);
+    const last=asset.last(data,effect);
     panel=document.createElement('div');
     panel.dataset.effectPlaying=effect.id;
+    panel.dataset.questionPanel='';
     panel.setAttribute('role','group');panel.setAttribute('aria-label',asset.name);
     Object.assign(panel.style,{position:'absolute',inset:'0',zIndex:12,background:'#101f2b',color:'white',
       display:'grid',gridTemplateRows:'minmax(0,1fr) auto',overflow:'hidden',pointerEvents:'auto'});
@@ -41,11 +53,15 @@ function mountQuestion(host, {node,content,slide}, effect, asset, data, activate
     art.style.cssText='min-height:0;min-width:0';
     bar.style.cssText='display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:4px 10px;padding:3px 6px;background:#172d39';
     const advance=document.createElement('button'), dismiss=document.createElement('button'), info=document.createElement('span');
-    for (const button of [advance,dismiss]) {
+    const back=document.createElement('button'),skip=document.createElement('button');
+    back.dataset.questionBack='';back.textContent='이전 단계';
+    advance.dataset.questionNext='';dismiss.dataset.questionClose='';
+    for (const button of [back,advance,skip,dismiss]) {
       button.type='button';button.dataset.effectTrigger='control';
       button.style.cssText='min-height:36px;padding:4px 12px;font:600 clamp(12px,2cqw,20px)/1.2 system-ui;border:1px solid #66868c;border-radius:9px;cursor:pointer';
     }
     advance.style.background='#a0e9d1'; advance.style.color='#10242d';
+    skip.textContent='정답 바로 보기';skip.onclick=()=>{step=last;draw();advance.focus({preventScroll:true});};
     dismiss.style.background='transparent';dismiss.style.color='#eef5f2';dismiss.textContent='닫기';
     info.setAttribute('role','status');
     info.style.cssText='font:500 clamp(11px,1.8cqw,19px)/1.3 system-ui;max-width:100%;overflow:auto;max-height:3.9em;overflow-wrap:anywhere';
@@ -60,37 +76,46 @@ function mountQuestion(host, {node,content,slide}, effect, asset, data, activate
       const graphic=effectArt(effect.id,true,{...effect,content:data,photo,step});
       art.replaceChildren(graphic);
       panel.dataset.step=String(step);
-      advance.textContent=step===last?'처음부터':asset.next(step,data);
+      panel.dataset.last=String(step===last);
+      back.disabled=step===0;
+      skip.hidden=effect.id!=='cluecard'||step>=last-1;
+      advance.textContent=step===last?'처음부터':asset.next(step,data,effect);
       info.textContent=step===last && effect.note ? effect.note : (step+1)+' / '+(last+1);
     }
     advance.onclick=()=>{step=step===last?0:step+1;draw();};
+    back.onclick=()=>{if(step){step--;draw();}};
     const leave=()=>{close();cover.focus({preventScroll:true});};
     dismiss.onclick=leave;
     panel.onkeydown=e=>{
       if(e.key==='Escape'){e.stopPropagation();e.preventDefault();leave();}
+      else if(['ArrowRight','PageDown','ArrowLeft','PageUp'].includes(e.key)){
+        e.stopPropagation();e.preventDefault();if(!e.repeat)stepOpenQuestion(host,e.key==='ArrowRight'||e.key==='PageDown'?1:-1);
+      }
       else if(e.key===' '||e.key==='Enter')e.stopPropagation();
     };
-    bar.append(info,advance,dismiss);panel.append(art,bar);host.append(panel);
-    draw();advance.focus({preventScroll:true});
+    bar.append(info,back,advance,skip,dismiss);panel.append(art,bar);host.append(panel);
+    draw();onQuestionChange?.(true);advance.focus({preventScroll:true});
   };
   const restore=()=>{
     close();cover.remove();node.style.setProperty('opacity',opacity,priority);
     if(ariaHidden===null)node.removeAttribute('aria-hidden');else node.setAttribute('aria-hidden',ariaHidden);
   };
-  return freeze=>{
+  const dispose=freeze=>{
     if(!freeze){restore();return;}
     // The departing slide is still on screen while a transition runs.
     cover.inert=true;if(panel)panel.inert=true;
     return restore;
   };
+  return {open:()=>cover.click(),dispose};
 }
 
 // The live player binds the actual piece. Offline lessons supply the same
 // player with a transparent target measured against the exported picture.
-export function mountEffectPlayer(host, bindings, { delay = 0 } = {}) {
+export function mountEffectPlayer(host, bindings, { delay = 0,onQuestionChange } = {}) {
   const cleanups = [];
   let closeNote = null, closeScene = null, nextSceneAt = delay;
   const queuedScenes = new Set();
+  let hasOpeningQuestion=false;
   for (const binding of bindings) {
     const {node,content}=binding;
     const effect = cleanEffect(binding.effect);
@@ -100,10 +125,17 @@ export function mountEffectPlayer(host, bindings, { delay = 0 } = {}) {
     const data = scene && sceneContent(effect.id,content);
     if (scene && !data) continue;
     if(asset.last){
-      cleanups.push(mountQuestion(host,binding,effect,asset,data,close=>{
+      const question=mountQuestion(host,binding,effect,asset,data,close=>{
         for(const timer of queuedScenes)clearTimeout(timer);
         queuedScenes.clear();closeNote?.();closeScene?.();closeScene=close;
-      }));
+      },onQuestionChange);
+      cleanups.push(question.dispose);
+      if(effect.when==='open'&&!hasOpeningQuestion){
+        hasOpeningQuestion=true;
+        const timer=setTimeout(question.open,delay);
+        queuedScenes.add(timer);
+        cleanups.push(()=>{clearTimeout(timer);queuedScenes.delete(timer);});
+      }
       continue;
     }
     const duration=(scene ? 4600 : 1450)*paceFactor(effect.pace);
@@ -226,7 +258,7 @@ export function cleanEffectTargets(rows) {
   });
 }
 
-export function mountOfflineEffects(host, targets) {
+export function mountOfflineEffects(host, targets, options) {
   const bindings = targets.map(row => {
     const node = document.createElement('span');
     Object.assign(node.style, { position:'absolute', left:row.x+'%', top:row.y+'%', width:row.w+'%',
@@ -235,6 +267,6 @@ export function mountOfflineEffects(host, targets) {
     host.append(node);
     return { node, effect:row.effect, content:row.content,slide:{...row,picture:host.querySelector('.lesson-slide')} };
   });
-  const stop = mountEffectPlayer(host,bindings);
+  const stop = mountEffectPlayer(host,bindings,options);
   return () => { stop(); for (const {node} of bindings) node.remove(); };
 }

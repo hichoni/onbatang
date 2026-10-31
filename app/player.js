@@ -7,6 +7,7 @@ import { liveBackdrops, leaveLooks } from '../src/live.js';
 import { playDesign, playTransition, morphs } from '../src/motion.js';
 import { scenePlayer } from '../src/scene.js';
 import { cleanDesign } from '../src/model.js';
+import { stepOpenQuestion } from '../src/effect-player.js';
 
 /**
  * stage: 장을 그릴 자리(비워 두고 넘긴다) · slides: 장들(그림 기록의 slides, 보일 것만) · aspect: 가로 ÷ 세로.
@@ -88,6 +89,7 @@ export function mountPlayer(stage, { slides = [], aspect = 16 / 9, onChange = ()
     get total() { return pages.length; },
     next() {
       if (!alive || !pages.length) return false;
+      if(stepOpenQuestion(stage,1))return true;
       settle();
       parts?.finish();
       if (waiting) { const w = waiting; waiting = null; w.layer.classList.remove('fe-standby'); w.player.play({ from: w.from }); tell(); return true; }
@@ -104,7 +106,9 @@ export function mountPlayer(stage, { slides = [], aspect = 16 / 9, onChange = ()
       at++; draw(1); return true;
     },
     prev() {
-      if (!alive || at <= 0) return false;
+      if (!alive) return false;
+      if(stepOpenQuestion(stage,-1))return true;
+      if(at<=0)return false;
       clearTimeout(outro); outro = 0;
       at--; draw(-1); return true;
     },

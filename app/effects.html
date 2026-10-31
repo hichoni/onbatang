@@ -81,19 +81,21 @@
     const art=document.createElement('span'), name=document.createElement('b');
     const hint=document.createElement('span'), play=document.createElement('em');
     button.dataset.asset=asset.id;
+    if(asset.id==='cluecard')button.id='clue-card';
     art.className='art';
     let step=0;
     const render=animate=>{
-      previewEffect(art,asset.id,animate,{pace:pace.value,palette:palette.value,step,
+      previewEffect(art,asset.id,animate,{...asset.demo,pace:pace.value,palette:palette.value,step,
         content:asset.id==='kinetic'?{t:'text',text:title.value}:asset.id==='bars'&&chart.value==='change'?changes:asset.example});
-      play.textContent=asset.last?(step===asset.last(asset.example)?'처음부터':asset.next(step,asset.example)):'▶ 재생';
+      play.textContent=asset.last?(step===asset.last(asset.example,asset.demo)?'처음부터':asset.next(step,asset.example,asset.demo)):'▶ 재생';
     };
     render(false); posters.push(()=>render(false));
     name.textContent=asset.name; hint.className='hint'; hint.textContent=asset.hint;
     button.append(art,name,play,hint);
-    button.onclick=() => {if(asset.last)step=(step+1)%(asset.last(asset.example)+1);render(true);};
+    button.onclick=() => {if(asset.last)step=(step+1)%(asset.last(asset.example,asset.demo)+1);render(true);};
     document.querySelector(asset.last?'#questions':asset.example?'#scenes':'#accents').append(button);
   }
+  if(location.hash==='#clue-card')document.getElementById('clue-card').scrollIntoView({block:'center'});
   title.oninput=chart.onchange=pace.onchange=palette.onchange=()=>posters.forEach(draw=>draw());
 </script>
 </html>

@@ -59,6 +59,34 @@ async function importDeck(page,entry){
 }
 const waitPages=(page,count)=>page.waitForFunction(n=>document.querySelectorAll('[data-material-page]').length===n,count);
 
+test('an imported PPT reopens with its authored clue card and original page order',options,async t=>{
+ const hash=sha256(await readFile(sourcePath)),hostRoot=process.env.MINICAN_HOST_ROOT;
+ const {page,entry,verifyIsolation}=await setup(t,{hostRoot});
+ await importDeck(page,hostRoot?entry:new URL('/app/index.html',entry).href);
+ const pageIds=()=>page.locator('[data-material-page]').evaluateAll(nodes=>nodes.map(n=>n.dataset.pageId));
+ const ids=await pageIds();
+ const text=page.locator('.cv-canvas .fe-stage .fi-text').filter({hasText:/\S/}).first();
+ const answer=(await text.innerText()).trim().replace(/\s+/g,' ');
+ assert.ok(answer && Array.from(answer).length<=80);
+ await text.click();
+ if(!await page.locator('[data-make-clue-card]').isVisible())await page.locator('.fe-tab[data-tab=text]').click();
+ await page.locator('[data-make-clue-card]').click();
+ await page.getByLabel('학생에게 보여 줄 질문').fill('표지에는 어떤 말이 있었나요?');
+ await page.getByLabel('힌트 1 (선택)').fill('첫 장을 떠올려 보세요.');
+ await page.getByLabel('그래픽 효과 재생 시점').selectOption('open');
+ await page.locator('[data-apply-effect]').click();
+ await page.locator('.cv-back').click();await page.locator('.cv-home-title').waitFor();await page.reload();
+ await page.locator('.cv-deck .cv-thumb').click();await waitPages(page,pageCount);assert.deepEqual(await pageIds(),ids);
+ await page.locator('.cv-show-btn').click();
+ const card=page.locator('.cv-show [data-effect-playing=cluecard]');
+ await card.waitFor();assert.match(await card.textContent(),/표지에는/);
+ await card.getByRole('button',{name:'힌트 1 공개'}).click();assert.match(await card.textContent(),/첫 장을/);
+ await card.getByRole('button',{name:'정답 공개'}).click();
+ const revealed=await card.locator('svg text[font-weight="700"]').allTextContents();
+ assert.equal(revealed.join('').replace(/\s/g,''),answer.replace(/\s/g,''));
+ assert.equal(sha256(await readFile(sourcePath)),hash);await verifyIsolation();
+});
+
 test('photo study samples a chosen PPT pixel, pauses, draws and reopens the result in the editor and offline HTML',options,async t=>{
  const originalHash=sha256(await readFile(sourcePath)),hostRoot=process.env.MINICAN_HOST_ROOT;
  const {page,entry,verifyIsolation}=await setup(t,{hostRoot});

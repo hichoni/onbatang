@@ -1,9 +1,11 @@
 import { cleanChart, chartScale, chartNumber } from './chart.js';
 import { revealContent } from './reveal-scenes.js';
+import { clueAnswer } from './clue-card.js';
 
 // Content is taken from the current piece each time. Only offline lessons
 // carry a bounded copy, because their slide is otherwise a single picture.
 export function sceneContent(id, item) {
+  if (id==='cluecard') return clueAnswer(item);
   if (id === 'kinetic' && item?.t === 'text' && typeof item.text==='string') {
     const chars = Array.from(item.text.trim().replace(/\s+/g, ' '));
     if (chars.length) return { t:'text', text:chars.length > 72 ? chars.slice(0,71).join('')+'…' : chars.join('') };

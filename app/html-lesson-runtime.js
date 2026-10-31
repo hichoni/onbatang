@@ -7,7 +7,8 @@ import { mountGaiApp } from './gai-app.js';
 import { mountQuiz } from './quiz.js';
 import { el } from '../src/dom.js';
 import { createShowTools } from './show-tools.js';
-import { cleanEffectTargets, mountOfflineEffects } from '../src/effect-player.js';
+import { cleanEffectTargets, mountOfflineEffects,stepOpenQuestion } from '../src/effect-player.js';
+import { questionEffect } from '../src/effect-assets.js';
 import {cleanLessonTarget,cleanLessonBinding,returnedResultsFromLesson} from './lesson-results.js';
 
 const png = value => typeof value === 'string' && /^data:image\/png;base64,[A-Za-z\d+/=]+$/.test(value) && value.length <= 4_000_000;
@@ -107,6 +108,7 @@ export function mountHtmlLesson(raw, host = document.getElementById('onbatang-le
     } catch { persistent = false; status.textContent = '브라우저에 저장하지 못했어요. 지금 작업은 그대로 있어요. 현재 수업 내려받기로 결과를 보관해 주세요.'; }
   }
   function navigate(step) {
+    if(stepOpenQuestion(stage,step))return;
     if(executing && pages[current].activity?.photoStudy && (step>0?app?.step?.():app?.back?.()))return;
     goTo(current + step);
   }
@@ -120,7 +122,7 @@ export function mountHtmlLesson(raw, host = document.getElementById('onbatang-le
     host.classList.add('lesson-show');
     const tools = createShowTools(host, {
       total: () => pages.length, index: () => current, next: () => navigate(1), prev: () => navigate(-1), go: goTo, close: endShow,
-      waitForTeacher: k=>!!pages[k]?.activity?.photoStudy,
+      waitForTeacher: k=>!!pages[k]?.activity?.photoStudy || pages[k]?.effects?.some(row=>questionEffect(row.effect)),
       thumb: slideImage, preview: slideImage, ratio: k => pages[k].aspect,
       notes: k => pages[k].notes || '', topic: k => pages[k].topic || '', dwell: k => pages[k].dur, label: k => pages[k].activity ? '활동' : pages[k].result ? '결과' : '',
       title: seed.title, notify: message => { status.textContent = message; }, keyClass: 'lesson-show-key',
@@ -206,7 +208,9 @@ export function mountHtmlLesson(raw, host = document.getElementById('onbatang-le
       target.querySelector('button')?.focus({ preventScroll: true });
     } }));
     stage.replaceChildren(scene);
-    if (frame) stopEffects = mountOfflineEffects(frame,page.effects);
+    if (frame) stopEffects = mountOfflineEffects(frame,page.effects,{onQuestionChange:open=>{
+      previous.disabled=!open && current===0;next.disabled=!open && current===pages.length-1;
+    }});
     if(autoPhoto && page.activity?.photoStudy)scene.querySelector('.lesson-start')?.click();
   }
   const keys = event => {

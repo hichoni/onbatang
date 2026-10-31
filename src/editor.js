@@ -33,6 +33,7 @@ import { TOLERANCE, colorAlpha, prepareAlpha, finishCutout, resizeMask, plainBor
 import { anchorResizedItem, resizeItemFromHandle } from './resize.js';
 import {cleanPalettes,updatePalettes} from './palettes.js';
 import { effectPicker } from './effect-picker.js';
+import { clueAnswer } from './clue-card.js';
 import { effectable, EFFECT_ASSETS } from './effect-assets.js';
 import {FULL_CROP, cleanCrop, coverCrop, cropImage, panCrop} from './crop.js';
 
@@ -3991,6 +3992,15 @@ export function createEditor({
         el('div', { class: 'fe-texts' }, ...TEXT_PRESETS.map((p) => el('button', {
           class: `fe-textadd ${p.id}`, type: 'button', onClick: () => add(newPresetText(p.id, { color: backgroundOf(card.bg).ink })),
         }, p.name))),
+        settings().motion && el('button',{class:'fe-math-add',type:'button',dataset:{makeClueCard:''},onClick:()=>{
+          const item=cur();
+          if(!clueAnswer(item)||item.lock){toast('정답으로 쓸 80자 이하의 잠금 해제된 글상자 하나를 먼저 골라 주세요.');return;}
+          openTab('motion');
+          const picker=panel.querySelector('.fe-fx-picker');
+          if(!picker)return;
+          picker.open=true;picker.querySelector('[data-effect-asset=cluecard]').click();
+          picker.querySelector('.fe-clue-fields input').focus();
+        }},icon('text'),el('span',{},el('b',{text:'단서 카드 만들기'}),el('small',{text:'고른 글을 정답으로 쓰고, 발표에서 질문과 힌트를 공개해요.'}))),
         el('p', { class: 'fe-note', text: '터치 화면에서는 글을 고른 뒤 한 번 더 누르면 고칠 수 있어요. 글꼴·크기·색은 도구 막대에서 바꿔요.' }),
         // 수식: 분수 · 루트 · 화학식(TeX). 창에서 적고 미리 본 뒤 넣는다.
         el('div', { class: 'fe-head', text: '수식' }),

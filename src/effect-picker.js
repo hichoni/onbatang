@@ -1,5 +1,6 @@
 import { el } from './dom.js';
 import { EFFECT_ASSETS, effectArt, cleanEffect, previewEffect } from './effect-assets.js';
+import { CLUE_LIMITS, clueOptions } from './clue-card.js';
 
 export function effectPicker(item, apply, aspect=1) {
   const saved = cleanEffect(item.effect,item);
@@ -16,22 +17,34 @@ export function effectPicker(item, apply, aspect=1) {
   ].map(option));
   pace.value=saved?.pace || 'normal'; palette.value=saved?.palette || 'original';
   let step=0, active;
+  const prompt=el('input',{type:'text',maxlength:CLUE_LIMITS.prompt,value:saved?.prompt||'',placeholder:'어떤 답이 떠오르나요?'});
+  const hints=Array.from({length:CLUE_LIMITS.hints},(_,i)=>el('input',{type:'text',maxlength:CLUE_LIMITS.hint,value:saved?.hints?.[i]||''}));
+  const cardFields=el('fieldset',{class:'fe-clue-fields'},el('legend',{text:'단서 카드 만들기'}),
+    el('p',{class:'fe-note',text:'정답으로 쓸 글 · '+(item.t==='text'?item.text:'')}),
+    el('label',{},'학생에게 보여 줄 질문',prompt),
+    ...hints.map((input,i)=>el('label',{},'힌트 '+(i+1)+' (선택)',input)));
+  function options(){return selected==='cluecard'?clueOptions({prompt:prompt.value,hints:hints.map(input=>input.value)}):{};}
+  cardFields.oninput=()=>{step=0;preview(false);};
   const when = el('select', { 'aria-label':'그래픽 효과 재생 시점' },
     el('option', { value:'press', text:'이 조각을 누를 때' }), el('option', { value:'open', text:'장이 열릴 때' }));
   when.value = saved?.when || 'press';
   const replay=el('button',{class:'fe-btn',type:'button',onClick:()=>{
-    if(active.last) step=(step+1)%(active.last(item)+1);
+    if(active.last) step=(step+1)%(active.last(item,options())+1);
     preview(true);
   }});
   function preview(animate) {
-    replay.textContent=active.last?(step===active.last(item)?'처음부터':active.next(step,item)):'다시 보기';
-    previewEffect(sample,selected,animate,{content:{...item,aspect},step,pace:pace.value,palette:palette.value});
+    const opts=options();
+    replay.textContent=active.last?(step===active.last(item,opts)?'처음부터':active.next(step,item,opts)):'다시 보기';
+    previewEffect(sample,selected,animate,{content:{...item,aspect},step,pace:pace.value,palette:palette.value,...opts});
   }
   pace.onchange=palette.onchange=() => preview(true);
   function pick(asset, animate) {
     selected = asset.id;active=asset;step=0;
-    when.disabled=!!asset.last;
-    if(asset.last)when.value='press';
+    cardFields.hidden=selected!=='cluecard';
+    if(cardFields.hidden)controls.insertBefore(choices,cardFields);
+    else controls.append(choices);
+    when.disabled=!!asset.last && asset.id!=='cluecard';
+    if(when.disabled)when.value='press';
     hint.textContent = asset.hint;
     for (const button of choices.querySelectorAll('button')) button.setAttribute('aria-pressed',String(button.dataset.effectAsset === selected));
     preview(animate);
@@ -46,15 +59,15 @@ export function effectPicker(item, apply, aspect=1) {
         el('span', { class:'fe-fx-icon','aria-hidden':'true' },effectArt(asset.id)), el('span',{},asset.name, !allowed && el('small',{text:sub}))));
     }
   }
-  pick(EFFECT_ASSETS.find(asset => asset.id === selected),false);
   const note = el('input', { type:'text', maxLength:120, placeholder:'함께 보여 줄 설명 (선택)', 'aria-label':'효과 설명', value:saved?.note || '' });
   const save = el('button', { class:'fe-btn primary', type:'button', dataset:{applyEffect:''}, text:'고른 조각에 적용',
-    onClick:() => apply(cleanEffect({ id:selected, when:when.value, note:note.value, pace:pace.value, palette:palette.value },item)) });
-  return el('details', { class:'fe-fx-picker', open:!!saved },
-    el('summary', { text:'HTML 그래픽 효과' + (saved ? ' · '+EFFECT_ASSETS.find(asset => asset.id === saved.id).name : '') }),
-    el('div', { class:'fe-fx-controls' }, sample,
+    onClick:() => apply(cleanEffect({ id:selected, when:when.value, note:note.value, pace:pace.value, palette:palette.value,...options() },item)) });
+  const controls=el('div', { class:'fe-fx-controls' }, sample,
       el('div',{class:'fe-fx-preview-actions'},hint,replay),
-      choices, el('div',{class:'fe-fx-settings'},el('label',{},'재생 속도',pace),el('label',{},'효과 색감',palette)),
+      cardFields, choices, el('div',{class:'fe-fx-settings'},el('label',{},'재생 속도',pace),el('label',{},'효과 색감',palette)),
       el('label',{},'재생 시점',when), note,
-      el('div', { class:'fe-row' }, save, saved && el('button', { class:'fe-btn', type:'button', text:'효과 빼기', onClick:() => apply(null) }))));
+      el('div', { class:'fe-row' }, save, saved && el('button', { class:'fe-btn', type:'button', text:'효과 빼기', onClick:() => apply(null) })));
+  pick(EFFECT_ASSETS.find(asset => asset.id === selected),false);
+  return el('details', { class:'fe-fx-picker', open:!!saved },
+    el('summary', { text:'HTML 그래픽 효과' + (saved ? ' · '+EFFECT_ASSETS.find(asset => asset.id === saved.id).name : '') }),controls);
 }

@@ -3,6 +3,7 @@
 import { kineticTitle, chartFocus, titleExample, chartExample, sceneContent } from './effect-scenes.js';
 import { REVEALS } from './reveal-scenes.js';
 import { CLASSROOM_ACCENTS } from './classroom-accents.js';
+import { CLUE_CARD, clueOptions } from './clue-card.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 function svg(tag, attributes) {
@@ -109,19 +110,22 @@ export const EFFECT_ASSETS = Object.freeze([
   { id:'bars', name:'데이터 포커스', hint:'선택한 막대 차트의 항목과 수치가 큰 무대에서 차례로 자라요', ink:EFFECT_PALETTES.iris, draw:chartFocus, example:chartExample },
   ...REVEALS.map((asset,i)=>({...asset,ink:[EFFECT_PALETTES.lagoon,EFFECT_PALETTES.sunset,EFFECT_PALETTES.iris][i]})),
   ...CLASSROOM_ACCENTS,
+  {...CLUE_CARD,ink:EFFECT_PALETTES.lagoon},
 ]);
 const registry = new Map(EFFECT_ASSETS.map(asset => [asset.id, asset]));
+export const questionEffect = effect => !!registry.get(effect?.id)?.last;
 export const effectable = item => ['text','shape','image','art','emoji','chart','math'].includes(item?.t);
 export function cleanEffect(raw, item) {
   const asset=registry.get(raw?.id);
   if (!asset || (item && asset.example && !sceneContent(asset.id,item))) return null;
   const note = typeof raw.note === 'string' ? Array.from(raw.note.trim()).slice(0, 120).join('') : '';
-  return { id: raw.id, when: !asset.last && raw.when === 'open' ? 'open' : 'press', ...(note ? { note } : {}),
+  return { id: raw.id, when: (!asset.last || asset.id==='cluecard') && raw.when === 'open' ? 'open' : 'press', ...(note ? { note } : {}),
+    ...(asset.id==='cluecard' ? clueOptions(raw) : {}),
     ...(['slow','fast'].includes(raw.pace) ? {pace:raw.pace} : {}),
     ...(typeof raw.palette==='string' && Object.hasOwn(EFFECT_PALETTES,raw.palette) ? {palette:raw.palette} : {}) };
 }
 
-export function effectArt(id, animate = false, {pace,palette,content,step=0,photo} = {}) {
+export function effectArt(id, animate = false, {pace,palette,content,step=0,photo,...settings} = {}) {
   const asset = registry.get(id);
   if (!asset) return null;
   const art = svg('svg', { viewBox: asset.example?'0 0 720 360':'-100 -70 200 140', 'aria-hidden': 'true', focusable: 'false' });
@@ -140,8 +144,9 @@ export function effectArt(id, animate = false, {pace,palette,content,step=0,phot
   if(id==='lens' && !photo && content?.t==='image' && content.url) {
     photo={...content,width:content.w || 4,height:(content.h || 3) / (content.aspect || 1)};
   }
+  const options=id==='cluecard'?clueOptions(settings):{};
   asset.draw({ part, ink:typeof palette==='string' && Object.hasOwn(EFFECT_PALETTES,palette)?EFFECT_PALETTES[palette]:asset.ink,
-    content:data,step:asset.last?Math.max(0,Math.min(asset.last(data),Math.trunc(step)||0)):0,photo });
+    content:data,step:asset.last?Math.max(0,Math.min(asset.last(data,options),Math.trunc(step)||0)):0,photo,options });
   if(asset.last){
     art.removeAttribute('aria-hidden');art.setAttribute('role','img');
     art.setAttribute('aria-label',[...art.querySelectorAll('text')].map(n=>n.textContent).join(' · '));
