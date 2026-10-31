@@ -64,9 +64,12 @@ test('element effects survive editor saves and run in the presenter and the down
   await page.getByRole('button',{name:'이 장 미리 보기',exact:true}).click();
   await interact(page.locator('.cv-canvas .fe-stage'));
   await page.reload();
+  const reopen = page.getByRole('button',{name:'모션 에셋 수업 열기',exact:true});
+  await reopen.or(page.locator('.cv-show-btn')).first().waitFor();
+  if (await reopen.isVisible()) await reopen.click();
+  await page.locator('.cv-canvas .fe-stage .fi-text').first().waitFor();
   const saved = await page.evaluate(async ({id,base}) => (await (await import(base+'/app/store.js')).getDesign(id)).slides[0].items[0].effect,{base,id});
   assert.deepEqual(saved,{id:'signal',when:'press',note:'전기가 흐르는 길'});
-  if (!await page.locator('.cv-show-btn').isVisible()) await page.getByRole('button',{name:'모션 에셋 수업 열기',exact:true}).click();
   await page.locator('.cv-show-btn').click();
   async function interact(surface) {
     const hit = surface.locator('[data-effect-trigger=signal]');
