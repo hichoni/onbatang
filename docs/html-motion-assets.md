@@ -19,3 +19,7 @@
 편집기, 발표, HTML 수업에 같은 렌더러를 사용한다. HTML 수업에는 슬라이드 그림, 조각의 위치·크기·회전, 효과 실행 코드를 파일 하나에 넣는다. PNG·PDF·PPTX 출력의 애니메이션 변환은 별도 작업이다.
 
 로컬 브라우저 회귀 시험은 `tests/browser/html-effect-assets.test.mjs`다. 공용 원본에서 실행하고, 내장본에서는 `MINICAN_HOST_ROOT`를 가이랩의 `dist`로 지정한다. 임시 프로필의 자료로 저장·재열기, 편집기와 발표의 클릭, HTML 내려받기, 모바일 폭 오프라인 재생을 확인한다.
+
+### 2026-10-31 운영 인수인계
+
+공용 Firebase v0.106.0의 제품 커밋은 `49343d4`, 가이랩 Cloudflare v0.160.0의 운영 커밋은 `7dcecce`다. 두 운영 주소에서 예제의 네 효과를 직접 재생하고 예제 HTML·효과 모듈 3개의 SHA-256이 원본과 일치하는지 확인했다. 자료 저장·재열기 시험은 공용과 가이랩의 로컬 브라우저에서 수행했다. [공용 예제](https://onbatang.web.app/app/effects.html) · [가이랩 예제](https://gbe.ai.kr/minican/app/effects.html)
