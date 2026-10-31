@@ -36,6 +36,7 @@ async function setupApp(t) {
   const act = activity();
   const html = `<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/src/editor.css"><link rel="stylesheet" href="/app/app.css"><link rel="stylesheet" href="/app/gai-app.css"><body class="mc-app"><main id="app"></main><script type="module">
 import {startMinican} from '/app/app.js';import {newRecord} from '/app/designs.js';import {putDesign,setStorageName} from '/app/store.js';
+import {markTourSeen,NEWS_KEY} from '/app/tour.js';for(const name of ['home','editor',NEWS_KEY])markTourSeen(name);
 setStorageName('presentation-fixture');const seed=newRecord('16:9');seed.name='발표 도구 검수';
 seed.slides=[{id:'pslide00001',bg:'#ffffff',notes:'첫 쪽 노트: 인사하고 질문 던지기',items:[${JSON.stringify(text('etext00001', '첫 쪽'))}]},
  {id:'pslide00002',bg:'#ffffff',activity:${JSON.stringify(act).replace(/</g, '\\u003c')},items:[${JSON.stringify(text('etext00002', '앱 표지'))}]},
@@ -73,7 +74,7 @@ test('editor keeps per-slide speaker notes and the presentation offers shared ke
   await page.locator('.fe-notes-input').fill('첫 쪽 노트: 고친 문장');
   assert.match(await notes.locator('.fe-notes-mark').textContent(), /자$/);
   // The open/closed choice is remembered on this device.
-  assert.equal(await page.evaluate(() => localStorage.getItem('minican.notes-open')), '1');
+  await page.waitForFunction(() => localStorage.getItem('minican.notes-open')==='1',null,{timeout:5000});
 
   await page.locator('.cv-show-btn').click();
   const show = page.locator('.cv-show');
@@ -89,6 +90,11 @@ test('editor keeps per-slide speaker notes and the presentation offers shared ke
   await page.locator('.ost-tile').first().click();
   assert.equal(await count(), '1 / 3');
   assert.equal(await page.locator('.ost-panel.open').count(), 0);
+  // The app slide is available for presenting, but never offered as a flat compare preview.
+  await page.keyboard.press('d');
+  const compare=page.getByRole('dialog',{name:'두 장 비교',exact:true});
+  assert.deepEqual(await compare.getByLabel('기준 장').locator('option').allTextContents(),['1쪽','3쪽']);
+  await compare.getByRole('button',{name:'비교 닫기'}).click();await compare.waitFor({state:'detached'});
   // Black screen, then any key returns without moving.
   await page.keyboard.press('b');
   assert.equal(await page.locator('.ost-curtain.black').count(), 1);

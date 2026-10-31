@@ -28,6 +28,7 @@
   .story-shelf summary{cursor:pointer;padding:16px 20px;font-weight:700;font-size:1.1rem}.story-shelf summary small{margin-left:.7em}
   .story-tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 16px}.story-tools output{margin-inline-end:auto}
   .story-tools button{cursor:pointer;min-height:44px;padding:6px 14px;border-radius:6px;border:1px solid #697e85;background:#21323d;color:#f5f6ef;font:inherit}.story-tools button:disabled{opacity:.45;cursor:default}
+  .compare-feature{display:grid;grid-template-columns:minmax(130px,.65fr) 1.35fr;gap:clamp(16px,3vw,32px);align-items:center;padding:20px;background:#192e32;border-color:#58726b}.compare-feature h2{margin:6px 0;font-size:clamp(1.4rem,3vw,2rem)}.compare-feature svg{width:100%;display:block}.compare-feature .story-tools{padding:12px 0 0}.compare-feature button:first-child{background:#afe9cf;color:#123730}.compare-feature button{font-weight:700}@media(max-width:540px){.compare-feature{grid-template-columns:1fr}.compare-feature svg{max-width:220px;margin:auto}}
   .story-stage{aspect-ratio:16/9;max-width:100%;margin:auto}.story-shelf .story-guide{padding:0 16px 14px;font-size:.85rem}
   footer{border-top:1px solid #384854;padding-top:16px;color:#b7c9c8;font-size:.85rem;line-height:1.6}
   .photo-feature{display:flex;align-items:center;gap:clamp(16px,4vw,36px);background:#1a3038;padding:clamp(14px,3vw,26px);border-radius:16px;margin:24px 0}.photo-feature canvas{width:32%;height:auto;border-radius:6px;image-rendering:pixelated}.photo-feature h2{font-size:clamp(1.3rem,4vw,2rem);margin:5px 0}.photo-feature p{margin-bottom:12px}
@@ -35,7 +36,11 @@
 </style>
 <main>
   <header><small>온바탕 / 움직임</small><h1>HTML 모션 에셋</h1><p>작은 창 속에 보이는 그림은 무엇일까요? 카드를 눌러 단서를 하나씩 열어 보세요.</p></header>
-  <details id="motion-stories" class="story-shelf"><summary>움직이는 디자인 세트 <small>6종 · 30장</small></summary>
+  <article id="slide-compare" class="story-shelf compare-feature">
+    <svg viewBox="0 0 250 145" aria-hidden="true"><rect x="1" y="1" width="248" height="143" rx="9" fill="#233e49" stroke="#54747a"/><path d="M125 2h115q8 0 8 8v126q0 7-8 7H125z" fill="#efd7ac"/><circle cx="125" cy="72" r="53" fill="none" stroke="#8c9f94" stroke-dasharray="2 5"/><path d="m55 59 70 11v5L55 63z" fill="#86acc0"/><path d="m125 70 67-25 1 4-68 26z" fill="#98795e"/><path d="M125 6v132" stroke="#aef4d0" stroke-width="2"/><circle cx="125" cy="72" r="7" fill="#fff1cd" stroke="#2c453f" stroke-width="2"/><g fill="#ffcb79"><circle cx="209" cy="99" r="9"/><circle cx="39" cy="100" r="8"/></g></svg>
+    <div><small>발표 도구 / 관찰실</small><h2>두 장을 포개면 무엇이 달라질까요?</h2><p>오전과 오후의 그림자, 표식을 붙이기 전후의 축제 지도를 비교해 보세요. 경계선을 밀면 같은 자리에서 바뀐 부분이 드러나요.</p><div class="story-tools"><button type="button" data-compare-set="sundial">그림자 비교하기</button><button type="button" data-compare-set="wayfinder">축제 안내도 비교하기</button></div></div>
+  </article>
+  <details id="motion-stories" class="story-shelf"><summary>움직이는 디자인 세트 <small>8종 · 40장</small></summary>
     <div class="story-tools"><label>수업·행사 선택<select id="story-choice"></select></label></div>
     <div class="story-stage" id="story-stage" aria-label="디자인 세트 발표 미리보기"></div>
     <div class="story-tools"><output id="story-count" aria-live="polite"></output><button id="story-prev" type="button">이전 장</button><button id="story-next" type="button">다음 장</button></div>
@@ -61,6 +66,11 @@
   import { EFFECT_ASSETS, previewEffect } from '../src/effect-assets.js';
   import {setupPhotoDemo} from './photo-study-demo.js';
   setupPhotoDemo();
+  for(const button of document.querySelectorAll('[data-compare-set]'))button.onclick=async()=>{
+    button.disabled=true;
+    try{const {compareCollection}=await import('./collection-preview.js');compareCollection(button.dataset.compareSet);}
+    finally{button.disabled=false;}
+  };
   const shelf=document.querySelector('#motion-stories');
   let stopPreview;
   shelf.addEventListener('toggle',async()=>{

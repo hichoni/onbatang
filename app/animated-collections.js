@@ -3,6 +3,20 @@ import {fontFamilyOf} from '../src/model.js';
 // Five beats per story. The same drawing parts move or change size as the story advances.
 // Drawing coordinates are in a little illustration frame, in square units (including on portrait paper).
 export const ANIMATED_COLLECTIONS = [
+  {id:'sundial',headingFont:'gowun-batang',name:'그림자 관측소',label:'SHADOW ALMANAC',tags:['과학','태양','관찰','비교'],layout:'right',bg:'#172A39',ink:'#FFF2D5',accent:'#F8BA72',rule:'#738789',effect:'suntrack',
+    beats:[
+      ['관찰 시작','그림자\n관측소','같은 장소에 막대를 세우고 그림자를 살펴요.'],
+      ['오전','서쪽으로 난\n긴 그림자','막대 밑에서 그림자 끝까지 거리를 재요.'],
+      ['한낮','짧아진\n그림자','오전 기록과 포개어 길이와 방향을 비교해요.'],
+      ['오후','동쪽으로\n기운 그림자','막대를 그대로 두고 달라진 점을 찾아요.'],
+      ['관찰 기록','해의 자리와\n그림자','두 시각을 골라 그림자가 옮겨 간 까닭을 말해요.']]},
+  {id:'wayfinder',headingFont:'do-hyeon',name:'학교 축제 길찾기',label:'CAMPUS WAYFINDING',tags:['학교 축제','행사','안내도','비교'],layout:'left',bg:'#F5F0DE',ink:'#193B3D',accent:'#AA412C',rule:'#A5B5A7',effect:'routewalk',
+    beats:[
+      ['행사 안내','학교 축제\n길찾기','정문에서 공연장까지 방문객의 길을 그려요.'],
+      ['갈림길','어디에서\n망설일까?','처음 온 사람이 어느 갈림길에서 멈출지 짚어요.'],
+      ['안내판 설치','표식을\n놓을 자리','앞 장과 나란히 보며 표식이 필요한 곳을 찾아요.'],
+      ['경로 확인','한 번 더\n걸어 보기','정문에서 출발해 같은 색의 표식을 따라가요.'],
+      ['안내도 완성','무대 앞에서\n만나요','처음 안내도와 포개어 더 찾기 쉬워진 곳을 말해요.']]},
   {id:'eclipse',headingFont:'do-hyeon',name:'해를 가리는 달',label:'SOLAR ATLAS',tags:['과학','우주','일식'],layout:'right',bg:'#101C35',ink:'#FFF3D5',accent:'#FFB34D',rule:'#53627A',effect:'corona',
     beats:[
       ['관측 예고','해를 가리는\n작은 달','기록 사진을 보며 두 원의 위치를 따라가요.'],
@@ -142,7 +156,38 @@ function relay(draw,n){
   draw('grip','rect',x+2,19,2.8,3.3,'#FBE472',{rot:-27});
 }
 
-const drawings={eclipse,groove,sprout,screening,overprint,relay};
+function sundial(draw,n){
+  draw('plate','circle',50,41,77,77,'#35535A',{line:.5,lc:'#80928B'});
+  draw('face','circle',50,41,67,67,'#203C49',{line:.4,lc:'#769389'});
+  for(let i=0;i<12;i++){
+    const angle=i*Math.PI/6;
+    draw('tick'+i,'rect',50+30*Math.sin(angle),41-30*Math.cos(angle),.7,i%3?2:4,'#C3C9A8',{rot:i*30});
+  }
+  // Map view, north at the top. Morning sunlight comes from the east;
+  // the fixed post casts a shorter, northward shadow at solar noon.
+  const dx=[-25,-19,0,18,26][n],dy=[-5,-12,-9,-12,-6][n];
+  draw('shadow','pill',50+dx/2,41+dy/2,Math.hypot(dx,dy),3.8,'#86ACC0',{rot:Math.atan2(dy,dx)*180/Math.PI});
+  draw('post','circle',50,41,6,6,'#F9E2B3');draw('cap','circle',50,41,2,2,'#9E7451');
+  const x=[84,78,50,22,16][n],y=[49,62,77,62,49][n];
+  draw('halo','circle',x,y,10,10,'#A57044');draw('sun','circle',x,y,6.2,6.2,'#FFD58C');
+}
+
+function wayfinder(draw,n){
+  draw('paper','rect',50,41,94,76,'#C9D8BE');
+  for(const [i,[x,y,w,h]] of [[25,20,30,17],[66,22,23,21],[22,57,25,18],[52,63,16,14]].entries()){
+    draw('building'+i,'rect',x,y,w,h,'#819E91');
+    draw('roof'+i,'rect',x-1,y-1,w-2,h-2,'#F4EFDB');
+  }
+  draw('avenue','rect',50,40,94,6,'#FAF6DF');draw('crossroad','rect',44,41,6,76,'#FAF6DF');
+  draw('lane','rect',82,50,5,38,'#FAF6DF');draw('stage','rect',82,68,19,10,'#294D52');
+  const route=[[10,40],[32,40],[44,40],[82,40],[82,62]];
+  // Signposts stay where installed; the visitor travels from the gate to the stage.
+  for(let i=0;i<3;i++){const x=[13,44,82][i];draw('sign'+i,'diamond',x,34,n>=i+2?5:2,n>=i+2?5:2,n>=i+2?'#AE452A':'#A7B7A0');}
+  const [x,y]=route[n];draw('visitor-ring','circle',x,y,9,9,'#F7BE70');
+  draw('visitor','circle',x,y,5,5,'#923E2A');
+}
+
+const drawings={eclipse,groove,sprout,screening,overprint,relay,sundial,wayfinder};
 export function animatedPlate(c,set,index){
   const {wide,a,ink}=c,band=set.layout==='band',left=set.layout==='left';
   const [role,heading,prompt]=set.beats[index],height=band?40:82;

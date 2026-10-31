@@ -9,6 +9,7 @@ export const SHOW_KEYS = Object.freeze([
   ['Home · End', '처음 · 마지막 쪽'],
   ['번호 + Enter', '그 쪽으로 가기'],
   ['G', '전체 보기'],
+  ['D', '두 장 비교 · PageUp / PageDown으로 비교 위치 이동'],
   ['B · W', '검은 화면 · 흰 화면'],
   ['P · L · E', '펜 · 레이저 · 지우기'],
   ['S', '발표자 화면(노트 · 다음 쪽 · 시간)'],
@@ -19,7 +20,7 @@ export const SHOW_KEYS = Object.freeze([
   ['R', '리허설: 장마다 걸린 시간 재기 · 그만 재기'],
   ['Esc', '도구 끄기 · 발표 끝내기'],
 ]);
-const LETTERS = { KeyB: 'black', Period: 'black', KeyW: 'white', Comma: 'white', KeyG: 'overview', KeyP: 'pen', KeyL: 'laser', KeyE: 'erase', KeyS: 'presenter', KeyF: 'fullscreen', KeyK: 'video', KeyC: 'camera', KeyA: 'auto', KeyR: 'rehearse', KeyH: 'help', Slash: 'help' };
+const LETTERS = { KeyB: 'black', Period: 'black', KeyW: 'white', Comma: 'white', KeyG: 'overview', KeyD: 'compare', KeyP: 'pen', KeyL: 'laser', KeyE: 'erase', KeyS: 'presenter', KeyF: 'fullscreen', KeyK: 'video', KeyC: 'camera', KeyA: 'auto', KeyR: 'rehearse', KeyH: 'help', Slash: 'help' };
 const NEXT = ['ArrowRight', 'ArrowDown', 'PageDown', ' ', 'Enter'];
 const PREV = ['ArrowLeft', 'ArrowUp', 'PageUp', 'Backspace'];
 const digitOf = (e) => /^Digit[0-9]$/.test(e.code) ? e.code.slice(5) : /^Numpad[0-9]$/.test(e.code) ? e.code.slice(6) : /^[0-9]$/.test(e.key) ? e.key : '';

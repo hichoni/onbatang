@@ -4,6 +4,24 @@ import {ONBATANG_FONTS,ONBATANG_TITLE_FONT} from './fonts.js';
 import {setTitleFont} from './templates.js';
 import {registerFonts} from '../src/fonts.js';
 import {mountPlayer} from './player.js';
+import {designView} from '../src/render.js';
+import {openSlideCompare} from './slide-compare.js';
+
+function prepareArt(){
+  configure({aspect:16/9,maxItems:40,fonts:ONBATANG_FONTS});
+  setTitleFont(ONBATANG_TITLE_FONT);
+  registerFonts(ONBATANG_FONTS);
+}
+
+export function compareCollection(id){
+  prepareArt();
+  const set=COLLECTIONS.find(story=>story.id===id),slides=createCollectionSlides(id);
+  const pages=slides.map((slide,index)=>({index,key:slide.id,ratio:16/9,label:(index+1)+'쪽 · '+set.beats[index][0]}));
+  const current=id==='sundial'?3:4;
+  return openSlideCompare(document.body,{pages,current,
+    memory:{anchor:pages[current].key,left:pages[1].key,right:pages[current].key,position:50,mode:'wipe',marks:[]},
+    preview:i=>{const view=designView(slides[i]);view.style.setProperty('--fe-ratio',String(16/9));return view;}});
+}
 
 export function startCollectionPreview(shelf){
   const select=shelf.querySelector('#story-choice'),stage=shelf.querySelector('#story-stage');
@@ -11,9 +29,7 @@ export function startCollectionPreview(shelf){
   const stories=COLLECTIONS.filter(set=>set.beats);
   if(!select.options.length)for(const set of stories)select.add(new Option(set.name,set.id));
   let player;
-  configure({aspect:16/9,maxItems:40,fonts:ONBATANG_FONTS});
-  setTitleFont(ONBATANG_TITLE_FONT);
-  registerFonts(ONBATANG_FONTS);
+  prepareArt();
   function open(){
     player?.destroy();
     const set=stories.find(story=>story.id===select.value);

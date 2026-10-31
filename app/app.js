@@ -2344,6 +2344,7 @@ async function present(O) {
   // 앱 안을 누른 뒤에도 프레젠터(리모컨)의 넘기기 단추와 Esc 는 발표가 듣는다(앱이 그 글쇠를 쓰지 않았을 때 앱이 알려 준다).
   const appKey = (key) => { if (['PageDown', 'PageUp', 'Escape'].includes(key)) tools?.handle({ key, code: key }); };
   const onKey = (e) => {
+    if(e.target?.closest?.('.ob-compare'))return;
     if(e.target?.closest?.('[data-question-panel]') && ['Escape','ArrowLeft','ArrowRight','PageUp','PageDown'].includes(e.key))return;
     // 앱·그림판 안에서 치는 글쇠는 앱의 것이다. 프레젠터의 넘기기(PageDown · PageUp)와 Esc 만 발표가 듣는다.
     if(e.target?.closest?.('.cv-show-activity:not([data-quiz])')&&!['Escape','PageDown','PageUp'].includes(e.key))return;
@@ -2405,6 +2406,9 @@ async function present(O) {
     ratio: (k) => aspectOf(entries[k].record),
     thumb: (k) => slideView(slides[k], aspectOf(entries[k].record), 480),
     preview: (k) => slideView(slides[k], aspectOf(entries[k].record), 960),
+    pageId:k=>slides[k].id,
+    sourcePage:k=>entries[k].page.source?.pageNumber,
+    compareAllowed:k=>!slides[k].activity && !slides[k].items?.some(it=>questionEffect(it.effect)),
     notes: (k) => slides[k]?.notes || '',
     // 주제: 숨긴 장에서 시작한 주제는 그다음 보이는 장으로 넘긴다.
     topic: (k) => shownTopics(lessonPages(O).map((v) => v.page)).get(entries[k]?.page.id) || '',
@@ -4175,6 +4179,7 @@ async function makeHtmlLesson(O,{notes=false}={}){
       const activity=value.page.activity;
       pages.push({id:value.page.id,image,aspect,...(notes?slideNotes(value.page):{}),...(topics.get(value.page.id)?{topic:topics.get(value.page.id)}:{}),...slideDur(value.page),...(value.page.source?.kind==='result'?{result:true}:{}),...(activity?{activity,binding:{documentId:value.record.id,pageId:value.page.id,activityId:activity.id,kind:activity.kind,definitionHash:await activityDefinitionHash(activity)}}:{})});
       if (effects) pages[pages.length-1].effects = effects;
+      if (value.page.source?.pageNumber) pages[pages.length-1].sourcePage=value.page.source.pageNumber;
     }
     if(abort.signal.aborted)return;
     const html=createHtmlLesson({title:O.materialDeck?.title||O.record.name,pages,target:lessonTarget(O)});

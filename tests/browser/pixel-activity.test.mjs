@@ -59,6 +59,42 @@ async function importDeck(page,entry){
 }
 const waitPages=(page,count)=>page.waitForFunction(n=>document.querySelectorAll('[data-material-page]').length===n,count);
 
+test('two-slide comparison crosses imported PPT parts without changing the presentation or source',options,async t=>{
+ const hash=sha256(await readFile(sourcePath)),hostRoot=process.env.MINICAN_HOST_ROOT;
+ const {page,entry,verifyIsolation}=await setup(t,{hostRoot});
+ await importDeck(page,hostRoot?entry:new URL('/app/index.html',entry).href);
+ await page.locator('.cv-back').click();await page.locator('.cv-home-title').waitFor();await page.reload();
+ await page.locator('.cv-deck .cv-thumb').click();await waitPages(page,pageCount);
+ const visible=await page.locator('[data-material-page]').evaluateAll(nodes=>nodes.filter(n=>!n.getAttribute('aria-label')?.includes('발표에서 숨김')).length);
+ await page.locator('.cv-show-btn').click();await page.getByRole('button',{name:'두 장 비교 (D)',exact:true}).click();
+ const d=page.getByRole('dialog',{name:'두 장 비교',exact:true});
+ await d.waitFor();
+ const r=d.getByLabel('비교할 장',{exact:true});
+ assert.equal(await r.locator('option').count(),visible);
+ const last=await r.locator('option').last().innerText();assert.match(last,/원본/);
+ await r.selectOption({index:visible-1});
+ const stage=d.locator('.obc-stage'),rect=await stage.boundingBox();
+ await page.mouse.move(rect.x+rect.width*.2,rect.y+rect.height*.5);await page.mouse.down();
+ await page.mouse.move(rect.x+rect.width*.8,rect.y+rect.height*.5,{steps:4});await page.mouse.up();
+ assert.ok(Math.abs(Number(await d.getByRole('slider').inputValue())-80)<=1);
+ assert.deepEqual(await stage.locator('.obc-layer').evaluateAll(nodes=>nodes.map(n=>n.dataset.page)),['1',String(visible)]);
+ await d.getByRole('button',{name:'비교 닫기'}).click();await d.waitFor({state:'detached'});
+ assert.equal(await page.locator('.cv-show-count').innerText(),'1 / '+visible);
+ await page.keyboard.press('Escape');await waitPages(page,pageCount);
+ await page.locator('.cv-down-btn').click();await page.locator('[data-type=html]').click();
+ const pending=page.waitForEvent('download');await page.locator('[data-download-save]').click();
+ const dir=await mkdtemp(resolve(tmpdir(),'compare-ppt-')),file=resolve(dir,'lesson.html');
+ t.after(async()=>{await unlink(file);await rmdir(dir);});await (await pending).saveAs(file);
+ const offline=await page.context().browser().newContext({offline:true,viewport:{width:390,height:844}});
+ const opened=await offline.newPage();await opened.goto(pathToFileURL(file).href);
+ await opened.getByRole('button',{name:/발표 모드/}).click();await opened.getByRole('button',{name:'두 장 비교 (D)'}).click();
+ const choices=opened.getByRole('dialog',{name:'두 장 비교'}).getByLabel('비교할 장',{exact:true});
+ assert.equal(await choices.locator('option').count(),visible);assert.equal(await choices.locator('option').last().innerText(),last);
+ await choices.selectOption({index:visible-1});
+ assert.ok(await opened.locator('.obc-layer img').last().evaluate(async img=>{await img.decode();return img.naturalWidth>0;}));
+ assert.equal(sha256(await readFile(sourcePath)),hash);await verifyIsolation();
+});
+
 test('an imported PPT reopens with its authored clue card and original page order',options,async t=>{
  const hash=sha256(await readFile(sourcePath)),hostRoot=process.env.MINICAN_HOST_ROOT;
  const {page,entry,verifyIsolation}=await setup(t,{hostRoot});

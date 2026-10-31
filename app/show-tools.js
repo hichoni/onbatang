@@ -4,6 +4,7 @@
 import { el } from '../src/dom.js';
 import { showAction, pageIndex, swipeStep, showClock, autoDelay, spokenNotes, SHOW_KEYS } from './show-keys.js';
 import { topicGroups } from '../src/document.js';
+import {openSlideCompare} from './slide-compare.js';
 
 const STYLE_ID = 'onbatang-show-tools-style';
 const STYLE = `
@@ -117,13 +118,37 @@ export function createShowTools(root, opts) {
   // 레이저와 발표자 화면은 마우스와 두 번째 화면이 있을 때 쓴다: 좁은 화면(휴대폰)에서는 단추를 감춘다(글쇠는 그대로 듣는다).
   const laserBtn = key('레이저', '레이저 포인터 (L)', () => setTool('laser'), ' ost-wide');
   const gridBtn = key('전체', '전체 보기 (G)', () => togglePanel('overview'));
+  const compareBtn = key('비교', '두 장 비교 (D)', compareSlides);
+  const compareMemory = {};
+  let comparison = null;
+  function updateCompareButton() {
+    let count=0;
+    for(let i=0;i<opts.total()&&count<2;i++)if(!opts.compareAllowed||opts.compareAllowed(i))count++;
+    compareBtn.disabled=count<2;
+    compareBtn.title=count<2?'활동과 정답을 가린 장을 제외하고 일반 슬라이드가 두 장 필요해요.':'두 장 비교 (D)';
+  }
+  updateCompareButton();
+  function compareSlides() {
+    if (comparison) return;
+    const pages = [];
+    for (let i=0;i<opts.total();i++) {
+      if (opts.compareAllowed && !opts.compareAllowed(i)) continue;
+      const source=opts.sourcePage?.(i),title=opts.topic?.(i);
+      const number=source?'발표 '+(i+1)+'쪽 · 원본 '+source+'쪽':(i+1)+'쪽';
+      pages.push({index:i,key:opts.pageId?.(i)||String(i),ratio:opts.ratio(i),label:number+(title?' · '+title:'')});
+    }
+    if (pages.length<2) {opts.notify?.('비교할 일반 슬라이드가 두 장 필요해요. 활동과 정답을 가린 장은 제외해요.');return;}
+    if(panel)closePanel();
+    comparison=openSlideCompare(root,{pages,current:opts.index(),preview:opts.preview,memory:compareMemory,onCurtain:setCurtain,
+      onClose:()=>{comparison=null;if(root.isConnected){compareBtn.focus({preventScroll:true});scheduleAuto();}}});
+  }
   const presenterBtn = key('발표자', '발표자 화면 열기: 노트 · 다음 쪽 · 시간 (S)', () => openPresenter(), ' ost-wide');
   const helpBtn = key('?', '단축키 보기 (?)', () => togglePanel('help'));
   const fullBtn = key('전체 화면', '전체 화면 켜기 · 끄기 (F)', () => toggleFullscreen(), ' ost-wide');
   const camBtn = key('카메라', '내 얼굴 카메라 창 (C)', () => toggleCamera());
   const autoBtn = key('자동', '자동 넘기기: 끝나면 처음부터 다시 (A)', () => toggleAuto(), ' ost-wide');
   const rehearseBtn = opts.saveTimes ? key('리허설', '리허설: 장마다 걸린 시간 재기 (R)', () => toggleRehearse(), ' ost-wide') : null;
-  const buttons = [penBtn, laserBtn, gridBtn, camBtn, autoBtn, ...(rehearseBtn ? [rehearseBtn] : []), presenterBtn, fullBtn, helpBtn];
+  const buttons = [penBtn, laserBtn, gridBtn, compareBtn, camBtn, autoBtn, ...(rehearseBtn ? [rehearseBtn] : []), presenterBtn, fullBtn, helpBtn];
   function toggleFullscreen() {
     if (doc.fullscreenElement) doc.exitFullscreen?.().catch(() => {});
     else root.requestFullscreen?.().catch(() => opts.notify?.('이 화면에서는 전체 화면을 켤 수 없어요.'));
@@ -134,12 +159,12 @@ export function createShowTools(root, opts) {
   // 전체 보기·검은 화면이 열려 있으면 기다렸다가 다시 잰다. 손으로 넘기면 그 쪽부터 다시 잰다.
   function scheduleAuto() {
     clearTimeout(autoTimer);
-    if (!autoOn) return;
+    if (!autoOn || comparison) return;
     const i = opts.index(), steps = Math.max(0, opts.steps?.(i) || 0);
     if (opts.waitForTeacher?.(i)) return;
     autoTimer = setTimeout(() => {
       if (!autoOn) return;
-      if (panel || curtain) { scheduleAuto(); return; }
+      if (panel || curtain || comparison) { scheduleAuto(); return; }
       if (autoDone < steps) { autoDone += 1; opts.next(); scheduleAuto(); return; }
       if (opts.index() >= opts.total() - 1) { if (opts.total() > 1) opts.go(0); else scheduleAuto(); return; }
       opts.next();
@@ -244,6 +269,7 @@ export function createShowTools(root, opts) {
 
   // ---------- 검은·흰 화면 ----------
   function setCurtain(kind) {
+    comparison?.close();
     curtain = curtain === kind ? '' : kind;
     curtainEl.className = `ost-curtain${curtain ? ` ${curtain}` : ''}`;
     renderPresenter();
@@ -430,6 +456,12 @@ export function createShowTools(root, opts) {
 
   // ---------- 글쇠 ----------
   function handle(e) {
+    if (comparison) {
+      if (['ArrowRight','PageDown','ArrowLeft','PageUp'].includes(e.key)) comparison.step(['ArrowRight','PageDown'].includes(e.key)?1:-1);
+      else if (e.key==='Escape'||e.code==='KeyD') comparison.close();
+      else if (e.code==='KeyB'||e.code==='KeyW') setCurtain(e.code==='KeyB'?'black':'white');
+      return true;
+    }
     if (panel === 'overview' && e.target?.closest?.('.ost-tile') && (e.key === 'Enter' || e.key === ' ')) return false;
     if (panel === 'overview' && ['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp'].includes(e.key)) { moveTile(['ArrowRight', 'ArrowDown'].includes(e.key) ? 1 : -1); return true; }
     const action = showAction(e, state);
@@ -447,6 +479,7 @@ export function createShowTools(root, opts) {
       case 'goto': opts.go(pageIndex(action.page, opts.total())); return true;
       case 'black': case 'white': setCurtain(action.type); return true;
       case 'overview': case 'help': togglePanel(action.type); return true;
+      case 'compare': compareSlides(); return true;
       case 'pen': case 'laser': setTool(action.type); return true;
       case 'erase': erase(); return true;
       case 'presenter': openPresenter(); return true;
@@ -510,7 +543,7 @@ export function createShowTools(root, opts) {
               pbtn('가−', '노트 글씨 작게', () => resize(-2)), pbtn('가+', '노트 글씨 크게', () => resize(2))),
             notes))),
       el('footer', { class: 'ost-p-foot' },
-        pbtn('◀ 앞', '앞 쪽 (←)', () => opts.prev()), pbtn('다음 ▶', '다음 쪽 (→)', () => opts.next()),
+        pbtn('◀ 앞', '앞 쪽 (←)', () => comparison?comparison.step(-1):opts.prev()), pbtn('다음 ▶', '다음 쪽 (→)', () => comparison?comparison.step(1):opts.next()),
         pbtn('검은 화면', '청중 화면을 잠깐 검게 (B)', () => setCurtain('black')),
         el('span', { class: 'ost-p-label', text: '청중 화면이 작아졌으면 그 창을 누르고 F 를 눌러 전체 화면으로 돌려요.' }),
         el('span', { class: 'ost-p-gap' }),
@@ -548,6 +581,8 @@ export function createShowTools(root, opts) {
     curtain: () => curtain,
     /** 쪽이 바뀐 뒤: 그린 것을 지우고, 열린 칸을 닫고, 발표자 화면을 맞춘다. */
     changed() {
+      comparison?.close();
+      updateCompareButton();
       erase(); if (panel) closePanel();
       // 리허설: 떠난 쪽의 시간을 적고 새 쪽에서 다시 잰다. 자동 넘기기: 새 쪽에서 다시 잰다.
       if (rehearsing) { noteTime(); here = opts.index(); since = Date.now(); paintRehearse(); }
@@ -555,6 +590,7 @@ export function createShowTools(root, opts) {
       renderPresenter();
     },
     destroy() {
+      comparison?.close();
       clearTimeout(digitTimer);
       clearTimeout(calmTimer); root.removeEventListener('pointermove', onMove); delete root.dataset.calm;
       stopCamera();

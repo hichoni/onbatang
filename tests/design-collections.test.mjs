@@ -8,7 +8,7 @@ import {matchItems} from '../src/motion.js';
 const aspects=[16/9,4/3,1,4/5,9/16,2.4];
 const em=s=>[...s].reduce((sum,c)=>sum+(/\s/.test(c)?.34:/[A-Za-z0-9.,:;/+—-]/.test(c)?.62:1),0);
 test('design collections contain five coordinated editable page roles each',()=>{
- assert.equal(COLLECTIONS.length,10);assert.equal(COLLECTION_LAYOUTS.length,50);
+ assert.equal(COLLECTIONS.length,12);assert.equal(COLLECTION_LAYOUTS.length,60);
  assert.equal(new Set(COLLECTION_LAYOUTS.map(l=>l.id)).size,COLLECTION_LAYOUTS.length);
  for(const collection of COLLECTIONS){const layouts=COLLECTION_LAYOUTS.filter(l=>l.collection===collection.id);assert.equal(layouts.length,5);assert.equal(layouts.filter(l=>l.cover).length,1);assert.ok(layouts.every(l=>l.ratio==='16:9'&&l.collectionName===collection.name));}
 });

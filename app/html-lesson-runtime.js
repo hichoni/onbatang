@@ -21,6 +21,7 @@ export function cleanHtmlLesson(raw) {
     seen.add(page.id); bytes += page.image.length;
     if (bytes > 200_000_000) throw new Error('수업 파일이 너무 커요. 그림 크기를 줄여 다시 내려받아 주세요.');
     const out = { id: page.id, image: page.image, aspect: page.aspect, ...slideNotes(page), ...slideTopic(page), ...slideDur(page) };
+    if(Number.isSafeInteger(page.sourcePage)&&page.sourcePage>0)out.sourcePage=page.sourcePage;
     const effects = cleanEffectTargets(page.effects);
     if (effects.length) {
       out.effects = effects;
@@ -124,6 +125,9 @@ export function mountHtmlLesson(raw, host = document.getElementById('onbatang-le
       total: () => pages.length, index: () => current, next: () => navigate(1), prev: () => navigate(-1), go: goTo, close: endShow,
       waitForTeacher: k=>!!pages[k]?.activity?.photoStudy || pages[k]?.effects?.some(row=>questionEffect(row.effect)),
       thumb: slideImage, preview: slideImage, ratio: k => pages[k].aspect,
+      pageId:k=>pages[k].id,
+      sourcePage:k=>pages[k].sourcePage,
+      compareAllowed:k=>!pages[k].activity && !pages[k].effects?.some(row=>questionEffect(row.effect)),
       notes: k => pages[k].notes || '', topic: k => pages[k].topic || '', dwell: k => pages[k].dur, label: k => pages[k].activity ? '활동' : pages[k].result ? '결과' : '',
       title: seed.title, notify: message => { status.textContent = message; }, keyClass: 'lesson-show-key',
     });
@@ -214,6 +218,7 @@ export function mountHtmlLesson(raw, host = document.getElementById('onbatang-le
     if(autoPhoto && page.activity?.photoStudy)scene.querySelector('.lesson-start')?.click();
   }
   const keys = event => {
+    if(event.target?.closest?.('.ob-compare'))return;
     if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
     // 앱·그림판 안에서 치는 글쇠는 앱의 것이다. 프레젠터의 넘기기(PageDown · PageUp)와 발표 모드의 Esc 만 수업이 듣는다.
     const clicker = ['PageDown', 'PageUp'].includes(event.key) || (show && event.key === 'Escape');

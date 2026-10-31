@@ -34,6 +34,62 @@ async function openBrowser(t) {
   return {hosted,base,origin,browser,page,errors};
 }
 
+test('slide comparison keeps its pair on the same slide and works in a reopened offline lesson', {
+  skip:!process.env.MINICAN_PLAYWRIGHT_PATH, timeout:100000,
+}, async t=>{
+  const {hosted,base,origin,browser,page,errors}=await openBrowser(t);
+  await page.evaluate(async base=>{
+    const tour=await import(base+'/app/tour.js');
+    for(const id of ['home','editor',tour.NEWS_KEY])tour.markTourSeen(id);
+  },base);
+  await page.goto(origin+(hosted?'/minican-app.html':'/app/index.html'));
+  await page.locator('button[data-starts=collection]').click();
+  await page.locator('button[data-layout=collection-sundial-1]').click();
+  await page.locator('.cv-back').click();
+  await page.reload();await page.getByRole('button',{name:'그림자 관측소 열기',exact:true}).click();
+  await page.locator('.cv-show-btn').click();
+  async function compare(p,small){
+    const launch=p.getByRole('button',{name:'두 장 비교 (D)',exact:true});
+    await launch.click();
+    const d=p.getByRole('dialog',{name:'두 장 비교',exact:true}),range=d.getByRole('slider');
+    const l=d.getByLabel('기준 장'),r=d.getByLabel('비교할 장',{exact:true});
+    assert.equal(await l.locator('option').count(),5);await r.selectOption({index:3});
+    await l.selectOption({index:1});
+    assert.deepEqual(await d.locator('.obc-layer').evaluateAll(nodes=>nodes.map(n=>n.dataset.page)),['2','4']);
+    const align=await d.locator('.obc-sheet').evaluateAll(nodes=>nodes.map(n=>[n.clientWidth,n.clientHeight]));
+    assert.deepEqual(align[0],align[1]);assert.ok(align[0][0]>200 && align[0][1]>100);
+    await range.focus();await p.keyboard.press('Home');await p.keyboard.press('ArrowRight');
+    assert.equal(await range.inputValue(),'1');await d.getByRole('button',{name:'이 위치 기억'}).click();
+    await range.focus();await p.keyboard.press('End');await d.getByRole('button',{name:'이 위치 기억'}).click();
+    const mark=d.getByRole('button',{name:'1번 · 1%'});await mark.click();
+    await p.keyboard.press('PageDown');assert.equal(await range.inputValue(),'100');
+    await p.keyboard.press('PageUp');assert.equal(await range.inputValue(),'1');
+    await d.getByRole('button',{name:'포개기'}).click();
+    assert.equal(await d.locator('.obc-layer').nth(1).evaluate(n=>getComputedStyle(n).opacity),'0.01');
+    await d.getByRole('button',{name:'나란히'}).click();
+    assert.ok(await range.isHidden());
+    const boxes=await d.locator('.obc-layer').evaluateAll(nodes=>nodes.map(n=>({x:n.offsetLeft,y:n.offsetTop})));
+    assert.ok(small?boxes[1].y>boxes[0].y:boxes[1].x>boxes[0].x);
+    await d.getByRole('button',{name:'커튼',exact:true}).click();
+    await p.keyboard.press('Escape');await d.waitFor({state:'detached'});
+    await launch.click();assert.equal(await range.inputValue(),'1');assert.equal(await mark.count(),1);
+    const oldLeft=await l.inputValue();await l.selectOption(await r.inputValue());
+    assert.equal(await r.inputValue(),oldLeft);assert.equal(await mark.count(),0);
+    await d.getByRole('button',{name:'비교 닫기'}).click();await d.waitFor({state:'detached'});
+  }
+  await compare(page,false);assert.match(await page.locator('.cv-show-count').innerText(),/1 \/ 5/);
+  await page.keyboard.press('Escape');
+  await page.locator('.cv-down-btn').click();await page.locator('[data-type=html]').click();
+  const dl=page.waitForEvent('download');await page.locator('[data-download-save]').click();
+  const dir=await mkdtemp(join(tmpdir(),'two-slides-')),file=join(dir,'lesson.html');
+  t.after(async()=>{await rm(file,{force:true});await rmdir(dir);});await (await dl).saveAs(file);
+  const offline=await browser.newContext({offline:true,reducedMotion:'reduce',viewport:{width:390,height:844}});
+  const p=await offline.newPage();p.on('pageerror',e=>errors.push(e.message));
+  await p.goto(pathToFileURL(file).href);await p.getByRole('button',{name:/발표 모드/}).click();
+  await compare(p,true);assert.match(await p.locator('.lesson-show-count').innerText(),/1 \/ 5/);
+  assert.deepEqual(errors,[]);
+});
+
 test('element effects survive editor saves and run in the presenter and the downloaded offline HTML', {
   skip:!process.env.MINICAN_PLAYWRIGHT_PATH, timeout:100000,
 }, async t => {
@@ -317,6 +373,11 @@ test('a teacher edits a question on a text box, controls each clue, and reopens 
   assert.equal(await live.locator('[data-question-panel]').getAttribute('data-step'),'0');
   await auto.click();
   await check(live,()=>page.getByRole('button',{name:'다음 장',exact:true}).click(),()=>page.keyboard.press('PageUp'));
+  await page.getByRole('button',{name:'두 장 비교 (D)'}).click();
+  const comparison=page.getByRole('dialog',{name:'두 장 비교',exact:true});
+  assert.equal(await comparison.getByLabel('기준 장').locator('option').count(),4);
+  assert.doesNotMatch(await comparison.getByLabel('기준 장').innerText(),/1쪽/);
+  await comparison.getByRole('button',{name:'비교 닫기'}).click();await comparison.waitFor({state:'detached'});
   await page.keyboard.press('Escape');
   await page.locator('.cv-down-btn').click();await page.locator('[data-type=html]').click();
   const ready=page.waitForEvent('download');await page.locator('[data-download-save]').click();
