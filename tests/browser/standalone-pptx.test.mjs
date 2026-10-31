@@ -22,6 +22,22 @@ const options={skip:!process.env.MINICAN_PLAYWRIGHT_PATH,timeout:300000};
 const slideFiles=files=>Object.keys(files).filter(name=>/^ppt\/slides\/slide\d+\.xml$/.test(name));
 const xml=(files,path)=>new TextDecoder().decode(files[path]);
 
+test('a touch file picker imports the original PPT bytes and reopens both pages',options,async t=>{
+ const {page,entry,base}=await setup(t,{viewport:{width:390,height:664},touch:true});
+ await enterImport(page,entry);
+ const view=page.locator('[data-inline-import]'),file=fixture('self-authored-4x3.pptx');
+ const chooser=page.waitForEvent('filechooser');
+ await view.getByRole('button',{name:'파일 선택',exact:true}).tap();
+ await (await chooser).setFiles(file);
+ const save=view.locator('[data-import-save]');await save.tap({timeout:90000});
+ await view.waitFor({state:'detached',timeout:90000});
+ const before=await readLibrary(page,base),source=await readFile(file);
+ assert.deepEqual(before.sources,[{bytes:source.length,sha256:sha256(source)}]);
+ assert.equal(before.graphs[0].pages.length,2);
+ await page.reload();await page.locator('.cv-canvas').waitFor();
+ assert.deepEqual(await readLibrary(page,base),before);
+});
+
 test('touch tabs open a palette from the horizontal tool rail',options,async t=>{
  const {page,entry}=await setup(t,{viewport:{width:390,height:844},touch:true});await page.goto(entry);await page.locator('.cv-hero .cv-new-btn').tap();await page.locator('.fe-tab[data-tab=bg]').tap();await page.locator('.cv-side .fe-palettes').waitFor({timeout:3000});
 });
@@ -381,14 +397,15 @@ async function setup(t,{base='',viewport={width:1440,height:1000},touch=false}={
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
  t.after(()=>new Promise(resolve=>server.close(resolve)));
  const origin=`http://127.0.0.1:${server.address().port}`;
- const {chromium}=await import(pathToFileURL(process.env.MINICAN_PLAYWRIGHT_PATH).href);
+ const {chromium,webkit,devices}=await import(pathToFileURL(process.env.MINICAN_PLAYWRIGHT_PATH).href);
  const downloadsPath=resolve(root,'work/standalone-pptx-downloads');await mkdir(downloadsPath,{recursive:true});
- const browser=await chromium.launch({channel:process.env.MINICAN_BROWSER||'msedge',headless:true,downloadsPath});
+ const useWebKit=process.env.MINICAN_BROWSER==='webkit';
+ const browser=useWebKit?await webkit.launch({headless:true,downloadsPath}):await chromium.launch({channel:process.env.MINICAN_BROWSER||'msedge',headless:true,downloadsPath});
  t.after(()=>browser.close());
  // Playwright's built-in serviceWorkers:'block' probes navigator.serviceWorker
  // without a try/catch in opaque sandbox frames. Keep registration blocked
  // without manufacturing a SecurityError in the real PPT preview iframe.
- const context=await browser.newContext({viewport,isMobile:touch,hasTouch:touch,reducedMotion:'reduce',serviceWorkers:'allow',acceptDownloads:true});
+ const context=await browser.newContext({...(useWebKit&&touch?devices['iPhone 13']:{}),viewport,isMobile:touch,hasTouch:touch,reducedMotion:'reduce',serviceWorkers:'allow',acceptDownloads:true});
  await context.addInitScript(()=>{try{const api=navigator.serviceWorker;if(api)api.register=async()=>undefined;localStorage.setItem('onbatang-tour-seen-v1:editor','1');localStorage.setItem('onbatang-tour-seen-v1:news-0.45','1');}catch{}});
  context.on('serviceworker',()=>serviceWorkers++);
  await context.route('**/*',route=>{

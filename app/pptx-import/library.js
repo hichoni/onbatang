@@ -3,6 +3,7 @@
 import {isId,cleanAssets,legacyId} from '../../src/document.js';
 import {isDesignId,migrateRecord} from '../designs.js';
 import {orderPages,validatePageOrder} from '../page-order.js';
+import {sha256Bytes,readLocalFile} from './local-file.js';
 
 const fail=code=>{throw Object.assign(Error(code),{code});};
 const natural=n=>Number.isSafeInteger(n)&&n>=0&&n<=2147483647;
@@ -11,7 +12,6 @@ const json=v=>JSON.stringify(v,(_,x)=>object(x)?Object.fromEntries(Object.keys(x
 const same=(a,b)=>json(a)===json(b),bytes=v=>new TextEncoder().encode(JSON.stringify(v)).length;
 const content=({revision,updatedAt,...value})=>value;
 const key=(id,revision)=>id+':'+revision;
-const hash=async blob=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',await blob.arrayBuffer())),n=>n.toString(16).padStart(2,'0')).join('');
 const request=q=>new Promise((yes,no)=>{q.onsuccess=()=>yes(q.result);q.onerror=()=>no(q.error);});
 const stores=['assets','heads','revisions','materials','materialRevisions'];
 const sourceMime='application/vnd.openxmlformats-officedocument.presentationml.presentation';
@@ -40,10 +40,11 @@ export function createPptxLibrary({storage='minican',indexedDB=globalThis.indexe
  const repository={storageScope:'local',
   async uploadAsset({assetId,kind,mimeType,blob}={}){
    if(!isId(assetId)||kind!=='source'||mimeType!==sourceMime||!(blob instanceof Blob)||blob.size<1||blob.size>52428800||blob.type&&blob.type!==mimeType)fail('INVALID_ASSET');
-   const sha256=await hash(blob),[descriptor]=cleanAssets([{id:assetId,kind,mimeType,sha256,byteLength:blob.size,storageKey:'local/'+assetId+'/'+sha256}]);
-   return transaction('readwrite',async s=>{const old=await request(s.assets.get(assetId));if(old){if(!same(old.descriptor,descriptor))fail('ASSET_CONFLICT');return old.descriptor;}await request(s.assets.add({descriptor,blob:new Blob([blob],{type:mimeType})},assetId));return descriptor;});
+   const sourceBytes=await blob.arrayBuffer(),sha256=await sha256Bytes(sourceBytes);
+   const [descriptor]=cleanAssets([{id:assetId,kind,mimeType,sha256,byteLength:blob.size,storageKey:'local/'+assetId+'/'+sha256}]);
+   return transaction('readwrite',async s=>{const old=await request(s.assets.get(assetId));if(old){if(!same(old.descriptor,descriptor))fail('ASSET_CONFLICT');return old.descriptor;}await request(s.assets.add({descriptor,bytes:sourceBytes},assetId));return descriptor;});
   },
-  async readAsset(id){const asset=await transaction('readonly',s=>request(s.assets.get(id)));if(!asset)fail('ASSET_MISSING');if(asset.blob.size!==asset.descriptor.byteLength||await hash(asset.blob)!==asset.descriptor.sha256)fail('ASSET_INTEGRITY');return asset.blob;},
+  async readAsset(id){const asset=await transaction('readonly',s=>request(s.assets.get(id)));if(!asset)fail('ASSET_MISSING');const blob=await readLocalFile(asset,asset.descriptor);if(!blob)fail('ASSET_INTEGRITY');return blob;},
   async getAsset(id){const asset=await transaction('readonly',s=>request(s.assets.get(id)));if(!asset)fail('ASSET_MISSING');return asset.descriptor;},
   async saveRevision({kind,id,payload,expectedRevision,sidecar={}}={}){
    reference({kind,id});if(expectedRevision!==null&&!natural(expectedRevision))fail('INVALID_EXPECTED_REVISION');
