@@ -949,14 +949,14 @@ export function playDesign(card, design, { delay = 0, still = false } = {}) {
   const finish = () => { for (const a of running.splice(0)) { try { a.finish(); } catch { /* 이미 끝났다 */ } } };
   const held = new Map();
   const stop = ({ freeze = false } = {}) => {
-    stopEffects();
+    stopEffects(freeze);
     stopped = true;
     if (freeze) {
       // Hold the visible outgoing pose until its card is removed. Cancelling
       // an active idle to its neutral pose before measuring it makes a snap.
       for (const a of loops) {
         const node = a.effect?.target;
-        if (!node?.style || held.has(node)) continue;
+        if (!node?.style || held.has(node) || node.style.getPropertyPriority('opacity')==='important') continue;
         const current = getComputedStyle(node);
         held.set(node, { transform: node.style.transform, opacity: node.style.opacity, filter: node.style.filter });
         const pose = { transform: current.transform, opacity: current.opacity, filter: current.filter };

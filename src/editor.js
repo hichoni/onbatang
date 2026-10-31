@@ -33,7 +33,7 @@ import { TOLERANCE, colorAlpha, prepareAlpha, finishCutout, resizeMask, plainBor
 import { anchorResizedItem, resizeItemFromHandle } from './resize.js';
 import {cleanPalettes,updatePalettes} from './palettes.js';
 import { effectPicker } from './effect-picker.js';
-import { effectable } from './effect-assets.js';
+import { effectable, EFFECT_ASSETS } from './effect-assets.js';
 import {FULL_CROP, cleanCrop, coverCrop, cropImage, panCrop} from './crop.js';
 
 const HISTORY = 40;
@@ -3697,6 +3697,7 @@ export function createEditor({
     for (const t of preview.timers) clearTimeout(t);
     preview.tr?.finish();
     preview.ctl?.restore();
+    preview.exit?.remove();
     preview = null;
     stage.classList.remove('fe-playing');
   }
@@ -3727,7 +3728,12 @@ export function createEditor({
     const wait = start + planMotion(design).ms + 500;
     for (let n = 0; n < ctl.left(); n++) timers.push(setTimeout(() => { if (preview === mine) ctl.next(); }, wait + n * 800));
     const linger = design.items.some(item => item.effect) ? 6000 : planMotion(design).loops.length ? 3500 : 0;
-    timers.push(setTimeout(() => { if (preview === mine) stopPreview(); }, wait + ctl.left() * 800 + 1200 + linger));
+    if (design.items.some(item=>item.effect && EFFECT_ASSETS.some(a=>a.last && a.id===item.effect.id))) {
+      mine.exit=el('button',{type:'button',class:'fe-preview-exit',dataset:{effectTrigger:'end-preview'},text:'미리 보기 끝내기',onClick:stopPreview});
+      stage.append(mine.exit);
+    } else {
+      timers.push(setTimeout(() => { if (preview === mine) stopPreview(); }, wait + ctl.left() * 800 + 1200 + linger));
+    }
     keepKeys();
   }
   function setCombo(id) {
@@ -3841,7 +3847,7 @@ export function createEditor({
       const graphics = motionPart('effectPicker', JSON.stringify([sel,it?.id,it?.t,it?.lock,it?.effect,it?.text,
         it?.kind,it?.title,it?.unit,it?.labels,it?.series,it?.vals]), () => [
         it && !it.lock && effectable(it)
-          ? effectPicker(it, effect => { stopPreview(); change({ effect }); })
+          ? effectPicker(it, effect => { stopPreview(); change({ effect }); },settings().aspect)
           : el('p', { class:'fe-note', text:'글·그림·도형을 하나 고르면 HTML 그래픽 효과를 붙일 수 있어요.' }),
       ]);
       const mine = it && !it.lock ? motionPart('mine', [sel, itemLabel(it), it.an || '', !!it.aw, it.em || '', it.lp || '', it.ex || '', it.sp || '', it.dl || 0, here.pa || ''].join('|'), () => {

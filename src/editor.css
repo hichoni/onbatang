@@ -208,6 +208,7 @@
 .fe-overlay { position: absolute; inset: 0; pointer-events: none; }
 /* 움직임을 미리 보는 동안에는 고른 테두리와 손잡이를 감춘다(움직임을 가리지 않게) */
 .fe-stage.fe-playing .fe-overlay { visibility: hidden; }
+.fe-preview-exit { position:absolute;inset:4px 4px auto auto;z-index:15;min-height:36px;padding:4px 12px;border:1px solid #68858a;border-radius:8px;background:#17333b;color:white;cursor:pointer; }
 .fe-sel { position: absolute; outline: 1.5px solid var(--fe-primary); outline-offset: 1px; box-shadow: 0 0 0 3.5px rgba(255, 255, 255, .75); }
 /* 함께 꾸밀 때: 다른 사람이 고른 요소. 그 사람의 색(--fe-other) 테두리와 이름표 */
 .fe-others { position: absolute; inset: 0; }

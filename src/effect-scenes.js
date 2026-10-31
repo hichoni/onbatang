@@ -1,4 +1,5 @@
 import { cleanChart, chartScale, chartNumber } from './chart.js';
+import { revealContent } from './reveal-scenes.js';
 
 // Content is taken from the current piece each time. Only offline lessons
 // carry a bounded copy, because their slide is otherwise a single picture.
@@ -11,7 +12,7 @@ export function sceneContent(id, item) {
     const chart = cleanChart(item);
     if (chart) return { t:'chart', ...chart };
   }
-  return null;
+  return revealContent(id,item);
 }
 
 export const titleExample = { t:'text', text:'작은 픽셀이 모여 그림이 된다' };

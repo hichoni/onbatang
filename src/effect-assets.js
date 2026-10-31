@@ -1,6 +1,7 @@
 // Each asset draws its own transparent SVG at rest. The small set of animation
 // primitives is shared by the picker, the presentation and the offline lesson.
 import { kineticTitle, chartFocus, titleExample, chartExample, sceneContent } from './effect-scenes.js';
+import { REVEALS } from './reveal-scenes.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 function svg(tag, attributes) {
@@ -105,6 +106,7 @@ export const EFFECT_ASSETS = Object.freeze([
   { id:'constellation', name:'별자리 연결', hint:'별을 하나씩 이어 개념 사이의 흐름을 보여줘요', ink:['#a8ddff','#a7a3ff','#ffbe88'], draw:constellation },
   { id:'kinetic', name:'키네틱 타이틀', hint:'선택한 글의 첫 72자를 큰 무대에서 낱말 차례로 보여줘요', ink:EFFECT_PALETTES.lagoon, draw:kineticTitle, example:titleExample },
   { id:'bars', name:'데이터 포커스', hint:'선택한 막대 차트의 항목과 수치가 큰 무대에서 차례로 자라요', ink:EFFECT_PALETTES.iris, draw:chartFocus, example:chartExample },
+  ...REVEALS.map((asset,i)=>({...asset,ink:[EFFECT_PALETTES.lagoon,EFFECT_PALETTES.sunset,EFFECT_PALETTES.iris][i]})),
 ]);
 const registry = new Map(EFFECT_ASSETS.map(asset => [asset.id, asset]));
 export const effectable = item => ['text','shape','image','art','emoji','chart','math'].includes(item?.t);
@@ -112,12 +114,12 @@ export function cleanEffect(raw, item) {
   const asset=registry.get(raw?.id);
   if (!asset || (item && asset.example && !sceneContent(asset.id,item))) return null;
   const note = typeof raw.note === 'string' ? Array.from(raw.note.trim()).slice(0, 120).join('') : '';
-  return { id: raw.id, when: raw.when === 'open' ? 'open' : 'press', ...(note ? { note } : {}),
+  return { id: raw.id, when: !asset.last && raw.when === 'open' ? 'open' : 'press', ...(note ? { note } : {}),
     ...(['slow','fast'].includes(raw.pace) ? {pace:raw.pace} : {}),
     ...(typeof raw.palette==='string' && Object.hasOwn(EFFECT_PALETTES,raw.palette) ? {palette:raw.palette} : {}) };
 }
 
-export function effectArt(id, animate = false, {pace,palette,content} = {}) {
+export function effectArt(id, animate = false, {pace,palette,content,step=0,photo} = {}) {
   const asset = registry.get(id);
   if (!asset) return null;
   const art = svg('svg', { viewBox: asset.example?'0 0 720 360':'-100 -70 200 140', 'aria-hidden': 'true', focusable: 'false' });
@@ -132,8 +134,16 @@ export function effectArt(id, animate = false, {pace,palette,content} = {}) {
     });
     return node;
   }
+  const data=asset.example && (sceneContent(id,content) || asset.example);
+  if(id==='lens' && !photo && content?.t==='image' && content.url) {
+    photo={...content,width:content.w || 4,height:(content.h || 3) / (content.aspect || 1)};
+  }
   asset.draw({ part, ink:typeof palette==='string' && Object.hasOwn(EFFECT_PALETTES,palette)?EFFECT_PALETTES[palette]:asset.ink,
-    content:asset.example && (sceneContent(id,content) || asset.example) });
+    content:data,step:asset.last?Math.max(0,Math.min(asset.last(data),Math.trunc(step)||0)):0,photo });
+  if(asset.last){
+    art.removeAttribute('aria-hidden');art.setAttribute('role','img');
+    art.setAttribute('aria-label',[...art.querySelectorAll('text')].map(n=>n.textContent).join(' · '));
+  }
   return art;
 }
 

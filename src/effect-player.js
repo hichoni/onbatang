@@ -3,18 +3,109 @@ import { sceneContent } from './effect-scenes.js';
 
 const labelOf = id => EFFECT_ASSETS.find(asset => asset.id === id)?.name || '';
 
+// A question covers its answer even before the presenter opens the large view.
+function mountQuestion(host, {node,content,slide}, effect, asset, data, activate) {
+  const cover=document.createElement('button');
+  cover.type='button'; cover.textContent=asset.name;
+  cover.dataset.effectTrigger=effect.id;
+  cover.setAttribute('aria-label',asset.name+' 시작');
+  cover.setAttribute('aria-expanded','false');
+  const w=node.offsetWidth, h=node.offsetHeight;
+  Object.assign(cover.style,{position:'absolute',left:node.style.left,top:node.style.top,
+    width:node.style.width,height:node.style.height || (h/Math.max(1,host.clientHeight)*100)+'%',
+    transform:node.style.transform,background:'#172b37',color:'#b2f2df',border:'1px solid #6b9c9b',
+    borderRadius:'2px',margin:'0',padding:'0',cursor:'pointer',lineHeight:'1.1',fontWeight:'750',fontSize:'clamp(11px,2.2cqw,30px)',overflow:'hidden',pointerEvents:'auto'});
+  // Preserve the box rotation, without mirroring the label on flipped photos.
+  cover.style.transform=cover.style.transform.replace(/scale\([^)]+\)/g,'');
+  const opacity=node.style.opacity, priority=node.style.getPropertyPriority('opacity'), ariaHidden=node.getAttribute('aria-hidden');
+  // Independent enter/idle animations can otherwise expose a moving answer.
+  node.style.setProperty('opacity','0','important');
+  node.setAttribute('aria-hidden','true');
+  node.after(cover);
+  let panel;
+  const close=()=>{panel?.remove();panel=null;cover.setAttribute('aria-expanded','false');};
+  cover.onclick=event=>{
+    event.stopPropagation();
+    if (panel) { close(); return; }
+    activate(close);
+    cover.setAttribute('aria-expanded','true');
+    let step=0;
+    const last=asset.last(data);
+    panel=document.createElement('div');
+    panel.dataset.effectPlaying=effect.id;
+    panel.setAttribute('role','group');panel.setAttribute('aria-label',asset.name);
+    Object.assign(panel.style,{position:'absolute',inset:'0',zIndex:12,background:'#101f2b',color:'white',
+      display:'grid',gridTemplateRows:'minmax(0,1fr) auto',overflow:'hidden',pointerEvents:'auto'});
+    panel.onclick=e=>e.stopPropagation();
+    const art=document.createElement('div'), bar=document.createElement('div');
+    art.style.cssText='min-height:0;min-width:0';
+    bar.style.cssText='display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:4px 10px;padding:3px 6px;background:#172d39';
+    const advance=document.createElement('button'), dismiss=document.createElement('button'), info=document.createElement('span');
+    for (const button of [advance,dismiss]) {
+      button.type='button';button.dataset.effectTrigger='control';
+      button.style.cssText='min-height:36px;padding:4px 12px;font:600 clamp(12px,2cqw,20px)/1.2 system-ui;border:1px solid #66868c;border-radius:9px;cursor:pointer';
+    }
+    advance.style.background='#a0e9d1'; advance.style.color='#10242d';
+    dismiss.style.background='transparent';dismiss.style.color='#eef5f2';dismiss.textContent='닫기';
+    info.setAttribute('role','status');
+    info.style.cssText='font:500 clamp(11px,1.8cqw,19px)/1.3 system-ui;max-width:100%;overflow:auto;max-height:3.9em;overflow-wrap:anywhere';
+    function draw() {
+      let photo;
+      if(effect.id==='lens'){
+        if(slide){
+          const sw=slide.picture.naturalWidth || host.clientWidth, sh=slide.picture.naturalHeight || host.clientHeight;
+          photo={url:slide.picture.src,width:sw*slide.w/100,height:sh*slide.h/100,slide:{w:sw,h:sh,x:sw*slide.x/100,y:sh*slide.y/100,rot:slide.rot}};
+        } else photo={...content,width:node.offsetWidth || w || 1,height:node.offsetHeight || h || 1};
+      }
+      const graphic=effectArt(effect.id,true,{...effect,content:data,photo,step});
+      art.replaceChildren(graphic);
+      panel.dataset.step=String(step);
+      advance.textContent=step===last?'처음부터':asset.next(step,data);
+      info.textContent=step===last && effect.note ? effect.note : (step+1)+' / '+(last+1);
+    }
+    advance.onclick=()=>{step=step===last?0:step+1;draw();};
+    const leave=()=>{close();cover.focus({preventScroll:true});};
+    dismiss.onclick=leave;
+    panel.onkeydown=e=>{
+      if(e.key==='Escape'){e.stopPropagation();e.preventDefault();leave();}
+      else if(e.key===' '||e.key==='Enter')e.stopPropagation();
+    };
+    bar.append(info,advance,dismiss);panel.append(art,bar);host.append(panel);
+    draw();advance.focus({preventScroll:true});
+  };
+  const restore=()=>{
+    close();cover.remove();node.style.setProperty('opacity',opacity,priority);
+    if(ariaHidden===null)node.removeAttribute('aria-hidden');else node.setAttribute('aria-hidden',ariaHidden);
+  };
+  return freeze=>{
+    if(!freeze){restore();return;}
+    // The departing slide is still on screen while a transition runs.
+    cover.inert=true;if(panel)panel.inert=true;
+    return restore;
+  };
+}
+
 // The live player binds the actual piece. Offline lessons supply the same
 // player with a transparent target measured against the exported picture.
 export function mountEffectPlayer(host, bindings, { delay = 0 } = {}) {
   const cleanups = [];
   let closeNote = null, closeScene = null, nextSceneAt = delay;
   const queuedScenes = new Set();
-  for (const { node, effect: rawEffect, content } of bindings) {
-    const effect = cleanEffect(rawEffect);
+  for (const binding of bindings) {
+    const {node,content}=binding;
+    const effect = cleanEffect(binding.effect);
     if (!node || !effect) continue;
-    const scene = EFFECT_ASSETS.find(a => a.id === effect.id).example;
+    const asset = EFFECT_ASSETS.find(a => a.id === effect.id);
+    const scene = asset.example;
     const data = scene && sceneContent(effect.id,content);
     if (scene && !data) continue;
+    if(asset.last){
+      cleanups.push(mountQuestion(host,binding,effect,asset,data,close=>{
+        for(const timer of queuedScenes)clearTimeout(timer);
+        queuedScenes.clear();closeNote?.();closeScene?.();closeScene=close;
+      }));
+      continue;
+    }
     const duration=(scene ? 4600 : 1450)*paceFactor(effect.pace);
     let graphic, caption, timer, opening;
     const automatic = effect.when === 'open';
@@ -113,7 +204,12 @@ export function mountEffectPlayer(host, bindings, { delay = 0 } = {}) {
       attrs.forEach((name,i) => original[i] === null ? node.removeAttribute(name) : node.setAttribute(name,original[i]));
     });
   }
-  return () => { for (const cleanup of cleanups.splice(0)) cleanup(); };
+  return (freeze=false) => {
+    for (const cleanup of cleanups.splice(0)) {
+      const restore=cleanup(freeze);
+      if(restore)cleanups.push(restore);
+    }
+  };
 }
 
 export function cleanEffectTargets(rows) {
@@ -137,7 +233,7 @@ export function mountOfflineEffects(host, targets) {
       height:row.h+'%', transform:`translate(-50%,-50%) rotate(${row.rot}deg)`, pointerEvents:'none' });
     if (row.label) node.setAttribute('aria-label',row.label);
     host.append(node);
-    return { node, effect:row.effect, content:row.content };
+    return { node, effect:row.effect, content:row.content,slide:{...row,picture:host.querySelector('.lesson-slide')} };
   });
   const stop = mountEffectPlayer(host,bindings);
   return () => { stop(); for (const {node} of bindings) node.remove(); };

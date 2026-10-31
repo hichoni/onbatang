@@ -1,8 +1,8 @@
 import { el } from './dom.js';
 import { EFFECT_ASSETS, effectArt, cleanEffect, previewEffect } from './effect-assets.js';
 
-export function effectPicker(item, apply) {
-  const saved = cleanEffect(item.effect);
+export function effectPicker(item, apply, aspect=1) {
+  const saved = cleanEffect(item.effect,item);
   let selected = saved?.id || EFFECT_ASSETS[0].id;
   const choices = el('div', { class:'fe-fx-choices', role:'group', 'aria-label':'그래픽 효과 선택' });
   const sample = el('div', { class:'fe-fx-sample', 'aria-hidden':'true' });
@@ -15,35 +15,45 @@ export function effectPicker(item, apply) {
     ['original','기본 색감'],['lagoon','민트 · 바다'],['sunset','노을 · 산호'],['iris','보라 · 오로라'],
   ].map(option));
   pace.value=saved?.pace || 'normal'; palette.value=saved?.palette || 'original';
-  const preview = animate => previewEffect(sample,selected,animate,{content:item,pace:pace.value,palette:palette.value});
+  let step=0, active;
+  const when = el('select', { 'aria-label':'그래픽 효과 재생 시점' },
+    el('option', { value:'press', text:'이 조각을 누를 때' }), el('option', { value:'open', text:'장이 열릴 때' }));
+  when.value = saved?.when || 'press';
+  const replay=el('button',{class:'fe-btn',type:'button',onClick:()=>{
+    if(active.last) step=(step+1)%(active.last(item)+1);
+    preview(true);
+  }});
+  function preview(animate) {
+    replay.textContent=active.last?(step===active.last(item)?'처음부터':active.next(step,item)):'다시 보기';
+    previewEffect(sample,selected,animate,{content:{...item,aspect},step,pace:pace.value,palette:palette.value});
+  }
   pace.onchange=palette.onchange=() => preview(true);
   function pick(asset, animate) {
-    selected = asset.id;
+    selected = asset.id;active=asset;step=0;
+    when.disabled=!!asset.last;
+    if(asset.last)when.value='press';
     hint.textContent = asset.hint;
     for (const button of choices.querySelectorAll('button')) button.setAttribute('aria-pressed',String(button.dataset.effectAsset === selected));
     preview(animate);
   }
-  for (const [group,title] of [[true,'수업 내용 강조'],[false,'시선을 끄는 효과']]) {
+  for (const [filter,title] of [[a=>a.last,'질문하고 단계별 공개'],[a=>a.example&&!a.last,'수업 내용 강조'],[a=>!a.example,'시선을 끄는 효과']]) {
     choices.append(el('b',{class:'fe-fx-group',text:title}));
-    for(const asset of EFFECT_ASSETS.filter(a=>!!a.example===group)) {
+    for(const asset of EFFECT_ASSETS.filter(filter)) {
       const allowed=!!cleanEffect({id:asset.id},item);
-      const sub=asset.id==='kinetic'?'글 조각 전용':'막대 차트 전용';
+      const sub=asset.requires || (asset.id==='kinetic'?'글 조각 전용':'막대 차트 전용');
       choices.append(el('button', { type:'button', class:'fe-fx-choice', dataset:{effectAsset:asset.id},
         disabled:!allowed,title:allowed?asset.hint:sub,onClick:() => pick(asset,true) },
-        el('span', { class:'fe-fx-icon' },effectArt(asset.id)), el('span',{},asset.name, !allowed && el('small',{text:sub}))));
+        el('span', { class:'fe-fx-icon','aria-hidden':'true' },effectArt(asset.id)), el('span',{},asset.name, !allowed && el('small',{text:sub}))));
     }
   }
   pick(EFFECT_ASSETS.find(asset => asset.id === selected),false);
-  const when = el('select', { 'aria-label':'그래픽 효과 재생 시점' },
-    el('option', { value:'press', text:'이 조각을 누를 때' }), el('option', { value:'open', text:'장이 열릴 때' }));
-  when.value = saved?.when || 'press';
   const note = el('input', { type:'text', maxLength:120, placeholder:'함께 보여 줄 설명 (선택)', 'aria-label':'효과 설명', value:saved?.note || '' });
   const save = el('button', { class:'fe-btn primary', type:'button', dataset:{applyEffect:''}, text:'고른 조각에 적용',
     onClick:() => apply(cleanEffect({ id:selected, when:when.value, note:note.value, pace:pace.value, palette:palette.value },item)) });
   return el('details', { class:'fe-fx-picker', open:!!saved },
     el('summary', { text:'HTML 그래픽 효과' + (saved ? ' · '+EFFECT_ASSETS.find(asset => asset.id === saved.id).name : '') }),
     el('div', { class:'fe-fx-controls' }, sample,
-      el('div',{class:'fe-fx-preview-actions'},hint,el('button',{class:'fe-btn',type:'button',text:'다시 보기',onClick:()=>preview(true)})),
+      el('div',{class:'fe-fx-preview-actions'},hint,replay),
       choices, el('div',{class:'fe-fx-settings'},el('label',{},'재생 속도',pace),el('label',{},'효과 색감',palette)),
       el('label',{},'재생 시점',when), note,
       el('div', { class:'fe-row' }, save, saved && el('button', { class:'fe-btn', type:'button', text:'효과 빼기', onClick:() => apply(null) }))));

@@ -46,6 +46,12 @@ test('element effects survive editor saves and run in the presenter and the down
       {id:'ekinetic01',t:'text',x:40,y:17,w:60,size:4,text:'작은 픽셀이 모인다',color:'#ffffff'},
       {id:'ebarstory01',t:'chart',x:77,y:72,w:35,h:37,kind:'hbar',title:'모둠별 픽셀 변화',unit:'칸',
         labels:['파랑','노랑','초록'],series:[{name:'1차',values:[-3,0,7]},{name:'2차',values:[2,4,9]}]});
+    const img=document.createElement('canvas');img.width=60;img.height=40;
+    const ctx=img.getContext('2d');ctx.fillStyle='#c01020';ctx.fillRect(0,0,30,40);ctx.fillStyle='#1070c0';ctx.fillRect(30,0,30,40);
+    record.slides[1].items.push(
+      {id:'etrend0101',t:'chart',kind:'line',title:'기온',unit:'도',labels:['월','화','수'],series:[{name:'관측',values:[-3,0,7]}],x:20,y:25,w:28,h:42,effect:{id:'forecast',note:'관측 종료'}},
+      {id:'elens01001',t:'image',url:img.toDataURL(),x:76,y:30,w:26,h:32,rot:14,crop:{x:.5,y:0,w:.5,h:1},effect:{id:'lens'}},
+      {id:'ecode01001',t:'text',text:'인공지능',x:72,y:75,w:30,size:6,color:'#ffffff'});
     await store.putDesign(record);
     const tour=await import(base+'/app/tour.js'); tour.markTourSeen('editor'); tour.markTourSeen(tour.NEWS_KEY);
     return record.id;
@@ -84,6 +90,14 @@ test('element effects survive editor saves and run in the presenter and the down
   await applyScene(page.locator('.cv-canvas .fe-stage .fi-text').nth(1),'kinetic');
   await applyScene(page.locator('.cv-canvas .fe-stage .fi-chart').first(),'bars');
   await page.waitForFunction(async ({base,id}) => (await (await import(base+'/app/store.js')).getDesign(id))?.slides[0].items[2].effect?.id==='bars',{base,id});
+  await page.locator('.cv-slide[data-slide="1"]').click();
+  await applyScene(page.locator('.cv-canvas .fe-stage .fi-text').filter({hasText:'인공지능'}),'initials');
+  await page.getByRole('button',{name:'이 장 미리 보기',exact:true}).click();
+  await page.locator('.cv-canvas [data-effect-trigger=initials]').click();
+  await page.locator('.cv-canvas [data-effect-playing=initials]').getByRole('button',{name:'첫 글자 공개'}).click();
+  await page.getByRole('button',{name:'미리 보기 끝내기',exact:true}).click();
+  assert.equal(await page.locator('.cv-canvas [data-effect-playing]').count(),0);
+  await page.locator('.cv-slide[data-slide="0"]').click();
   await page.reload();
   const reopen = page.getByRole('button',{name:'모션 에셋 수업 열기',exact:true});
   await reopen.or(page.locator('.cv-show-btn')).first().waitFor();
@@ -124,6 +138,40 @@ test('element effects survive editor saves and run in the presenter and the down
   await checkScenes(page.locator('.cv-show-stage'));
   await page.keyboard.press('ArrowRight');
   await page.locator('.cv-show-stage [data-effect-note]').filter({hasText:'완성했어요'}).waitFor();
+  async function checkQuestions(surface,offline) {
+    for(const [id,actions] of [['forecast',['다음 값 공개','다음 값 공개']],['lens',['렌즈 넓히기','전체 그림 공개']],['initials',['첫 글자 공개','정답 공개']]]){
+      const cover=surface.locator('[data-effect-trigger='+id+']');
+      await cover.press('Enter');
+      const panel=surface.locator('[data-effect-playing='+id+']');
+      assert.equal(await panel.getAttribute('data-step'),'0');
+      if(id==='initials')assert.ok((await panel.textContent()).includes('ㅇㄱㅈㄴ'));
+      for(const [i,action] of actions.entries()){
+        if(id==='forecast')assert.doesNotMatch(await panel.textContent(),/관측 종료|관측 · 7도/);
+        if(id==='initials')assert.doesNotMatch(await panel.textContent(),/인공지능/);
+        await panel.getByRole('button',{name:action}).press('Space');
+        assert.equal(await panel.getAttribute('data-step'),String(i+1));
+      }
+      if(id==='initials')assert.match(await panel.textContent(),/인공지능/);
+      if(id==='forecast')assert.match(await panel.textContent(),/관측 · 7도.*관측 종료/);
+      if(id==='lens'){
+        const image=panel.locator('image');
+        assert.ok((await image.getAttribute('href')).startsWith('data:image/'));
+        if(offline)assert.equal(await image.getAttribute('href'),await surface.locator('.lesson-slide').getAttribute('src'));
+        // At full reveal the visible cropped part must be blue (the source's left half is red).
+        const pixel=await panel.locator('svg').first().evaluate(async svg=>{
+          const src=new Image();src.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(new XMLSerializer().serializeToString(svg));
+          await src.decode();const canvas=document.createElement('canvas');canvas.width=720;canvas.height=360;
+          const ctx=canvas.getContext('2d');ctx.drawImage(src,0,0,720,360);return [...ctx.getImageData(360,183,1,1).data];
+        });
+        assert.ok(pixel[2]>pixel[0]*2,'cropped blue pixel, got '+pixel);
+      }
+      await panel.getByRole('button',{name:'처음부터'}).click();
+      assert.equal(await panel.getAttribute('data-step'),'0');
+      await panel.getByRole('button',{name:'닫기',exact:true}).click();
+      assert.equal(await cover.getAttribute('aria-expanded'),'false');
+    }
+  }
+  await checkQuestions(page.locator('.cv-show-stage'),false);
   await page.keyboard.press('Escape');
   await page.locator('.cv-down-btn').click();
   await page.locator('[data-type=html]').click();
@@ -148,5 +196,6 @@ test('element effects survive editor saves and run in the presenter and the down
   await opened.locator('.lesson-navigation').getByRole('button',{name:/다음/}).click();
   await frame.locator('[data-effect-note]').filter({hasText:'완성했어요'}).waitFor();
   assert.equal(await frame.locator('[data-effect-playing] svg').evaluate(n => n.getAnimations({subtree:true}).length),0);
+  await checkQuestions(frame,true);
   assert.deepEqual(errors,[]);
 });

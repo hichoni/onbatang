@@ -17,13 +17,15 @@
   button{display:grid;grid-template-columns:1fr auto;gap:4px 8px;padding:0 16px 16px;border:1px solid #354756;border-radius:16px;overflow:hidden;background:#1b2835;color:inherit;text-align:start;cursor:pointer;font:inherit}
   button:hover,button:focus-visible{outline:2px solid #93dcc9;outline-offset:2px}
   .art{display:block;grid-column:1/-1;margin:0 -16px 12px;height:134px;background:radial-gradient(ellipse at 60% 90%,#26354d,#101a29 90%)}
-  #scenes .art{height:auto;aspect-ratio:2/1}
+  #scenes .art,#questions .art{height:auto;aspect-ratio:2/1}
+  #questions em{color:#101f2b;background:#a0e9d1;padding:5px 9px;border-radius:7px}
   b{font-size:1.15rem} em{grid-row:2;grid-column:2;font-style:normal;color:#9de0cc;font-size:.78rem;align-self:center}
   .hint{grid-column:1/-1;color:#c4d3d9;font-size:.88rem}
   footer{border-top:1px solid #384854;padding-top:16px;color:#b7c9c8;font-size:.85rem;line-height:1.6}
 </style>
 <main>
-  <header><small>온바탕 / 움직임</small><h1>HTML 모션 에셋</h1><p>카드를 눌러 한 번 재생해 보세요. 수업에서는 제목, 그림, 도형에 같은 효과를 붙일 수 있어요.</p></header>
+  <header><small>온바탕 / 움직임</small><h1>HTML 모션 에셋</h1><p>작은 창 속에 보이는 그림은 무엇일까요? 카드를 눌러 단서를 하나씩 열어 보세요.</p></header>
+  <h2>질문하고 단계별 공개</h2><section id="questions" aria-label="질문하고 단계별 공개"></section>
   <div class="settings">
     <label>시연할 제목<input id="title" value="작은 픽셀이 모여 그림이 된다" maxlength="72"></label>
     <label>시연할 차트<select id="chart"><option value="pixels">도안별 픽셀 수 · 세로</option><option value="change">모둠별 증감 · 가로</option></select></label>
@@ -47,13 +49,17 @@
     const hint=document.createElement('span'), play=document.createElement('em');
     button.dataset.asset=asset.id;
     art.className='art';
-    const render=animate=>previewEffect(art,asset.id,animate,{pace:pace.value,palette:palette.value,
-      content:asset.id==='kinetic'?{t:'text',text:title.value}:asset.id==='bars'&&chart.value==='change'?changes:asset.example});
+    let step=0;
+    const render=animate=>{
+      previewEffect(art,asset.id,animate,{pace:pace.value,palette:palette.value,step,
+        content:asset.id==='kinetic'?{t:'text',text:title.value}:asset.id==='bars'&&chart.value==='change'?changes:asset.example});
+      play.textContent=asset.last?(step===asset.last(asset.example)?'처음부터':asset.next(step,asset.example)):'▶ 재생';
+    };
     render(false); posters.push(()=>render(false));
-    name.textContent=asset.name; hint.className='hint'; hint.textContent=asset.hint; play.textContent='▶ 재생';
+    name.textContent=asset.name; hint.className='hint'; hint.textContent=asset.hint;
     button.append(art,name,play,hint);
-    button.onclick=() => render(true);
-    document.querySelector(asset.example?'#scenes':'#accents').append(button);
+    button.onclick=() => {if(asset.last)step=(step+1)%(asset.last(asset.example)+1);render(true);};
+    document.querySelector(asset.last?'#questions':asset.example?'#scenes':'#accents').append(button);
   }
   title.oninput=chart.onchange=pace.onchange=palette.onchange=()=>posters.forEach(draw=>draw());
 </script>
