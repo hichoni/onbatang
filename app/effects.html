@@ -4,6 +4,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>온바탕 · HTML 모션 에셋</title>
 <link rel="stylesheet" href="./pixel-art.css">
+<link rel="stylesheet" href="../src/editor.css">
+<link rel="stylesheet" href="./player.css">
 <style>
   *{box-sizing:border-box}
   body{margin:0;background:#101823;color:#f1f5ee;font-family:system-ui,"Malgun Gothic",sans-serif}
@@ -22,12 +24,23 @@
   #questions em{color:#101f2b;background:#a0e9d1;padding:5px 9px;border-radius:7px}
   b{font-size:1.15rem} em{grid-row:2;grid-column:2;font-style:normal;color:#9de0cc;font-size:.78rem;align-self:center}
   .hint{grid-column:1/-1;color:#c4d3d9;font-size:.88rem}
+  .story-shelf{margin:24px 0;border:1px solid #536573;border-radius:12px;background:#1a2734;overflow:hidden}
+  .story-shelf summary{cursor:pointer;padding:16px 20px;font-weight:700;font-size:1.1rem}.story-shelf summary small{margin-left:.7em}
+  .story-tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 16px}.story-tools output{margin-inline-end:auto}
+  .story-tools button{cursor:pointer;min-height:44px;padding:6px 14px;border-radius:6px;border:1px solid #697e85;background:#21323d;color:#f5f6ef;font:inherit}.story-tools button:disabled{opacity:.45;cursor:default}
+  .story-stage{aspect-ratio:16/9;max-width:100%;margin:auto}.story-shelf .story-guide{padding:0 16px 14px;font-size:.85rem}
   footer{border-top:1px solid #384854;padding-top:16px;color:#b7c9c8;font-size:.85rem;line-height:1.6}
   .photo-feature{display:flex;align-items:center;gap:clamp(16px,4vw,36px);background:#1a3038;padding:clamp(14px,3vw,26px);border-radius:16px;margin:24px 0}.photo-feature canvas{width:32%;height:auto;border-radius:6px;image-rendering:pixelated}.photo-feature h2{font-size:clamp(1.3rem,4vw,2rem);margin:5px 0}.photo-feature p{margin-bottom:12px}
   .photo-feature button,#photo-demo>.demo-close{font:inherit;border:0;background:#a8e8d3;color:#11272a;border-radius:7px;padding:10px 15px;cursor:pointer;min-height:44px}#photo-demo{border:0;border-radius:14px;padding:12px;background:#f5f7f3;width:min(900px,96vw);max-height:92dvh}#photo-demo::backdrop{background:#081018cc}#photo-demo>.demo-close{display:block;margin:0 0 8px auto}#photo-demo header{border:0;padding:0}#photo-demo p{color:inherit}#photo-demo .pixel-setup{background:#fff}
 </style>
 <main>
   <header><small>온바탕 / 움직임</small><h1>HTML 모션 에셋</h1><p>작은 창 속에 보이는 그림은 무엇일까요? 카드를 눌러 단서를 하나씩 열어 보세요.</p></header>
+  <details id="motion-stories" class="story-shelf"><summary>움직이는 디자인 세트 <small>6종 · 30장</small></summary>
+    <div class="story-tools"><label>수업·행사 선택<select id="story-choice"></select></label></div>
+    <div class="story-stage" id="story-stage" aria-label="디자인 세트 발표 미리보기"></div>
+    <div class="story-tools"><output id="story-count" aria-live="polite"></output><button id="story-prev" type="button">이전 장</button><button id="story-next" type="button">다음 장</button></div>
+    <p class="story-guide">장을 넘겨 움직임을 보세요. 네 번째 장에서는 효과가 자동으로 재생돼요. 내 자료로 쓰려면 온바탕 첫 화면의 ‘틀로 시작하기 → 디자인 세트’에서 같은 이름을 고르세요.</p>
+  </details>
   <article class="photo-feature" id="photo-study">
     <canvas width="96" height="72" aria-label="해 질 무렵의 산과 호수"></canvas>
     <div><small>실과 · 사진과 데이터</small><h2>사진 속으로 들어가기</h2><p>사진에서 한 점을 골라 RGB를 알아보고 그 색으로 첫 칸을 칠해요.</p><button type="button" id="try-study">샘플로 체험하기</button></div>
@@ -48,6 +61,16 @@
   import { EFFECT_ASSETS, previewEffect } from '../src/effect-assets.js';
   import {setupPhotoDemo} from './photo-study-demo.js';
   setupPhotoDemo();
+  const shelf=document.querySelector('#motion-stories');
+  let stopPreview;
+  shelf.addEventListener('toggle',async()=>{
+    stopPreview?.();stopPreview=null;
+    if(shelf.open){
+      const {startCollectionPreview}=await import('./collection-preview.js');
+      if(shelf.open&&!stopPreview)stopPreview=startCollectionPreview(shelf);
+    }
+  });
+  if(location.hash==='#motion-stories')shelf.open=true;
   const title=document.querySelector('#title'), chart=document.querySelector('#chart'), pace=document.querySelector('#pace'), palette=document.querySelector('#palette');
   const changes={t:'chart',kind:'hbar',title:'모둠별 픽셀 변화',unit:'칸',labels:['파랑','노랑','초록'],
     series:[{name:'첫 도안',values:[-3,0,7]},{name:'바꾼 도안',values:[2,4,9]}]};

@@ -3,12 +3,14 @@
 // 외부 이미지/글꼴/저장소를 사용하지 않으며 모든 글과 도형은 개별 편집 가능하다.
 import { board, LINE, TITLE_FONT } from './templates.js';
 import { newId } from '../src/document.js';
+import { ANIMATED_COLLECTIONS, animatedPlate } from './animated-collections.js';
 
 export const COLLECTIONS = Object.freeze([
   { id:'fieldnote', name:'현장 노트', label:'FIELDNOTE', hint:'관찰에서 실천으로 이어지는 에디토리얼 세트', bg:'#F4F0E6', ink:'#18221E', accent:'#E75C36' },
   { id:'signal', name:'배움 신호', label:'SIGNAL', hint:'작은 실험과 새로운 연결을 위한 테크 세트', bg:'#0F1821', ink:'#EAF2F1', accent:'#D5F26A' },
   { id:'gallery', name:'함께 자란 시간', label:'GALLERY', hint:'전시·성장·졸업의 이야기를 담는 도록 세트', bg:'#F6F0E5', ink:'#3D263D', accent:'#B15F45' },
   { id:'forum', name:'다음 학교', label:'FORUM', hint:'질문·논의·결정을 정리하는 정보 디자인 세트', bg:'#F7F7F1', ink:'#141E2B', accent:'#2554E8' },
+  ...ANIMATED_COLLECTIONS,
 ].map(value=>Object.freeze({...value,slides:5})));
 
 const ASPECT = 16/9;
@@ -193,15 +195,24 @@ function forum(a,index) {
 const makers={fieldnote,signal,gallery,forum};
 const roles=['표지','차례','내용·실습','비교·기록','마무리'];
 export const COLLECTION_LAYOUTS=Object.freeze(COLLECTIONS.flatMap(collection=>roles.map((role,index)=>Object.freeze({
-  id:`collection-${collection.id}-${index+1}`,name:`${collection.name} · ${role}`,group:`디자인 세트 · ${collection.name}`,ratio:'16:9',cover:index===0,
-  collection:collection.id,collectionName:collection.name,bg:collection.id==='gallery'&&index===4?'#3D263D':collection.id==='forum'&&index===4?'#2554E8':collection.bg,
-  tags:[collection.name,collection.label,role,'디자인 세트',...(collection.id==='gallery'?['전시','성장','졸업']:collection.id==='forum'?['회의','토론','결정']:['연수','워크숍','실습'])],
-  items:aspect=>makers[collection.id](validAspect(aspect),index),
+  id:`collection-${collection.id}-${index+1}`,name:`${collection.name} · ${collection.beats?.[index][0] || role}`,group:`디자인 세트 · ${collection.name}`,ratio:'16:9',cover:index===0,
+  collection:collection.id,collectionName:collection.name,animated:!!collection.beats,bg:collection.id==='gallery'&&index===4?'#3D263D':collection.id==='forum'&&index===4?'#2554E8':collection.bg,
+  tags:[collection.name,collection.label,role,'디자인 세트',...(collection.tags || (collection.id==='gallery'?['전시','성장','졸업']:collection.id==='forum'?['회의','토론','결정']:['연수','워크숍','실습']))],
+  items:aspect=>collection.beats?animatedPlate(canvas(validAspect(aspect),collection,index),collection,index):makers[collection.id](validAspect(aspect),index),
 }))));
 
 /** 편집기 설정에 기대지 않는 새 5장. 도형 높이를 페이지 %로 바꾸고 모든 이름표를 새로 만든다. */
 export function createCollectionSlides(id,{aspect=ASPECT}={}) {
   const a=validAspect(aspect),layouts=COLLECTION_LAYOUTS.filter(layout=>layout.collection===id);
   if(layouts.length!==5)throw new RangeError('디자인 세트를 골라 주세요.');
-  return layouts.map(layout=>({id:newId('p'),bg:layout.bg,items:layout.items(a).map(raw=>({...raw,...(raw.t==='shape'?{h:raw.h*a}:{}),id:newId('e')}))}));
+  const set=COLLECTIONS.find(value=>value.id===id),landmarks=new Map();
+  return layouts.map((layout,index)=>({id:newId('p'),bg:layout.bg,...(set.beats?{tr:'move',notes:set.beats[index][2]}:{}),
+    items:layout.items(a).map(({layerKey,...raw})=>{
+      const elementId=newId('e'),item={...raw,...(raw.t==='shape'?{h:raw.h*a}:{}),id:elementId};
+      if(layerKey){
+        if(landmarks.has(layerKey))item.origin={elementId:landmarks.get(layerKey)};
+        else landmarks.set(layerKey,elementId);
+      }
+      return item;
+    })}));
 }

@@ -6,9 +6,7 @@ import {tmpdir} from 'node:os';
 import {extname,resolve,sep,join} from 'node:path';
 import {pathToFileURL,fileURLToPath} from 'node:url';
 
-test('element effects survive editor saves and run in the presenter and the downloaded offline HTML', {
-  skip:!process.env.MINICAN_PLAYWRIGHT_PATH, timeout:100000,
-}, async t => {
+async function openBrowser(t) {
   const hosted = !!process.env.MINICAN_HOST_ROOT, base = hosted ? '/minican' : '';
   const root = resolve(process.env.MINICAN_HOST_ROOT || fileURLToPath(new URL('../../',import.meta.url)));
   const types = {'.html':'text/html; charset=utf-8','.js':'text/javascript','.css':'text/css','.svg':'image/svg+xml','.woff2':'font/woff2','.json':'application/json'};
@@ -33,6 +31,13 @@ test('element effects survive editor saves and run in the presenter and the down
   const errors = [];
   page.on('pageerror',e => errors.push(e.message));
   await page.goto(origin+'/seed');
+  return {hosted,base,origin,browser,page,errors};
+}
+
+test('element effects survive editor saves and run in the presenter and the downloaded offline HTML', {
+  skip:!process.env.MINICAN_PLAYWRIGHT_PATH, timeout:100000,
+}, async t => {
+  const {hosted,base,origin,browser,page,errors}=await openBrowser(t);
   const id = await page.evaluate(async base => {
     const {newRecord} = await import(base+'/app/designs.js'), store = await import(base+'/app/store.js');
     store.setStorageName(base ? 'gailab-minican' : 'minican');
@@ -197,5 +202,56 @@ test('element effects survive editor saves and run in the presenter and the down
   await frame.locator('[data-effect-note]').filter({hasText:'완성했어요'}).waitFor();
   assert.equal(await frame.locator('[data-effect-playing] svg').evaluate(n => n.getAnimations({subtree:true}).length),0);
   await checkQuestions(frame,true);
+  assert.deepEqual(errors,[]);
+});
+
+test('a teacher starts a motion set, reopens it, presents its linked art and downloads the five-page HTML', {
+  skip:!process.env.MINICAN_PLAYWRIGHT_PATH, timeout:80000,
+}, async t => {
+  const {hosted,base,origin,browser,page,errors}=await openBrowser(t);
+  await page.evaluate(async base=>{
+    const tour=await import(base+'/app/tour.js');
+    for(const id of ['home','editor',tour.NEWS_KEY])tour.markTourSeen(id);
+  },base);
+  await page.goto(origin+(hosted?'/minican-app.html':'/app/index.html'));
+  await page.locator('button[data-starts=collection]').click();
+  const tile=page.locator('button[data-layout=collection-eclipse-1]');
+  assert.match(await tile.textContent(),/모션 5장/);
+  await tile.click();
+  const title=page.getByLabel('그림 이름',{exact:true});
+  await title.fill('일식 관측 수업');await title.press('Enter');
+  await page.waitForFunction(async base=>(await (await import(base+'/app/store.js')).listDesigns()).some(d=>d.name==='일식 관측 수업'&&d.slides.length===5),base);
+  await page.reload();
+  const reopen=page.getByRole('button',{name:'일식 관측 수업 열기',exact:true});
+  await reopen.or(title).first().waitFor();
+  if(await reopen.isVisible())await reopen.click();
+  assert.equal(await title.inputValue(),'일식 관측 수업');
+  assert.equal(await page.locator('.cv-slide[data-slide]').count(),5);
+  await page.locator('.cv-show-btn').click();
+  const stage=page.locator('.cv-show-stage');
+  await stage.locator('[data-effect-trigger=corona]').click();
+  await stage.locator('[data-effect-playing=corona] svg').waitFor();
+  await page.keyboard.press('ArrowRight');
+  await stage.locator('.fe-morph-back').waitFor({state:'attached'});
+  for(let i=0;i<2;i++)await page.keyboard.press('ArrowRight');
+  await stage.locator('[data-effect-playing=corona] svg').waitFor();
+  await page.keyboard.press('Escape');
+  await page.locator('.cv-down-btn').click();await page.locator('[data-type=html]').click();
+  const ready=page.waitForEvent('download');
+  await page.locator('[data-download-save]').click();
+  const dir=await mkdtemp(join(tmpdir(),'onbatang-collection-')),file=join(dir,'lesson.html');
+  t.after(async()=>{await rm(file,{force:true});await rmdir(dir);});
+  await (await ready).saveAs(file);
+  const offline=await browser.newContext({offline:true,reducedMotion:'reduce',viewport:{width:390,height:844}});
+  const opened=await offline.newPage();opened.on('pageerror',e=>errors.push(e.message));
+  await opened.goto(pathToFileURL(file).href);
+  const frame=opened.locator('.lesson-effects-frame');
+  await frame.locator('[data-effect-trigger=corona]').click();
+  assert.equal(await frame.locator('[data-effect-playing=corona] svg').evaluate(svg=>svg.getAnimations({subtree:true}).length),0);
+  const next=opened.locator('.lesson-navigation').getByRole('button',{name:/다음/});
+  for(let i=0;i<3;i++)await next.click();
+  await frame.locator('[data-effect-playing=corona] svg').waitFor();
+  await next.click();
+  assert.ok(await next.isDisabled());
   assert.deepEqual(errors,[]);
 });

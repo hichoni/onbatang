@@ -2,6 +2,7 @@
 // primitives is shared by the picker, the presentation and the offline lesson.
 import { kineticTitle, chartFocus, titleExample, chartExample, sceneContent } from './effect-scenes.js';
 import { REVEALS } from './reveal-scenes.js';
+import { CLASSROOM_ACCENTS } from './classroom-accents.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 function svg(tag, attributes) {
@@ -107,6 +108,7 @@ export const EFFECT_ASSETS = Object.freeze([
   { id:'kinetic', name:'키네틱 타이틀', hint:'선택한 글의 첫 72자를 큰 무대에서 낱말 차례로 보여줘요', ink:EFFECT_PALETTES.lagoon, draw:kineticTitle, example:titleExample },
   { id:'bars', name:'데이터 포커스', hint:'선택한 막대 차트의 항목과 수치가 큰 무대에서 차례로 자라요', ink:EFFECT_PALETTES.iris, draw:chartFocus, example:chartExample },
   ...REVEALS.map((asset,i)=>({...asset,ink:[EFFECT_PALETTES.lagoon,EFFECT_PALETTES.sunset,EFFECT_PALETTES.iris][i]})),
+  ...CLASSROOM_ACCENTS,
 ]);
 const registry = new Map(EFFECT_ASSETS.map(asset => [asset.id, asset]));
 export const effectable = item => ['text','shape','image','art','emoji','chart','math'].includes(item?.t);

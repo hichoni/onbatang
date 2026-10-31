@@ -192,6 +192,7 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"], body.mc-app :is(#app,.cv-a
 .cv-seg-btn:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
 .cv-start-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .cv-start-list.theme { gap: 12px 10px; }
+.cv-collection-preview { display:inline-flex;align-items:center;min-height:44px;color:inherit;font-size:.88rem;text-underline-offset:.22em; }
 .cv-start { display: grid; gap: 6px; padding: 0; border: 0; border-radius: var(--cv-r-m); background: none; font: inherit; font-size: .84rem; color: #fff; text-align: center; cursor: pointer; }
 .cv-start b { font-weight: 700; }
 .cv-start-view { display: block; border-radius: var(--cv-r-s); overflow: hidden; outline: 3px solid transparent; transition: transform .12s ease, outline-color .12s ease; }

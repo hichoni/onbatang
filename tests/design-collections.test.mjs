@@ -3,13 +3,30 @@ import assert from 'node:assert/strict';
 import {COLLECTIONS,COLLECTION_LAYOUTS,createCollectionSlides} from '../app/design-collections.js';
 import {configure,layoutItems,cleanDesign,SHAPES} from '../src/model.js';
 import {cleanRecord,newRecord} from '../app/designs.js';
+import {matchItems} from '../src/motion.js';
 
 const aspects=[16/9,4/3,1,4/5,9/16,2.4];
 const em=s=>[...s].reduce((sum,c)=>sum+(/\s/.test(c)?.34:/[A-Za-z0-9.,:;/+—-]/.test(c)?.62:1),0);
-test('four original design collections contain five coordinated editable page roles each',()=>{
- assert.equal(COLLECTIONS.length,4);assert.equal(COLLECTION_LAYOUTS.length,20);
- assert.equal(new Set(COLLECTION_LAYOUTS.map(l=>l.id)).size,20);
+test('design collections contain five coordinated editable page roles each',()=>{
+ assert.equal(COLLECTIONS.length,10);assert.equal(COLLECTION_LAYOUTS.length,50);
+ assert.equal(new Set(COLLECTION_LAYOUTS.map(l=>l.id)).size,COLLECTION_LAYOUTS.length);
  for(const collection of COLLECTIONS){const layouts=COLLECTION_LAYOUTS.filter(l=>l.collection===collection.id);assert.equal(layouts.length,5);assert.equal(layouts.filter(l=>l.cover).length,1);assert.ok(layouts.every(l=>l.ratio==='16:9'&&l.collectionName===collection.name));}
+});
+test('animated sets keep their own landmarks and lesson cues when saved and reopened',()=>{
+ for(const set of COLLECTIONS.filter(s=>s.beats)){
+   const pages=cleanRecord({...newRecord('16:9'),slides:createCollectionSlides(set.id)}).slides;
+   for(const [i,page] of pages.entries()){
+     assert.equal(page.notes,set.beats[i][2]);
+     assert.equal(page.items.find(it=>it.effect)?.effect?.id,set.effect);
+     assert.equal(page.items.find(it=>it.effect).effect.when,i===3?'open':'press');
+     if(!i)continue;
+     const prev=pages[i-1].items,pairs=matchItems(prev,page.items);
+     assert.equal(page.tr,'move');assert.ok(pairs.some(([a,b])=>{
+       const from=prev[a],to=page.items[b];
+       return to.origin?.elementId&&['x','y','w','h','rot','color'].some(key=>from[key]!==to[key]);
+     }),set.id+' beat '+i+' has real visual continuity');
+   }
+ }
 });
 test('all page roles retain text, valid shapes and readable geometry at original and preset ratios',()=>{
  const shapes=new Set(SHAPES.map(s=>s.id));

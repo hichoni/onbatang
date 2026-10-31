@@ -485,7 +485,9 @@ function render() {
   // 주제 테마는 표지만 보여 준다(내용 장은 꾸미는 화면의 템플릿 칸에서 넣는다). 이름은 테마의 이름.
   const starts = startTab === 'theme'
     ? layoutList().filter((l) => l.cover && !l.occasion && !l.collection).map((l) => [l, l.group])
-    : startTab === 'collection' ? layoutList().filter(l => l.collection && l.cover).map(l => [l, `${l.collectionName} · 5장`])
+    : startTab === 'collection' ? layoutList().filter(l => l.collection && l.cover)
+      .sort((a,b) => Number(b.animated) - Number(a.animated))
+      .map(l => [l, `${l.collectionName} · ${l.animated ? '모션 ' : ''}5장`])
     : startTab === 'occasion' ? layoutList().filter(l => l.occasion).map(l => [l, l.name])
     : layoutList().filter((l) => l.group === BASIC_GROUP).map((l) => [l, l.name]);
   const newBtn = (cls) => el('button', { class: `btn ${cls}`, type: 'button', disabled: loading || full, onClick: () => startNew() }, ic('plus'), el('span', { text: '새 그림 만들기' }));
@@ -536,7 +538,9 @@ function render() {
           },
         }, name))),
           el('div', { class: 'cv-start-arrows', role: 'group', 'aria-label': '틀 좌우 이동' }, previous, next))),
-      track);
+      track, startTab === 'collection' ? el('a', {class:'cv-collection-preview',target:'_blank',rel:'noopener',
+        href:new URL('./effects.html#motion-stories', import.meta.url).href,
+        text:'세트를 고르기 전에 움직임 미리 보기 ↗',title:'새 창에서 디자인 세트 미리 보기'}) : null);
 
   // ② 내 그림: 불러온다 → 없으면 없다고 알리고 새로 만들게 한다. 그림은 이 기기에만 저장된다.
   // 한 PPT 를 나눠 담은 파트들은 한 칸으로 묶어 보여 준다(homeEntries). 거르기 · 찾기 · 늘어놓기는 목록 위 막대에서.
