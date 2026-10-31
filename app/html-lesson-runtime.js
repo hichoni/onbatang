@@ -7,6 +7,7 @@ import { mountGaiApp } from './gai-app.js';
 import { mountQuiz } from './quiz.js';
 import { el } from '../src/dom.js';
 import { createShowTools } from './show-tools.js';
+import { cleanEffectTargets, mountOfflineEffects } from '../src/effect-player.js';
 import {cleanLessonTarget,cleanLessonBinding,returnedResultsFromLesson} from './lesson-results.js';
 
 const png = value => typeof value === 'string' && /^data:image\/png;base64,[A-Za-z\d+/=]+$/.test(value) && value.length <= 4_000_000;
@@ -19,6 +20,11 @@ export function cleanHtmlLesson(raw) {
     seen.add(page.id); bytes += page.image.length;
     if (bytes > 200_000_000) throw new Error('수업 파일이 너무 커요. 그림 크기를 줄여 다시 내려받아 주세요.');
     const out = { id: page.id, image: page.image, aspect: page.aspect, ...slideNotes(page), ...slideTopic(page), ...slideDur(page) };
+    const effects = cleanEffectTargets(page.effects);
+    if (effects.length) {
+      out.effects = effects;
+      bytes += new TextEncoder().encode(JSON.stringify(effects)).length;
+    }
     if (out.notes) bytes += out.notes.length * 3;
     if (page.activity !== undefined) { out.activity = cleanActivity(page.activity); bytes += new TextEncoder().encode(JSON.stringify(out.activity)).length; }
     if(page.binding!==undefined){out.binding=cleanLessonBinding(page.binding);if(out.activity&&(out.binding.pageId!==out.id||out.binding.activityId!==out.activity.id||out.binding.kind!==out.activity.kind))throw Error('활동의 원본 연결 정보가 달라요.');}
@@ -37,6 +43,7 @@ export function mountHtmlLesson(raw, host = document.getElementById('onbatang-le
   const seed = cleanHtmlLesson(raw), storageKey = `onbatang-html-lesson-v1:${seed.id}`;
   let pages = seed.pages, current = 0, app = null, executing = false, persistent = true, storageNotice = '', update = seed.updatedAt;
   const savedResults = new Map();
+  let stopEffects = null;
   const originalIds = seed.pages.filter(p => !p.result).map(p => p.id).join(',');
   try {
     const stored = JSON.parse(localStorage.getItem(storageKey) || 'null');
@@ -145,6 +152,7 @@ export function mountHtmlLesson(raw, host = document.getElementById('onbatang-le
   // 앱 안을 누른 뒤에도 프레젠터의 넘기기 단추와 Esc 는 수업이 듣는다.
   const appKey = key => { if (show) show.tools.handle({ key, code: key }); else if (key === 'PageDown') navigate(1); else if (key === 'PageUp') navigate(-1); };
   function render() {
+    stopEffects?.(); stopEffects = null;
     previous.disabled = current === 0; next.disabled = current === pages.length - 1;
     const page = pages[current]; count.textContent = `${current + 1} / ${pages.length}쪽${page.activity ? ' · 활동' : page.result ? ' · 결과' : ''}`;
     showCount.textContent = `${current + 1} / ${pages.length}`;
@@ -153,9 +161,12 @@ export function mountHtmlLesson(raw, host = document.getElementById('onbatang-le
     show?.tools.changed();
     if (executing) return;
     const scene = el('section', { class: 'lesson-scene' });
-    scene.append(el('img', { class: 'lesson-slide', src: page.image, alt: `${current + 1}쪽${page.activity ? ` ${page.activity.title}` : page.result ? ' 활동 결과' : ''}` }));
+    const picture = el('img', { class: 'lesson-slide', src: page.image, alt: `${current + 1}쪽${page.activity ? ` ${page.activity.title}` : page.result ? ' 활동 결과' : ''}` });
+    const frame = page.effects?.length ? el('div', { class:'lesson-effects-frame' }, picture) : null;
+    scene.append(frame || picture);
     if (page.activity) scene.append(el('button', { type: 'button', class: 'lesson-start', text: page.activity.kind === 'quiz' ? '퀴즈 풀기' : '활동 시작', onclick: () => {
       executing = true; returnToCover.hidden = false;
+      stopEffects?.(); stopEffects = null;
       const target = el('section', { class: 'lesson-scene lesson-activity' }); stage.replaceChildren(target);
       // 퀴즈: 혼자 풀어 보는 판(시작 → 정답 공개 → 다시 풀기). 점수판 · 학생 휴대폰은 발표에서만 쓴다.
       if(page.activity.kind==='quiz'){app=mountQuiz(target,{activity:page.activity,aspect:page.aspect});return;}
@@ -190,6 +201,7 @@ export function mountHtmlLesson(raw, host = document.getElementById('onbatang-le
       target.querySelector('button')?.focus({ preventScroll: true });
     } }));
     stage.replaceChildren(scene);
+    if (frame) stopEffects = mountOfflineEffects(frame,page.effects);
   }
   const keys = event => {
     if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
@@ -208,7 +220,7 @@ export function mountHtmlLesson(raw, host = document.getElementById('onbatang-le
     else if (event.key === 'End') { event.preventDefault(); goTo(pages.length - 1); }
   };
   document.addEventListener('keydown', keys); render();
-  return { getPages: () => pages, startShow, endShow, destroy() { endShow(); app?.destroy(); document.removeEventListener('keydown', keys); document.removeEventListener('fullscreenchange', onFull); host.replaceChildren(); } };
+  return { getPages: () => pages, startShow, endShow, destroy() { endShow(); stopEffects?.(); app?.destroy(); document.removeEventListener('keydown', keys); document.removeEventListener('fullscreenchange', onFull); host.replaceChildren(); } };
 }
 
 async function gaiResultImage(activity,result,aspect){

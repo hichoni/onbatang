@@ -96,7 +96,7 @@ const sceneEdgeFor = (W, H) => Math.min(1920, Math.max(W, H));
  * 디자인을 canvas 에 그린다. { canvas, width, height, missingFonts(받지 못해 기본 글꼴로 그린 글꼴의 이름들) }
  * - width: 그림의 너비(px). 높이는 비율(aspect: 가로 ÷ 세로. 안 주면 configure 의 값)에 맞춘다.
  */
-export async function designToCanvas(design, { width = 1080, aspect = settings().aspect } = {}) {
+export async function designToCanvas(design, { width = 1080, aspect = settings().aspect, withEffects = false } = {}) {
   const d = cleanDesign(design);
   const ratio = Number.isFinite(aspect) && aspect > 0 ? aspect : 1;
   const W = Math.max(16, Math.min(4096, Math.round(width)));
@@ -110,9 +110,28 @@ export async function designToCanvas(design, { width = 1080, aspect = settings()
   card.style.width = `${W}px`;
   card.style.height = `${H}px`;
   await scenesReady(card);
+  const targets = withEffects && d.items.some(item => item.effect)
+    ? [...card.children].filter(node => node.classList.contains('fi')) : null;
   const [fonts] = await Promise.all([fontRules(d), inlineImages(card)]);
   const canvas = await paintNode(card, W, H, fonts.css);
-  return { canvas, width: W, height: H, missingFonts: fonts.missing };
+  const effects = targets ? measureEffects(card,targets,d.items,W,H) : [];
+  return { canvas, width: W, height: H, missingFonts: fonts.missing, ...(effects.length ? { effects } : {}) };
+}
+
+// Measure intrinsic text/art sizes at the same export dimensions as the PNG.
+// Rotation is saved separately so even narrow rotated pieces have an exact hit area.
+function measureEffects(card,nodes,items,width,height) {
+  const box = el('div', { 'aria-hidden':'true' });
+  box.style.cssText = 'position:fixed;left:-20000px;top:0;visibility:hidden;pointer-events:none';
+  box.append(card);
+  document.body.append(box);
+  try {
+    return items.flatMap((item,i) => {
+      if (!item.effect || !nodes[i]?.offsetWidth || !nodes[i].offsetHeight) return [];
+      return [{ effect:item.effect, x:item.x, y:item.y, w:nodes[i].offsetWidth / width * 100,
+        h:nodes[i].offsetHeight / height * 100, rot:item.rot, label:(item.alt || item.text || '').slice(0,60) }];
+    });
+  } finally { box.remove(); }
 }
 
 /**
@@ -150,12 +169,12 @@ export async function designSheet(design, cells, { width, height, sheetWidth, sh
  * - width · aspect: designToCanvas 와 같다.
  * - type: 'image/png'(기본) 또는 'image/jpeg'. quality: JPG 의 화질(0~1).
  */
-export async function designToBlob(design, { width = 1080, aspect, type = 'image/png', quality = 0.9 } = {}) {
-  const made = await designToCanvas(design, { width, aspect });
+export async function designToBlob(design, { width = 1080, aspect, type = 'image/png', quality = 0.9, withEffects = false } = {}) {
+  const made = await designToCanvas(design, { width, aspect, withEffects });
   const mime = type === 'image/jpeg' ? 'image/jpeg' : 'image/png';
   const blob = await new Promise((resolve, reject) => {
     try { made.canvas.toBlob(resolve, mime, quality); } catch (ex) { reject(ex); }
   });
   if (!blob) throw new Error('그림 파일로 만들지 못했어요');
-  return { blob, type: mime, ext: mime === 'image/jpeg' ? 'jpg' : 'png', width: made.width, height: made.height, missingFonts: made.missingFonts };
+  return { blob, type: mime, ext: mime === 'image/jpeg' ? 'jpg' : 'png', width: made.width, height: made.height, missingFonts: made.missingFonts, ...(made.effects ? { effects:made.effects } : {}) };
 }

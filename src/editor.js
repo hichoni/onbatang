@@ -32,6 +32,8 @@ import { fontReady } from './fonts.js';
 import { TOLERANCE, colorAlpha, prepareAlpha, finishCutout, resizeMask, plainBorder } from './cutout.js';
 import { anchorResizedItem, resizeItemFromHandle } from './resize.js';
 import {cleanPalettes,updatePalettes} from './palettes.js';
+import { effectPicker } from './effect-picker.js';
+import { effectable } from './effect-assets.js';
 import {FULL_CROP, cleanCrop, coverCrop, cropImage, panCrop} from './crop.js';
 
 const HISTORY = 40;
@@ -2043,6 +2045,7 @@ export function createEditor({
 
   // ---------- 끌기·크기·돌리기 ----------
   stage.addEventListener('pointerdown', (e) => {
+    if (preview && e.target.closest?.('[data-effect-trigger]')) return;
     if (e.button > 0 || !card || drag) return;      // 끄는 중에 다른 손가락이 닿으면 모른 척한다
     if(cropJob){e.preventDefault();applyCrop();return;}
     // 잇는 중: 조각을 누르면 시작 → 닿을 조각 차례로 고르고, 빈 곳을 누르면 그만둔다.
@@ -3723,7 +3726,7 @@ export function createEditor({
     stage.classList.add('fe-playing');
     const wait = start + planMotion(design).ms + 500;
     for (let n = 0; n < ctl.left(); n++) timers.push(setTimeout(() => { if (preview === mine) ctl.next(); }, wait + n * 800));
-    const linger = planMotion(design).loops.length ? 3500 : 0;      // 계속 움직이는 조각이 있으면 조금 더 보여 준다
+    const linger = design.items.some(item => item.effect) ? 6000 : planMotion(design).loops.length ? 3500 : 0;
     timers.push(setTimeout(() => { if (preview === mine) stopPreview(); }, wait + ctl.left() * 800 + 1200 + linger));
     keepKeys();
   }
@@ -3835,6 +3838,11 @@ export function createEditor({
       const waits = items().filter((k) => k.aw || k.em || k.ex || k.lkem).length;
       // 고른 요소가 있으면 맨 위에 그 요소의 움직임이 나온다. 정하지 않은 요소는 장의 조합 효과를 따른다(조합 효과가 없으면 처음부터 보인다).
       const it = cur();
+      const graphics = motionPart('effectPicker', JSON.stringify([sel,it?.id,it?.t,it?.lock,it?.effect]), () => [
+        it && !it.lock && effectable(it)
+          ? effectPicker(it, effect => { stopPreview(); change({ effect }); })
+          : el('p', { class:'fe-note', text:'글·그림·도형을 하나 고르면 HTML 그래픽 효과를 붙일 수 있어요.' }),
+      ]);
       const mine = it && !it.lock ? motionPart('mine', [sel, itemLabel(it), it.an || '', !!it.aw, it.em || '', it.lp || '', it.ex || '', it.sp || '', it.dl || 0, here.pa || ''].join('|'), () => {
         const follow = { id: '', name: here.pa ? '장의 효과대로' : '없음' };
         const choices = [follow, ...(here.pa ? [{ id: STILL, name: '가만히' }] : []), ...ENTERS];
@@ -3919,7 +3927,7 @@ export function createEditor({
       return [
         typeof motionSets?.open === 'function' ? el('button', { class: 'fe-outline-start', type: 'button', dataset: { motionSets: '' }, onClick: () => motionSets.open() },
           icon('motion'), el('span', {}, el('b', { text: '이야기가 이어지는 움직임 묶음' }), el('small', { text: '전체 지도 → 주제 확대 → 정리 · 숨 쉬는 요소' }))) : null,
-        ...mine, ...motionTimeline(), ...combos, ...turns,
+        ...graphics, ...mine, ...motionTimeline(), ...combos, ...turns,
         el('div', { class: 'fe-row fe-motion-go' },
           el('button', { class: 'fe-btn primary', type: 'button', onClick: () => previewPage() }, icon('play'), '이 장 미리 보기'), all),
         hint || waits ? el('p', { class: 'fe-note', text: `${hint}${waits ? `이 장에는 누를 때 나오거나 강조하는 요소가 ${waits}개 있어요.` : ''}`.trim() }) : null,

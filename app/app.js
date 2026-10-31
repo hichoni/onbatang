@@ -2325,6 +2325,7 @@ async function present(O) {
     if (!['Escape', 'PageDown', 'PageUp'].includes(e.key) && e.target?.closest?.('input, textarea, select, [contenteditable=""], [contenteditable="true"]')) return;
     // 아래 막대의 단추에 초점이 있을 때 스페이스 · 엔터는 그 단추를 누르는 글쇠다(다음 장으로 넘기지 않는다).
     if ((e.key === ' ' || e.key === 'Enter') && e.target?.closest?.('.cv-show-key')) { e.stopPropagation(); return; }
+    if ((e.key === ' ' || e.key === 'Enter') && e.target?.closest?.('[data-effect-trigger]')) return;
     // 웹사이트를 둘러보는 중의 Esc 는 발표를 끝내지 않고 보기로 돌아간다.
     if (e.key === 'Escape' && web?.mode === 'use') { e.preventDefault(); e.stopPropagation(); webMode('view'); return; }
     // 유튜브를 틀었으면 스페이스 바는 멈추기 · 다시 틀기다(다음 장은 → · PageDown · 누르기).
@@ -4142,10 +4143,11 @@ async function makeHtmlLesson(O,{notes=false}={}){
       status.textContent=`${index+1} / ${entries.length}쪽을 수업에 담고 있어요…`;
       const aspect=aspectOf(value.record);setupApp(value.record);
       const {width}=exportSize('medium',aspect);
-      const {blob}=await designToBlob(value.page,{width,aspect,type:'image/png'});
+      const {blob,effects}=await designToBlob(value.page,{width,aspect,type:'image/png',withEffects:true});
       const image=await new Promise((yes,no)=>{const reader=new FileReader();reader.onload=()=>yes(reader.result);reader.onerror=no;reader.readAsDataURL(blob);});
       const activity=value.page.activity;
       pages.push({id:value.page.id,image,aspect,...(notes?slideNotes(value.page):{}),...(topics.get(value.page.id)?{topic:topics.get(value.page.id)}:{}),...slideDur(value.page),...(value.page.source?.kind==='result'?{result:true}:{}),...(activity?{activity,binding:{documentId:value.record.id,pageId:value.page.id,activityId:activity.id,kind:activity.kind,definitionHash:await activityDefinitionHash(activity)}}:{})});
+      if (effects) pages[pages.length-1].effects = effects;
     }
     if(abort.signal.aborted)return;
     const html=createHtmlLesson({title:O.materialDeck?.title||O.record.name,pages,target:lessonTarget(O)});

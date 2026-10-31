@@ -11,6 +11,7 @@
 // 글자 크기(size)도 카드 너비를 100 으로 본 값이라, 카드가 커지거나 작아져도 모양이 그대로다.
 //
 // 프로젝트마다 다른 것(글꼴 목록, 어떤 그림 주소를 믿을지, 카드 비율, 개수 한도)은 configure() 로 한 번 정해 둔다.
+import { cleanEffect, effectable } from './effect-assets.js';
 import { SHAPE_ASSETS, SHAPE_GROUPS, shapeAsset } from './shapes.js';
 import { isArtId, artColorable, artAspect, artPack, artName } from './art.js';
 import { isYouTubeId, ytStart, ytTime, YT_CC } from './youtube.js';
@@ -270,6 +271,8 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
   };
   // 이름표(id)는 있을 때만 남긴다: 여럿이 함께 꾸미는 프로젝트가 요소를 가려낼 때 쓴다(틴커랩 미니캔의 "함께 만드는 그림"). 혼자 쓰는 그림에는 없다.
   if (typeof it.id === 'string' && /^[a-z][a-z0-9]{5,31}$/.test(it.id)) base.id = it.id;
+  const effect = effectable(it) && cleanEffect(it.effect);
+  if (effect) base.effect = effect;
   // 그룹(g): 같은 표를 단 요소들은 한 번에 고르고 함께 옮긴다. 그룹으로 묶었을 때만 적는다.
   if (typeof it.g === 'string' && GROUP_ID.test(it.g)) base.g = it.g;
   // 움직임(발표할 때)은 정했을 때만 적는다. an: 나타나는 효과(또는 'none' = 가만히) · aw: 누를 때 나타난다(motion.js).

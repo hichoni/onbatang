@@ -9,6 +9,7 @@
 // 그림은 이 기기(브라우저의 IndexedDB, store.js)에만 저장된다. 서버로는 아무것도 보내지 않는다.
 
 /** 고를 수 있는 화면 비율(aspect 는 가로 ÷ 세로). */
+import { cleanEffect, effectable } from '../src/effect-assets.js';
 import { SCHEMA_VERSION, DOCUMENT_LIMITS, DocumentError, fail, isId, newId, legacyId, cleanSize, metadata, cleanAssets, validatePageInput, validateReferences, slideNotes, slideHidden, slideTopic, slideDur, slideVoice } from '../src/document.js';
 import { relink } from '../src/links.js';
 import { cleanActivity } from '../src/activity.js';
@@ -156,6 +157,8 @@ const cleanSlide = (d, index, documentId) => {
   return { bg: d.bg, ...slideExtra({ ...d, id: pageId }), items: items.map((item, i) => {
     const out = {};
     for (const k of ITEM_FIELDS) if (['string', 'number', 'boolean'].includes(typeof item[k])) out[k] = item[k];
+    const effect = effectable(item) && cleanEffect(item.effect);
+    if (effect) out.effect = effect;
     const crop=item.t==='image'?cleanCrop(item.crop):null;
     const runs=item.t==='text'&&Array.isArray(item.runs)&&item.runs.length?cleanRuns(String(item.text??''),item.runs,item):[];
     // 차트: 표(항목 · 계열)와 꾸밈(종류 · 제목 · 단위 · 색 묶음 · 값 보이기)은 chart.js 가 정리한다.

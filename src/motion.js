@@ -18,6 +18,7 @@
 // 키프레임(화면용)과 모습(영상용)이 같은 표(ENTER_DEFS · TRANSITION_DEFS)에서 나오므로 둘이 어긋나지 않는다.
 
 import { LOOK_EM, LOOK_EM_MS, itemLook, slideLook } from './live.js';
+import { mountEffectPlayer } from './effect-player.js';
 const SOFT = 'cubic-bezier(.2, .8, .2, 1)';
 const SNAP = 'cubic-bezier(.16, 1, .3, 1)';      // 확 다가와 부드럽게 서는 빠르기(모션그래픽의 '스냅')
 
@@ -903,6 +904,7 @@ export function playIdle(node, item, id, { delay = 0, phase = 0, scale = 1 } = {
 export function playDesign(card, design, { delay = 0, still = false } = {}) {
   const nodes = card ? [...card.children].filter((n) => n.classList.contains('fi')) : [];
   const items = Array.isArray(design?.items) ? design.items : [];
+  const stopEffects = mountEffectPlayer(card, items.flatMap((item,i) => item.effect ? [{ node:nodes[i], effect:item.effect }] : []), { delay });
   const plan = planMotion(design);
   if (still) { plan.auto = []; plan.clicks = []; for (const l of plan.loops) l.after = 0; }
   const running = [];
@@ -947,6 +949,7 @@ export function playDesign(card, design, { delay = 0, still = false } = {}) {
   const finish = () => { for (const a of running.splice(0)) { try { a.finish(); } catch { /* 이미 끝났다 */ } } };
   const held = new Map();
   const stop = ({ freeze = false } = {}) => {
+    stopEffects();
     stopped = true;
     if (freeze) {
       // Hold the visible outgoing pose until its card is removed. Cancelling

@@ -5,6 +5,8 @@
 //   <link rel="stylesheet" href="./onbatang/editor.css">
 
 export { createEditor } from './editor.js';
+export { EFFECT_ASSETS, cleanEffect, effectArt } from './effect-assets.js';
+export { mountEffectPlayer } from './effect-player.js';
 export { designView, itemView, shapeThumb, youTubePlayers } from './render.js';
 export { isYouTubeId, parseYouTube, ytStart, ytThumb, ytWatch, ytEmbed, ytTime, YT_MAX_START, YT_ORIGIN } from './youtube.js';
 export { SHAPE_ASSETS, shapeAsset, shapeSvg } from './shapes.js';

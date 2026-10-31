@@ -1026,3 +1026,16 @@ td .fe-chart-cell[inputmode] { text-align: right; font-variant-numeric: tabular-
 .fe-math-add b { display: block; font-size: 1rem; }
 .fe-math-add small { color: var(--fe-muted); font-size: .8rem; }
 .fe-math-add-art { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; background: var(--fe-soft); font: italic 700 1.05rem/1 "Times New Roman", serif; color: var(--fe-primary-dark); }
+
+.fe-fx-picker { min-width: 0; min-height: max-content; margin: .6rem 0; border: 1px solid var(--fe-line,#d2ded8); border-radius: 14px; }
+.fe-tabbody:has(> .fe-fx-picker) { grid-auto-rows: max-content; }
+.fe-fx-picker summary { padding: 14px; font-weight: 750; cursor: pointer; }
+.fe-fx-controls { display: grid; gap: 10px; padding: 0 12px 12px; }
+.fe-fx-controls :is(input,select) { min-width: 0; width: 100%; min-height: 44px; border: 1px solid #c2d1c9; border-radius: 8px; padding: 6px 9px; font: inherit; background: white; color: #243b35; }
+.fe-fx-sample,.fe-fx-icon { display: grid; place-items: center; overflow: hidden; background: radial-gradient(ellipse at 65% 70%,#29384d,#121b2c 80%); }
+.fe-fx-sample { height: 88px; border-radius: 9px; }
+.fe-fx-choices { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 6px; }
+.fe-fx-choice { display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 4px; border: 1px solid #c6d3cc; border-radius: 9px; background: white; color: #233b35; font: 650 .82rem/1.2 system-ui,sans-serif; text-align: start; cursor: pointer; }
+.fe-fx-choice[aria-pressed=true] { border-color: #246b5e; box-shadow: inset 0 0 0 1px #246b5e; background: #edf6f1; }
+.fe-fx-icon { flex: none; width: 32px; height: 32px; border-radius: 6px; }
+[data-effect-trigger]:focus-visible { outline: 3px dashed #249486; outline-offset: 3px; }

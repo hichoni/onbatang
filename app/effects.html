@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>온바탕 · HTML 모션 에셋</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#101823;color:#f1f5ee;font-family:system-ui,"Malgun Gothic",sans-serif}
+  main{max-width:920px;margin:auto;padding:clamp(24px,5vw,64px) 20px}
+  header{border-top:2px solid #9de0cc;padding-top:20px}
+  small{font-size:.77rem;letter-spacing:.1em;font-weight:750;color:#9de0cc}
+  h1{font-size:clamp(2.1rem,6vw,3.7rem);line-height:1.12;letter-spacing:-.06em;margin:16px 0}
+  p{line-height:1.65;color:#c6d2d6;margin:0}
+  section{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:16px;margin:28px 0}
+  button{display:grid;grid-template-columns:1fr auto;gap:4px 8px;padding:0 16px 16px;border:1px solid #354756;border-radius:16px;overflow:hidden;background:#1b2835;color:inherit;text-align:start;cursor:pointer;font:inherit}
+  button:hover,button:focus-visible{outline:2px solid #93dcc9;outline-offset:2px}
+  .art{display:block;grid-column:1/-1;margin:0 -16px 12px;height:134px;background:radial-gradient(ellipse at 60% 90%,#26354d,#101a29 90%)}
+  b{font-size:1.15rem} em{grid-row:2;grid-column:2;font-style:normal;color:#9de0cc;font-size:.78rem;align-self:center}
+  .hint{grid-column:1/-1;color:#c4d3d9;font-size:.88rem}
+  footer{border-top:1px solid #384854;padding-top:16px;color:#b7c9c8;font-size:.85rem;line-height:1.6}
+</style>
+<main>
+  <header><small>온바탕 / 움직임</small><h1>HTML 모션 에셋</h1><p>카드를 눌러 한 번 재생해 보세요. 수업에서는 제목, 그림, 도형에 같은 효과를 붙일 수 있어요.</p></header>
+  <section aria-label="모션 에셋 네 가지"></section>
+  <footer>편집기에서 조각 선택 → 움직임 → HTML 그래픽 효과. 재생 시점을 정하고, 필요하면 함께 보여 줄 설명을 적으세요.</footer>
+</main>
+<script type="module">
+  import { EFFECT_ASSETS, previewEffect } from '../src/effect-assets.js';
+  for (const asset of EFFECT_ASSETS) {
+    const button=document.createElement('button');
+    button.type='button';
+    const art=document.createElement('span'), name=document.createElement('b');
+    const hint=document.createElement('span'), play=document.createElement('em');
+    art.className='art'; previewEffect(art,asset.id,false);
+    name.textContent=asset.name; hint.className='hint'; hint.textContent=asset.hint; play.textContent='▶ 재생';
+    button.append(art,name,play,hint);
+    button.onclick=() => previewEffect(art,asset.id);
+    document.querySelector('section').append(button);
+  }
+</script>
+</html>
