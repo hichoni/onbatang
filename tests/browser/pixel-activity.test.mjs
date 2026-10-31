@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
-import {readFile,mkdir,mkdtemp,writeFile} from 'node:fs/promises';
+import {readFile,mkdir,mkdtemp,writeFile,unlink,rmdir} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
 import {createHash} from 'node:crypto';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {resolve,extname,sep} from 'node:path';
@@ -19,13 +20,14 @@ const xml=(files,path)=>new TextDecoder().decode(files[path]);
 const sourcePath=process.env.MINICAN_PIXEL_PPTX||resolve(root,'tools/fixtures/pptx/self-authored-21-pages.pptx');
 const pageCount=Number(process.env.MINICAN_PIXEL_PAGE_COUNT||21);
 
-async function setup(t,{viewport={width:1440,height:1000},touch=false}={}){
+async function setup(t,{viewport={width:1440,height:1000},touch=false,hostRoot}={}){
+ const servedRoot=hostRoot?resolve(hostRoot):root;
  const errors=[],external=[],workers=[],requests=[];
  const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript','.css':'text/css','.json':'application/json','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png','.jpg':'image/jpeg'};
  const server=createServer(async(req,res)=>{try{
   if(new URL(req.url,'http://localhost').pathname==='/authoring-test.html'){res.setHeader('Content-Type',mime['.html']);return res.end('<!doctype html><html lang="ko"><meta name="viewport" content="width=device-width,initial-scale=1"><body class="mc-app"><main id="app"></main><script type="module">import {startOnbatang} from "/app/standalone.js";await startOnbatang({activityAuthoring:true});</script></body></html>');}
-  const pathname=new URL(req.url,'http://localhost').pathname,file=resolve(root,'.'+decodeURIComponent(pathname));
-  if(!file.startsWith(root+sep)){res.writeHead(403);return res.end();}
+  const pathname=new URL(req.url,'http://localhost').pathname,file=resolve(servedRoot,'.'+decodeURIComponent(pathname));
+  if(!file.startsWith(servedRoot+sep)){res.writeHead(403);return res.end();}
   res.setHeader('Content-Type',mime[extname(file)]||'application/octet-stream');res.end(await readFile(file));
  }catch{res.writeHead(404);res.end();}});
  await new Promise(done=>server.listen(0,'127.0.0.1',done));
@@ -38,11 +40,11 @@ async function setup(t,{viewport={width:1440,height:1000},touch=false}={}){
  await context.route('**/*',route=>{const url=new URL(route.request().url());if(['data:','blob:','about:'].includes(url.protocol))return route.continue();if(url.origin!==origin){external.push(url.origin);return route.abort('blockedbyclient');}requests.push(url.pathname);return route.continue();});
  const page=await context.newPage();page.setDefaultTimeout(45000);
  page.on('pageerror',error=>errors.push(error.message));page.on('worker',worker=>workers.push(worker.url()));
- return {page,entry:origin+'/authoring-test.html',async verifyIsolation(){
+ return {page,entry:origin+(hostRoot?'/minican-app.html':'/authoring-test.html'),async verifyIsolation(){
   assert.deepEqual(errors,[],'no uncaught editor, activity or sandbox-preview errors');
   assert.deepEqual(external,[],'pixel activities and local exports make no off-origin requests');
-  assert.ok(workers.some(url=>url.endsWith('/app/pptx-import/vendor/pptx-worker.js')),'the real conversion worker ran');
-  assert.ok(requests.includes('/app/pptx-import/vendor/preview-frame.html'),'the real PPT preview frame loaded');
+  assert.ok(workers.some(url=>url.includes('pptx')&&url.includes('worker')),'the real conversion worker ran');
+  assert.ok(requests.some(url=>url.includes('preview-frame.html')),'the real PPT preview frame loaded');
  }};
 }
 
@@ -56,6 +58,93 @@ async function importDeck(page,entry){
  await waitPages(page,pageCount);
 }
 const waitPages=(page,count)=>page.waitForFunction(n=>document.querySelectorAll('[data-material-page]').length===n,count);
+
+test('photo study samples a chosen PPT pixel, pauses, draws and reopens the result in the editor and offline HTML',options,async t=>{
+ const originalHash=sha256(await readFile(sourcePath)),hostRoot=process.env.MINICAN_HOST_ROOT;
+ const {page,entry,verifyIsolation}=await setup(t,{hostRoot});
+ await importDeck(page,hostRoot?entry:new URL('/app/index.html',entry).href);
+ const order=()=>page.locator('[data-material-page]').evaluateAll(nodes=>nodes.map(n=>n.dataset.pageId));
+ const original=await order(),at=Math.min(2,pageCount-2);
+ await page.locator('[data-material-page="'+at+'"]').click();
+ await page.locator('[data-material-page="'+at+'"][aria-pressed=true]').waitFor();
+ await page.locator('.fe-tab[data-tab=motion]').click();await page.locator('[data-photo-study]').click();
+ const picker=page.locator('.ps-picker'),bounds=await picker.locator('canvas').boundingBox();
+ assert.ok(bounds);await picker.click({position:{x:Math.floor(bounds.width*.69),y:Math.floor(bounds.height*.41)}});
+ await picker.press('ArrowRight');
+ const point=await picker.evaluate(button=>{
+   const canvas=button.querySelector('canvas'),marker=button.querySelector('.ps-marker');
+   const x=Math.floor(parseFloat(marker.style.left)*canvas.width/100),y=Math.floor(parseFloat(marker.style.top)*canvas.height/100);
+   const rgb=[...canvas.getContext('2d').getImageData(x,y,1,1).data].slice(0,3);
+   return {x,y,rgb,color:'#'+rgb.map(v=>v.toString(16).padStart(2,'0')).join('')};
+ });
+ await page.getByRole('button',{name:'다음에 수업 장 넣기'}).click();
+ await waitPages(page,pageCount+1).catch(async error=>{throw Error(error.message+' '+await page.locator('.ps-setup .pixel-status').allTextContents());});
+ const inserted=await order();assert.deepEqual(inserted.filter(id=>original.includes(id)),original);
+ assert.ok(!original.includes(inserted[at+1]));
+ await page.locator('.cv-show-btn').click();
+ async function paint(surface,control,{checkTimer=false}={}){
+   const intro=surface.locator('.ps-intro');
+   await intro.locator('[aria-label="선택한 사진과 관찰할 점"]').waitFor();assert.equal(await intro.getAttribute('data-phase'),'0');
+   await control.click();assert.equal(await intro.getAttribute('data-phase'),'1');assert.equal(await intro.locator('.ps-values').isVisible(),false);
+   if(checkTimer){
+     await page.clock.install();
+     const auto=show.getByRole('button',{name:/자동 넘기기/});
+     await auto.click();await page.clock.fastForward(120000);
+     assert.equal(await intro.getAttribute('data-phase'),'1','automatic playback waits for the teacher');
+     await auto.click();
+   }
+   const offset=await intro.locator('.ps-stage svg').evaluate((svg,p)=>{
+     const pixel=new DOMPoint(p.x+.5,p.y+.5).matrixTransform(svg.querySelector('g').getScreenCTM()),b=svg.getBoundingClientRect();
+     return Math.hypot(pixel.x-b.left-b.width/2,pixel.y-b.top-b.height/2);
+   },point);assert.ok(offset<2,'zoom centers the chosen pixel: '+offset);
+   await control.click();assert.deepEqual((await intro.locator('.ps-values b').allTextContents()).map(Number),point.rgb);
+   await control.click();assert.equal(await surface.locator('[data-pixel]').count(),64);
+   assert.ok((await surface.locator('[data-pixel="0"]').getAttribute('aria-label')).includes(point.color));
+ }
+ const show=page.locator('.cv-show');
+ await paint(show,show.getByRole('button',{name:'다음 장',exact:true}),{checkTimer:true});
+ await show.locator('[data-pixel="9"]').click();
+ await show.getByRole('button',{name:'결과를 다음 슬라이드에 저장'}).click();
+ await show.locator('.cv-show-stage').getByText('사진 속으로 들어가기 · 결과',{exact:true}).first().waitFor();
+ await show.getByRole('button',{name:'발표 끝내기 (Esc)'}).click();
+ await waitPages(page,pageCount+2);const saved=await order();
+ await page.locator('.cv-back').click();await page.locator('.cv-home-title').waitFor();await page.reload();
+ await page.locator('.cv-deck .cv-thumb').click();await waitPages(page,pageCount+2);assert.deepEqual(await order(),saved);
+ const visible=await page.locator('[data-material-page]:not(.skip)').evaluateAll(nodes=>nodes.map(n=>n.dataset.pageId));
+ const activityAt=visible.indexOf(inserted[at+1]);
+ assert.deepEqual(saved.filter(id=>original.includes(id)),original);assert.equal(saved[at+1],inserted[at+1]);assert.ok(!inserted.includes(saved[at+2]));
+ if(!hostRoot){
+   const lib=await readLibrary(page),activity=lib.graphs[0].pages[at+1].page.activity;
+   assert.equal(activity.photoStudy.x,point.x);assert.equal(activity.photoStudy.y,point.y);
+   assert.equal(activity.cells[9],0);assert.equal(lib.sources[0].sha256,originalHash);
+   assert.deepEqual(lib.originals[0].pages.map(v=>v.page.id),original);
+ }
+ await page.locator('.cv-down-btn').click();const dialog=page.getByRole('dialog',{name:'내려받기',exact:true});
+ await dialog.locator('[data-type=html]').click();
+ const download=page.waitForEvent('download',{timeout:150000});await dialog.locator('[data-download-save]').click();
+ const temp=await mkdtemp(resolve(tmpdir(),'onbatang-photo-')),file=resolve(temp,'lesson.html'),copy=resolve(temp,'lesson-with-result.html');
+ t.after(async()=>{for(const path of [file,copy])await unlink(path).catch(error=>{if(error.code!=='ENOENT')throw error;});await rmdir(temp);});
+ await (await download).saveAs(file);
+ const offline=await page.context().browser().newContext({offline:true,viewport:{width:390,height:844},reducedMotion:'reduce'});
+ t.after(()=>offline.close());const player=await offline.newPage();
+ await player.goto(pathToFileURL(file).href);
+ const data=await player.evaluate(()=>JSON.parse(document.getElementById('onbatang-lesson-data').textContent).pages.map(p=>({id:p.id,result:p.result,image:p.result?p.image.slice(0,22):'',color:p.activity?.palette[0],cell:p.activity?.cells[9]})));
+ assert.deepEqual(data.map(p=>p.id),visible);assert.equal(data[activityAt].color,point.color);assert.equal(data[activityAt].cell,0);assert.equal(data[activityAt+1].result,true);
+ assert.match(data[activityAt+1].image,/^data:image\/png/);
+ const next=player.getByRole('button',{name:'다음',exact:true});
+ for(let i=0;i<activityAt;i++)await next.click();await paint(player,next);
+ await player.locator('[data-pixel="10"]').click();
+ await player.getByRole('button',{name:'결과를 다음 슬라이드에 저장'}).click();
+ const resultCount=(activityAt+2)+' / '+(visible.length+1)+'쪽 · 결과';
+ assert.equal(await player.locator('.lesson-count').innerText(),resultCount);await player.reload();
+ assert.equal(await player.locator('.lesson-count').innerText(),resultCount);
+ const ready=player.waitForEvent('download');
+ await player.getByRole('button',{name:'현재 수업 내려받기'}).click();await (await ready).saveAs(copy);
+ const fresh=await page.context().browser().newContext({offline:true});t.after(()=>fresh.close());const opened=await fresh.newPage();await opened.goto(pathToFileURL(copy).href);
+ assert.equal(await opened.evaluate(i=>JSON.parse(document.getElementById('onbatang-lesson-data').textContent).pages[i].activity.cells[10],activityAt),0);
+ assert.equal(await opened.locator('.lesson-count').innerText(),'1 / '+(visible.length+1)+'쪽');
+ assert.equal(sha256(await readFile(sourcePath)),originalHash);await verifyIsolation();
+});
 
 async function readLibrary(page){
  return page.evaluate(async()=>{

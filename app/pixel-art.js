@@ -1,5 +1,6 @@
 import { el } from '../src/dom.js';
 import { cleanPixelActivity, newPixelActivity } from '../src/pixel-art.js';
+import { photoStudyIntro } from './photo-study.js';
 
 export function pixelArtImage(raw, cells = raw.cells) {
   const a = cleanPixelActivity({ ...raw, cells });
@@ -16,8 +17,27 @@ export function pixelArtImage(raw, cells = raw.cells) {
   return canvas.toDataURL('image/png');
 }
 
-export function mountPixelArt(root, { activity: raw, onSave, onChange, saveLabel = '결과를 다음 슬라이드에 저장', saveMessage = '결과를 다음 슬라이드에 저장했어요.' } = {}) {
-  const activity = cleanPixelActivity(raw);
+export function mountPixelArt(root, options={}) {
+  const activity=cleanPixelActivity(options.activity);
+  if(!activity.photoStudy)return mountBoard(root,activity,options);
+  let board;
+  const intro=photoStudyIntro(root,activity,from=>{
+    board=mountBoard(root,activity,options);
+    const cell=root.querySelector('[data-pixel="0"]');
+    cell.focus({preventScroll:true});
+    if(!matchMedia('(prefers-reduced-motion: reduce)').matches && from.width){
+      const to=cell.getBoundingClientRect(), tile=el('span',{class:'ps-flying-color','aria-hidden':'true'});
+      Object.assign(tile.style,{left:to.x+'px',top:to.y+'px',width:to.width+'px',height:to.height+'px',background:activity.palette[0]});
+      (cell.closest('dialog[open]')||document.fullscreenElement||document.body).append(tile);
+      const fly=tile.animate([{transform:`translate(${from.x-to.x}px,${from.y-to.y}px) scale(${from.width/Math.max(to.width,1)},${from.height/Math.max(to.height,1)})`},{transform:'none'}],
+        {duration:540,easing:'cubic-bezier(.22,.72,.2,1)'});
+      fly.finished.then(()=>tile.remove(),()=>tile.remove());
+    }
+  });
+  return {step:intro.step,back:intro.back,getCells:()=>board?.getCells()||[...activity.cells],destroy(){intro.destroy();board?.destroy();}};
+}
+
+function mountBoard(root,activity,{onSave,onChange,saveLabel='결과를 다음 슬라이드에 저장',saveMessage='결과를 다음 슬라이드에 저장했어요.'}) {
   let cells = [...activity.cells], color = 0, undo = [], stroke = null, pointer = null, focus = 0, busy = false, destroyed = false;
   const abort = new AbortController(), signal = abort.signal;
   const status = el('p', { class: 'pixel-status', role: 'status', 'aria-live': 'polite' });
@@ -116,9 +136,11 @@ export function createPixelArtSetup({ activity: raw, onApply, onCancel } = {}) {
   const instructions = el('textarea', { rows: 3, maxlength: 400, value: activity.instructions });
   const size = el('select', { 'aria-label': '칸 수' }, [8, 12, 16].map(n => el('option', { value: n, text: `${n} × ${n}칸` })));
   size.value = String(activity.size);
+  size.disabled=!!activity.photoStudy;
   const status = el('p', { class: 'pixel-status', role: 'status' });
   const confirm = el('div', { class: 'pixel-confirm', hidden: true });
   const fields = activity.palette.map((color, i) => el('label', { class: 'pixel-color-field' }, `${i + 1}`, el('input', { type: 'color', value: color, 'aria-label': `${i + 1}번 색` })));
+  if(activity.photoStudy)fields[0].querySelector('input').disabled=true;
   const save = el('button', { type: 'submit', class: 'pixel-primary', text: raw ? '활동 설정 저장' : '활동 슬라이드 추가' });
   const form = el('form', { class: 'pixel-setup' }, el('h2', { text: raw ? '픽셀아트 설정' : '픽셀아트 활동 넣기' }),
     el('p', { text: '지금 슬라이드 다음에 활동을 넣어요. 발표에서 직접 그리고 결과를 다음 슬라이드에 남길 수 있어요.' }),
@@ -141,7 +163,9 @@ export function createPixelArtSetup({ activity: raw, onApply, onCancel } = {}) {
     busy = true; form.querySelectorAll('input,textarea,select,button').forEach(n => { n.disabled = true; });
     try { await onApply(cleanPixelActivity({ ...activity, title: title.value.trim(), instructions: instructions.value, palette: fields.map(label => label.querySelector('input').value) })); }
     catch (error) { status.textContent = `활동을 저장하지 못했어요. ${error?.message || '다시 시도해 주세요.'}`; }
-    finally { busy = false; form.querySelectorAll('input,textarea,select,button').forEach(n => { n.disabled = false; }); }
+    finally { busy = false; form.querySelectorAll('input,textarea,select,button').forEach(n => { n.disabled = false; });
+      if(activity.photoStudy){size.disabled=true;fields[0].querySelector('input').disabled=true;}
+    }
   });
   form.addEventListener('keydown', event => { if (event.key !== 'Escape') event.stopPropagation(); });
   return form;

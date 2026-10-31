@@ -3,6 +3,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>온바탕 · HTML 모션 에셋</title>
+<link rel="stylesheet" href="./pixel-art.css">
 <style>
   *{box-sizing:border-box}
   body{margin:0;background:#101823;color:#f1f5ee;font-family:system-ui,"Malgun Gothic",sans-serif}
@@ -11,10 +12,10 @@
   small{font-size:.77rem;letter-spacing:.1em;font-weight:750;color:#9de0cc}
   h1{font-size:clamp(2.1rem,6vw,3.7rem);line-height:1.12;letter-spacing:-.06em;margin:16px 0}
   p{line-height:1.65;color:#c6d2d6;margin:0}
-  section{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:16px;margin:12px 0 26px}
+  main>section{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:16px;margin:12px 0 26px}
   h2{font-size:1.05rem;margin:28px 0 4px} .settings{display:flex;flex-wrap:wrap;gap:12px;margin:20px 0}
   label{display:grid;gap:4px;color:#bfd8d3;font-size:.82rem} input,select{min-height:44px;max-width:100%;color:#f5f7f5;background:#20303c;border:1px solid #57717b;border-radius:8px;padding:6px 10px;font:inherit}
-  button{display:grid;grid-template-columns:1fr auto;gap:4px 8px;padding:0 16px 16px;border:1px solid #354756;border-radius:16px;overflow:hidden;background:#1b2835;color:inherit;text-align:start;cursor:pointer;font:inherit}
+  [data-asset]{display:grid;grid-template-columns:1fr auto;gap:4px 8px;padding:0 16px 16px;border:1px solid #354756;border-radius:16px;overflow:hidden;background:#1b2835;color:inherit;text-align:start;cursor:pointer;font:inherit}
   button:hover,button:focus-visible{outline:2px solid #93dcc9;outline-offset:2px}
   .art{display:block;grid-column:1/-1;margin:0 -16px 12px;height:134px;background:radial-gradient(ellipse at 60% 90%,#26354d,#101a29 90%)}
   #scenes .art,#questions .art{height:auto;aspect-ratio:2/1}
@@ -22,9 +23,16 @@
   b{font-size:1.15rem} em{grid-row:2;grid-column:2;font-style:normal;color:#9de0cc;font-size:.78rem;align-self:center}
   .hint{grid-column:1/-1;color:#c4d3d9;font-size:.88rem}
   footer{border-top:1px solid #384854;padding-top:16px;color:#b7c9c8;font-size:.85rem;line-height:1.6}
+  .photo-feature{display:flex;align-items:center;gap:clamp(16px,4vw,36px);background:#1a3038;padding:clamp(14px,3vw,26px);border-radius:16px;margin:24px 0}.photo-feature canvas{width:32%;height:auto;border-radius:6px;image-rendering:pixelated}.photo-feature h2{font-size:clamp(1.3rem,4vw,2rem);margin:5px 0}.photo-feature p{margin-bottom:12px}
+  .photo-feature button,#photo-demo>.demo-close{font:inherit;border:0;background:#a8e8d3;color:#11272a;border-radius:7px;padding:10px 15px;cursor:pointer;min-height:44px}#photo-demo{border:0;border-radius:14px;padding:12px;background:#f5f7f3;width:min(900px,96vw);max-height:92dvh}#photo-demo::backdrop{background:#081018cc}#photo-demo>.demo-close{display:block;margin:0 0 8px auto}#photo-demo header{border:0;padding:0}#photo-demo p{color:inherit}#photo-demo .pixel-setup{background:#fff}
 </style>
 <main>
   <header><small>온바탕 / 움직임</small><h1>HTML 모션 에셋</h1><p>작은 창 속에 보이는 그림은 무엇일까요? 카드를 눌러 단서를 하나씩 열어 보세요.</p></header>
+  <article class="photo-feature" id="photo-study">
+    <canvas width="96" height="72" aria-label="해 질 무렵의 산과 호수"></canvas>
+    <div><small>실과 · 사진과 데이터</small><h2>사진 속으로 들어가기</h2><p>사진에서 한 점을 골라 RGB를 알아보고 그 색으로 첫 칸을 칠해요.</p><button type="button" id="try-study">샘플로 체험하기</button></div>
+  </article>
+  <dialog id="photo-demo" aria-label="사진 속으로 들어가기 체험"><button type="button" class="demo-close">체험 닫기</button><div id="demo-stage"></div></dialog>
   <h2>질문하고 단계별 공개</h2><section id="questions" aria-label="질문하고 단계별 공개"></section>
   <div class="settings">
     <label>시연할 제목<input id="title" value="작은 픽셀이 모여 그림이 된다" maxlength="72"></label>
@@ -38,6 +46,8 @@
 </main>
 <script type="module">
   import { EFFECT_ASSETS, previewEffect } from '../src/effect-assets.js';
+  import {setupPhotoDemo} from './photo-study-demo.js';
+  setupPhotoDemo();
   const title=document.querySelector('#title'), chart=document.querySelector('#chart'), pace=document.querySelector('#pace'), palette=document.querySelector('#palette');
   const changes={t:'chart',kind:'hbar',title:'모둠별 픽셀 변화',unit:'칸',labels:['파랑','노랑','초록'],
     series:[{name:'첫 도안',values:[-3,0,7]},{name:'바꾼 도안',values:[2,4,9]}]};

@@ -13,7 +13,16 @@ export function cleanPixelActivity(raw) {
   if (![8, 12, 16].includes(raw.size)) invalid(raw, 'size');
   if (!Array.isArray(raw.palette) || raw.palette.length < 2 || raw.palette.length > 12 || [...raw.palette].some(c => typeof c !== 'string' || !/^#[a-f\d]{6}$/i.test(c))) invalid(raw, 'palette');
   if (!Array.isArray(raw.cells) || raw.cells.length !== raw.size ** 2 || [...raw.cells].some(c => !Number.isInteger(c) || c < -1 || c >= raw.palette.length)) invalid(raw, 'cells');
-  return { version: 1, kind: 'pixel-art', id: raw.id, title: raw.title, instructions: raw.instructions, size: raw.size, palette: raw.palette.map(c => c.toLowerCase()), cells: [...raw.cells] };
+  const activity = { version: 1, kind: 'pixel-art', id: raw.id, title: raw.title, instructions: raw.instructions, size: raw.size, palette: raw.palette.map(c => c.toLowerCase()), cells: [...raw.cells] };
+  if(raw.photoStudy!==undefined){
+    const p=raw.photoStudy;
+    if(raw.size!==8 || !isObject(p) || typeof p.image!=='string' || p.image.length>160000 ||
+      !/^data:image\/(png|jpeg);base64,[A-Za-z\d+/]+=*$/.test(p.image) ||
+      ![p.width,p.height].every(v=>Number.isInteger(v)&&v>=1&&v<=1024) ||
+      !Number.isInteger(p.x)||p.x<0||p.x>=p.width||!Number.isInteger(p.y)||p.y<0||p.y>=p.height) invalid(raw,'photoStudy');
+    activity.photoStudy={image:p.image,width:p.width,height:p.height,x:p.x,y:p.y};
+  }
+  return activity;
 }
 
 export function newPixelActivity(options = {}) {

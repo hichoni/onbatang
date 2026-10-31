@@ -12,6 +12,7 @@ import {createLocalPalettes} from './palettes.js';
 import {newId,slideNotes,slideDur,shownTopics,cleanTopic,TOPIC_LIMIT,DUR_LIMIT} from '../src/document.js';
 import {newPixelActivity,pixelArtCover,pixelArtResult} from '../src/pixel-art.js';
 import {mountPixelArt,createPixelArtSetup,pixelArtImage} from './pixel-art.js';
+import {photoStudySetup,studyBitmap} from './photo-study.js';
 import {quizCover,createQuizBoard,quizzesFromAnswer} from '../src/quiz.js';
 import {createQuizSetup,mountQuiz} from './quiz.js';
 import {createHtmlLesson} from './html-lesson.js';
@@ -791,6 +792,7 @@ function openDesign(record, isNew) {
     // 올린 파일을 지웠다: 다른 장에서 쓴 것도 지운다(지금 장은 편집기가 지운다). 띠의 작은 그림을 다시 그린다.
     // 움직임 칸의 "모든 장에 똑같이"
     onMotionAll: (motion) => applyMotionAll(O, motion),
+    onPhotoStudy: !embedMode ? item=>configureActivity(O,false,{x:item.x,y:item.y}) : null,
     motionSets: { open: () => offerMotionSets(O) },
     // 카드의 빈 곳(과 그 둘레)을 우클릭하면 나오는 장(슬라이드) 메뉴
     slideMenu: () => slideMenuGroups(O),
@@ -1786,9 +1788,9 @@ async function commitActivityDocument(O,document,pageOrder,selectedPageId,expect
     selectActivityRecord(O,ready,selectedPageId);if(accountFor(ready))pusher.queue(ready);
   }
 }
-async function configureActivity(O,editing=false){
+async function configureActivity(O,editing=false,photoStart=null){
   if(editing&&O.editor.getDesign().activity?.kind==='quiz')return configureQuiz(O,true);
-  if(!activityAuthoring)return;
+  if(!activityAuthoring&&!photoStart)return;
   if(editing&&O.editor.getDesign().activity?.kind==='gai-app')return configureGaiActivity(O,true);
   if(O.closed||O.leaving||O.inlineImport||O.activityBusy||videoBusy(O))return;
   if(O.materialLoadingPromise)await O.materialLoadingPromise;
@@ -1800,7 +1802,7 @@ async function configureActivity(O,editing=false){
   if(editing&&!activity)return;
   const host=el('section',{class:'cv-activity-config','aria-label':'픽셀아트 활동 만들기'});
   const cancel=()=>{host.remove();if(O.activityConfig===host)O.activityConfig=null;};
-  host.append(createPixelArtSetup({activity,onCancel:cancel,onApply:async value=>{
+  const onApply=async (value,photoCover)=>{
     if(O.closed||O.activityBusy)throw Error('현재 작업을 마친 뒤 다시 시도해주세요.');
     O.activityBusy=true;app.inert=true;
     try{
@@ -1811,10 +1813,14 @@ async function configureActivity(O,editing=false){
       if(!editing){
         // Keep each existing part bounded and reserve room for its first result.
         const candidates=O.materialDeck?[record,...O.materialDeck.documents.filter(row=>row.id!==record.id)]:[record];
-        record=candidates.find(row=>row.slides.length<=MAX_SLIDES-2&&new TextEncoder().encode(JSON.stringify(row)).length<500000);
+        const extra=value.photoStudy?value.photoStudy.image.length+(photoCover?.length||0):0;
+        record=candidates.find(row=>row.slides.length<=MAX_SLIDES-2&&
+          ((!O.materialDeck&&photoStart)||new TextEncoder().encode(JSON.stringify(row)).length+extra<500000));
         if(!record)throw Error('활동과 결과를 넣을 공간이 부족해요. 새 그림에 활동을 만들어주세요. 기존 자료는 그대로예요.');
       }
-      const page={...pixelArtCover(value,aspectOf(record),pixelArtImage(value)),id:editing?selected.id:newId('p'),
+      const cover=photoCover?{bg:'#10202a',items:[{id:newId('e'),t:'image',layout:'slide',x:50,y:50,w:100,h:100,url:photoCover,alt:'사진 속으로 들어가기',lock:true}]}:
+        editing&&value.photoStudy?{bg:selected.bg,items:selected.items}:pixelArtCover(value,aspectOf(record),pixelArtImage(value));
+      const page={...cover,id:editing?selected.id:newId('p'),
         source:editing?selected.source:{kind:'local'},origin:editing?selected.origin:{documentId:O.record.id,pageId:selected.id,revision:O.record.revision},activity:value};
       const slides=[...record.slides],ids=entries.map(v=>v.page.id);
       if(editing)slides[slides.findIndex(p=>p.id===selected.id)]=page;
@@ -1822,9 +1828,20 @@ async function configureActivity(O,editing=false){
       await commitActivityDocument(O,{...record,slides},ids,page.id,record.id===O.record.id?O.persistedRecord:record);cancel();
       if(O.recoveryRequired)await closeDesign(O);
     }finally{O.activityBusy=false;app.inert=false;}
-  }}));
+  };
   O.activityConfig=host;O.shell.querySelector('.cv-canvas').append(host);
-  host.querySelector('input')?.focus({preventScroll:true});
+  if(photoStart){
+    host.setAttribute('aria-label','사진 속으로 들어가기');
+    host.append(el('p',{role:'status',text:'이 장의 사진을 준비하고 있어요.'}),el('button',{type:'button',text:'취소',onClick:cancel}));
+    try{
+      const aspect=aspectOf(O.record);
+      const {canvas}=await designToCanvas(selected,{width:Math.round(960*Math.min(1,aspect)),aspect});
+      const bitmap=await studyBitmap(canvas);
+      if(!host.isConnected||O.closed||O.activityConfig!==host)return;
+      host.replaceChildren(photoStudySetup(bitmap,{start:photoStart,onCancel:cancel,onApply}));
+    }catch(error){cancel();toast(error.message||'사진을 준비하지 못했어요.');return;}
+  }else host.append(createPixelArtSetup({activity,onCancel:cancel,onApply}));
+  host.querySelector(photoStart?'.ps-picker':'input')?.focus({preventScroll:true});
 }
 
 // 퀴즈 장 넣기 · 고치기(모든 곳). 새로 넣을 때는 지금 장 다음에 하나 또는 여러 장(가이X 가 만든 문제)을 넣는다.
@@ -2282,6 +2299,7 @@ async function present(O) {
   const go = (step) => {
     if(savingActivity)return;
     if (step > 0 && pixel?.step?.()) return;   // 퀴즈 장: 시작 → 정답 공개 → 순위
+    if (step < 0 && pixel?.back?.()) return;
     if (step > 0) {
       // 움직이는 중에 넘기면 그 움직임은 바로 끝낸다. 누를 때 나오는 것이 남아 있으면 그것부터 하나 나타나게 한다.
       settle();
@@ -2385,6 +2403,7 @@ async function present(O) {
     label: (k) => (slides[k]?.activity ? '활동' : entries[k]?.page.source?.kind === 'result' ? '결과' : ''),
     // 자동 넘기기: 리허설로 잰 시간(없으면 기본) · 누를 때 나오는 걸음 수. 리허설: 잰 시간을 발표가 끝난 뒤 저장할지 묻는다.
     dwell: (k) => slides[k]?.dur, steps: (k) => (slides[k] && !slides[k].activity ? planMotion(slides[k]).clicks.length : 0),
+    waitForTeacher: k=>!!slides[k]?.activity?.photoStudy,
     saveTimes: (seconds) => { rehearsed = entries.map((v, k) => [v.page.id, seconds[k]]).filter(([, s]) => s != null); },
     title: O.record.name, notify: toast, keyClass: 'cv-show-key', stateChanged: tellRemote,
   });

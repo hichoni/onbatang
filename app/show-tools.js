@@ -136,6 +136,7 @@ export function createShowTools(root, opts) {
     clearTimeout(autoTimer);
     if (!autoOn) return;
     const i = opts.index(), steps = Math.max(0, opts.steps?.(i) || 0);
+    if (opts.waitForTeacher?.(i)) return;
     autoTimer = setTimeout(() => {
       if (!autoOn) return;
       if (panel || curtain) { scheduleAuto(); return; }

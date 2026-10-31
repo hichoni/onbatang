@@ -25,6 +25,17 @@ test('activity survives record and editor sanitizers; copies have new activity i
   assert.throws(()=>migrateRecord(unsupported),{code:'INVALID_ACTIVITY'});
 });
 
+test('photo study keeps its exact source pixel across saves and only accepts bounded inline rasters',()=>{
+  const point={image:'data:image/png;base64,iVBORw0KGgo=',width:48,height:32,x:47,y:0};
+  const activity=newPixelActivity({photoStudy:point});
+  assert.deepEqual(cleanDesign(JSON.parse(JSON.stringify({activity}))).activity.photoStudy,point);
+  for(const change of [{x:48},{y:-1},{width:1025},{image:'https://example.org/a.png'},
+    {image:'data:image/svg+xml;base64,AAAA'},{image:'data:image/png;base64,'+'a'.repeat(160000)}]){
+    assert.throws(()=>newPixelActivity({photoStudy:{...point,...change}}),{code:'INVALID_ACTIVITY'});
+  }
+  assert.throws(()=>newPixelActivity({size:12,photoStudy:point}),{code:'INVALID_ACTIVITY'});
+});
+
 test('invalid activity rejects unknown versions, scripts and lossy dimensions instead of truncating', () => {
   for (const change of [a => a.version = 2, a => a.kind = 'iframe', a => a.id = 'bad', a => a.size = 10,
     a => a.cells.pop(), a => a.cells[0] = 8, a => a.cells[0] = -2, a => a.palette[0] = 'url(https://example.com)',

@@ -66,7 +66,7 @@ export function mountHtmlLesson(raw, host = document.getElementById('onbatang-le
   const stage = el('main', { class: 'lesson-stage', tabindex: '-1' });
   const previous = el('button', { type: 'button', text: '이전', onclick: () => navigate(-1) });
   const next = el('button', { type: 'button', text: '다음', onclick: () => navigate(1) });
-  const returnToCover = el('button', { type: 'button', text: '활동 화면 닫기', hidden: true, onclick: () => { app?.destroy(); app = null; executing = false; render(); } });
+  const returnToCover = el('button', { type: 'button', text: '활동 화면 닫기', hidden: true, onclick: () => { app?.destroy(); app = null; executing = false; render(false); } });
   const download = el('button', { type: 'button', text: '현재 수업 내려받기', class: 'lesson-download', onclick: () => {
     try {
       persist();
@@ -96,7 +96,8 @@ export function mountHtmlLesson(raw, host = document.getElementById('onbatang-le
     el('nav', { class: 'lesson-navigation', 'aria-label': '슬라이드 이동' }, previous, count, next, returnToCover), stage, status,
     el('footer', { class: 'lesson-footer', text: '활동과 결과는 이 브라우저에 저장돼요. 다른 기기에서는 현재 수업을 내려받아 여세요.' }));
   function persist() {
-    update = Date.now();
+    // A file may have been exported on a device whose clock is ahead.
+    update = Math.max(update, Date.now());
     const cells = Object.fromEntries(pages.filter(p => p.activity?.kind==='pixel-art').map(p => [p.id, p.activity.cells]));
     const states = Object.fromEntries(pages.filter(p => p.activity?.kind==='gai-app').map(p => [p.id, p.activity.state]));
     try {
@@ -105,7 +106,10 @@ export function mountHtmlLesson(raw, host = document.getElementById('onbatang-le
       persistent = true;
     } catch { persistent = false; status.textContent = '브라우저에 저장하지 못했어요. 지금 작업은 그대로 있어요. 현재 수업 내려받기로 결과를 보관해 주세요.'; }
   }
-  function navigate(step) { goTo(current + step); }
+  function navigate(step) {
+    if(executing && pages[current].activity?.photoStudy && (step>0?app?.step?.():app?.back?.()))return;
+    goTo(current + step);
+  }
   function goTo(to) {
     if (to < 0 || to >= pages.length || to === current) return;
     app?.destroy(); app = null; executing = false; current = to; persist(); render();
@@ -116,6 +120,7 @@ export function mountHtmlLesson(raw, host = document.getElementById('onbatang-le
     host.classList.add('lesson-show');
     const tools = createShowTools(host, {
       total: () => pages.length, index: () => current, next: () => navigate(1), prev: () => navigate(-1), go: goTo, close: endShow,
+      waitForTeacher: k=>!!pages[k]?.activity?.photoStudy,
       thumb: slideImage, preview: slideImage, ratio: k => pages[k].aspect,
       notes: k => pages[k].notes || '', topic: k => pages[k].topic || '', dwell: k => pages[k].dur, label: k => pages[k].activity ? '활동' : pages[k].result ? '결과' : '',
       title: seed.title, notify: message => { status.textContent = message; }, keyClass: 'lesson-show-key',
@@ -151,7 +156,7 @@ export function mountHtmlLesson(raw, host = document.getElementById('onbatang-le
   });
   // 앱 안을 누른 뒤에도 프레젠터의 넘기기 단추와 Esc 는 수업이 듣는다.
   const appKey = key => { if (show) show.tools.handle({ key, code: key }); else if (key === 'PageDown') navigate(1); else if (key === 'PageUp') navigate(-1); };
-  function render() {
+  function render(autoPhoto=true) {
     stopEffects?.(); stopEffects = null;
     previous.disabled = current === 0; next.disabled = current === pages.length - 1;
     const page = pages[current]; count.textContent = `${current + 1} / ${pages.length}쪽${page.activity ? ' · 활동' : page.result ? ' · 결과' : ''}`;
@@ -165,7 +170,7 @@ export function mountHtmlLesson(raw, host = document.getElementById('onbatang-le
     const frame = page.effects?.length ? el('div', { class:'lesson-effects-frame' }, picture) : null;
     scene.append(frame || picture);
     if (page.activity) scene.append(el('button', { type: 'button', class: 'lesson-start', text: page.activity.kind === 'quiz' ? '퀴즈 풀기' : '활동 시작', onclick: () => {
-      executing = true; returnToCover.hidden = false;
+      executing = true; returnToCover.hidden = showClose.hidden = false;
       stopEffects?.(); stopEffects = null;
       const target = el('section', { class: 'lesson-scene lesson-activity' }); stage.replaceChildren(target);
       // 퀴즈: 혼자 풀어 보는 판(시작 → 정답 공개 → 다시 풀기). 점수판 · 학생 휴대폰은 발표에서만 쓴다.
@@ -202,6 +207,7 @@ export function mountHtmlLesson(raw, host = document.getElementById('onbatang-le
     } }));
     stage.replaceChildren(scene);
     if (frame) stopEffects = mountOfflineEffects(frame,page.effects);
+    if(autoPhoto && page.activity?.photoStudy)scene.querySelector('.lesson-start')?.click();
   }
   const keys = event => {
     if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;

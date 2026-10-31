@@ -97,7 +97,7 @@ const BLOB_CACHE = 12;         // 이번에 올린 사진의 파일 내용을 �
  */
 export function createEditor({
   design = null, onChange = () => {}, uploadImage = null, loadImageBlob = null, fonts = fontList, notify = toast, onAspect = () => {},
-  uploads = null, usedElsewhere = null, onRemoveUpload = null, onMotionAll = null, motionSets = null, canPaste = () => true,
+  uploads = null, usedElsewhere = null, onRemoveUpload = null, onMotionAll = null, motionSets = null, onPhotoStudy = null, canPaste = () => true,
   documentImport = null, colorPalettes = null,
   saveVideo = null, createCamera = null, videoLimits = null, videoNote = '', videoHint = '',
   onSelect = null, lockedBy = null, slideMenu = null, outline = null,
@@ -3934,6 +3934,8 @@ export function createEditor({
       return [
         typeof motionSets?.open === 'function' ? el('button', { class: 'fe-outline-start', type: 'button', dataset: { motionSets: '' }, onClick: () => motionSets.open() },
           icon('motion'), el('span', {}, el('b', { text: '이야기가 이어지는 움직임 묶음' }), el('small', { text: '전체 지도 → 주제 확대 → 정리 · 숨 쉬는 요소' }))) : null,
+        onPhotoStudy && !card.activity && items().length>0 && el('button',{class:'fe-outline-start',type:'button',dataset:{photoStudy:''},onClick:()=>onPhotoStudy(cur() || {})},
+          icon('motion'),'사진 속으로 들어가기 · RGB 수업'),
         ...graphics, ...mine, ...motionTimeline(), ...combos, ...turns,
         el('div', { class: 'fe-row fe-motion-go' },
           el('button', { class: 'fe-btn primary', type: 'button', onClick: () => previewPage() }, icon('play'), '이 장 미리 보기'), all),
