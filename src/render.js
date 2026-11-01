@@ -1,5 +1,6 @@
 // 디자인 그리기(브라우저): 요소 하나(itemView)와 디자인 한 장(designView). 편집기와 "보기 전용" 화면이 함께 쓴다.
 import { el } from './dom.js';
+import {projectCamera} from './slide-flow.js';
 import { backgroundOf, cleanDesign, fontFamilyOf, settings, hangsPunctuation } from './model.js';
 import { shapeAsset, shapeSvg } from './shapes.js';
 import { artSvg, loadArt, artReady } from './art.js';
@@ -206,8 +207,8 @@ export function paintCard(node, bg) {
  * 움직이는 바탕(design.live)은 멈춘 모습의 그림을 맨 아래에 깐다(live.js. 발표 · 공유 링크는 liveBackdrops 로 움직인다). 크기는 sceneEdge 를 따른다.
  * sceneNote: 거짓이면 영상 파일이 없을 때의 이름표를 넣지 않는다(내보낼 때).
  */
-export function designView(design, { empty = '', sceneEdge = 640, sceneNote = true } = {}) {
-  const d = cleanDesign(design, { keepSpaces: true });
+export function designView(design, { empty = '', sceneEdge = 640, sceneNote = true, prepared = false } = {}) {
+  const d = prepared ? design : projectCamera(cleanDesign(design, { keepSpaces: true }));
   // 글자 효과: 장의 효과는 data-look, 장이나 글상자 어디에든 효과가 있으면 data-looks(발표 · 공유 링크가 그 카드의 글을 움직인다).
   const look = slideLook(d), looks = d.items.map((it) => itemLook(it, look));
   // 그 장에서 나타나는 · 사라지는 움직임을 끈 것(lkin · lkout: false)은 data-look-in · data-look-out 에 적는다.

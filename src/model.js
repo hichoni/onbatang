@@ -12,6 +12,7 @@
 //
 // 프로젝트마다 다른 것(글꼴 목록, 어떤 그림 주소를 믿을지, 카드 비율, 개수 한도)은 configure() 로 한 번 정해 둔다.
 import { cleanEffect, effectable } from './effect-assets.js';
+import {flowFields,cleanMorphKey} from './slide-flow.js';
 import { SHAPE_ASSETS, SHAPE_GROUPS, shapeAsset } from './shapes.js';
 import { isArtId, artColorable, artAspect, artPack, artName } from './art.js';
 import { isYouTubeId, ytStart, ytTime, YT_CC } from './youtube.js';
@@ -259,6 +260,7 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
   const it = item && typeof item === 'object' ? item : {};
   const base = {
     ...metadata(it),
+    ...(cleanMorphKey(it.morphKey)?{morphKey:cleanMorphKey(it.morphKey)}:{}),
     ...(pptxItem(it) ? {layout:'slide'} : {}),
     // Slide artwork may continue beyond the viewport (PPT bleed and a shared
     // spatial story). Preserve bounded offstage coordinates instead of piling
@@ -468,7 +470,7 @@ export function cleanDesign(design, opts) {
  * 디자인을 새로 짜 맞추는 곳({ bg, items } 를 만드는 곳)에서 이것을 함께 펼쳐 넣으면 움직임이 따라간다.
  */
 export function designMotion(design) {
-  const out = {};
+  const out = flowFields(design);
   if (COMBO_IDS.includes(design?.pa)) out.pa = design.pa;
   if (TRANSITION_IDS.includes(design?.tr)) out.tr = design.tr;
   return out;

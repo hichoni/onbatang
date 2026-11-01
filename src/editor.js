@@ -98,7 +98,7 @@ const BLOB_CACHE = 12;         // 이번에 올린 사진의 파일 내용을 �
  */
 export function createEditor({
   design = null, onChange = () => {}, uploadImage = null, loadImageBlob = null, fonts = fontList, notify = toast, onAspect = () => {},
-  uploads = null, usedElsewhere = null, onRemoveUpload = null, onMotionAll = null, motionSets = null, onPhotoStudy = null, canPaste = () => true,
+  uploads = null, usedElsewhere = null, onRemoveUpload = null, onMotionAll = null, motionSets = null, slideFlow = null, onPhotoStudy = null, canPaste = () => true,
   documentImport = null, colorPalettes = null,
   saveVideo = null, createCamera = null, videoLimits = null, videoNote = '', videoHint = '',
   onSelect = null, lockedBy = null, slideMenu = null, outline = null,
@@ -332,7 +332,7 @@ export function createEditor({
   // 디자인의 움직임(조합 효과 pa · 전환 효과 tr)을 바꿔 적는다. 정하지 않은 것은 칸째 지운다(저장되는 모양에 빈 값이 남지 않게).
   function setMotion(next) {
     const m = designMotion(next);
-    for (const key of ['pa', 'tr']) { if (m[key]) card[key] = m[key]; else delete card[key]; }
+    for (const key of ['pa', 'tr','camera','travel']) { if (m[key]) card[key] = m[key]; else delete card[key]; }
   }
   // 디자인의 영상 장면(video)을 바꿔 적는다. 없으면 칸째 지운다.
   function setVideo(next) {
@@ -3937,6 +3937,8 @@ export function createEditor({
           icon('motion'), el('span', {}, el('b', { text: '이야기가 이어지는 움직임 묶음' }), el('small', { text: '전체 지도 → 주제 확대 → 정리 · 숨 쉬는 요소' }))) : null,
         onPhotoStudy && !card.activity && items().length>0 && el('button',{class:'fe-outline-start',type:'button',dataset:{photoStudy:''},onClick:()=>onPhotoStudy(cur() || {})},
           icon('motion'),'사진 속으로 들어가기 · RGB 수업'),
+        slideFlow?.open ? el('button',{class:'fe-outline-start',type:'button',dataset:{slideFlow:''},onClick:()=>slideFlow.open()},icon('motion'),'모핑 · 카메라 직접 편집') : null,
+        card.camera ? el('p',{class:'fe-note',text:`발표 카메라 ${card.camera.z}배를 저장했어요. 이 편집판은 원래 배치이며 발표·내려받기에는 지정한 구도가 보여요.`}) : null,
         ...graphics, ...mine, ...motionTimeline(), ...combos, ...turns,
         el('div', { class: 'fe-row fe-motion-go' },
           el('button', { class: 'fe-btn primary', type: 'button', onClick: () => previewPage() }, icon('play'), '이 장 미리 보기'), all),

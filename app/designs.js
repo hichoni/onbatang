@@ -1,3 +1,4 @@
+import {flowFields,cleanMorphKey} from '../src/slide-flow.js';
 // 미니캔 앱의 규칙: 그림 한 편의 기록, 화면 비율, 이름, 차례, 내려받는 크기.
 // DOM·저장소를 쓰지 않는 순수 함수만 둔다. 디자인 그 자체({ bg, items })의 모양과 정리는 모듈(src/model.js)의 것을 쓴다.
 //
@@ -101,7 +102,7 @@ const cleanName = (raw) => String(raw ?? '').replace(/\s+/g, ' ').trim().slice(0
 // 여기서는 짧은 이름인지만 본다: 어떤 효과가 있는지는 편집기 모듈(src/motion.js)이 알고, 모르는 이름은 그릴 때 버려진다.
 const MOTION_ID = /^[a-z][a-z0-9]{1,11}$/;
 export function slideMotion(slide) {
-  const out = {};
+  const out = flowFields(slide);
   for (const key of ['pa', 'tr']) if (typeof slide?.[key] === 'string' && MOTION_ID.test(slide[key])) out[key] = slide[key];
   return out;
 }
@@ -122,7 +123,7 @@ export function slideVideo(slide) {
 export const slideExtra = (slide) => ({ ...metadata(slide, { identity: true }), ...slideMotion(slide), ...slideVideo(slide), ...designLive(slide), ...designWeb(slide), ...slideNotes(slide), ...slideHidden(slide), ...slideTopic(slide), ...slideDur(slide), ...slideVoice(slide), ...(slide?.activity === undefined ? {} : {activity:cleanActivity(slide.activity)}) });
 export function withSlideMotion(slide, motion) {
   const { pa, tr, ...extra } = slideExtra(slide);
-  return { bg: slide.bg, items: slide.items, ...extra, ...slideMotion(motion) };
+  return { bg: slide.bg, items: slide.items, ...extra, ...slideMotion({pa:motion?.pa,tr:motion?.tr}) };
 }
 /** 영상 장면이 있는 장인지. */
 export const hasVideo = (slide) => !!slideVideo(slide).video;
@@ -159,6 +160,7 @@ const cleanSlide = (d, index, documentId) => {
     for (const k of ITEM_FIELDS) if (['string', 'number', 'boolean'].includes(typeof item[k])) out[k] = item[k];
     const effect = effectable(item) && cleanEffect(item.effect,item);
     if (effect) out.effect = effect;
+    if(cleanMorphKey(item.morphKey))out.morphKey=cleanMorphKey(item.morphKey);
     const crop=item.t==='image'?cleanCrop(item.crop):null;
     const runs=item.t==='text'&&Array.isArray(item.runs)&&item.runs.length?cleanRuns(String(item.text??''),item.runs,item):[];
     // 차트: 표(항목 · 계열)와 꾸밈(종류 · 제목 · 단위 · 색 묶음 · 값 보이기)은 chart.js 가 정리한다.

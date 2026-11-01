@@ -102,18 +102,27 @@ export async function putDesign(record) {
 }
 /** Replace a draft only if it is still the snapshot that was pinned. */
 export async function replaceDesignIfUnchanged(record, expected) {
+  return (await replaceDesignsIfUnchanged([{record,expected}]))[0];
+}
+/** Commit connected material parts together, or leave every part unchanged. */
+export async function replaceDesignsIfUnchanged(plans) {
+  if(!plans.length)return [];
+  if(new Set(plans.map(p=>p.record.id)).size!==plans.length)throw Error('DUPLICATE_DESIGN');
   const canonical=value=>JSON.stringify(value,(_,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.fromEntries(Object.keys(x).sort().map(k=>[k,x[k]])):x);
-  const clean=migrateRecord(record),before=expected?migrateRecord(expected):null,db=await open();
+  const prepared=plans.map(({record,expected})=>({clean:migrateRecord(record),before:expected?migrateRecord(expected):null})),db=await open();
   return new Promise((resolve,reject)=>{
-    const tx=db.transaction(STORE,'readwrite'),store=tx.objectStore(STORE),q=store.get(clean.id);let result,error;
+    const tx=db.transaction([STORE,ORIGINALS],'readwrite'),store=tx.objectStore(STORE),result=[];let error;
+    prepared.forEach(({clean,before},i)=>{const q=store.get(clean.id);
     q.onsuccess=()=>{try{
       const current=q.result?migrateRecord(q.result):null;
       if(canonical(current)!==canonical(before))throw Error('DRAFT_CHANGED');
       const revision=Math.max(current?.revision||0,clean.revision)+1;
       if(!Number.isSafeInteger(revision))throw Error('REVISION_LIMIT');
-      result={...clean,revision,updatedAt:Date.now()};
-      store.put(result,result.id);
+      if(q.result&&q.result.schemaVersion===undefined){const originals=tx.objectStore(ORIGINALS),original=q.result,backup=originals.get(clean.id);backup.onsuccess=()=>{if(backup.result===undefined)originals.put(original,clean.id);};}
+      result[i]={...clean,revision,updatedAt:Date.now()};
+      store.put(result[i],clean.id);
     }catch(ex){error=ex;tx.abort();}};
+    });
     tx.oncomplete=()=>resolve(result);
     tx.onerror=tx.onabort=()=>reject(error||tx.error||Error('DRAFT_SAVE_FAILED'));
   });

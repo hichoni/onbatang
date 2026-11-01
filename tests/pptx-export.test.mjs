@@ -25,6 +25,16 @@ function unzip(bytes) {
   return {files, xml: name => new TextDecoder().decode(files.get(name))};
 }
 
+test('presentation camera exports native PPTX geometry once and keeps editable source positions',async()=>{
+  const slides=[{...page([shape({x:70,y:50,w:20,h:10,rot:0}),text({x:70,y:50,w:40,h:20,size:4})]),camera:{x:70,y:50,z:2}}],before=structuredClone(slides);
+  const exported=await createPptx({slides,size:{width:1000,height:600,unit:'px'}}),xml=unzip(exported.bytes).xml('ppt/slides/slide1.xml');
+  assert.match(xml,/<a:off x="2857500" y="2286000"\/><a:ext cx="3810000" cy="1143000"\/>/);
+  assert.match(xml,/sz="6000"/,'text is twice as large in the camera view');
+  const captured=[];await createPptx({slides,mode:'image',renderSlide:async d=>{captured.push(d);return png;}});
+  assert.deepEqual(captured[0].camera,slides[0].camera,'image renderer gets the original camera to project only once');
+  assert.equal(captured[0].items[0].w,20);assert.deepEqual(slides,before);
+});
+
 test('editable PPTX contains complete package parts, native text/shape order and exact physical slide size', async () => {
   const slides = [page([text(), shape()]), page([text({id:'etext002',text:'두 번째 쪽'})])], before = structuredClone(slides), progress = [];
   const result = await createPptx({slides,size:{width:12192000,height:6858000,unit:'emu'},title:'수업 & 검증',onProgress:value=>progress.push(value)});

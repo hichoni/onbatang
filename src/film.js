@@ -88,7 +88,7 @@ export function filmPlan(designs, { stay = DEFAULT_STAY, scenes = true } = {}) {
     // 목소리를 녹음한 장은 녹음할 때 머문 시간만큼(그 구간의 목소리가 함께 담긴다), 리허설로 잰 시간이 있는 장은 그 시간만큼 머문다(고른 머무는 시간 대신).
     const voice = design?.voice && design.voice.ms > 0 ? design.voice : null;
     const stayMs = voice ? voice.ms : Number.isInteger(design?.dur) && design.dur >= 1 ? Math.min(design.dur, 600) * 1000 : stayAll;
-    const pose = n > 0 ? transitionPose(design?.tr) : null;
+    const pose = n > 0 ? transitionPose(design?.tr,1,0,design.travel) : null;
     // 이어 움직이기: 앞 장과 짝이 된 요소는 전환 동안 옮겨 가고, 장이 열린 뒤에 다시 나타나지 않는다(발표 화면과 같다).
     // 누를 때 나타나는 요소는 짝짓지 않는다(그 차례에 나타난다).
     const pairs = pose && morphs(design.tr) ? morphPairs(designs[n - 1], design) : null;

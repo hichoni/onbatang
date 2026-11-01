@@ -1,5 +1,6 @@
 // Editable PresentationML export. Stored designs and source files are never changed.
 // Package parts follow ISO/IEC 29500 PresentationML; ZIP creation stays dependency-free.
+import {projectCamera} from '../src/slide-flow.js';
 import {zipStore} from './zip.js';
 import {cleanDesign, settings, fontList, backgroundOf, hangsPunctuation} from '../src/model.js';
 import {designToBlob, designSheet} from '../src/export.js';
@@ -325,7 +326,7 @@ export async function createPptx({slides, aspect = 16 / 9, size, title = '온바
   for (let index = 0; index < input.length; index += 1) {
     abort(signal); const raw = input[index], pageNumber = index + 1;
     if (!object(raw) || !Array.isArray(raw.items)) fail('INVALID_SLIDE', '슬라이드 내용을 확인해 주세요.', {pageNumber});
-    const design = cleanDesign(raw, {keepSpaces: true});
+    const original = cleanDesign(raw, {keepSpaces: true}), design = projectCamera(original);
     if (design.items.length !== raw.items.length || design.items.some((item, n) => item.t !== raw.items[n].t || (item.t === 'text' && item.text !== raw.items[n].text))) fail('UNSUPPORTED_CONTENT', '정리 과정에서 달라지는 요소가 있어요. 원본을 보존하기 위해 내보내기를 멈췄어요.', {pageNumber});
     const pageWarn = warn(pageNumber), relations = [['rId1', 'slideLayout', '../slideLayouts/slideLayout1.xml']], shapes = [];
     if (design.notes) relations.push([`rId${relations.length + 1}`, 'notesSlide', `../notesSlides/notesSlide${pageNumber}.xml`]);
@@ -351,7 +352,7 @@ export async function createPptx({slides, aspect = 16 / 9, size, title = '온바
     if (design.video || design.pa || design.tr || design.items.some(item => (item.an && item.an !== 'none') || item.em || item.ex || item.aw || (item.lp && item.lp !== 'none'))) pageWarn('STATIC_EXPORT', '움직임과 소리는 포함하지 않고 현재 그림을 저장해요.');
     // 웹사이트 장: PowerPoint 에는 사이트가 들어가지 않는다(표지 그림 · 주소만).
     if (design.web) pageWarn('WEB_AS_PICTURE', `웹사이트 장은 표지 그림으로 저장해요. 주소: ${design.web.url}`);
-    if (mode === 'image') await raster(await cancellable(renderSlide(design, options), signal), `슬라이드 ${pageNumber}`);
+    if (mode === 'image') await raster(await cancellable(renderSlide(original, options), signal), `슬라이드 ${pageNumber}`);
     else {
       if (design.video || design.web || !/^#[a-f0-9]{6}$/i.test(backgroundOf(design.bg).bg)) {
         if (!design.video && !design.web) pageWarn('BACKGROUND_RASTERIZED', '꾸민 바탕은 모양을 보존한 그림으로 저장해요.');

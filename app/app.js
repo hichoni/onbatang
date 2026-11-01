@@ -56,10 +56,11 @@ import { saveVideo, listVideos, removeVideos, placeVideo } from './videos.js';
 import { saveVoice, loadVoice, listVoices, removeVoices } from './voices.js';
 import { zipStore } from './zip.js';
 import { createPptx } from './pptx.js';
-import { listDesigns, getDesign, putDesign, replaceDesignIfUnchanged, removeDesign, setStorageName, storageName, listDesignIssues, getOriginalDesign } from './store.js';
+import { listDesigns, getDesign, putDesign, replaceDesignIfUnchanged, replaceDesignsIfUnchanged, removeDesign, setStorageName, storageName, listDesignIssues, getOriginalDesign } from './store.js';
 import { setupApp, useFonts, photoToData, BASIC_GROUP } from './setup.js';
 import { applyMotionSet, createMotionSequence, MOTION_SETS } from './motion-sets.js';
 import { openMotionSetPanel } from './motion-set-panel.js';
+import {openSlideFlowPanel} from './slide-flow-panel.js';
 import { COLLECTIONS, createCollectionSlides } from './design-collections.js';
 import { questionEffect } from '../src/effect-assets.js';
 import { stepOpenQuestion } from '../src/effect-player.js';
@@ -800,6 +801,7 @@ function openDesign(record, isNew) {
     onMotionAll: (motion) => applyMotionAll(O, motion),
     onPhotoStudy: !embedMode ? item=>configureActivity(O,false,{x:item.x,y:item.y}) : null,
     motionSets: { open: () => offerMotionSets(O) },
+    slideFlow: { open: () => offerSlideFlow(O) },
     // 카드의 빈 곳(과 그 둘레)을 우클릭하면 나오는 장(슬라이드) 메뉴
     slideMenu: () => slideMenuGroups(O),
     outline: { open: () => openOutline(O) },
@@ -1666,6 +1668,39 @@ function changeSlides(O, change) {
 
 /** 움직임 칸의 "모든 장에 똑같이": 지금 장의 조합 효과와 전환 효과를 다른 장들에도 적는다(요소 하나하나의 효과는 그대로 둔다).
  * 여러 파트로 된 PPT 전체 자료이면 다른 파트의 장들에도 적고, 그 파트들을 이 기기(와 계정)에 저장한다. */
+async function offerSlideFlow(O){
+  if(O.closed||videoBusy(O)||O.motionAll)return;
+  try{
+    if(O.co)throw Error('함께 고치기를 마친 뒤 모션을 편집해 주세요.');
+    if(O.materialLoadingPromise)await O.materialLoadingPromise;
+    await persistEditorAction(O);
+    const entries=lessonPages(O),snapshot=structuredClone(entries.map(v=>v.page));
+    if(entries.length<2)throw Error('장을 복제하거나 새 장을 더하면 두 장 사이의 모핑을 편집할 수 있어요.');
+    openSlideFlowPanel({slides:snapshot,at:entries.findIndex(v=>v.record.id===O.record.id&&v.index===O.at),aspect:aspectOf(O.record),
+      scope:O.materialDeck?'PPT 전체 자료':'현재 자료',onApply:async next=>{
+        if(O.closed||S.open!==O||O.co)throw Error('편집 화면을 다시 확인해 주세요.');
+        const changes=new Map();
+        next.forEach((page,i)=>{if(JSON.stringify(page)!==JSON.stringify(snapshot[i])){const row=entries[i];if(!changes.has(row.record.id))changes.set(row.record.id,[]);changes.get(row.record.id).push({page,before:snapshot[i]});}});
+        const plans=[];
+        for(const [id,rows]of changes){
+          const record=await getDesign(id);if(!record)throw Error('자료가 다른 창에서 바뀌었어요. 닫고 다시 열어주세요.');
+          for(const {before}of rows){const current=record.slides.find(p=>p.id===before.id);if(!current||JSON.stringify(cleanDesign(current))!==JSON.stringify(cleanDesign(before)))throw Error('다른 창에서 고친 장이 있어요. 덮어쓰지 않았습니다. 닫고 다시 열어주세요.');}
+          const byId=new Map(rows.map(v=>[v.page.id,v.page]));plans.push({expected:record,record:{...record,slides:record.slides.map(page=>byId.get(page.id)||page),synced:false}});
+        }
+        let saved;
+        try{saved=await replaceDesignsIfUnchanged(plans);}catch(error){throw Error(error.message==='DRAFT_CHANGED'?'다른 창에서 자료가 바뀌었어요. 어느 파트도 덮어쓰지 않았습니다. 닫고 다시 열어주세요.':'저장하지 못했어요. 기존 파트는 그대로입니다. 저장 공간을 확인해 주세요.');}
+        for(const kept of saved){
+          upsert(kept);
+          if(O.materialDeck)O.materialDeck.documents=O.materialDeck.documents.map(row=>row.id===kept.id?kept:row);
+          if(kept.id===O.record.id){O.persistedRecord=structuredClone(kept);O.record={...kept};delete O.record.slides;O.slides=kept.slides;O.editor.setDesign(O.slides[O.at]);O.editor.forget();O.dirty=false;O.saved=true;}
+          if(accountFor(kept))pusher.queue(kept);
+          if(typeof shareAction?.saved==='function'){try{shareAction.saved(kept);}catch(error){console.warn(error);}}
+        }
+        renderStrip(O);setStatus(O,'모션과 카메라 구도를 이 기기에 저장했어요','ok');toast('모핑과 카메라를 저장했어요. 발표에서 이어지는 흐름을 확인하세요.');
+      }});
+  }catch(error){toast(error.message||'모션 편집을 열지 못했어요.',5000);}
+}
+
 function offerMotionSets(O) {
   if (O.closed || O.motionAll || videoBusy(O)) return;
   openMotionSetPanel({

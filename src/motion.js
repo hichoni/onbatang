@@ -21,6 +21,7 @@ import { LOOK_EM, LOOK_EM_MS, itemLook, slideLook } from './live.js';
 import { mountEffectPlayer } from './effect-player.js';
 import { reducedMotion } from './motion-preference.js';
 import { easeFn } from './easing.js';
+import {cleanMorphKey,cleanTravel,travelEase} from './slide-flow.js';
 export { easeFn };
 const SOFT = 'cubic-bezier(.2, .8, .2, 1)';
 const SNAP = 'cubic-bezier(.16, 1, .3, 1)';      // 확 다가와 부드럽게 서는 빠르기(모션그래픽의 '스냅')
@@ -623,15 +624,22 @@ export function matchItems(before, after) {
   const pairs = [];
   const usedA = new Set();
   const usedB = new Set();
+  b.forEach((nb,j)=>{
+    const key=cleanMorphKey(nb?.morphKey);
+    if(!key||key==='off')return;
+    const candidates=a.map((na,i)=>na?.t===nb.t&&na.morphKey===key?i:-1).filter(i=>i>=0);
+    if(candidates.length===1 && b.filter(it=>it?.morphKey===key).length===1){const i=candidates[0];pairs.push([i,j]);usedA.add(i);usedB.add(j);}
+  });
   b.forEach((nb, j) => {
+    if(usedB.has(j)||cleanMorphKey(nb?.morphKey))return;
     const keys = linksOf(nb);
     if (!keys.length) return;
-    const i = a.findIndex((na, k) => !usedA.has(k) && na?.t === nb?.t && linksOf(na).some((v) => keys.includes(v)));
+    const i = a.findIndex((na, k) => !usedA.has(k) && !cleanMorphKey(na?.morphKey) && na?.t === nb?.t && linksOf(na).some((v) => keys.includes(v)));
     if (i >= 0) { pairs.push([i, j]); usedA.add(i); usedB.add(j); }
   });
   const count = (list, used) => {
     const m = new Map();
-    list.forEach((it, k) => { const c = !used.has(k) && contentOf(it); if (c) m.set(c, [...(m.get(c) || []), k]); });
+    list.forEach((it, k) => { const c = !used.has(k) && !cleanMorphKey(it?.morphKey) && contentOf(it); if (c) m.set(c, [...(m.get(c) || []), k]); });
     return m;
   };
   const left = count(a, usedA);
@@ -785,8 +793,9 @@ function poseOf(def, ms, { mirror = false, scale = 1 } = {}) {
  *   장의 모습: { x(옆으로 옮긴 거리. 카드 너비의 %) · y(위아래. 카드 높이의 %) · k · o · turn(도) · b(흐림. 카드 너비의 %) · r(돌린 각도) · lt(더한 밝기)
  *               inset([위, 오른쪽, 아래, 왼쪽] % 또는 null) · circle(% 또는 null) }
  */
-export function transitionPose(id, dir = 1, ms = 0) {
-  const def = TRANSITION_DEFS[id];
+export function transitionPose(id, dir = 1, ms = 0, travel = null) {
+  const custom=morphs(id) && cleanTravel(travel);
+  const def = custom?{...TRANSITION_DEFS[id],ms:custom.ms,ease:travelEase(custom)}:TRANSITION_DEFS[id];
   if (!def) return null;
   const p = easeFn(def.ease || TURN_EASE)(unit(ms / def.ms));
   const pose = (frames) => {
@@ -961,8 +970,8 @@ export function playDesign(card, design, { delay = 0, still = false } = {}) {
  * 돌려주는 것: { ms(걸리는 시간. 틀지 않았으면 0), finish(): 바로 끝낸다(여러 번 불러도 된다), done: 끝나면 풀리는 약속 }
  * 끝난 뒤에는 두 장 모두 움직임이 걸리지 않은 제 모습이다(나가는 장을 떼는 일은 부른 쪽이 한다).
  */
-export function playTransition(old, next, id, dir = 1, { from = null, to = null } = {}) {
-  if (morphs(id) && old && next && from && to && typeof next.animate === 'function' && !calm(next)) return playMorph(old, next, from, to);
+export function playTransition(old, next, id, dir = 1, { from = null, to = null, manual = false } = {}) {
+  if (morphs(id) && old && next && from && to && typeof next.animate === 'function' && (manual || !calm(next))) return playMorph(old, next, from, to, (dir<0?from:to).travel);
   const f = transitionFrames(id, dir, { w: next?.getBoundingClientRect?.().width || 1000 });
   if (!f || !next || typeof next.animate !== 'function' || calm(next)) return { ms: 0, finish() {}, done: Promise.resolve() };
   const opts = { duration: f.ms, easing: f.easing, fill: 'both' };
@@ -1035,8 +1044,9 @@ const lift = (nodes) => { for (const n of nodes) if (n?.style) n.style.willChang
  * 옮겨 온 요소에는 data-moved 를 달아 playDesign 이 다시 나타나게 하지 않는다.
  * 돌려주는 것은 playTransition 과 같다(+ moved: 옮겨 온 요소의 수).
  */
-function playMorph(old, next, from, to) {
-  const def = TRANSITION_DEFS.move;
+function playMorph(old, next, from, to, travel) {
+  const custom=cleanTravel(travel);
+  const def = custom?{...TRANSITION_DEFS.move,ms:custom.ms,ease:travelEase(custom)}:TRANSITION_DEFS.move;
   const nodesOf = (card) => [...card.children].filter((n) => n.classList.contains('fi'));
   const was = nodesOf(old);
   const now = nodesOf(next);
@@ -1087,5 +1097,7 @@ function playMorph(old, next, from, to) {
     for (const n of hidden) n.style.visibility = '';
   };
   const done = Promise.all(anims.map((a) => a.finished.catch(() => {}))).then(end);
-  return { ms: def.ms, finish: end, done, moved: pairs.length };
+  return { ms: def.ms, finish: end, done, moved: pairs.length,
+    seek:p=>{if(!over)for(const a of anims){a.pause();a.currentTime=Math.min(def.ms-.01,Math.max(0,p*def.ms));}},
+    resume:()=>{if(!over)for(const a of anims)a.play();} };
 }

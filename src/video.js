@@ -1,3 +1,4 @@
+import {projectCamera} from './slide-flow.js';
 // 온바탕 편집기의 영상 내보내기(브라우저): 여러 장의 디자인을, 발표할 때의 움직임 그대로 영상 파일 하나로 만든다.
 //
 // 어떻게 그리는가(화면을 녹화하지 않는다)
@@ -532,7 +533,7 @@ function drawMorph(ctx, W, H, from, to, turn, p, flat, n) {
 export function createFilm(designs, { width = 1920, height = 1080, stay = DEFAULT_STAY, canvas = null, scenes = true } = {}) {
   const W = even(width);
   const H = even(height);
-  const list = (Array.isArray(designs) ? designs : []).map((d) => cleanDesign(d, { keepSpaces: true }));
+  const list = (Array.isArray(designs) ? designs : []).map((d) => projectCamera(cleanDesign(d, { keepSpaces: true })));
   const plan = filmPlan(list, { stay, scenes });
   const out = canvas || document.createElement('canvas');
   out.width = W;
@@ -585,10 +586,10 @@ export function createFilm(designs, { width = 1920, height = 1080, stay = DEFAUL
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalAlpha = 1;
     if (slide.turn?.pairs && local < slide.turn.ms && built.has(n - 1)) {
-      drawMorph(ctx, W, H, built.get(n - 1), built.get(n), slide.turn, transitionPose(slide.turn.id, 1, local).next.o, flat, n);
+      drawMorph(ctx, W, H, built.get(n - 1), built.get(n), slide.turn, transitionPose(slide.turn.id, 1, local, list[n].travel).next.o, flat, n);
     } else if (slide.turn && local < slide.turn.ms && built.has(n - 1)) {
       // 전환 효과가 도는 동안: 나가는 장은 다 나온 모습, 들어오는 장은 요소가 나오기 전의 모습이다.
-      const pose = transitionPose(slide.turn.id, 1, local);
+      const pose = transitionPose(slide.turn.id, 1, local, list[n].travel);
       const old = flat(0, n - 1, Infinity);
       const next = flat(1, n, 0);
       ctx.fillStyle = BACKDROP;
