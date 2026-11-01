@@ -45,9 +45,9 @@
     <div><small>발표 도구 / 관찰실</small><h2>두 장을 포개면 무엇이 달라질까요?</h2><p>오전과 오후의 그림자, 표식을 붙이기 전후의 축제 지도를 비교해 보세요. 경계선을 밀면 같은 자리에서 바뀐 부분이 드러나요.</p><div class="story-tools"><button type="button" data-compare-set="sundial">그림자 비교하기</button><button type="button" data-compare-set="wayfinder">축제 안내도 비교하기</button></div></div>
   </article>
   <details id="motion-stories" class="story-shelf"><summary>움직이는 디자인 세트 <small>8종 · 40장</small></summary>
-    <div class="story-tools"><label>수업·행사 선택<select id="story-choice"></select></label></div>
+    <div class="story-tools"><label>수업·행사 선택<select id="story-choice" disabled></select></label></div>
     <div class="story-stage" id="story-stage" aria-label="디자인 세트 발표 미리보기"></div>
-    <div class="story-tools"><output id="story-count" aria-live="polite"></output><button id="story-prev" type="button">이전 장</button><button id="story-next" type="button">다음 장</button></div>
+    <div class="story-tools"><output id="story-count" aria-live="polite">첫 장을 불러오는 중이에요…</output><button id="story-prev" type="button" disabled>이전 장</button><button id="story-next" type="button" disabled>다음 장</button></div>
     <p class="story-guide">장을 넘겨 움직임을 보세요. 네 번째 장에서는 효과가 자동으로 재생돼요. 내 자료로 쓰려면 온바탕 첫 화면의 ‘틀로 시작하기 → 디자인 세트’에서 같은 이름을 고르세요.</p>
   </details>
   <article class="photo-feature" id="photo-study">
@@ -84,12 +84,21 @@
     finally{button.disabled=false;}
   };
   const shelf=document.querySelector('#motion-stories');
-  let stopPreview;
+  const choice=shelf.querySelector('#story-choice'),count=shelf.querySelector('#story-count');
+  let stopPreview,opening=0;
   shelf.addEventListener('toggle',async()=>{
+    const turn=++opening;
     stopPreview?.();stopPreview=null;
-    if(shelf.open){
+    choice.disabled=true;
+    shelf.querySelector('#story-prev').disabled=true;
+    shelf.querySelector('#story-next').disabled=true;
+    count.textContent='첫 장을 불러오는 중이에요…';
+    if(!shelf.open)return;
+    try{
       const {startCollectionPreview}=await import('./collection-preview.js');
-      if(shelf.open&&!stopPreview)stopPreview=startCollectionPreview(shelf);
+      if(shelf.open && turn===opening){stopPreview=startCollectionPreview(shelf);choice.disabled=false;}
+    }catch{
+      if(shelf.open && turn===opening)count.textContent='디자인 세트를 불러오지 못했어요. 연결을 확인하고 페이지를 새로 열어 주세요.';
     }
   });
   if(location.hash==='#motion-stories')shelf.open=true;

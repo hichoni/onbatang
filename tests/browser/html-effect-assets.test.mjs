@@ -73,7 +73,13 @@ test('mobile gallery paints motion on tap, including a scoped opt-in under reduc
   assert.equal(await toggle.getAttribute('aria-pressed'),'false');
   await toggle.tap();assert.equal(await toggle.getAttribute('aria-pressed'),'true');
   await expectFrames();
+  let startImport;
+  const holdImport=new Promise(resolve=>{startImport=resolve});
+  await page.route('**/collection-preview.js',async route=>{await holdImport;await route.continue()});
   await page.locator('#motion-stories summary').tap();
+  assert.ok(await page.locator('#story-next').isDisabled());
+  assert.match(await page.locator('#story-count').innerText(),/불러오는 중/);
+  startImport();
   await page.locator('#story-next').tap();
   assert.match(await page.locator('#story-count').innerText(),/^2 \/ 5/);
   assert.ok(await page.locator('#story-stage').evaluate(n=>n.getAnimations({subtree:true}).some(a=>a.playState==='running')));
