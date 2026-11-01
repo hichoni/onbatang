@@ -1,4 +1,4 @@
-import { cleanEffect, effectArt, EFFECT_ASSETS, paceFactor } from './effect-assets.js';
+import { cleanEffect, playEffectArt, EFFECT_ASSETS, paceFactor } from './effect-assets.js';
 import { sceneContent } from './effect-scenes.js';
 
 const labelOf = id => EFFECT_ASSETS.find(asset => asset.id === id)?.name || '';
@@ -73,8 +73,7 @@ function mountQuestion(host, {node,content,slide}, effect, asset, data, activate
           photo={url:slide.picture.src,width:sw*slide.w/100,height:sh*slide.h/100,slide:{w:sw,h:sh,x:sw*slide.x/100,y:sh*slide.y/100,rot:slide.rot}};
         } else photo={...content,width:node.offsetWidth || w || 1,height:node.offsetHeight || h || 1};
       }
-      const graphic=effectArt(effect.id,true,{...effect,content:data,photo,step});
-      art.replaceChildren(graphic);
+      playEffectArt(art,effect.id,{...effect,content:data,photo,step});
       panel.dataset.step=String(step);
       panel.dataset.last=String(step===last);
       back.disabled=step===0;
@@ -164,7 +163,8 @@ export function mountEffectPlayer(host, bindings, { delay = 0,onQuestionChange }
       Object.assign(graphic.style, { position:'absolute', pointerEvents:'none', zIndex:8, left:x+'%', top:y+'%',
         width:width+'%', aspectRatio:'10 / 7', transform:'translate(-50%, -50%)',
         filter:'drop-shadow(0 1px 2px #17213988)' });
-      const art=effectArt(effect.id,true,{...effect,content:data});
+      host.append(graphic);
+      const art=playEffectArt(graphic,effect.id,{...effect,content:data});
       if (scene) {
         if (!automatic) { for (const timer of queuedScenes) clearTimeout(timer); queuedScenes.clear(); }
         closeScene?.(); closeScene=clear;
@@ -183,8 +183,6 @@ export function mountEffectPlayer(host, bindings, { delay = 0,onQuestionChange }
           height:'2.5%',aspectRatio:'auto',transform:'translate(-50%, -10%)'});
         art.setAttribute('viewBox','-100 30 200 24'); art.setAttribute('preserveAspectRatio','none');
       }
-      graphic.append(art);
-      host.append(graphic);
       if (effect.note) {
         closeNote?.();
         closeNote = clear;

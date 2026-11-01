@@ -3433,11 +3433,19 @@ async function closeDesign(O, btn = null) {
   // 이 기기의 그림 목록은 다시 읽는다(싸다).
   try { S.list = await listDesigns(); } catch { /* 저장소를 못 쓰는 창: 기억하고 있는 목록을 그대로 쓴다 */ }
   // 꾸미던 그림이 작아지면서 목록의 그 그림 자리로 돌아간다(저장되지 않은 빈 그림이면 그냥 사라진다).
-  const id = O.record.id;
-  transit(() => {
+  const returnToShelf = () => {
     render();
     window.scrollTo({ top: 0 });
-    app.querySelector(`.cv-item[data-id="${id}"] .cv-thumb .fe-card`)?.classList.add('cv-moving');
+    return app.querySelector(`.cv-item[data-id="${O.record.id}"] .cv-thumb .fe-card`);
+  };
+  // WebKit can terminate its page while snapshotting the editor and a full template
+  // shelf together. Animate the saved thumbnail after the normal navigation instead.
+  if (navigator.vendor === 'Apple Computer, Inc.') {
+    const thumbnail = returnToShelf();
+    ease(thumbnail, [{ opacity: .45, transform: 'scale(.95)' }, { opacity: 1, transform: 'none' }]);
+  } else transit(() => {
+    const thumbnail = returnToShelf();
+    if (moving) thumbnail?.classList.add('cv-moving');
   }, 'close');
 }
 // ---------- 버전 기록: 예전 판 보기 · 되돌리기 · 새 그림으로 꺼내기(history.js) ----------

@@ -6,7 +6,17 @@ import {tmpdir} from 'node:os';
 import {extname,resolve,sep,join} from 'node:path';
 import {pathToFileURL,fileURLToPath} from 'node:url';
 
-async function openBrowser(t) {
+async function openExport(page,file) {
+  if(process.env.MINICAN_BROWSER==='webkit' && process.platform==='win32'){
+    // WebKit's offline emulation rejects even a local file: navigation on Windows.
+    // Block HTTP(S) at the request boundary and actually open the downloaded file.
+    await page.context().route(/^https?:/,route=>route.abort('internetdisconnected'));
+    await page.context().setOffline(false);
+  }
+  await page.goto(pathToFileURL(file).href);
+}
+
+async function openBrowser(t, {phone=false} = {}) {
   const hosted = !!process.env.MINICAN_HOST_ROOT, base = hosted ? '/minican' : '';
   const root = resolve(process.env.MINICAN_HOST_ROOT || fileURLToPath(new URL('../../',import.meta.url)));
   const types = {'.html':'text/html; charset=utf-8','.js':'text/javascript','.css':'text/css','.svg':'image/svg+xml','.woff2':'font/woff2','.json':'application/json'};
@@ -23,16 +33,55 @@ async function openBrowser(t) {
   await new Promise(done => server.listen(0,'127.0.0.1',done));
   t.after(() => server.close());
   const origin = 'http://127.0.0.1:'+server.address().port;
-  const {chromium} = await import(pathToFileURL(process.env.MINICAN_PLAYWRIGHT_PATH).href);
-  const browser = await chromium.launch({channel:process.env.MINICAN_BROWSER || 'msedge',headless:true});
+  const {chromium,webkit,devices} = await import(pathToFileURL(process.env.MINICAN_PLAYWRIGHT_PATH).href);
+  const browser = process.env.MINICAN_BROWSER==='webkit'?await webkit.launch():await chromium.launch({channel:process.env.MINICAN_BROWSER || 'msedge',headless:true});
   t.after(() => browser.close());
-  const page = await browser.newPage({viewport:{width:1280,height:800}});
+  const page = await browser.newPage(phone?devices['iPhone 13']:{viewport:{width:1280,height:800}});
   page.setDefaultTimeout(12000);
   const errors = [];
   page.on('pageerror',e => errors.push(e.message));
   await page.goto(origin+'/seed');
   return {hosted,base,origin,browser,page,errors};
 }
+
+test('mobile gallery paints motion on tap, including a scoped opt-in under reduced motion', {
+  skip:!process.env.MINICAN_PLAYWRIGHT_PATH, timeout:60000,
+}, async t=>{
+  const {page,origin,base,errors}=await openBrowser(t,{phone:true});
+  // Model a WebKit implementation which cannot enumerate descendant animations on an SVG.
+  await page.addInitScript(()=>{SVGSVGElement.prototype.getAnimations=()=>[];});
+  await page.goto(origin+base+'/app/effects.html');
+  const toggle=page.locator('#motion-switch'), tile=page.locator('[data-asset=prism]'), svg=tile.locator('svg');
+  const moving=()=>svg.locator('g').evaluateAll(groups=>groups.some(g=>g.getAnimations().some(a=>a.playState==='running')));
+  async function expectFrames(control=tile){
+    await control.scrollIntoViewIfNeeded();
+    await control.tap();
+    assert.ok(await moving());
+    const art=tile.locator('.art');
+    const early=await art.screenshot({animations:'allow'});
+    await page.waitForTimeout(130);
+    assert.notDeepEqual(await art.screenshot({animations:'allow'}),early);
+  }
+  await page.emulateMedia({reducedMotion:'no-preference'});
+  assert.ok(await toggle.isHidden());
+  await expectFrames(page.locator('#try-motion'));
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await toggle.waitFor({state:'visible'});
+  assert.equal(await moving(),false);
+  assert.match(await tile.textContent(),/움직임 한 번 재생/);
+  await expectFrames();
+  assert.equal(await toggle.getAttribute('aria-pressed'),'false');
+  await toggle.tap();assert.equal(await toggle.getAttribute('aria-pressed'),'true');
+  await expectFrames();
+  await page.locator('#motion-stories summary').tap();
+  await page.locator('#story-next').tap();
+  assert.match(await page.locator('#story-count').innerText(),/^2 \/ 5/);
+  assert.ok(await page.locator('#story-stage').evaluate(n=>n.getAnimations({subtree:true}).some(a=>a.playState==='running')));
+  await page.reload();await toggle.waitFor();
+  assert.equal(await toggle.getAttribute('aria-pressed'),'false');
+  assert.equal(await moving(),false);
+  assert.deepEqual(errors,[]);
+});
 
 test('slide comparison keeps its pair on the same slide and works in a reopened offline lesson', {
   skip:!process.env.MINICAN_PLAYWRIGHT_PATH, timeout:100000,
@@ -45,7 +94,10 @@ test('slide comparison keeps its pair on the same slide and works in a reopened 
   await page.goto(origin+(hosted?'/minican-app.html':'/app/index.html'));
   await page.locator('button[data-starts=collection]').click();
   await page.locator('button[data-layout=collection-sundial-1]').click();
+  await page.locator('.cv-back').waitFor();
+  await page.waitForFunction(()=>!document.documentElement.dataset.cvMove);
   await page.locator('.cv-back').click();
+  await page.getByRole('button',{name:'그림자 관측소 열기',exact:true}).waitFor();
   await page.reload();await page.getByRole('button',{name:'그림자 관측소 열기',exact:true}).click();
   await page.locator('.cv-show-btn').click();
   async function compare(p,small){
@@ -71,7 +123,11 @@ test('slide comparison keeps its pair on the same slide and works in a reopened 
     const boxes=await d.locator('.obc-layer').evaluateAll(nodes=>nodes.map(n=>({x:n.offsetLeft,y:n.offsetTop})));
     assert.ok(small?boxes[1].y>boxes[0].y:boxes[1].x>boxes[0].x);
     await d.getByRole('button',{name:'커튼',exact:true}).click();
-    await p.keyboard.press('Escape');await d.waitFor({state:'detached'});
+    // Safari can reserve Escape to leave native fullscreen. Its on-screen close
+    // control is also the path available to iPhone users.
+    if(process.env.MINICAN_BROWSER==='webkit')await d.getByRole('button',{name:'비교 닫기'}).click();
+    else await p.keyboard.press('Escape');
+    await d.waitFor({state:'detached'});
     await launch.click();assert.equal(await range.inputValue(),'1');assert.equal(await mark.count(),1);
     const oldLeft=await l.inputValue();await l.selectOption(await r.inputValue());
     assert.equal(await r.inputValue(),oldLeft);assert.equal(await mark.count(),0);
@@ -85,7 +141,7 @@ test('slide comparison keeps its pair on the same slide and works in a reopened 
   t.after(async()=>{await rm(file,{force:true});await rmdir(dir);});await (await dl).saveAs(file);
   const offline=await browser.newContext({offline:true,reducedMotion:'reduce',viewport:{width:390,height:844}});
   const p=await offline.newPage();p.on('pageerror',e=>errors.push(e.message));
-  await p.goto(pathToFileURL(file).href);await p.getByRole('button',{name:/발표 모드/}).click();
+  await openExport(p,file);await p.getByRole('button',{name:/발표 모드/}).click();
   await compare(p,true);assert.match(await p.locator('.lesson-show-count').innerText(),/1 \/ 5/);
   assert.deepEqual(errors,[]);
 });
@@ -174,7 +230,8 @@ test('element effects survive editor saves and run in the presenter and the down
     const signal=surface.locator('[data-effect-playing=signal] svg');
     assert.equal(await signal.locator('path').first().getAttribute('stroke'),'#ffd678');
     const timing=await signal.evaluate(svg=>svg.getAnimations({subtree:true})[0]?.effect.getTiming().duration ?? null);
-    assert.equal(timing,await signal.evaluate(()=>matchMedia('(prefers-reduced-motion: reduce)').matches)?null:1080*1.55);
+    const still=await signal.evaluate(n=>matchMedia('(prefers-reduced-motion: reduce)').matches && !n.closest('[data-ob-allow-motion]'));
+    assert.equal(timing,still?null:1080*1.55);
     assert.equal(await hit.getAttribute('aria-expanded'),'true');
     await hit.press('Enter');
     assert.equal(await hit.getAttribute('aria-expanded'),'false');
@@ -196,6 +253,14 @@ test('element effects survive editor saves and run in the presenter and the down
     await chart.getByRole('button',{name:'강조 화면 닫기'}).click();
   }
   await interact(page.locator('.cv-show-stage'));
+  await page.emulateMedia({reducedMotion:'reduce'});
+  const motionSwitch=page.getByRole('button',{name:/^움직임 켜기 ·/});
+  await motionSwitch.waitFor();
+  await interact(page.locator('.cv-show-stage'));
+  await motionSwitch.click();
+  await interact(page.locator('.cv-show-stage'));
+  await page.getByRole('button',{name:/^움직임 끄기 ·/}).click();
+  await page.emulateMedia({reducedMotion:'no-preference'});
   await checkScenes(page.locator('.cv-show-stage'));
   await page.keyboard.press('ArrowRight');
   await page.locator('.cv-show-stage [data-effect-note]').filter({hasText:'완성했어요'}).waitFor();
@@ -245,7 +310,7 @@ test('element effects survive editor saves and run in the presenter and the down
   const offline=await browser.newContext({offline:true,reducedMotion:'reduce',viewport:{width:390,height:844}});
   const opened=await offline.newPage(); opened.setDefaultTimeout(10000);
   opened.on('pageerror',e => errors.push(e.message));
-  await opened.goto(pathToFileURL(file).href);
+  await openExport(opened,file);
   const frame=opened.locator('.lesson-effects-frame');
   await interact(frame);
   await checkScenes(frame);
@@ -300,7 +365,7 @@ test('a teacher starts a motion set, reopens it, presents its linked art and dow
   await (await ready).saveAs(file);
   const offline=await browser.newContext({offline:true,reducedMotion:'reduce',viewport:{width:390,height:844}});
   const opened=await offline.newPage();opened.on('pageerror',e=>errors.push(e.message));
-  await opened.goto(pathToFileURL(file).href);
+  await openExport(opened,file);
   const frame=opened.locator('.lesson-effects-frame');
   await frame.locator('[data-effect-trigger=corona]').click();
   assert.equal(await frame.locator('[data-effect-playing=corona] svg').evaluate(svg=>svg.getAnimations({subtree:true}).length),0);
@@ -385,7 +450,7 @@ test('a teacher edits a question on a text box, controls each clue, and reopens 
   t.after(async()=>{await rm(file,{force:true});await rmdir(dir);});await (await ready).saveAs(file);
   const offline=await browser.newContext({offline:true,reducedMotion:'reduce',viewport:{width:390,height:844}});
   const opened=await offline.newPage();opened.on('pageerror',e=>errors.push(e.message));
-  await opened.goto(pathToFileURL(file).href);
+  await openExport(opened,file);
   const nav=opened.locator('.lesson-navigation'),next=nav.getByRole('button',{name:'다음',exact:true});
   await check(opened.locator('.lesson-effects-frame'),()=>next.click(),()=>nav.getByRole('button',{name:'이전',exact:true}).click());
   assert.ok(await nav.getByRole('button',{name:'이전',exact:true}).isDisabled());await next.click();

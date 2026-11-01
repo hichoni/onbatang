@@ -4,6 +4,7 @@
 // LIVE_STILL 초의 멈춘 모습이 들어간다. 바탕 위의 글 · 사진 · 움직임은 그대로다.
 // 스타일마다 그릴 때의 규칙(한 장의 종이 · 투명한 겹 · 결정론)은 코드로 짠 영화 스타일 모음(Lemo-Opuscar)의 방식을 따랐다.
 import { el } from './dom.js';
+import { reducedMotion } from './motion-preference.js';
 
 /** 그림 파일 · 작은 그림에 쓰는 순간(초): 다 피어나고 자리 잡은 모습. */
 export const LIVE_STILL = 4;
@@ -998,7 +999,6 @@ export function lookCard(card, look, t, opts = {}) {
   });
 }
 
-const reduced = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 /**
  * root 안의 움직이는 바탕(.fe-live 그림)마다 그 위에 canvas 를 얹어 움직이게 한다(발표 · 공유 링크 · 꾸미기 판).
  * 시간은 부른 때를 0 초로 센다(발표는 장이 열린 때. 영상 내보내기와 같은 모습이 같은 때에 나온다). 동작 줄이기를 켠 기기는 멈춘 모습 그대로다.
@@ -1012,7 +1012,7 @@ export function liveBackdrops(root, { fps = 60, start = performance.now() } = {}
     const canvas = el('canvas', { class: 'fe-live fe-live-canvas', 'aria-hidden': 'true' });
     img.after(canvas);
     const ctx = canvas.getContext('2d');
-    let raf = 0, last = -1, stopped = false, shown = false, waited = 0;
+    let raf = 0, last = -1, stopped = false, shown = false, waited = 0, wasStill;
     const fit = () => {
       const box = canvas.getBoundingClientRect(), dpr = Math.min(1.5, globalThis.devicePixelRatio || 1);
       const w = Math.max(16, Math.min(1920, Math.round(box.width * dpr))), h = Math.max(16, Math.min(1920, Math.round(box.height * dpr)));
@@ -1025,7 +1025,8 @@ export function liveBackdrops(root, { fps = 60, start = performance.now() } = {}
       shown = true;
       raf = requestAnimationFrame(draw);
       if (document.hidden) return;
-      const still = reduced(), t = still ? LIVE_STILL : (now - start) / 1000;
+      const still = reducedMotion(canvas), t = still ? LIVE_STILL : (now - start) / 1000;
+      if (still !== wasStill) { last = -1; wasStill = still; }
       if (last >= 0 && (still || t - last < 1 / fps - 0.002)) return;
       fit(); last = t;
       paintLive(ctx, canvas.width, canvas.height, live, t, seed);
@@ -1051,7 +1052,7 @@ export function liveLooks(card, { fps = 60, start = performance.now(), look = lo
   if (!card || looping.has(card) || (!look && !card.dataset?.looks)) return { stop() {}, leave: () => 0 };
   looping.add(card);
   const seen = intro ? new WeakMap() : null;
-  let raf = 0, last = -1, stopped = false, shown = false, waited = 0, ticks = 0, leave = null, leaving = null;
+  let raf = 0, last = -1, stopped = false, shown = false, waited = 0, ticks = 0, leave = null, leaving = null, wasStill;
   const tick = (now) => {
     if (stopped) return;
     if (!card.isConnected) { if (shown || ++waited > 600) { run.stop(); return; } raf = requestAnimationFrame(tick); return; }
@@ -1059,7 +1060,9 @@ export function liveLooks(card, { fps = 60, start = performance.now(), look = lo
     raf = requestAnimationFrame(tick);
     if (document.hidden) return;
     // 멈춘 모습일 때도 가끔 다시 입힌다(꾸미기 판에서 글을 새로 그리면 효과가 없는 글이 된다).
-    if (reduced()) { if (last < 0 || ++ticks % 15 === 0) { last = LIVE_STILL; lookCard(card, look, LIVE_STILL, { move: false }); } return; }
+    const still = reducedMotion(card);
+    if (still !== wasStill) { last = -1; wasStill = still; }
+    if (still) { if (last < 0 || ++ticks % 15 === 0) { last = LIVE_STILL; lookCard(card, look, LIVE_STILL, { move: false }); } return; }
     const t = (now - start) / 1000;
     if (last >= 0 && t - last < 1 / fps - 0.002) return;
     last = t;
@@ -1069,7 +1072,7 @@ export function liveLooks(card, { fps = 60, start = performance.now(), look = lo
     stop() { if (stopped) return; stopped = true; cancelAnimationFrame(raf); looping.delete(card); leavers.delete(card); lookCard(card, null, 0, { stop: true }); },
     // 지금 보이는 효과 글들이 사라지기 시작한다. 돌려주는 것: 다 사라지는 데 걸리는 ms(사라질 글이 없거나 동작 줄이기면 0).
     leave() {
-      if (stopped || leave != null || reduced() || !card.isConnected) return 0;
+      if (stopped || leave != null || reducedMotion(card) || !card.isConnected) return 0;
       const now = (performance.now() - start) / 1000;
       const nodes = textsOf(card).filter((node) => nodeLook(node, look) && visibleNow(node));
       const ms = Math.max(0, ...nodes.map((node) => lookOutro(nodeLook(node, look))?.ms || 0));

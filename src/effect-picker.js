@@ -1,6 +1,7 @@
 import { el } from './dom.js';
 import { EFFECT_ASSETS, effectArt, cleanEffect, previewEffect } from './effect-assets.js';
 import { CLUE_LIMITS, clueOptions } from './clue-card.js';
+import { reducedMotion } from './motion-preference.js';
 
 export function effectPicker(item, apply, aspect=1) {
   const saved = cleanEffect(item.effect,item);
@@ -30,12 +31,12 @@ export function effectPicker(item, apply, aspect=1) {
   when.value = saved?.when || 'press';
   const replay=el('button',{class:'fe-btn',type:'button',onClick:()=>{
     if(active.last) step=(step+1)%(active.last(item,options())+1);
-    preview(true);
+    preview(true,!active.last && reducedMotion(sample));
   }});
-  function preview(animate) {
+  function preview(animate, playOnce=false) {
     const opts=options();
-    replay.textContent=active.last?(step===active.last(item,opts)?'처음부터':active.next(step,item,opts)):'다시 보기';
-    previewEffect(sample,selected,animate,{content:{...item,aspect},step,pace:pace.value,palette:palette.value,...opts});
+    replay.textContent=active.last?(step===active.last(item,opts)?'처음부터':active.next(step,item,opts)):(reducedMotion(sample)?'움직임 한 번 재생':'다시 보기');
+    previewEffect(sample,selected,animate,{content:{...item,aspect},step,pace:pace.value,palette:palette.value,playOnce,...opts});
   }
   pace.onchange=palette.onchange=() => preview(true);
   function pick(asset, animate) {

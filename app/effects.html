@@ -11,6 +11,7 @@
   body{margin:0;background:#101823;color:#f1f5ee;font-family:system-ui,"Malgun Gothic",sans-serif}
   main{max-width:920px;margin:auto;padding:clamp(24px,5vw,64px) 20px}
   header{border-top:2px solid #9de0cc;padding-top:20px}
+  #try-motion{display:inline-flex;align-items:center;min-height:44px;margin-top:8px;color:#a0e9d1;font-weight:700;text-underline-offset:4px}
   small{font-size:.77rem;letter-spacing:.1em;font-weight:750;color:#9de0cc}
   h1{font-size:clamp(2.1rem,6vw,3.7rem);line-height:1.12;letter-spacing:-.06em;margin:16px 0}
   p{line-height:1.65;color:#c6d2d6;margin:0}
@@ -24,6 +25,8 @@
   #questions em{color:#101f2b;background:#a0e9d1;padding:5px 9px;border-radius:7px}
   b{font-size:1.15rem} em{grid-row:2;grid-column:2;font-style:normal;color:#9de0cc;font-size:.78rem;align-self:center}
   .hint{grid-column:1/-1;color:#c4d3d9;font-size:.88rem}
+  #motion-notice:not([hidden]){display:flex;align-items:center;flex-wrap:wrap;gap:12px 20px;margin-top:18px;padding:14px 16px;border:1px solid #55796f;border-radius:10px;background:#1b302e}
+  #motion-notice p{flex:1 1 230px;color:#e1f0e9}#motion-switch{min-height:44px;padding:6px 14px;border:0;border-radius:7px;color:#102b24;background:#a0e9d1;font:inherit;font-weight:700;cursor:pointer}
   .story-shelf{margin:24px 0;border:1px solid #536573;border-radius:12px;background:#1a2734;overflow:hidden}
   .story-shelf summary{cursor:pointer;padding:16px 20px;font-weight:700;font-size:1.1rem}.story-shelf summary small{margin-left:.7em}
   .story-tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 16px}.story-tools output{margin-inline-end:auto}
@@ -35,7 +38,8 @@
   .photo-feature button,#photo-demo>.demo-close{font:inherit;border:0;background:#a8e8d3;color:#11272a;border-radius:7px;padding:10px 15px;cursor:pointer;min-height:44px}#photo-demo{border:0;border-radius:14px;padding:12px;background:#f5f7f3;width:min(900px,96vw);max-height:92dvh}#photo-demo::backdrop{background:#081018cc}#photo-demo>.demo-close{display:block;margin:0 0 8px auto}#photo-demo header{border:0;padding:0}#photo-demo p{color:inherit}#photo-demo .pixel-setup{background:#fff}
 </style>
 <main>
-  <header><small>온바탕 / 움직임</small><h1>HTML 모션 에셋</h1><p>작은 창 속에 보이는 그림은 무엇일까요? 카드를 눌러 단서를 하나씩 열어 보세요.</p></header>
+  <header><small>온바탕 / 움직임</small><h1>HTML 모션 에셋</h1><p>효과 카드를 눌러 움직임을 재생하거나, 디자인 세트의 다음 장을 열어 전환을 살펴보세요.</p><a id="try-motion" href="#prism-demo">프리즘 리본 한 번 재생</a></header>
+  <aside id="motion-notice" hidden><p aria-live="polite"></p><button id="motion-switch" type="button" hidden>움직임 켜기</button></aside>
   <article id="slide-compare" class="story-shelf compare-feature">
     <svg viewBox="0 0 250 145" aria-hidden="true"><rect x="1" y="1" width="248" height="143" rx="9" fill="#233e49" stroke="#54747a"/><path d="M125 2h115q8 0 8 8v126q0 7-8 7H125z" fill="#efd7ac"/><circle cx="125" cy="72" r="53" fill="none" stroke="#8c9f94" stroke-dasharray="2 5"/><path d="m55 59 70 11v5L55 63z" fill="#86acc0"/><path d="m125 70 67-25 1 4-68 26z" fill="#98795e"/><path d="M125 6v132" stroke="#aef4d0" stroke-width="2"/><circle cx="125" cy="72" r="7" fill="#fff1cd" stroke="#2c453f" stroke-width="2"/><g fill="#ffcb79"><circle cx="209" cy="99" r="9"/><circle cx="39" cy="100" r="8"/></g></svg>
     <div><small>발표 도구 / 관찰실</small><h2>두 장을 포개면 무엇이 달라질까요?</h2><p>오전과 오후의 그림자, 표식을 붙이기 전후의 축제 지도를 비교해 보세요. 경계선을 밀면 같은 자리에서 바뀐 부분이 드러나요.</p><div class="story-tools"><button type="button" data-compare-set="sundial">그림자 비교하기</button><button type="button" data-compare-set="wayfinder">축제 안내도 비교하기</button></div></div>
@@ -65,6 +69,14 @@
 <script type="module">
   import { EFFECT_ASSETS, previewEffect } from '../src/effect-assets.js';
   import {setupPhotoDemo} from './photo-study-demo.js';
+  import {bindMotionSwitch,reducedMotion} from '../src/motion-preference.js';
+  const notice=document.querySelector('#motion-notice'),motionSwitch=document.querySelector('#motion-switch');
+  const updatePlayLabels=[];
+  bindMotionSwitch(document.querySelector('main'),motionSwitch,(enabled,reduced)=>{
+    notice.hidden=!reduced;
+    notice.querySelector('p').textContent=enabled?'이 화면에서 움직임을 켰어요. 효과를 누르거나 디자인 세트의 다음 장을 열어 보세요.':'기기의 ‘동작 줄이기’ 설정으로 정지 그림을 보여 주고 있어요. 원하면 이 화면에서만 움직임을 켤 수 있어요.';
+    updatePlayLabels.forEach(update=>update());
+  });
   setupPhotoDemo();
   for(const button of document.querySelectorAll('[data-compare-set]'))button.onclick=async()=>{
     button.disabled=true;
@@ -92,20 +104,31 @@
     const hint=document.createElement('span'), play=document.createElement('em');
     button.dataset.asset=asset.id;
     if(asset.id==='cluecard')button.id='clue-card';
+    if(asset.id==='prism')button.id='prism-demo';
     art.className='art';
     let step=0;
-    const render=animate=>{
-      previewEffect(art,asset.id,animate,{...asset.demo,pace:pace.value,palette:palette.value,step,
+    const label=()=>{
+      play.textContent=asset.last?(step===asset.last(asset.example,asset.demo)?'처음부터':asset.next(step,asset.example,asset.demo)):(reducedMotion(button)?'움직임 한 번 재생':'▶ 재생');
+    };
+    updatePlayLabels.push(label);
+    const render=(animate,playOnce=false)=>{
+      previewEffect(art,asset.id,animate,{...asset.demo,pace:pace.value,palette:palette.value,step,playOnce,
         content:asset.id==='kinetic'?{t:'text',text:title.value}:asset.id==='bars'&&chart.value==='change'?changes:asset.example});
-      play.textContent=asset.last?(step===asset.last(asset.example,asset.demo)?'처음부터':asset.next(step,asset.example,asset.demo)):'▶ 재생';
+      label();
     };
     render(false); posters.push(()=>render(false));
     name.textContent=asset.name; hint.className='hint'; hint.textContent=asset.hint;
     button.append(art,name,play,hint);
-    button.onclick=() => {if(asset.last)step=(step+1)%(asset.last(asset.example,asset.demo)+1);render(true);};
+    button.onclick=() => {if(asset.last)step=(step+1)%(asset.last(asset.example,asset.demo)+1);render(true,!asset.last && reducedMotion(button));};
     document.querySelector(asset.last?'#questions':asset.example?'#scenes':'#accents').append(button);
   }
   if(location.hash==='#clue-card')document.getElementById('clue-card').scrollIntoView({block:'center'});
+  document.querySelector('#try-motion').onclick=event=>{
+    event.preventDefault();
+    const tile=document.getElementById('prism-demo');
+    tile.scrollIntoView({block:'center'});
+    tile.focus({preventScroll:true});tile.click();
+  };
   title.oninput=chart.onchange=pace.onchange=palette.onchange=()=>posters.forEach(draw=>draw());
 </script>
 </html>

@@ -25,7 +25,7 @@
     "app/pptx-import/preview-punctuation.js": "8ff4f855942dde60b6302e775e5a06b58b411e34b015c129088157533934c90e",
     "app/pptx-import/worker.js": "e4ea8c3a9237c1e1b2fc8dc93f57389cbb2f7966134252b8078ab44ef01dc14c",
     "app/zip.js": "c7c09e5385bab4e403509ab734acb182d15ff017c469e731b05a5d1f3eead18e",
-    "package-lock.json": "561e316fe1b1c19a6f1b918950e2484476b00577b14dd80c5d7a1e464f37e553",
+    "package-lock.json": "fc395001427a7490006db05bbcae807afee4664b47ca21ce951a27b918bdb816",
     "src/activity.js": "7e6ff97046d62a8b63f6dd4a85ba2cc0760fc74605e9ae308eaa73d4b25ae29f",
     "src/chart.js": "ec041e78d1221d41f66e304ecdff4173ec0f23d4394632a409dc2dc7d83eb407",
     "src/classroom-accents.js": "41b27fa7ca336ef4c700c00c606b0bc9983d352299ce62362305c1212ffb9aa8",
@@ -33,12 +33,13 @@
     "src/crop.js": "ec9159574565f560476ede8f5292609ab74eae42d130fe0bf59a1ad8844ac1fb",
     "src/document.js": "4b7bf138e5055212d6764282660034d9b840cfd89d0506a123686c02bf147a70",
     "src/dom.js": "381c1e39c6b79f846820e6dd8a9e214e0afda803c65fbb6c5272cd36326ac5b6",
-    "src/effect-assets.js": "077013574d88dd6eb03580364d95208ec1f9f8d20c4785b59cf507980d8927fa",
+    "src/effect-assets.js": "8814aeb32d62ab978b21dfb9038e142279dd358509867e43a3d0a670efa2ef58",
     "src/effect-scenes.js": "d0f7d83f41d1ed2ef68ad3c30bad289924f51929a0204d85870092e0519b225c",
     "src/gai-app.js": "b475f79811d851731cc5b65ab312b0b4b64274e7661b6a5b79e71b6e5d072073",
     "src/links.js": "b1900f5a82be0132590e8abb5d0eebe974e5873a524b5264f8f413272d94a70b",
-    "src/live.js": "0fa7d700bf2ac2f5737df9f723775639707360f387ee99881a5ff64cae8071c3",
+    "src/live.js": "8751bcb9e360138d5b257811b0f7afa09916eb58d664be8b48498eb3cc1d7cd9",
     "src/math.js": "dd8c86de304220b56502f7e8c93a89afcd3114e993d7387b8d1859f989fb81e6",
+    "src/motion-preference.js": "9026baa6167600bb24da8fb129fc000ac0815c3b859bd0c5572f9953def9d758",
     "src/omml-tex.js": "2f8c5d29e60cb2fa0d213f85d8a8a8a6487ac9eef83fdecee63fab765524de17",
     "src/pixel-art.js": "7e6553bb54d4805a4019255b2759ad983d35811999335a8a800a615e7329d4f1",
     "src/quiz.js": "20d6c7811d8cff1037bab98ec91aa5b2dda8c40bd461cbf0642da7cec7c12916",
@@ -102,7 +103,7 @@
     },
     "pptx-worker.js": {
       "bytes": 253241,
-      "sha256": "868906699cc2931bf8b03dcdd3a644eec5632112133b443c36823787999e79bb"
+      "sha256": "5660fe383dd4e3c05516bff3390dbb5ae6ba81bca9b8ade2010fc099db076b42"
     },
     "preview-frame.html": {
       "bytes": 1243897,

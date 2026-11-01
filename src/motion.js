@@ -19,6 +19,7 @@
 
 import { LOOK_EM, LOOK_EM_MS, itemLook, slideLook } from './live.js';
 import { mountEffectPlayer } from './effect-player.js';
+import { reducedMotion } from './motion-preference.js';
 const SOFT = 'cubic-bezier(.2, .8, .2, 1)';
 const SNAP = 'cubic-bezier(.16, 1, .3, 1)';      // 확 다가와 부드럽게 서는 빠르기(모션그래픽의 '스냅')
 
@@ -835,9 +836,7 @@ export function transitionPose(id, dir = 1, ms = 0) {
 // ---------- 재생(브라우저) ----------
 
 /** 움직임을 줄여 달라고 해 둔 기기인지(그러면 아무것도 틀지 않는다). */
-export function calm() {
-  return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
-}
+export const calm = reducedMotion;
 
 /**
  * 요소 하나를 그 효과로 나타나게 한다. node 는 그 요소를 그린 것(render.js 의 itemView), item 은 그 요소의 값.
@@ -845,8 +844,8 @@ export function calm() {
  */
 export function playEnter(node, item, id, { delay = 0, scale = 1, mirror = false } = {}) {
   // 타자 치듯: 글자가 실제로 놓인 자리를 재어 그 자리까지 연다.
-  const k = enterKeyframes(item, id, { scale, mirror, stops: id === 'type' && !calm() ? measureType(node) : null });
-  if (!k || !node || typeof node.animate !== 'function' || calm()) return null;
+  const k = enterKeyframes(item, id, { scale, mirror, stops: id === 'type' && !calm(node) ? measureType(node) : null });
+  if (!k || !node || typeof node.animate !== 'function' || calm(node)) return null;
   return node.animate(k.keyframes, { duration: k.ms, delay, easing: k.easing, fill: 'backwards' });
 }
 
@@ -858,7 +857,7 @@ export function playExit(node, item, id) {
   if (!node) return null;
   const k = exitKeyframes(item, id);
   const hide = () => { node.style.visibility = 'hidden'; };
-  if (!k || typeof node.animate !== 'function' || calm()) { hide(); return null; }
+  if (!k || typeof node.animate !== 'function' || calm(node)) { hide(); return null; }
   const a = node.animate(k.keyframes, { duration: k.ms, easing: k.easing, fill: 'forwards' });
   // 끝나면 숨기고 움직임을 걷는다(붙들어 둔 모습이 남지 않게).
   a.finished.then(() => { hide(); try { a.cancel(); } catch { /* 이미 걷혔다 */ } }, () => {});
@@ -868,9 +867,9 @@ export function playExit(node, item, id) {
 /** 요소 하나를 강조 효과로 한 번 움직인다(끝나면 흔적이 없다). 틀지 못했으면 null. */
 export function playEmphasis(node, item, id) {
   // 글자 효과의 강조: 그 글에 누른 때를 적어 두면 live.js(liveLooks)가 그때부터 강조 움직임을 그린다.
-  if (id === LOOK_EM) { if (node && !calm()) node.dataset.lkHit = String(performance.now()); return null; }
+  if (id === LOOK_EM) { if (node && !calm(node)) node.dataset.lkHit = String(performance.now()); return null; }
   const k = emphasisKeyframes(item, id);
-  if (!k || !node || typeof node.animate !== 'function' || calm()) return null;
+  if (!k || !node || typeof node.animate !== 'function' || calm(node)) return null;
   return node.animate(k.keyframes, { duration: k.ms, easing: k.easing });
 }
 
@@ -882,7 +881,7 @@ export function playEmphasis(node, item, id) {
 export function playIdle(node, item, id, { delay = 0, phase = 0, scale = 1 } = {}) {
   // (빠르기는 idleKeyframes 가 요소의 sp 로 입힌다.)
   const k = idleKeyframes(item, id, { scale });
-  if (!k || !node || typeof node.animate !== 'function' || calm()) return null;
+  if (!k || !node || typeof node.animate !== 'function' || calm(node)) return null;
   // Phase is an offset within the loop, never a subtraction from its gate.
   // A negative delay used to start a new idle *during* a morph and override
   // that morph's transform, making an otherwise paired object jump in place.
@@ -997,9 +996,9 @@ export function playDesign(card, design, { delay = 0, still = false } = {}) {
  * 끝난 뒤에는 두 장 모두 움직임이 걸리지 않은 제 모습이다(나가는 장을 떼는 일은 부른 쪽이 한다).
  */
 export function playTransition(old, next, id, dir = 1, { from = null, to = null } = {}) {
-  if (morphs(id) && old && next && from && to && typeof next.animate === 'function' && !calm()) return playMorph(old, next, from, to);
+  if (morphs(id) && old && next && from && to && typeof next.animate === 'function' && !calm(next)) return playMorph(old, next, from, to);
   const f = transitionFrames(id, dir, { w: next?.getBoundingClientRect?.().width || 1000 });
-  if (!f || !next || typeof next.animate !== 'function' || calm()) return { ms: 0, finish() {}, done: Promise.resolve() };
+  if (!f || !next || typeof next.animate !== 'function' || calm(next)) return { ms: 0, finish() {}, done: Promise.resolve() };
   const opts = { duration: f.ms, easing: f.easing, fill: 'both' };
   const drop = lift([next, f.old ? old : null]);
   const anims = [next.animate(f.next, opts)];

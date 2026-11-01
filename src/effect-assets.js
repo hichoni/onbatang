@@ -4,6 +4,7 @@ import { kineticTitle, chartFocus, titleExample, chartExample, sceneContent } fr
 import { REVEALS } from './reveal-scenes.js';
 import { CLASSROOM_ACCENTS } from './classroom-accents.js';
 import { CLUE_CARD, clueOptions } from './clue-card.js';
+import { reducedMotion } from './motion-preference.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 function svg(tag, attributes) {
@@ -125,19 +126,23 @@ export function cleanEffect(raw, item) {
     ...(typeof raw.palette==='string' && Object.hasOwn(EFFECT_PALETTES,raw.palette) ? {palette:raw.palette} : {}) };
 }
 
-export function effectArt(id, animate = false, {pace,palette,content,step=0,photo,...settings} = {}) {
+function drawArt(id, animate, {pace,palette,content,step=0,photo,playOnce=false,...settings} = {}, container, animations) {
   const asset = registry.get(id);
   if (!asset) return null;
   const art = svg('svg', { viewBox: asset.example?'0 0 720 360':'-100 -70 200 140', 'aria-hidden': 'true', focusable: 'false' });
   art.style.cssText = 'width:100%;height:100%;display:block;overflow:visible;pointer-events:none';
-  const running = animate && !globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  if (container) container.replaceChildren(art);
+  const running = animate && (playOnce || !reducedMotion(container));
   function part(tag, attrs, frames, delay = 0, duration = 1050) {
     const group = svg('g', {});
     const node=svg(tag,attrs);
     group.append(node); art.append(group);
-    if (running && frames && group.animate) group.animate(frames, {
-      duration:duration*paceFactor(pace), delay:delay*paceFactor(pace), fill: 'both', easing: 'cubic-bezier(.22,.68,.32,1)',
-    });
+    if (running && frames && group.animate) {
+      const animation = group.animate(frames, {
+        duration:duration*paceFactor(pace), delay:delay*paceFactor(pace), fill:'both', easing:'cubic-bezier(.22,.68,.32,1)',
+      });
+      animations?.push(animation);
+    }
     return node;
   }
   const data=asset.example && (sceneContent(id,content) || asset.example);
@@ -154,11 +159,19 @@ export function effectArt(id, animate = false, {pace,palette,content,step=0,phot
   return art;
 }
 
-// Keep the final gallery tile legible, including after rapid repeated clicks.
+export function effectArt(id, animate = false, options) {
+  return drawArt(id,animate,options);
+}
+
+export function playEffectArt(container,id,options) {
+  return drawArt(id,true,options,container);
+}
+
+// Wait for the animations we actually started. Some engines return an empty
+// subtree animation list before the first paint, even when the groups are moving.
 export function previewEffect(container, id, animate = true, options) {
-  const art = effectArt(id, animate, options);
-  if (!art) return;
-  container.replaceChildren(art);
-  if (animate) Promise.allSettled(art.getAnimations({ subtree:true }).map(animation => animation.finished))
+  const animations=[];
+  const art = drawArt(id,animate,options,container,animations);
+  if (animations.length) Promise.allSettled(animations.map(animation => animation.finished))
     .then(() => { if (container.firstChild === art) container.replaceChildren(effectArt(id,false,options)); });
 }

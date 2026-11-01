@@ -5,6 +5,7 @@ import { el } from '../src/dom.js';
 import { showAction, pageIndex, swipeStep, showClock, autoDelay, spokenNotes, SHOW_KEYS } from './show-keys.js';
 import { topicGroups } from '../src/document.js';
 import {openSlideCompare} from './slide-compare.js';
+import {bindMotionSwitch} from '../src/motion-preference.js';
 
 const STYLE_ID = 'onbatang-show-tools-style';
 const STYLE = `
@@ -38,6 +39,7 @@ const STYLE = `
 .ost-help-list dt{font-weight:800;color:#ffd43b}.ost-help-list dd{margin:0}
 .ost-help-note{margin-top:18px;color:#c5cbe0;font-size:14px}
 .ost-key.on{background:#ffd43b!important;color:#1d2433!important}
+.ost-key[hidden]{display:none!important}
 .ost-cam{position:absolute;z-index:6;width:var(--ost-cam,20%);aspect-ratio:1;border-radius:50%;overflow:hidden;border:4px solid #fff;box-shadow:0 6px 24px rgba(0,0,0,.35);background:#20263c;pointer-events:auto;cursor:grab;touch-action:none;display:none}
 .ost-cam.on{display:block}.ost-cam.big{--ost-cam:34%}.ost-cam:active{cursor:grabbing}
 .ost-cam video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);pointer-events:none}
@@ -148,7 +150,9 @@ export function createShowTools(root, opts) {
   const camBtn = key('카메라', '내 얼굴 카메라 창 (C)', () => toggleCamera());
   const autoBtn = key('자동', '자동 넘기기: 끝나면 처음부터 다시 (A)', () => toggleAuto(), ' ost-wide');
   const rehearseBtn = opts.saveTimes ? key('리허설', '리허설: 장마다 걸린 시간 재기 (R)', () => toggleRehearse(), ' ost-wide') : null;
-  const buttons = [penBtn, laserBtn, gridBtn, compareBtn, camBtn, autoBtn, ...(rehearseBtn ? [rehearseBtn] : []), presenterBtn, fullBtn, helpBtn];
+  const motionBtn = el('button',{class:(opts.keyClass || '')+' ost-key',type:'button',hidden:true});
+  const releaseMotion = bindMotionSwitch(root,motionBtn);
+  const buttons = [penBtn, laserBtn, gridBtn, compareBtn, motionBtn, camBtn, autoBtn, ...(rehearseBtn ? [rehearseBtn] : []), presenterBtn, fullBtn, helpBtn];
   function toggleFullscreen() {
     if (doc.fullscreenElement) doc.exitFullscreen?.().catch(() => {});
     else root.requestFullscreen?.().catch(() => opts.notify?.('이 화면에서는 전체 화면을 켤 수 없어요.'));
@@ -590,6 +594,7 @@ export function createShowTools(root, opts) {
       renderPresenter();
     },
     destroy() {
+      releaseMotion();
       comparison?.close();
       clearTimeout(digitTimer);
       clearTimeout(calmTimer); root.removeEventListener('pointermove', onMove); delete root.dataset.calm;
