@@ -70,7 +70,7 @@ export function runEffectFrames(frames,start,duration,onFrame,onEnd) {
   let timer,previous=performance.now(),elapsed=start*duration;
   frames.paint(start);
   function tick(){
-    if(!frames.svg.isConnected)return;
+    if(!frames.svg.isConnected){onEnd(false);return;}
     if(document.hidden){onEnd(false);return;}
     const now=performance.now();
     // Keep a delayed first paint from jumping straight to the poster on a busy phone.

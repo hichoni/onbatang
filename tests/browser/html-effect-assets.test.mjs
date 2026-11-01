@@ -238,7 +238,18 @@ test('element effects survive editor saves and run in the presenter and the down
     const picker=page.locator('.fe-fx-picker');
     if (await picker.getAttribute('open')===null) await picker.locator('summary').click();
     await picker.locator('[data-effect-asset='+asset+']').click();
-    if(observe)await picker.getByLabel('발표에서 멈춰 보며 설명하기').check();
+    if(observe){
+      await picker.getByLabel('발표에서 멈춰 보며 설명하기').check();
+      const author=picker.locator('.ob-study');
+      await author.locator('summary').click();
+      await author.getByRole('slider').press('Home');
+      await author.getByRole('button',{name:/지금 순간 담기/}).click();
+      await author.getByLabel('4번 관찰 이름').fill('출발점 다시 보기');
+      await author.getByRole('button',{name:'4번 관찰 앞으로'}).click();
+      await author.getByRole('button',{name:'3번 관찰 앞으로'}).click();
+      await author.getByRole('button',{name:'3번 관찰 삭제'}).click();
+      assert.deepEqual(await author.locator('.obs-points button').allTextContents(),['입사광','출발점 다시 보기','퍼진 빛']);
+    }
     await picker.locator('[data-apply-effect]').click();
   }
   await applyScene(page.locator('.cv-canvas .fe-stage .fi-text').nth(1),'kinetic');
@@ -260,6 +271,8 @@ test('element effects survive editor saves and run in the presenter and the down
   await page.locator('.cv-canvas .fe-stage .fi-text').first().waitFor();
   const saved = await page.evaluate(async ({id,base}) => (await (await import(base+'/app/store.js')).getDesign(id)).slides[0].items[0].effect,{base,id});
   assert.deepEqual(saved,{id:'signal',when:'press',note:'전기가 흐르는 길',pace:'slow',palette:'sunset'});
+  const savedCues=await page.evaluate(async ({id,base}) => (await (await import(base+'/app/store.js')).getDesign(id)).slides[0].items[3].effect.stops,{base,id});
+  assert.deepEqual(savedCues,[[18,'입사광'],[0,'출발점 다시 보기'],[95,'퍼진 빛']]);
   await page.locator('.cv-show-btn').click();
   async function interact(surface) {
     const hit = surface.locator('[data-effect-trigger=signal]');
@@ -279,6 +292,12 @@ test('element effects survive editor saves and run in the presenter and the down
     const trigger=surface.locator('[data-effect-trigger=spectrum]');
     await trigger.click();
     const study=surface.getByRole('group',{name:'프리즘 분광 모션 관찰대'});
+    assert.deepEqual(await study.locator('.obs-points button').allTextContents(),['입사광','출발점 다시 보기','퍼진 빛']);
+    assert.equal(await study.getByRole('slider').inputValue(),'18');
+    await study.getByRole('button',{name:'다음 관찰 →'}).click();
+    assert.equal(await study.getByRole('slider').inputValue(),'0');
+    await study.getByRole('slider').press('PageDown');
+    assert.equal(await study.getByRole('slider').inputValue(),'95');
     await study.getByRole('button',{name:'퍼진 빛'}).click();
     const range=study.getByRole('slider');assert.equal(await range.inputValue(),'95');
     await range.press('Home');await range.press('ArrowRight');assert.equal(await range.inputValue(),'1');
@@ -308,6 +327,15 @@ test('element effects survive editor saves and run in the presenter and the down
   await page.getByRole('button',{name:/^움직임 끄기 ·/}).click();
   await page.emulateMedia({reducedMotion:'no-preference'});
   await checkScenes(page.locator('.cv-show-stage'));
+  await page.locator('.cv-show-stage [data-effect-trigger=spectrum]').click();
+  const observation=page.locator('.cv-show-stage [data-effect-observation]');
+  for(const expected of ['0','95']){
+    await page.locator('.cv-show-bar').getByRole('button',{name:'다음 장',exact:true}).click();
+    assert.equal(await observation.getByRole('slider').inputValue(),expected);
+  }
+  await page.locator('.cv-show-bar').getByRole('button',{name:'다음 장',exact:true}).click();
+  assert.equal(await observation.count(),0);
+  assert.ok(await page.locator('.cv-show-stage [data-effect-trigger=spectrum]').isVisible());
   await page.keyboard.press('ArrowRight');
   await page.locator('.cv-show-stage [data-effect-note]').filter({hasText:'완성했어요'}).waitFor();
   async function checkQuestions(surface,offline) {

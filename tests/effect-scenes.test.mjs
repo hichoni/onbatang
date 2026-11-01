@@ -5,6 +5,24 @@ import { sceneContent, chartExample } from '../src/effect-scenes.js';
 import { cleanEffectTargets } from '../src/effect-player.js';
 import { REVEALS } from '../src/reveal-scenes.js';
 import { CLUE_CARD } from '../src/clue-card.js';
+import { cleanMotionCues } from '../src/motion-cues.js';
+
+test('teacher observation order survives cleaning and offline targets without changing old effects',()=>{
+  const stops=[[91,' 결론 '],[0,'<첫 순간>'],[47,'가'.repeat(40)]];
+  const effect=cleanEffect({id:'spectrum',when:'open',observe:true,stops});
+  assert.deepEqual(effect,{id:'spectrum',when:'press',observe:true,
+    stops:[[91,'결론'],[0,'<첫 순간>'],[47,'가'.repeat(28)]]});
+  assert.deepEqual(cleanEffectTargets([{x:50,y:50,w:30,h:10,rot:0,effect}])[0].effect,effect);
+  assert.deepEqual(cleanEffect(effect),effect);
+  assert.deepEqual(cleanEffect({id:'spectrum',stops}),{id:'spectrum',when:'press'});
+  assert.deepEqual(cleanEffect({id:'signal',observe:true}),{id:'signal',when:'press',observe:true});
+  assert.equal(cleanEffect({id:'cluecard',observe:true,stops}).observe,undefined);
+  assert.deepEqual(cleanMotionCues([[25.2,'A'],[25.4,'duplicate'],[Infinity,'bad'],[-1,'bad'],['5','bad'],[100,' ']]),
+    [[25,'A'],[100,'관찰 2']]);
+  assert.equal(cleanMotionCues(Array.from({length:9},(_,i)=>[i,'🙂'.repeat(40)])).length,6);
+  assert.equal(Array.from(cleanMotionCues([[0,'🙂'.repeat(40)]])[0][1]).length,28);
+  assert.deepEqual(stops[0],[91,' 결론 ']);
+});
 
 test('authored clue cards keep bounded questions and ordered clues; the current text box supplies the answer',()=>{
   const item={t:'text',text:'  RGB  색상 '};

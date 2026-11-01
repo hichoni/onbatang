@@ -49,9 +49,10 @@
   <article id="motion-study" class="story-shelf" style="padding:clamp(14px,3vw,24px)">
     <small>수업 도구 / 움직임 관찰</small>
     <h2 style="font-size:1.55rem;margin:6px 0">모션 관찰대</h2>
-    <p>재생을 멈추거나 시간 막대를 밀어 한 순간씩 살펴보세요.</p>
+    <p>재생을 멈추고, 이야기할 순간을 담아 보세요. 내 슬라이드에서도 이 순서대로 설명할 수 있어요.</p>
     <label style="margin:12px 0">관찰할 효과<select id="study-choice"></select></label>
     <div id="study-stage"></div>
+    <p style="font-size:.83rem;margin-top:12px">이곳에서 만든 순서는 예제 화면에 머무는 동안 유지돼요. 내 수업에 저장하려면 편집기에서 조각 선택 → 움직임 → HTML 그래픽 효과 → 발표에서 멈춰 보며 설명하기를 고르세요.</p>
   </article>
   <article id="slide-compare" class="story-shelf compare-feature">
     <svg viewBox="0 0 250 145" aria-hidden="true"><rect x="1" y="1" width="248" height="143" rx="9" fill="#233e49" stroke="#54747a"/><path d="M125 2h115q8 0 8 8v126q0 7-8 7H125z" fill="#efd7ac"/><circle cx="125" cy="72" r="53" fill="none" stroke="#8c9f94" stroke-dasharray="2 5"/><path d="m55 59 70 11v5L55 63z" fill="#86acc0"/><path d="m125 70 67-25 1 4-68 26z" fill="#98795e"/><path d="M125 6v132" stroke="#aef4d0" stroke-width="2"/><circle cx="125" cy="72" r="7" fill="#fff1cd" stroke="#2c453f" stroke-width="2"/><g fill="#ffcb79"><circle cx="209" cy="99" r="9"/><circle cx="39" cy="100" r="8"/></g></svg>
@@ -128,10 +129,12 @@
       content:asset.id==='kinetic'?{t:'text',text:title.value}:asset.id==='bars'&&chart.value==='change'?changes:asset.example};
   }
   let stopStudy;
+  const cueDrafts=new Map();
   function showStudy(){
     stopStudy?.();
     const asset=studyAssets.find(item=>item.id===studyChoice.value);
-    stopStudy=mountMotionStudy(studyStage,asset,cardOptions(asset));
+    stopStudy=mountMotionStudy(studyStage,asset,{...cardOptions(asset),stops:cueDrafts.get(asset.id)},
+      null,stops=>cueDrafts.set(asset.id,stops));
   }
   studyChoice.onchange=showStudy;showStudy();
   const posters=[];

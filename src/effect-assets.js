@@ -6,6 +6,7 @@ import { CLASSROOM_ACCENTS } from './classroom-accents.js';
 import { OBSERVATION_ACCENTS } from './observation-accents.js';
 import { CLUE_CARD, clueOptions } from './clue-card.js';
 import { reducedMotion } from './motion-preference.js';
+import { cleanMotionCues } from './motion-cues.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 function svg(tag, attributes) {
@@ -123,8 +124,10 @@ export function cleanEffect(raw, item) {
   if (!asset || (item && asset.example && !sceneContent(asset.id,item))) return null;
   const note = typeof raw.note === 'string' ? Array.from(raw.note.trim()).slice(0, 120).join('') : '';
   const observe = !asset.last && raw.observe === true;
+  const stops = observe ? cleanMotionCues(raw.stops) : [];
   return { id: raw.id, when: !observe && (!asset.last || asset.id==='cluecard') && raw.when === 'open' ? 'open' : 'press', ...(note ? { note } : {}),
     ...(observe ? {observe:true} : {}),
+    ...(stops.length ? {stops} : {}),
     ...(asset.id==='cluecard' ? clueOptions(raw) : {}),
     ...(['slow','fast'].includes(raw.pace) ? {pace:raw.pace} : {}),
     ...(typeof raw.palette==='string' && Object.hasOwn(EFFECT_PALETTES,raw.palette) ? {palette:raw.palette} : {}) };

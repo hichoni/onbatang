@@ -2,12 +2,16 @@ import { el } from './dom.js';
 import { EFFECT_ASSETS, effectArt, cleanEffect, previewEffect } from './effect-assets.js';
 import { CLUE_LIMITS, clueOptions } from './clue-card.js';
 import { reducedMotion } from './motion-preference.js';
+import { mountMotionStudy } from './motion-study.js';
 
 export function effectPicker(item, apply, aspect=1) {
   const saved = cleanEffect(item.effect,item);
   let selected = saved?.id || EFFECT_ASSETS[0].id;
   const choices = el('div', { class:'fe-fx-choices', role:'group', 'aria-label':'그래픽 효과 선택' });
   const sample = el('div', { class:'fe-fx-sample', 'aria-hidden':'true' });
+  const study=el('div',{class:'fe-study-author',hidden:true});
+  const cueDrafts=new Map(saved?.stops?[[saved.id,saved.stops]]:[]);
+  let stopStudy;
   const hint = el('small', { class:'fe-note' });
   const option = ([value, text]) => el('option',{ value, text });
   const pace=el('select',{'aria-label':'재생 속도'},...[
@@ -35,13 +39,21 @@ export function effectPicker(item, apply, aspect=1) {
     when.disabled=(!!active.last && active.id!=='cluecard') || (!active.last && observe.checked);
     if(when.disabled)when.value='press';
   }
-  observe.onchange=updateWhen;
+  observe.onchange=()=>{updateWhen();preview(false);};
   const replay=el('button',{class:'fe-btn',type:'button',onClick:()=>{
     if(active.last) step=(step+1)%(active.last(item,options())+1);
     preview(true,!active.last && reducedMotion(sample));
   }});
   function preview(animate, playOnce=false) {
     const opts=options();
+    stopStudy?.();stopStudy=null;
+    const observing=!active.last && observe.checked;
+    study.hidden=!observing;sample.hidden=observing;replay.hidden=observing;
+    if(observing){
+      stopStudy=mountMotionStudy(study,active,{content:{...item,aspect},pace:pace.value,palette:palette.value,
+        stops:cueDrafts.get(selected)},null,stops=>cueDrafts.set(selected,stops));
+      return;
+    }
     replay.textContent=active.last?(step===active.last(item,opts)?'처음부터':active.next(step,item,opts)):(reducedMotion(sample)?'움직임 한 번 재생':'다시 보기');
     previewEffect(sample,selected,animate,{content:{...item,aspect},step,pace:pace.value,palette:palette.value,playOnce,...opts});
   }
@@ -69,8 +81,8 @@ export function effectPicker(item, apply, aspect=1) {
   }
   const note = el('input', { type:'text', maxLength:120, placeholder:'함께 보여 줄 설명 (선택)', 'aria-label':'효과 설명', value:saved?.note || '' });
   const save = el('button', { class:'fe-btn primary', type:'button', dataset:{applyEffect:''}, text:'고른 조각에 적용',
-    onClick:() => apply(cleanEffect({ id:selected, when:when.value, observe:!active.last && observe.checked, note:note.value, pace:pace.value, palette:palette.value,...options() },item)) });
-  const controls=el('div', { class:'fe-fx-controls' }, sample,
+    onClick:() => apply(cleanEffect({ id:selected, when:when.value, observe:!active.last && observe.checked, stops:cueDrafts.get(selected), note:note.value, pace:pace.value, palette:palette.value,...options() },item)) });
+  const controls=el('div', { class:'fe-fx-controls' }, sample,study,
       el('div',{class:'fe-fx-preview-actions'},hint,replay),
       cardFields, choices, el('div',{class:'fe-fx-settings'},el('label',{},'재생 속도',pace),el('label',{},'효과 색감',palette)),
       studyOption, el('label',{},'재생 시점',when), note,

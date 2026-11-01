@@ -7,6 +7,13 @@ const labelOf = id => EFFECT_ASSETS.find(asset => asset.id === id)?.name || '';
 // Presenter buttons, keyboard and remote use the same controls as a tap.
 // At either end, return to the slide before the next navigation command.
 export function stepOpenQuestion(stage,direction) {
+  const study=stage?.querySelector('[data-effect-observation]');
+  if(study){
+    const button=study.querySelector(direction>0?'.obs-next':'.obs-back');
+    if(button.disabled)study.querySelector('.obs-close').click();
+    else button.click();
+    return true;
+  }
   const panel=stage?.querySelector('[data-question-panel]:not([inert])');
   if(!panel)return false;
   const button=panel.querySelector(direction>0?'[data-question-next]':'[data-question-back]');

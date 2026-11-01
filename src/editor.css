@@ -1032,6 +1032,7 @@ td .fe-chart-cell[inputmode] { text-align: right; font-variant-numeric: tabular-
 .fe-tabbody:has(> .fe-fx-picker) { grid-auto-rows: max-content; }
 .fe-fx-picker summary { padding: 14px; font-weight: 750; cursor: pointer; }
 .fe-fx-controls { display: grid; gap: 10px; padding: 0 12px 12px; }
+.fe-fx-sample[hidden],.fe-study-author[hidden],.fe-fx-preview-actions [hidden]{display:none}
 .fe-fx-controls label.fe-observe-option{display:flex;align-items:center;gap:8px}
 .fe-fx-controls label.fe-observe-option[hidden]{display:none}
 .fe-fx-controls .fe-observe-option input{width:auto;min-height:0;accent-color:var(--fe-primary)}
