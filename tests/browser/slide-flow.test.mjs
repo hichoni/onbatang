@@ -8,12 +8,12 @@ const repo=resolve(fileURLToPath(new URL('../../',import.meta.url)));
 test('teacher connects elements, edits camera and timing, previews and saves without changing artwork',{
  skip:!process.env.MINICAN_PLAYWRIGHT_PATH,timeout:90000,
 },async t=>{
- const hosted=!!process.env.MINICAN_HOST_ROOT,base=hosted?'/minican':'',root=resolve(process.env.MINICAN_HOST_ROOT||repo);
+ const hosted=!!(process.env.MINICAN_HOST_ROOT||process.env.MINICAN_LIVE_HOST),base=hosted?'/minican':'',root=resolve(process.env.MINICAN_HOST_ROOT||repo);
  const server=createServer(async(req,res)=>{try{const url=new URL(req.url,'http://localhost');if(url.pathname==='/seed'){res.setHeader('Content-Type','text/html');return res.end('<!doctype html><title>Seed</title>');}const p=resolve(root,'.'+decodeURIComponent(url.pathname));if(!p.startsWith(root+sep))throw Error();res.setHeader('Content-Type',({'.js':'text/javascript','.html':'text/html;charset=utf-8','.css':'text/css','.woff2':'font/woff2','.json':'application/json','.svg':'image/svg+xml'})[extname(p)]||'application/octet-stream');res.end(await readFile(p));}catch{res.writeHead(404);res.end();}});
  await new Promise(done=>server.listen(0,'127.0.0.1',done));t.after(()=>new Promise(done=>server.close(done)));
- const origin=`http://127.0.0.1:${server.address().port}`,pw=await import(pathToFileURL(process.env.MINICAN_PLAYWRIGHT_PATH));
+ const origin=process.env.MINICAN_LIVE_ORIGIN||`http://127.0.0.1:${server.address().port}`,pw=await import(pathToFileURL(process.env.MINICAN_PLAYWRIGHT_PATH));
  const browser=await(process.env.MINICAN_BROWSER==='webkit'?pw.webkit.launch():pw.chromium.launch({channel:'msedge'}));t.after(()=>browser.close());
- const page=await browser.newPage({viewport:{width:1280,height:950},reducedMotion:'no-preference'}),errors=[];page.on('pageerror',e=>errors.push(e.message));page.setDefaultTimeout(15000);await page.goto(origin+'/seed');
+ const page=await browser.newPage({viewport:{width:1280,height:950},reducedMotion:'no-preference'}),errors=[];page.on('pageerror',e=>errors.push(e.message));page.setDefaultTimeout(15000);await page.goto(origin+(process.env.MINICAN_LIVE_ORIGIN?(hosted?'/minican/app/effects':'/app/effects.html'):'/seed'));
  const id=await page.evaluate(async base=>{
   const {newRecord}=await import(base+'/app/designs.js'),store=await import(base+'/app/store.js');store.setStorageName(base?'gailab-minican':'minican');
   const record=newRecord('16:9');record.name='이어지는 별 관측';record.slides=[0,1,2].map(i=>({id:'pflowbrowser0'+i,bg:'#f4efe2',items:[
@@ -39,14 +39,19 @@ test('teacher connects elements, edits camera and timing, previews and saves wit
  await mkdir(resolve(repo,'work/flow-review'),{recursive:true});await panel.screenshot({path:resolve(repo,`work/flow-review/${hosted?'gai':'public'}-desktop.png`),scale:'css'});
  await page.setViewportSize({width:390,height:844});assert.ok(await panel.evaluate(n=>n.scrollWidth<=n.clientWidth+1),'mobile has no horizontal overflow');
  await panel.getByRole('button',{name:'자료에 적용·저장',exact:true}).click();await panel.waitFor({state:'detached'});
- await page.reload();await page.locator('[data-tab=motion]').click();await page.locator('[data-slide-flow]').click();await panel.waitFor();
+ await page.reload();
+ await page.locator('[data-tab=motion],button[aria-label="이어지는 별 관측 열기"]').first().waitFor();
+ const reopen=page.getByRole('button',{name:'이어지는 별 관측 열기',exact:true});if(await reopen.isVisible())await reopen.click();
+ await page.locator('[data-tab=motion]').click();await page.locator('[data-slide-flow]').click();await panel.waitFor();
  await panel.getByRole('button',{name:'카메라 구도',exact:true}).click();assert.equal(await panel.getByLabel('카메라 확대',{exact:true}).inputValue(),'2');assert.equal(await panel.getByLabel('모핑 이동 시간').inputValue(),'2400');
  await panel.screenshot({path:resolve(repo,`work/flow-review/${hosted?'gai':'public'}-phone.png`),scale:'css'});
  await panel.getByRole('button',{name:'앞 장 카메라 편집',exact:true}).click();
  await panel.getByLabel('카메라 확대',{exact:true}).evaluate(el=>{el.value='3';el.dispatchEvent(new Event('input',{bubbles:true}));});
  await panel.getByRole('button',{name:'전체 화면으로',exact:true}).click();assert.equal(await panel.getByLabel('카메라 확대',{exact:true}).inputValue(),'1');
  await panel.getByRole('button',{name:'도착 장 카메라 편집',exact:true}).click();assert.equal(await panel.getByLabel('카메라 확대',{exact:true}).inputValue(),'2','resetting the first camera leaves the destination camera intact');
- const saved=await page.evaluate(async({base,id})=>(await(await import(base+'/app/store.js')).getDesign(id)),{base,id});
+ // Production uses a bundled module instance; the independent inspection
+ // import must explicitly choose the host's IndexedDB after each navigation.
+ const saved=await page.evaluate(async({base,id})=>{const store=await import(base+'/app/store.js');store.setStorageName(base?'gailab-minican':'minican');return store.getDesign(id);},{base,id});
  assert.deepEqual(saved.slides[1].camera,{x:70,y:55,z:2});assert.equal(saved.slides[1].travel.ms,2400);assert.equal(saved.slides[1].items[2].x,72);assert.equal(saved.slides[1].items[2].w,26);
  assert.equal(saved.slides[0].items[1].morphKey,saved.slides[1].items[2].morphKey);assert.equal(saved.slides[2].camera,undefined);
  await panel.getByRole('button',{name:'전체 화면으로',exact:true}).click();await panel.getByRole('button',{name:'취소',exact:true}).click();
