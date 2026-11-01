@@ -46,12 +46,13 @@ effect: {
 | 공용 단위 시험 | 403/403 통과. 잘못된 값·중복·이름 길이·이전 자료·오프라인 대상의 순서 보존 포함 |
 | 공용 로컬 Edge 및 Windows WebKit | 갤러리와 조각 효과 시험 통과. 실제 UI로 지점 추가·이름 변경·순서 변경·삭제 → 적용 → 새로고침 → 발표 → 내려받은 HTML 재열기 확인 |
 | 발표 이동 경로 | Windows WebKit에서 발표의 다음 버튼으로 18 → 0 → 95% → 관찰대 닫기 확인. 닫을 때 장이 먼저 바뀌지 않음 |
+| GBE-AI Lab 내장본 | Windows WebKit에서 갤러리와 편집·저장·재열기·발표·오프라인 HTML 시험 2개 통과. 일반·운영 번들 빌드, 초기 로딩·내장 페이지 Node 시험 12개 통과 |
 | 모바일 화면 모사 | iPhone 13 화면 크기 및 844×390 가로 폭에서 순서 편집 화면 확인. 동작 줄이기를 켠 상태에서 직접 재생·멈춤·되감기 확인 |
 | 새 효과 | 앞·뒤 그림이 다름, 같은 지점으로 돌아오면 픽셀이 일치함, 멈춤 뒤 위치 유지. 프리즘 분광·픽셀 직조도 함께 회귀 확인 |
 | 실제 iPhone Safari·실제 휴대폰 리모컨 | 이번 버전 미검수. Windows WebKit은 실제 기기가 아님 |
 | 실제 계정 동기화·PPTX/PowerPoint 재열기 | 이번 변경에서 별도로 반복하지 않음. 로컬 자료와 HTML 저장 검증만 완료 |
 
-GBE-AI Lab 내장본 검사 및 양쪽 운영 배포의 최종 커밋·검증 결과는 아래 운영 기록에 남긴다. 갤러리 검증을 계정 저장 검증으로 보고하지 않는다.
+GBE-AI Lab 내장본 검사 및 양쪽 운영 배포의 최종 커밋·검증 결과는 아래 운영 기록을 따른다. 갤러리 검증을 계정 저장 검증으로 보고하지 않는다.
 
 ## 보존 범위
 
@@ -78,4 +79,12 @@ node --test --test-name-pattern 'mobile gallery|element effects' tests/browser/h
 
 ## 운영 기록
 
-배포 및 내장본 검사가 끝나면 이 절에 정확한 커밋과 결과를 추가한다.
+- **공용 Firebase Hosting 배포 완료**: 제품 0.114.0, 원본 커밋 `d4fcf585d9ffd86a04d47fd6094e5c80263c62a4`. Git 커밋의 파일로만 staging을 만들고 다시 검사했다. 배포한 `/version.json`의 커밋이 일치한다. 인수인계 마감용 문서 커밋은 이 제품 커밋 이후이며 제품 파일을 바꾸지 않는다.
+- **GBE-AI Lab Cloudflare Pages 배포 완료**: 제품 0.168.0, main 커밋 `2d522ac49f1c118478d38f6971216ee28b54a589`. `https://gbe.ai.kr/version.json`에서 정확한 커밋을 확인했다.
+- **내장 원본 일치**: 274개 파일을 동기화 검사했고, 운영 `/minican/SOURCE.json`의 전체 바이트가 로컬 명세와 같았다. 명세 SHA-256: `EE75D68AC5415C4364F29330BB59B0C14130D97909CFAD45B9FE2945CEE1190A`.
+- **운영 브라우저 검수**: 양쪽 주소를 Windows WebKit의 iPhone 13 화면으로 열어 프리즘 분광·픽셀 직조·오로라 물결·종이별 펼침의 서로 다른 관찰 프레임, 같은 지점으로 되감기, 멈춤을 확인했다. 관찰 추가·이름 수정·재배치·삭제, 다른 효과를 골랐다 돌아왔을 때의 임시 순서 유지, 직접 재생 중에도 전체 동작 줄이기 설정은 유지되는 것을 확인했다.
+- **운영 파일 대조**: 갤러리 HTML과 관련 모듈 5개의 원본 바이트를 대조했다. Cloudflare가 응답 끝에 분석용 beacon 스크립트를 붙이는 경우에는 원본 HTML 전체가 같은 앞부분인지, 추가분은 해당 스크립트 하나뿐인지 구분해서 확인한다. 호스팅 분석 스크립트를 원본 파일 변경으로 기록하지 않는다.
+- **보존 확인**: GBE-AI Lab의 두 기존 변경 파일은 작업 전후 SHA-256이 같고 커밋에서 제외했다. 운영 DB·실제 계정·PPT 원본은 변경하지 않았다. 유료 QA는 사용하지 않았다.
+- **CI 통과**: GBE-AI Lab [Community checks #41356384640](https://github.com/hichoni/g-ai-lab/actions/runs/41356384640)의 `verify`가 3분 33초에 성공했다. 전체 npm 시험과 Firebase 시험 단계를 포함한다. 기존 Actions checkout/setup-node/setup-java v4의 런타임 지원 종료 안내는 별도 유지보수 후보로 남긴다. Cloudflare 운영 배포와 로컬 검증도 완료했다.
+
+[GBE-AI Lab 상세 반영 기록](https://github.com/hichoni/g-ai-lab/blob/2d522ac49f1c118478d38f6971216ee28b54a589/docs/GAI_ONBATANG_HANDOFF_2026-11-02_MOTION_CUES.md)
