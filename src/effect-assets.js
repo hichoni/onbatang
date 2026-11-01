@@ -126,7 +126,7 @@ export function cleanEffect(raw, item) {
     ...(typeof raw.palette==='string' && Object.hasOwn(EFFECT_PALETTES,raw.palette) ? {palette:raw.palette} : {}) };
 }
 
-function drawArt(id, animate, {pace,palette,content,step=0,photo,playOnce=false,...settings} = {}, container, animations) {
+function drawArt(id, animate, {pace,palette,content,step=0,photo,playOnce=false,...settings} = {}, container, animations, collect) {
   const asset = registry.get(id);
   if (!asset) return null;
   const art = svg('svg', { viewBox: asset.example?'0 0 720 360':'-100 -70 200 140', 'aria-hidden': 'true', focusable: 'false' });
@@ -137,6 +137,7 @@ function drawArt(id, animate, {pace,palette,content,step=0,photo,playOnce=false,
     const group = svg('g', {});
     const node=svg(tag,attrs);
     group.append(node); art.append(group);
+    if (frames && collect) collect(group, frames, delay*paceFactor(pace), duration*paceFactor(pace));
     if (running && frames && group.animate) {
       const animation = group.animate(frames, {
         duration:duration*paceFactor(pace), delay:delay*paceFactor(pace), fill:'both', easing:'cubic-bezier(.22,.68,.32,1)',
@@ -159,8 +160,8 @@ function drawArt(id, animate, {pace,palette,content,step=0,photo,playOnce=false,
   return art;
 }
 
-export function effectArt(id, animate = false, options) {
-  return drawArt(id,animate,options);
+export function effectArt(id, animate = false, options, collect) {
+  return drawArt(id,animate,options,null,null,collect);
 }
 
 export function playEffectArt(container,id,options) {

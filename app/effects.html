@@ -25,6 +25,7 @@
   #questions em{color:#101f2b;background:#a0e9d1;padding:5px 9px;border-radius:7px}
   b{font-size:1.15rem} em{grid-row:2;grid-column:2;font-style:normal;color:#9de0cc;font-size:.78rem;align-self:center}
   .hint{grid-column:1/-1;color:#c4d3d9;font-size:.88rem}
+  [data-asset][data-playing] em{color:#f5fffb;font-weight:750}
   #motion-notice:not([hidden]){display:flex;align-items:center;flex-wrap:wrap;gap:12px 20px;margin-top:18px;padding:14px 16px;border:1px solid #55796f;border-radius:10px;background:#1b302e}
   #motion-notice p{flex:1 1 230px;color:#e1f0e9}#motion-switch{min-height:44px;padding:6px 14px;border:0;border-radius:7px;color:#102b24;background:#a0e9d1;font:inherit;font-weight:700;cursor:pointer}
   .story-shelf{margin:24px 0;border:1px solid #536573;border-radius:12px;background:#1a2734;overflow:hidden}
@@ -68,6 +69,7 @@
 </main>
 <script type="module">
   import { EFFECT_ASSETS, previewEffect } from '../src/effect-assets.js';
+  import {playEffectCard} from './effect-card-playback.js';
   import {setupPhotoDemo} from './photo-study-demo.js';
   import {bindMotionSwitch,reducedMotion} from '../src/motion-preference.js';
   const notice=document.querySelector('#motion-notice'),motionSwitch=document.querySelector('#motion-switch');
@@ -75,7 +77,7 @@
   bindMotionSwitch(document.querySelector('main'),motionSwitch,(enabled,reduced)=>{
     notice.hidden=!reduced;
     notice.querySelector('p').textContent=enabled?'이 화면에서 움직임을 켰어요. 효과를 누르거나 디자인 세트의 다음 장을 열어 보세요.':'기기의 ‘동작 줄이기’ 설정으로 정지 그림을 보여 주고 있어요. 원하면 이 화면에서만 움직임을 켤 수 있어요.';
-    updatePlayLabels.forEach(update=>update());
+    updatePlayLabels.forEach(update=>update(reduced&&!enabled));
   });
   setupPhotoDemo();
   for(const button of document.querySelectorAll('[data-compare-set]'))button.onclick=async()=>{
@@ -115,20 +117,30 @@
     if(asset.id==='cluecard')button.id='clue-card';
     if(asset.id==='prism')button.id='prism-demo';
     art.className='art';
-    let step=0;
+    let step=0,stop=null,played=false;
     const label=()=>{
-      play.textContent=asset.last?(step===asset.last(asset.example,asset.demo)?'처음부터':asset.next(step,asset.example,asset.demo)):(reducedMotion(button)?'움직임 한 번 재생':'▶ 재생');
+      if(asset.last)play.textContent=step===asset.last(asset.example,asset.demo)?'처음부터':asset.next(step,asset.example,asset.demo);
+      else if(stop)play.textContent='재생 중 ↻';
+      else play.textContent=reducedMotion(button)?'움직임 한 번 재생':played?'↻ 다시 재생':'▶ 재생';
+      button.toggleAttribute('data-playing',!!stop);
     };
-    updatePlayLabels.push(label);
-    const render=(animate,playOnce=false)=>{
-      previewEffect(art,asset.id,animate,{...asset.demo,pace:pace.value,palette:palette.value,step,playOnce,
-        content:asset.id==='kinetic'?{t:'text',text:title.value}:asset.id==='bars'&&chart.value==='change'?changes:asset.example});
+    updatePlayLabels.push(shouldStop=>{if(shouldStop)stop?.();label();});
+    const render=animate=>{
+      stop?.();
+      const options={...asset.demo,pace:pace.value,palette:palette.value,step,
+        content:asset.id==='kinetic'?{t:'text',text:title.value}:asset.id==='bars'&&chart.value==='change'?changes:asset.example};
+      if(animate&&!asset.last){
+        stop=playEffectCard(art,asset.id,options,()=>{stop=null;played=true;label();});
+      }else{
+        played=false;
+        previewEffect(art,asset.id,animate,options);
+      }
       label();
     };
     render(false); posters.push(()=>render(false));
     name.textContent=asset.name; hint.className='hint'; hint.textContent=asset.hint;
     button.append(art,name,play,hint);
-    button.onclick=() => {if(asset.last)step=(step+1)%(asset.last(asset.example,asset.demo)+1);render(true,!asset.last && reducedMotion(button));};
+    button.onclick=() => {if(asset.last)step=(step+1)%(asset.last(asset.example,asset.demo)+1);render(true);};
     document.querySelector(asset.last?'#questions':asset.example?'#scenes':'#accents').append(button);
   }
   if(location.hash==='#clue-card')document.getElementById('clue-card').scrollIntoView({block:'center'});

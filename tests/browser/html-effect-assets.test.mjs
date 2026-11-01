@@ -48,15 +48,19 @@ test('mobile gallery paints motion on tap, including a scoped opt-in under reduc
   skip:!process.env.MINICAN_PLAYWRIGHT_PATH, timeout:60000,
 }, async t=>{
   const {page,origin,base,errors}=await openBrowser(t,{phone:true});
-  // Model a WebKit implementation which cannot enumerate descendant animations on an SVG.
-  await page.addInitScript(()=>{SVGSVGElement.prototype.getAnimations=()=>[];});
+  // Gallery playback must work even if Safari cannot animate any SVG group.
+  await page.addInitScript(()=>{const original=SVGElement.prototype.animate;SVGElement.prototype.animate=function(...args){
+    if(this.closest('[data-asset]'))throw Error('SVG animation unavailable');
+    return original.apply(this,args);
+  };});
   await page.goto(origin+base+'/app/effects.html');
-  const toggle=page.locator('#motion-switch'), tile=page.locator('[data-asset=prism]'), svg=tile.locator('svg');
-  const moving=()=>svg.locator('g').evaluateAll(groups=>groups.some(g=>g.getAnimations().some(a=>a.playState==='running')));
-  async function expectFrames(control=tile){
+  const toggle=page.locator('#motion-switch'), tile=page.locator('[data-asset=prism]'), label=tile.locator('em');
+  const moving=()=>tile.evaluate(b=>b.hasAttribute('data-playing'));
+  async function expectFrames(control=label){
     await control.scrollIntoViewIfNeeded();
     await control.tap();
     assert.ok(await moving());
+    assert.match(await label.innerText(),/재생 중/);
     const art=tile.locator('.art');
     const early=await art.screenshot({animations:'allow'});
     await page.waitForTimeout(130);
@@ -64,6 +68,13 @@ test('mobile gallery paints motion on tap, including a scoped opt-in under reduc
   }
   await page.emulateMedia({reducedMotion:'no-preference'});
   assert.ok(await toggle.isHidden());
+  await expectFrames();
+  await page.waitForFunction(()=>document.querySelector('#prism-demo em').textContent==='↻ 다시 재생');
+  await page.locator('#palette').selectOption('sunset');
+  await page.locator('#pace').selectOption('slow');
+  await label.tap();await label.tap();
+  assert.equal(await tile.locator('polygon').first().getAttribute('fill'),'#ffd678');
+  assert.equal(await tile.locator('svg').count(),1);
   await expectFrames(page.locator('#try-motion'));
   await page.emulateMedia({reducedMotion:'reduce'});
   await toggle.waitFor({state:'visible'});

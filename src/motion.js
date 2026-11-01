@@ -20,6 +20,8 @@
 import { LOOK_EM, LOOK_EM_MS, itemLook, slideLook } from './live.js';
 import { mountEffectPlayer } from './effect-player.js';
 import { reducedMotion } from './motion-preference.js';
+import { easeFn } from './easing.js';
+export { easeFn };
 const SOFT = 'cubic-bezier(.2, .8, .2, 1)';
 const SNAP = 'cubic-bezier(.16, 1, .3, 1)';      // 확 다가와 부드럽게 서는 빠르기(모션그래픽의 '스냅')
 
@@ -680,42 +682,6 @@ export function tweenItem(a, b, t, { content = 'b' } = {}) {
 export const morphs = (id) => !!TRANSITION_DEFS[id]?.morph;
 
 // ---------- 그 순간의 모습(영상으로 만들 때): 브라우저의 키프레임 계산을 그대로 따라 한다 ----------
-
-const EASES = { linear: null, ease: [0.25, 0.1, 0.25, 1], 'ease-in': [0.42, 0, 1, 1], 'ease-out': [0, 0, 0.58, 1], 'ease-in-out': [0.42, 0, 0.58, 1] };
-const easeCache = new Map();
-/** CSS 의 빠르기(이름 · cubic-bezier(…) · steps(n, end))를 0~1 → 0~1 함수로 바꾼다. 모르는 것은 한결같은 빠르기(linear)다. */
-export function easeFn(css) {
-  if (easeCache.has(css)) return easeCache.get(css);
-  const m = /^cubic-bezier\(([^)]+)\)$/.exec(String(css ?? '').trim());
-  const p = m ? m[1].split(',').map(Number) : EASES[css];
-  let fn = (x) => Math.min(1, Math.max(0, x));
-  // 계단(steps(n, end)): n 칸으로 나눠 칸이 끝날 때마다 한 칸씩 뛴다(타자 치듯).
-  const st = /^steps\(\s*(\d+)\s*(?:,\s*(?:end|jump-end)\s*)?\)$/.exec(String(css ?? '').trim());
-  if (st && Number(st[1]) > 0) {
-    const n = Number(st[1]);
-    fn = (x) => (x >= 1 ? 1 : x <= 0 ? 0 : Math.floor(x * n) / n);
-    easeCache.set(css, fn);
-    return fn;
-  }
-  if (p && p.length === 4 && p.every(Number.isFinite)) {
-    const [x1, y1, x2, y2] = p;
-    const at = (a, b, t) => 3 * a * t * (1 - t) ** 2 + 3 * b * t * t * (1 - t) + t ** 3;
-    fn = (x) => {
-      if (x <= 0) return 0;
-      if (x >= 1) return 1;
-      // 가로(시간) 값이 x 가 되는 곡선 위의 자리를 반씩 좁혀 찾는다(곡선의 가로는 늘 커지기만 한다).
-      let lo = 0;
-      let hi = 1;
-      for (let n = 0; n < 32; n++) {
-        const mid = (lo + hi) / 2;
-        if (at(x1, x2, mid) < x) lo = mid; else hi = mid;
-      }
-      return at(y1, y2, (lo + hi) / 2);
-    };
-  }
-  easeCache.set(css, fn);
-  return fn;
-}
 
 // frame 들의 때(0~1): 적힌 것은 그대로, 처음은 0 · 마지막은 1, 나머지는 앞뒤 사이에 고르게 놓는다.
 function offsetsOf(frames) {
