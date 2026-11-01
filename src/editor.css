@@ -1032,6 +1032,9 @@ td .fe-chart-cell[inputmode] { text-align: right; font-variant-numeric: tabular-
 .fe-tabbody:has(> .fe-fx-picker) { grid-auto-rows: max-content; }
 .fe-fx-picker summary { padding: 14px; font-weight: 750; cursor: pointer; }
 .fe-fx-controls { display: grid; gap: 10px; padding: 0 12px 12px; }
+.fe-fx-controls label.fe-observe-option{display:flex;align-items:center;gap:8px}
+.fe-fx-controls label.fe-observe-option[hidden]{display:none}
+.fe-fx-controls .fe-observe-option input{width:auto;min-height:0;accent-color:var(--fe-primary)}
 .fe-fx-controls :is(input,select) { min-width: 0; width: 100%; min-height: 44px; border: 1px solid #c2d1c9; border-radius: 8px; padding: 6px 9px; font: inherit; background: white; color: #243b35; }
 .fe-fx-sample,.fe-fx-icon { display: grid; place-items: center; overflow: hidden; background: radial-gradient(ellipse at 65% 70%,#29384d,#121b2c 80%); }
 .fe-fx-sample { height: 88px; border-radius: 9px; }

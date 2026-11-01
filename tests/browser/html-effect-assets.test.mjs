@@ -68,6 +68,24 @@ test('mobile gallery paints motion on tap, including a scoped opt-in under reduc
   }
   await page.emulateMedia({reducedMotion:'no-preference'});
   assert.ok(await toggle.isHidden());
+  const study=page.locator('#study-stage');
+  const scrubbing=study.getByRole('slider');
+  await page.locator('#study-choice').selectOption('pixelweave');
+  await study.getByRole('button',{name:'완성된 하트'}).tap();
+  assert.equal(await scrubbing.inputValue(),'100');
+  const complete=await study.locator('.obs-art').screenshot();
+  await study.getByRole('button',{name:'흩어진 칸'}).tap();
+  assert.notDeepEqual(await study.locator('.obs-art').screenshot(),complete);
+  await study.getByRole('button',{name:/이어 재생/}).tap();
+  await page.waitForFunction(()=>Number(document.querySelector('#study-stage input').value)>15);
+  await study.getByRole('button',{name:/멈춤/}).tap();
+  const paused=await scrubbing.inputValue();
+  await page.waitForTimeout(150);assert.equal(await scrubbing.inputValue(),paused);
+  await scrubbing.press('End');assert.equal(await scrubbing.inputValue(),'100');
+  assert.deepEqual(await study.locator('.obs-art').screenshot(),complete);
+  await page.getByRole('link',{name:'프리즘 리본 관찰대에서 보기'}).tap();
+  assert.equal(await page.locator('#study-choice').inputValue(),'prism');
+  assert.ok(page.url().endsWith('#motion-study'));
   await expectFrames();
   await page.waitForFunction(()=>document.querySelector('#prism-demo em').textContent==='↻ 다시 재생');
   await page.locator('#palette').selectOption('sunset');
@@ -179,7 +197,8 @@ test('element effects survive editor saves and run in the presenter and the down
     record.slides[0].items.push(
       {id:'ekinetic01',t:'text',x:40,y:17,w:60,size:4,text:'작은 픽셀이 모인다',color:'#ffffff'},
       {id:'ebarstory01',t:'chart',x:77,y:72,w:35,h:37,kind:'hbar',title:'모둠별 픽셀 변화',unit:'칸',
-        labels:['파랑','노랑','초록'],series:[{name:'1차',values:[-3,0,7]},{name:'2차',values:[2,4,9]}]});
+        labels:['파랑','노랑','초록'],series:[{name:'1차',values:[-3,0,7]},{name:'2차',values:[2,4,9]}]},
+      {id:'estudy0001',t:'text',x:22,y:75,w:26,size:5,text:'빛 관찰',color:'#ffffff'});
     const img=document.createElement('canvas');img.width=60;img.height=40;
     const ctx=img.getContext('2d');ctx.fillStyle='#c01020';ctx.fillRect(0,0,30,40);ctx.fillStyle='#1070c0';ctx.fillRect(30,0,30,40);
     record.slides[1].items.push(
@@ -212,17 +231,19 @@ test('element effects survive editor saves and run in the presenter and the down
   await interact(page.locator('.cv-canvas .fe-stage'));
   // Stop preview by reopening the motion tab, then author both content scenes.
   await page.locator('.fe-tab[data-tab=motion]').click();
-  async function applyScene(item,asset) {
+  async function applyScene(item,asset,observe=false) {
     await item.click();
     const tab=page.locator('.fe-tab[data-tab=motion]');
     if (await tab.getAttribute('aria-selected')!=='true' || await page.locator('.cv-app.folded').count()) await tab.click();
     const picker=page.locator('.fe-fx-picker');
     if (await picker.getAttribute('open')===null) await picker.locator('summary').click();
     await picker.locator('[data-effect-asset='+asset+']').click();
+    if(observe)await picker.getByLabel('발표에서 멈춰 보며 설명하기').check();
     await picker.locator('[data-apply-effect]').click();
   }
   await applyScene(page.locator('.cv-canvas .fe-stage .fi-text').nth(1),'kinetic');
   await applyScene(page.locator('.cv-canvas .fe-stage .fi-chart').first(),'bars');
+  await applyScene(page.locator('.cv-canvas .fe-stage .fi-text').filter({hasText:'빛 관찰'}),'spectrum',true);
   await page.waitForFunction(async ({base,id}) => (await (await import(base+'/app/store.js')).getDesign(id))?.slides[0].items[2].effect?.id==='bars',{base,id});
   await page.locator('.cv-slide[data-slide="1"]').click();
   await applyScene(page.locator('.cv-canvas .fe-stage .fi-text').filter({hasText:'인공지능'}),'initials');
@@ -255,6 +276,14 @@ test('element effects survive editor saves and run in the presenter and the down
     assert.equal(await surface.locator('[data-effect-note]').count(),0);
   }
   async function checkScenes(surface) {
+    const trigger=surface.locator('[data-effect-trigger=spectrum]');
+    await trigger.click();
+    const study=surface.getByRole('group',{name:'프리즘 분광 모션 관찰대'});
+    await study.getByRole('button',{name:'퍼진 빛'}).click();
+    const range=study.getByRole('slider');assert.equal(await range.inputValue(),'95');
+    await range.press('Home');await range.press('ArrowRight');assert.equal(await range.inputValue(),'1');
+    await study.getByRole('button',{name:'슬라이드로 돌아가기'}).click();
+    assert.equal(await trigger.getAttribute('aria-expanded'),'false');
     await surface.locator('[data-effect-trigger=kinetic]').click();
     const title=surface.locator('[data-effect-playing=kinetic]');
     assert.deepEqual(await title.locator('text[font-weight="800"]').allTextContents(),['작은','픽셀이','모인다']);

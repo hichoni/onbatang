@@ -3,6 +3,7 @@
 import { kineticTitle, chartFocus, titleExample, chartExample, sceneContent } from './effect-scenes.js';
 import { REVEALS } from './reveal-scenes.js';
 import { CLASSROOM_ACCENTS } from './classroom-accents.js';
+import { OBSERVATION_ACCENTS } from './observation-accents.js';
 import { CLUE_CARD, clueOptions } from './clue-card.js';
 import { reducedMotion } from './motion-preference.js';
 
@@ -70,8 +71,8 @@ function confetti({ part, ink }) {
           transform: `translate(${x} ${y}) rotate(${i * 23})` }];
     // Animate a parent group so the confetti's own orientation stays intact.
     part(mark[0], { ...mark[1], fill: ink[i % 3] }, [
-      { transform: 'scale(.12)', opacity: 0 },
-      { transform: 'scale(.82)', opacity: 1, offset: .35 },
+      { transform: 'translateY(0px) scale(.12)', opacity: 0 },
+      { transform: 'translateY(0px) scale(.82)', opacity: 1, offset: .35 },
       { transform: 'translateY(12px) scale(1.2)', opacity: 0 },
     ], (i % 4) * 46, 880 + i % 3 * 110);
   }
@@ -111,6 +112,7 @@ export const EFFECT_ASSETS = Object.freeze([
   { id:'bars', name:'데이터 포커스', hint:'선택한 막대 차트의 항목과 수치가 큰 무대에서 차례로 자라요', ink:EFFECT_PALETTES.iris, draw:chartFocus, example:chartExample },
   ...REVEALS.map((asset,i)=>({...asset,ink:[EFFECT_PALETTES.lagoon,EFFECT_PALETTES.sunset,EFFECT_PALETTES.iris][i]})),
   ...CLASSROOM_ACCENTS,
+  ...OBSERVATION_ACCENTS,
   {...CLUE_CARD,ink:EFFECT_PALETTES.lagoon},
 ]);
 const registry = new Map(EFFECT_ASSETS.map(asset => [asset.id, asset]));
@@ -120,7 +122,9 @@ export function cleanEffect(raw, item) {
   const asset=registry.get(raw?.id);
   if (!asset || (item && asset.example && !sceneContent(asset.id,item))) return null;
   const note = typeof raw.note === 'string' ? Array.from(raw.note.trim()).slice(0, 120).join('') : '';
-  return { id: raw.id, when: (!asset.last || asset.id==='cluecard') && raw.when === 'open' ? 'open' : 'press', ...(note ? { note } : {}),
+  const observe = !asset.last && raw.observe === true;
+  return { id: raw.id, when: !observe && (!asset.last || asset.id==='cluecard') && raw.when === 'open' ? 'open' : 'press', ...(note ? { note } : {}),
+    ...(observe ? {observe:true} : {}),
     ...(asset.id==='cluecard' ? clueOptions(raw) : {}),
     ...(['slow','fast'].includes(raw.pace) ? {pace:raw.pace} : {}),
     ...(typeof raw.palette==='string' && Object.hasOwn(EFFECT_PALETTES,raw.palette) ? {palette:raw.palette} : {}) };

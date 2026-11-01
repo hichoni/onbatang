@@ -2344,7 +2344,7 @@ async function present(O) {
   // 앱 안을 누른 뒤에도 프레젠터(리모컨)의 넘기기 단추와 Esc 는 발표가 듣는다(앱이 그 글쇠를 쓰지 않았을 때 앱이 알려 준다).
   const appKey = (key) => { if (['PageDown', 'PageUp', 'Escape'].includes(key)) tools?.handle({ key, code: key }); };
   const onKey = (e) => {
-    if(e.target?.closest?.('.ob-compare'))return;
+    if(e.target?.closest?.('.ob-compare, .ob-study'))return;
     if(e.target?.closest?.('[data-question-panel]') && ['Escape','ArrowLeft','ArrowRight','PageUp','PageDown'].includes(e.key))return;
     // 앱·그림판 안에서 치는 글쇠는 앱의 것이다. 프레젠터의 넘기기(PageDown · PageUp)와 Esc 만 발표가 듣는다.
     if(e.target?.closest?.('.cv-show-activity:not([data-quiz])')&&!['Escape','PageDown','PageUp'].includes(e.key))return;

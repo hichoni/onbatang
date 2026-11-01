@@ -1,5 +1,6 @@
 import { cleanEffect, playEffectArt, EFFECT_ASSETS, paceFactor } from './effect-assets.js';
 import { sceneContent } from './effect-scenes.js';
+import { mountMotionStudy } from './motion-study.js';
 
 const labelOf = id => EFFECT_ASSETS.find(asset => asset.id === id)?.name || '';
 
@@ -138,21 +139,34 @@ export function mountEffectPlayer(host, bindings, { delay = 0,onQuestionChange }
       continue;
     }
     const duration=(scene ? 4600 : 1450)*paceFactor(effect.pace);
-    let graphic, caption, timer, opening;
+    let graphic, caption, timer, opening, stopStudy;
     const automatic = effect.when === 'open';
     function clear() {
       clearTimeout(timer);
+      stopStudy?.();stopStudy=null;
       graphic?.remove();
       caption?.remove();
       graphic = caption = null;
       if (closeNote === clear) closeNote = null;
       if (closeScene === clear) closeScene = null;
-      if (!automatic && (scene || effect.note)) node.setAttribute('aria-expanded', 'false');
+      if (!automatic && (scene || effect.note || effect.observe)) node.setAttribute('aria-expanded', 'false');
     }
     function play() {
-      const wasOpen = !!caption || (scene && !!graphic);
+      const wasOpen = !!caption || ((scene || effect.observe) && !!graphic);
       clear();
       if (wasOpen && !automatic) return;
+      if(effect.observe){
+        for(const pending of queuedScenes)clearTimeout(pending);
+        queuedScenes.clear();closeScene?.();closeNote?.();closeScene=clear;
+        graphic=document.createElement('div');
+        graphic.dataset.effectPlaying=effect.id;graphic.dataset.effectObservation='';
+        host.append(graphic);
+        stopStudy=mountMotionStudy(graphic,asset,{...effect,content:data},()=>{
+          clear();node.focus({preventScroll:true});
+        });
+        node.setAttribute('aria-expanded','true');
+        return;
+      }
       const frame = host.getBoundingClientRect(), rect = node.getBoundingClientRect();
       if (!frame.width || !frame.height || !rect.width || !rect.height) return;
       const x = (rect.left + rect.width / 2 - frame.left) / frame.width * 100;
@@ -217,7 +231,7 @@ export function mountEffectPlayer(host, bindings, { delay = 0,onQuestionChange }
     node.setAttribute('tabindex','0');
     node.setAttribute('aria-label', [node.getAttribute('aria-label') || node.getAttribute('alt') || node.textContent?.trim().slice(0,60),
       effect.note ? '설명 열기 또는 닫기' : labelOf(effect.id) + ' 재생'].filter(Boolean).join(' · '));
-    if (scene || effect.note) node.setAttribute('aria-expanded','false');
+    if (scene || effect.note || effect.observe) node.setAttribute('aria-expanded','false');
     const click = event => { event.stopPropagation(); play(); };
     const key = event => {
       if (event.key !== 'Enter' && event.key !== ' ') return;

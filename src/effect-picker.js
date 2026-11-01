@@ -29,6 +29,13 @@ export function effectPicker(item, apply, aspect=1) {
   const when = el('select', { 'aria-label':'그래픽 효과 재생 시점' },
     el('option', { value:'press', text:'이 조각을 누를 때' }), el('option', { value:'open', text:'장이 열릴 때' }));
   when.value = saved?.when || 'press';
+  const observe=el('input',{type:'checkbox',checked:saved?.observe});
+  const studyOption=el('label',{class:'fe-observe-option'},observe,'발표에서 멈춰 보며 설명하기');
+  function updateWhen(){
+    when.disabled=(!!active.last && active.id!=='cluecard') || (!active.last && observe.checked);
+    if(when.disabled)when.value='press';
+  }
+  observe.onchange=updateWhen;
   const replay=el('button',{class:'fe-btn',type:'button',onClick:()=>{
     if(active.last) step=(step+1)%(active.last(item,options())+1);
     preview(true,!active.last && reducedMotion(sample));
@@ -44,8 +51,8 @@ export function effectPicker(item, apply, aspect=1) {
     cardFields.hidden=selected!=='cluecard';
     if(cardFields.hidden)controls.insertBefore(choices,cardFields);
     else controls.append(choices);
-    when.disabled=!!asset.last && asset.id!=='cluecard';
-    if(when.disabled)when.value='press';
+    studyOption.hidden=!!asset.last;
+    updateWhen();
     hint.textContent = asset.hint;
     for (const button of choices.querySelectorAll('button')) button.setAttribute('aria-pressed',String(button.dataset.effectAsset === selected));
     preview(animate);
@@ -62,11 +69,11 @@ export function effectPicker(item, apply, aspect=1) {
   }
   const note = el('input', { type:'text', maxLength:120, placeholder:'함께 보여 줄 설명 (선택)', 'aria-label':'효과 설명', value:saved?.note || '' });
   const save = el('button', { class:'fe-btn primary', type:'button', dataset:{applyEffect:''}, text:'고른 조각에 적용',
-    onClick:() => apply(cleanEffect({ id:selected, when:when.value, note:note.value, pace:pace.value, palette:palette.value,...options() },item)) });
+    onClick:() => apply(cleanEffect({ id:selected, when:when.value, observe:!active.last && observe.checked, note:note.value, pace:pace.value, palette:palette.value,...options() },item)) });
   const controls=el('div', { class:'fe-fx-controls' }, sample,
       el('div',{class:'fe-fx-preview-actions'},hint,replay),
       cardFields, choices, el('div',{class:'fe-fx-settings'},el('label',{},'재생 속도',pace),el('label',{},'효과 색감',palette)),
-      el('label',{},'재생 시점',when), note,
+      studyOption, el('label',{},'재생 시점',when), note,
       el('div', { class:'fe-row' }, save, saved && el('button', { class:'fe-btn', type:'button', text:'효과 빼기', onClick:() => apply(null) })));
   pick(EFFECT_ASSETS.find(asset => asset.id === selected),false);
   return el('details', { class:'fe-fx-picker', open:!!saved },
