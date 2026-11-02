@@ -5,7 +5,7 @@
 // SVG 그림 안에서는 바깥 파일을 부를 수 없으므로, 스타일·글꼴·사진을 모두 그 안에 글자(data 주소)로 넣는다.
 // 최신 크롬·엣지에서 된다(사파리는 이렇게 그린 canvas 를 파일로 꺼내지 못하게 막을 수 있다. 그때는 오류를 던진다).
 import { el } from './dom.js';
-import {projectCamera} from './slide-flow.js';
+import {projectCamera, cameraAllowed} from './slide-flow.js';
 import { sceneContent } from './effect-scenes.js';
 import { designView, itemView, paintCard } from './render.js';
 import { sceneView, scenesReady } from './scene.js';
@@ -180,4 +180,54 @@ export async function designToBlob(design, { width = 1080, aspect, type = 'image
   });
   if (!blob) throw new Error('그림 파일로 만들지 못했어요');
   return { blob, type: mime, ext: mime === 'image/jpeg' ? 'jpg' : 'png', width: made.width, height: made.height, missingFonts: made.missingFonts, ...(made.effects ? { effects:made.effects } : {}) };
+}
+
+// Offline morphs contain raster pieces, never serialized HTML, fonts or remote
+// asset URLs. Capture each piece without its rotation/opacity; the player applies
+// those once. Camera projection changes the saved geometry, not the artwork.
+export async function designToHtmlFlow(design, {width = 1080, aspect = settings().aspect, signal} = {}) {
+  if (!cameraAllowed(design) || design.items?.some(it => ['web','yt'].includes(it.t))) return null;
+  const d = cleanDesign(design), projected = projectCamera(d);
+  const W = Math.max(16, Math.min(1920, Math.round(width))), H = Math.round(W / aspect);
+  if (d.items.some(it => it.t === 'art')) await loadArt();
+  const card = designView(d, {prepared:true});
+  Object.assign(card.style, {width:`${W}px`,height:`${H}px`});
+  card.style.setProperty('--fe-ratio', String(aspect));
+  const box = el('div', {'aria-hidden':'true'});
+  box.style.cssText = 'position:fixed;left:-100000px;top:0;visibility:hidden;pointer-events:none';
+  box.append(card); document.body.append(box);
+  const digest = async text => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text))),v=>v.toString(16).padStart(2,'0')).join('');
+  try {
+    const [fonts] = await Promise.all([fontRules(d), inlineImages(card), document.fonts?.ready]);
+    const bg = getComputedStyle(card).getPropertyValue('--fe-bg').trim();
+    const nodes = [...card.children].filter(n=>n.classList.contains('fi')), items = [];
+    for (const [i,node] of nodes.entries()) {
+      signal?.throwIfAborted();
+      const item = d.items[i], target = projected.items[i];
+      const w = Math.max(1,node.offsetWidth), h = Math.max(1,node.offsetHeight);
+      // Symmetric padding retains punctuation overhang, outlines and shadows.
+      const pad = Math.ceil(Math.max(8, (item.size || 0) * W / 100, (item.line || 0) * W / 100 * 2));
+      const sw = Math.ceil(w + 2*pad), sh = Math.ceil(h + 2*pad);
+      const root = el('div'), layer = card.cloneNode(false), piece = node.cloneNode(true);
+      root.style.cssText = `position:relative;width:${sw}px;height:${sh}px;overflow:hidden`;
+      Object.assign(layer.style,{position:'absolute',left:`${sw/2-W/2}px`,top:`${sh/2-H/2}px`,background:'transparent',overflow:'visible',borderRadius:'0'});
+      Object.assign(piece.style,{left:'50%',top:'50%',transform:'translate(-50%,-50%)',opacity:'1'});
+      layer.append(piece);root.append(layer);
+      // Bound each decoded bitmap, including unusually large/off-slide text.
+      const z = target.w/item.w || 1;
+      const scale = Math.min(z,2048/sw,2048/sh,Math.sqrt(4_000_000/(sw*sh)));
+      const wrapper=el('div',{},root),rw=Math.max(1,Math.round(sw*scale)),rh=Math.max(1,Math.round(sh*scale));
+      wrapper.style.cssText=`width:${rw}px;height:${rh}px;overflow:hidden`;
+      root.style.transform=`scale(${scale})`;root.style.transformOrigin='0 0';
+      const bitmap = await paintNode(wrapper,rw,rh,fonts.css);
+      const image = bitmap.toDataURL('image/png');
+      const row = {id:item.id,t:item.t,x:target.x,y:target.y,w:sw/W*100*z,h:sh/H*100*z,
+        rot:item.rot||0,fx:!!item.fx,fy:!!item.fy,op:item.op??100,image,bgc:await digest(image)};
+      for(const key of ['text','ch','art','shape','color','morphKey'])if(item[key]!==undefined)row[key]=item[key];
+      if(item.url)row.url=await digest(item.url);
+      if(item.origin?.elementId)row.origin={elementId:item.origin.elementId};
+      items.push(row);bitmap.width=0;bitmap.height=0;
+    }
+    return {version:1,bg,items,...(d.tr==='move'?{tr:'move'}:{}),...(d.travel?{travel:d.travel}:{})};
+  } finally {box.remove();}
 }

@@ -16,6 +16,8 @@ import {photoStudySetup,studyBitmap} from './photo-study.js';
 import {quizCover,createQuizBoard,quizzesFromAnswer} from '../src/quiz.js';
 import {createQuizSetup,mountQuiz} from './quiz.js';
 import {createHtmlLesson} from './html-lesson.js';
+import {htmlFlowPages} from './html-lesson-flow.js';
+import {designToHtmlFlow} from '../src/export.js';
 import {activityDefinitionHash} from './lesson-results.js';
 import {openLessonResults} from './lesson-results-ui.js';
 import {cleanGaiActivity,gaiAppCover,gaiAppResult} from '../src/gai-app.js';
@@ -3746,7 +3748,7 @@ function askDownload(O, btn) {
       choice('cv-down-format', 'PNG', '또렷한 그림', pick.kind === 'png', {type: 'png'}, {kind: 'png'}),
       choice('cv-down-format', 'JPG', '용량이 작은 그림', pick.kind === 'jpg', {type: 'jpg'}, {kind: 'jpg'}),
       choice('cv-down-format', 'PPTX', 'PowerPoint 파일', pptx, {type: 'pptx'}, {kind: 'pptx'}),
-      choice('cv-down-format', 'HTML 수업', '슬라이드와 활동을 함께 실행', html, {type: 'html'}, {kind: 'html'}),
+      choice('cv-down-format', 'HTML 수업', '인터넷 없이 슬라이드 모핑과 활동 실행', html, {type: 'html'}, {kind: 'html'}),
       choice('cv-down-format', 'PDF·인쇄', '종이로 뽑거나 PDF로 저장', pdf, {type: 'pdf'}, {kind: 'pdf'}),
       choice('cv-down-format', 'GIF', '저절로 넘어가는 움직이는 그림', gif, {type: 'gif'}, {kind: 'gif'}),
       choice('cv-down-format', '링크 공유', '받은 사람이 열어 바로 고쳐요', link, {type: 'link'}, {kind: 'link'}),
@@ -4212,6 +4214,7 @@ async function makeHtmlLesson(O,{notes=false}={}){
     // 숨긴 장은 발표용 HTML 수업에 넣지 않는다.
     const every=lessonPages(O),entries=every.filter(v=>!v.page.hidden),pages=[],topics=shownTopics(every.map(v=>v.page));
     if(!entries.length)throw Error('모든 장을 숨겨서 담을 장이 없어요.');
+    const flowPages=htmlFlowPages(entries.map(v=>v.page));let htmlBytes=0;
     for(const [index,value]of entries.entries()){
       if(abort.signal.aborted)return;
       status.textContent=`${index+1} / ${entries.length}쪽을 수업에 담고 있어요…`;
@@ -4222,7 +4225,13 @@ async function makeHtmlLesson(O,{notes=false}={}){
       const activity=value.page.activity;
       pages.push({id:value.page.id,image,aspect,...(notes?slideNotes(value.page):{}),...(topics.get(value.page.id)?{topic:topics.get(value.page.id)}:{}),...slideDur(value.page),...(value.page.source?.kind==='result'?{result:true}:{}),...(activity?{activity,binding:{documentId:value.record.id,pageId:value.page.id,activityId:activity.id,kind:activity.kind,definitionHash:await activityDefinitionHash(activity)}}:{})});
       if (effects) pages[pages.length-1].effects = effects;
+      if(flowPages.has(index)){
+        const flow=await designToHtmlFlow(value.page,{width,aspect,signal:abort.signal});
+        if(flow)pages[pages.length-1].flow=flow;
+      }
       if (value.page.source?.pageNumber) pages[pages.length-1].sourcePage=value.page.source.pageNumber;
+      htmlBytes+=new TextEncoder().encode(JSON.stringify(pages[pages.length-1])).length;
+      if(htmlBytes>200_000_000)throw Error('수업 파일이 너무 커요. 슬라이드를 나누어 다시 내려받아 주세요.');
     }
     if(abort.signal.aborted)return;
     const html=createHtmlLesson({title:O.materialDeck?.title||O.record.name,pages,target:lessonTarget(O)});
