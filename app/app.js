@@ -1,12 +1,13 @@
 // 미니캔 앱: 내 그림들 → 새 그림 → 꾸미기(그림의 모양은 꾸미는 화면에서 언제든 바꾼다) → 그림·영상 파일로 내려받기.
 // 편집기는 모듈(src/)의 것을 쓴다. 그림은 기기에 저장하며, 선택적 계정/가이X 연결은 호스트가 제공한다.
 // 들여 쓰는 곳은 startMinican({ fonts, titleFont, storage, onView, brand, sync })로 시작한다(index.html 이 그 예다).
-// 화면의 짜임: 첫 화면(소개·새로 만들기 + 템플릿 + 내 그림)과 꾸미는 화면(위 막대 · 왼쪽 도구 줄과 옆 칸 · 가운데 그림 · 아래 슬라이드 띠).
-//             꾸미는 화면은 넓은 화면에서 창을 꽉 채우고(스크롤 없음), 좁은 화면에서는 위에서 아래로 쌓인다(app.css).
+// 화면의 짜임: 첫 화면(소개·새로 만들기 + 템플릿 + 내 그림), 편집 화면(상단 문서·도구, 왼쪽 장 목록, 가운데 캔버스, 오른쪽 선택 속성).
+//             편집 화면은 창을 채우고, 좁은 화면에서는 장 목록·속성·삽입 칸을 필요할 때 연다(app.css).
 import { el, toast, openModal, closeModal } from './ui.js';
 import { onbatangLogo,gaiOwl } from './brand.js';
 import { onbatangLoading,deferredOnbatangLoading } from './loading.js';
-import {bindFilmstrip,bindSlideTray} from './filmstrip.js';
+import {bindFilmstrip,bindPageRail} from './filmstrip.js';
+import {documentMenu,bindEditorWorkspace} from './editor-workspace.js';
 import {orderPages,movePage} from './page-order.js';
 import {createLocalPalettes} from './palettes.js';
 import {newId,slideNotes,slideDur,shownTopics,cleanTopic,TOPIC_LIMIT,DUR_LIMIT} from '../src/document.js';
@@ -120,7 +121,6 @@ function setView(view) {
   try { onView(view); } catch (ex) { console.warn(ex); }
 }
 // 꾸미는 화면이 창을 꽉 채우는 앱 짜임인지(app.css 의 넓은 화면 조건과 같다). 아니면 위에서 아래로 쌓인다.
-const WIDE = window.matchMedia('(min-width: 900px) and (min-height: 520px)');
 
 // ---------- 움직임: 화면이 바뀔 때 뚝 끊기지 않게 ----------
 // 움직임을 줄이도록 설정한 기기에서는 아무것도 움직이지 않는다(바로 바뀐다).
@@ -420,10 +420,11 @@ function editorTour(O, { news = false } = {}) {
     ...(news ? { title: '온바탕 새 기능' } : {}),
     show: (view) => {
       if (O.closed) return;
-      const tab = O.editor.panel.querySelector(`.fe-tab[data-tab="${view}"]`);
-      if (!tab) return;
-      if (!tab.classList.contains('on')) tab.click();
-      else if (O.shell?.classList.contains('folded')) O.shell.querySelector('.cv-fold')?.click();
+      const menu=O.shell.querySelector('.cv-document-menu');
+      if(menu)menu.open=view==='document';
+      if(view==='pages'){O.workspace.closeTools();if(getComputedStyle(O.strip).display==='none')O.shell.querySelector('.cv-pages-toggle').click();if(O.strip.classList.contains('cv-tray-collapsed'))O.strip.querySelector('.cv-tray-toggle').click();return;}
+      if(!view||view==='document'||view==='canvas'){O.workspace.closeTools();return;}
+      O.editor.openTab(view);
     },
   });
 }
@@ -779,6 +780,10 @@ function openDesign(record, isNew) {
     onKeydown: (e) => { if (e.key === 'Enter') name.blur(); },
   });
   O.editor = createEditor({
+    inspector: true,
+    onToolOpen: () => O.workspace?.openTools(),
+    onToolClose: () => O.workspace?.closeTools(),
+    onInsert: () => O.workspace?.inserted(),
     colorPalettes,
     design: O.slides[0],
     onChange: () => touched(O),
@@ -872,11 +877,16 @@ function openDesign(record, isNew) {
     ...(mark ? [mark, el('span', { class: 'cv-bar-sep cv-brand-sep', 'aria-hidden': 'true' })] : []),
     el('button', { class: 'btn btn-ghost cv-back', type: 'button', title: '저장하고 내 그림으로 돌아가요', onClick: (e) => closeDesign(O, e.currentTarget) }, ...face('back', '내 그림')),
     el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' }),
-    name, O.status, historyButton(O), ...(material ? [material] : []), ...(lesson?[lesson]:[]), ...(accountLibrary?[accountLibrary]:[]), el('span', { class: 'cv-bar-gap' }), shapes, el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' }), tourButton('editor', O), ...(share ? [share] : []), ...(co ? [co] : []), show, down);
+    el('div', { class: 'cv-document-name' }, name, O.status),
+    documentMenu([
+      ['자료 관리', historyButton(O), material, lesson, accountLibrary, share, co],
+      ['화면 비율', shapes],
+      ['도움말', tourButton('editor', O)],
+    ]), el('span', { class: 'cv-bar-gap' }), show, down);
   // 들여쓰기 막대는 보통 막대 뒤에 만든다(이름 칸 · 저장 상태는 한 곳에만 놓일 수 있다).
   const embedHeader = embedBar ? el('header', { class: 'cv-bar cv-embed-bar' },
     el('span', { class: 'onba-editor-logo' }, onbatangLogo()), ...(embedBar.close ? [embedBar.close, el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' })] : []),
-    name, O.status, historyButton(O), el('span', { class: 'cv-bar-gap' }), tourButton('editor', O), embedBar.done) : null;
+    el('div', { class: 'cv-document-name' }, name, O.status), documentMenu([['자료 관리', historyButton(O)], ['도움말', tourButton('editor', O)]]), el('span', { class: 'cv-bar-gap' }), embedBar.done) : null;
   const shell = editorShell(O, embedHeader || bar);
   // ? : 꾸미는 화면 단축키 표(글을 쓰는 칸에서는 그냥 글자다). 아무 데도 누르지 않은 때에도 듣도록 문서에 단다.
   const onHelpKey = (e) => {
@@ -909,23 +919,10 @@ function openDesign(record, isNew) {
 }
 
 /**
- * 꾸미는 화면의 틀: 위 막대(bar) · 왼쪽 도구 줄과 옆 칸 · 가운데(고른 요소의 도구 막대 · 그림 · 슬라이드 띠). O.strip · O.shell 을 채운다.
+ * 장 중심 편집 화면: 위 막대(bar)·도구, 왼쪽 장 목록, 가운데 캔버스, 오른쪽 선택 속성. O.strip · O.shell 을 채운다.
  * O 에는 editor 와 alert(저장하지 못했을 때의 띠)가 있어야 한다.
  */
 function editorShell(O, bar) {
-  // 왼쪽: 도구 줄(템플릿·텍스트·요소·업로드·배경·레이어)과 옆 칸. 고른 도구를 한 번 더 누르거나 ‹ 를 누르면 옆 칸을 접는다(그림이 넓어진다).
-  // 고른 요소의 펼친 칸(색·위치·투명도 …)은 넓은 화면에서 옆 칸 자리에 뜬다(그림을 가리지 않게. app.css). 그래서 옆 칸을 접을 때는 닫고, 열릴 때는 편다.
-  const pop = O.editor.toolbar.querySelector('.fe-pop');
-  const closePop = () => { if (pop && !pop.hidden && WIDE.matches) pop.querySelector('.fe-pop-close')?.click(); };
-  const fold = el('button', { class: 'cv-fold', type: 'button', onClick: () => setFold(!shell.classList.contains('folded')) }, ic('back'));
-  const setFold = (want) => {
-    const on = want && WIDE.matches;       // 쌓는 화면에는 접을 옆 칸이 없다
-    if (on) closePop();
-    shell.classList.toggle('folded', on);
-    fold.title = on ? '옆 칸 펴기' : '옆 칸 접기';
-    fold.setAttribute('aria-label', fold.title);
-    fold.setAttribute('aria-expanded', String(!on));
-  };
   const side = el('aside', { class: 'cv-side', 'aria-label': '넣을 것 고르기' }, O.editor.panel);
   side.addEventListener('click', (e) => {
     const tab = e.target.closest('.fe-tab');
@@ -933,21 +930,9 @@ function editorShell(O, bar) {
     O.activityConfig?.remove();O.activityConfig=null;
     const same = tab.classList.contains('on');
     const wasFolded = shell.classList.contains('folded');
-    closePop();
-    setFold(!wasFolded && same);
-    // 다른 도구를 골랐으면(편집기가 옆 칸을 다시 그린 뒤에) 그 내용이 살짝 떠오른다.
-    if (!same || wasFolded) requestAnimationFrame(() => ease(side.querySelector('.fe-tabbody'), [{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }], 200));
-  }, true);                              // 편집기가 옆 칸을 다시 그리기 전에(고른 도구가 무엇이었는지 보고) 정한다
-  let popOpen = false;
-  if (pop) {
-    new MutationObserver(() => {
-      const open = !pop.hidden;
-      if (open && shell.classList.contains('folded')) setFold(false);
-      if (open && !popOpen && WIDE.matches) ease(pop, [{ opacity: 0, transform: 'translateX(-12px)' }, { opacity: 1, transform: 'none' }], 200);
-      popOpen = open;
-    }).observe(pop, { attributes: true, attributeFilter: ['hidden'] });
-  }
-  // 가운데: 고른 요소의 도구 막대 · 그림 · 슬라이드 띠(지금 장 고르기, 장 더하기·복제·옮기기·지우기)
+    if (!wasFolded && same) O.workspace.closeTools(); else O.workspace.openTools();
+  }, true);
+  // 장 목록과 선택 속성은 서로 독립적이다. 편집 엔진의 도구 DOM은 한 번만 놓는다.
   O.strip = el('div', { class: 'cv-strip', role: 'group', 'aria-label': '슬라이드' });
   // 슬라이드 목록의 작은 그림을 우클릭: 그 장을 고르고 장 메뉴(새 장 · 복제 · 옮기기 · 이 장부터 발표 · 지우기)를 띄운다.
   // 전체 자료의 다른 파트에 있는 장은 먼저 그 파트를 연다(누른 것과 같다).
@@ -964,14 +949,21 @@ function editorShell(O, bar) {
   const canvasBox = el('div', { class: 'cv-canvas' }, O.editor.stage);
   O.editor.setSelectionSurface(canvasBox);
   const work = el('section', { class: 'cv-work', 'aria-label': '그림' },
-    el('div', { class: 'cv-tools' }, O.editor.toolbar),
+    el('div', { class: 'cv-work-head' },
+      el('button', { class: 'btn cv-pages-toggle', type: 'button', 'aria-expanded': 'false' }, ...face('layers', '장 목록')),
+      O.editor.historyTools,
+      el('span', { class: 'cv-canvas-label', text: '편집 캔버스' }),
+      el('button', { class: 'btn cv-properties-toggle', type: 'button', 'aria-expanded': 'false' }, ...face('pencil', '속성'))),
     canvasBox,
-    O.editor.notes, O.strip, fold);
+    O.editor.notes);
+  const properties = el('aside', { class: 'cv-properties cv-tools', 'aria-label': '선택 속성' },
+    el('button', { class: 'cv-properties-close', type: 'button', 'aria-label': '속성 닫기' }, ic('close')),
+    O.editor.toolbar);
   // 노트 칸을 펴 두었는지는 이 기기에 기억한다(다음에 열 때도 그대로).
   try { O.editor.notes.open = localStorage.getItem(NOTES_OPEN_KEY) === '1'; } catch { /* 저장 공간이 막힌 기기: 접어 둔다 */ }
   O.editor.notes.addEventListener('toggle', () => { try { localStorage.setItem(NOTES_OPEN_KEY, O.editor.notes.open ? '1' : '0'); } catch { /* 기억하지 못해도 칸은 그대로 쓴다 */ } });
-  const shell = O.shell = el('div', { class: 'cv-app' }, bar, O.alert, side, work);
-  setFold(false);
+  const shell = O.shell = el('div', { class: 'cv-app cv-page-workspace folded' }, bar, O.alert, side, O.strip, work, properties);
+  O.workspace = bindEditorWorkspace(shell);
   return shell;
 }
 
@@ -1006,7 +998,7 @@ function renderStrip(O) {
   if (!O.strip || O.closed) return;
   O.activityConfig?.remove();O.activityConfig=null;
   if(O.materialDeck&&O.strip.dataset.materialLayout==='1'){
-    renderMaterialNavigation(O,O.strip.querySelector('.cv-slide-list').scrollLeft);
+    renderMaterialNavigation(O,O.strip.querySelector('.cv-slide-list').scrollTop);
     const pages=materialPages(O),at=pages.findIndex(v=>v.record.id===O.record.id&&v.index===O.at),tools=O.strip.querySelectorAll('.cv-slide-tool');
     tools[0].disabled=at<=0;tools[1].disabled=at>=pages.length-1;tools[2].disabled=O.slides.length>=MAX_SLIDES;
     const del=tools[3];del.disabled=O.slides.length===1&&!O.editor.getDesign().items.length&&!hasVideo(O.editor.getDesign());
@@ -1019,7 +1011,7 @@ function renderStrip(O) {
   const aspect = aspectOf(O.record);
   const n = O.slides.length;
   const full = n >= MAX_SLIDES;
-  const left = O.strip.querySelector('.cv-slide-list')?.scrollLeft || 0;
+  const left = O.strip.querySelector('.cv-slide-list')?.scrollTop || 0;
   // 움직임(발표할 때)이 있는 장에는 작은 표시가 붙는다
   const thumbs = O.slides.map((d, i) => {
     const design = i === O.at ? O.editor.getDesign() : d;
@@ -1072,15 +1064,18 @@ function renderStrip(O) {
   // 띠를 다시 그려도 옆으로 넘겨 둔 자리는 그대로 두고, 고른 장이 안 보일 때에만 그쪽으로 (부드럽게) 넘긴다.
   const list = O.strip.querySelector('.cv-slide-list');
   const on = list.querySelector('.cv-slide.on');
-  list.scrollLeft = left;
+  list.scrollTop = left;
   if (on) {
     const box = list.getBoundingClientRect();
     const r = on.getBoundingClientRect();
-    const by = r.left < box.left + 8 ? r.left - box.left - 8 : r.right > box.right - 8 ? r.right - box.right + 8 : 0;
-    if (by) list.scrollBy({ left: by, behavior: CALM.matches ? 'auto' : 'smooth' });
+    const by = r.top < box.top + 8 ? r.top - box.top - 8 : r.bottom > box.bottom - 8 ? r.bottom - box.bottom + 8 : 0;
+    if (by) list.scrollBy({ top: by, behavior: 'auto' });
   }
   renderMaterialNavigation(O,left);
   decorateStrip(O);
+  list.scrollTop = left;
+  const selected = list.querySelector('.cv-slide.on');
+  if (selected) { const box = list.getBoundingClientRect(), r = selected.getBoundingClientRect(); list.scrollTop += r.top < box.top + 8 ? r.top - box.top - 8 : r.bottom > box.bottom - 8 ? r.bottom - box.bottom + 8 : 0; }
   if(O.materialDeck)O.strip.dataset.materialLayout='1';
 }
 function moveStripSelection(O,delta){if(O.materialDeck){const pages=materialPages(O),from=pages.findIndex(v=>v.record.id===O.record.id&&v.index===O.at);reorderStrip(O,from,from+delta);}else changeSlides(O,(slides,at)=>moveSlide(slides,at,delta));}
@@ -1105,26 +1100,25 @@ async function reorderStrip(O,from,to){
 }
 function decorateStrip(O){
   const list=O.strip.querySelector('.cv-slide-list'),count=O.strip.querySelector('.cv-slide-count');
-  const size=el('input',{type:'range',min:'88',max:'600',step:'1',value:'120','aria-label':'슬라이드 목록 창 높이',dataset:{trayHeight:''}});
-  const scroll=(text,dir)=>el('button',{class:'cv-slide-scroll',type:'button','aria-label':text,onClick:()=>list.scrollBy({left:dir*list.clientWidth*.75,behavior:CALM.matches?'auto':'smooth'})},dir<0?'‹':'›');
-  const guide=window.matchMedia('(pointer: coarse)').matches?'손잡이로 순서 변경 · 목록을 밀어 이동':'끌어서 순서 변경 · 휠로 가로 이동';
+  const size=el('input',{type:'range',min:'152',max:'300',step:'1',value:'196','aria-label':'장 목록 너비',dataset:{trayWidth:''}});
+  const guide=window.matchMedia('(pointer: coarse)').matches?'손잡이로 순서 변경 · 목록을 밀어 이동':'끌어서 순서 변경 · Alt+↑/↓로도 옮겨요';
   const bodyId=O.trayId??=newId('u');
   const toggle=el('button',{class:'cv-tray-toggle',type:'button','aria-controls':bodyId,title:'슬라이드 목록 접기/펼치기'},el('span',{class:'cv-tray-toggle-label'},'목록 접기'),el('span',{class:'cv-tray-chevron','aria-hidden':'true'},'⌄'));
   const page=(dir,text)=>el('button',{class:'cv-slide-scroll cv-tray-page',type:'button',dataset:{trayStep:String(dir)},'aria-label':text},dir<0?'‹':'›');
-  const options=el('div',{class:'cv-tray-options'},el('div',{class:'cv-tray-options-heading'},el('b',{},'슬라이드 도구'),el('button',{class:'cv-tray-reset',type:'button',dataset:{trayReset:''}},'창 높이 초기화')),
+  const options=el('div',{class:'cv-tray-options'},el('div',{class:'cv-tray-options-heading'},el('b',{},'장 도구'),el('button',{class:'cv-tray-reset',type:'button',dataset:{trayReset:''}},'너비 초기화')),
     O.strip.querySelector('.cv-slide-tools'),
-    el('div',{class:'cv-tray-options-row'},el('label',{class:'cv-strip-size'},'창 높이',size),scroll('목록 왼쪽 보기',-1),scroll('목록 오른쪽 보기',1)),
+    el('div',{class:'cv-tray-options-row'},el('label',{class:'cv-strip-size'},'목록 너비',size)),
     el('p',{class:'cv-strip-guide',text:guide}),O.strip.querySelector('.cv-material-hint'));
-  const menu=el('details',{class:'cv-tray-menu'},el('summary',{'aria-label':'슬라이드 도구 열기',title:'슬라이드 복제·삭제·순서·높이·결과 가져오기'},'···'),options);
+  const menu=el('details',{class:'cv-tray-menu'},el('summary',{'aria-label':'슬라이드 도구 열기',title:'장 복제·삭제·순서·너비·결과 가져오기'},'···'),options);
   const header=el('div',{class:'cv-strip-header'},toggle,count,page(-1,'이전 슬라이드'),page(1,'다음 슬라이드'),menu);
   const body=el('div',{class:'cv-tray-body',id:bodyId},list);
-  const grip=el('div',{class:'cv-tray-grip',role:'separator',tabindex:'0','aria-orientation':'horizontal','aria-label':'슬라이드 목록 높이 조절','aria-controls':bodyId,'aria-valuemin':'0','aria-valuemax':'152',title:'위아래로 끌어 목록 높이 조절 · 누르면 접기/펼치기 · 방향키로도 조절'});
+  const grip=el('div',{class:'cv-tray-grip',role:'separator',tabindex:'0','aria-orientation':'vertical','aria-label':'장 목록 너비 조절','aria-controls':bodyId,'aria-valuemin':'48','aria-valuemax':'300',title:'좌우로 끌어 목록 너비 조절 · 방향키로도 조절'});
   O.strip.replaceChildren(grip,header,body);list.tabIndex=0;
-  O.tray??=bindSlideTray(O.strip,{key:`onbatang.filmstrip-tray.v1.${storageName()}`,
+  O.tray??=bindPageRail(O.strip,{key:`onbatang.page-rail.v2.${storageName()}`,
     navigation:()=>{const at=O.materialDeck?materialPages(O).findIndex(v=>v.record.id===O.record.id&&v.index===O.at):O.at,n=O.materialDeck?materialPages(O).length:O.slides.length;return {previous:at>0,next:at<n-1};},
     step:delta=>{if(O.materialDeck){const pages=materialPages(O),at=pages.findIndex(v=>v.record.id===O.record.id&&v.index===O.at);if(pages[at+delta])navigateMaterialPage(O,pages[at+delta]);}else goSlide(O,O.at+delta);}});
   O.tray.refresh();
-  O.stripDrag=bindFilmstrip(list,{reorder:(from,to)=>reorderStrip(O,from,to),busy:()=>O.closed||O.leaving||!!O.inlineImport||app.inert});
+  O.stripDrag=bindFilmstrip(list,{vertical:true,reorder:(from,to)=>reorderStrip(O,from,to),busy:()=>O.closed||O.leaving||!!O.inlineImport||app.inert});
 }
 
 // Stored PPT parts stay independent. The editor shows their pages as one deck
@@ -1218,7 +1212,7 @@ function renderMaterialNavigation(O,left=0) {
    O.stripDrag?.destroy();rail.replaceChildren(...nodes);
    // Rebind only when the page set/order changes, never on selection.
    for(const grip of rail.querySelectorAll('.cv-slide-grip'))grip.remove();
-   if(O.strip.dataset.materialLayout==='1')O.stripDrag=bindFilmstrip(rail,{reorder:(from,to)=>reorderStrip(O,from,to),busy:()=>O.closed||O.leaving||!!O.inlineImport||app.inert});
+   if(O.strip.dataset.materialLayout==='1')O.stripDrag=bindFilmstrip(rail,{vertical:true,reorder:(from,to)=>reorderStrip(O,from,to),busy:()=>O.closed||O.leaving||!!O.inlineImport||app.inert});
   }
   const count=O.strip.querySelector('.cv-slide-count');
   count.textContent=`${at+1} / ${pages.length}쪽 · 전체 PPT`;
@@ -1226,8 +1220,8 @@ function renderMaterialNavigation(O,left=0) {
   if(!O.strip.querySelector('.cv-material-hint'))O.strip.append(el('span',{class:'cv-material-hint',text:'모든 쪽을 이어서 편집할 수 있어요. 변경은 이 기기에 자동 저장돼요.'}));
   const selected=rail.querySelector('.on');
   const key=`${O.record.id}:${O.at}`;
-  rail.scrollLeft=left;
-  if(selected&&O.materialScrollTarget!==key){const box=rail.getBoundingClientRect(),r=selected.getBoundingClientRect();rail.scrollLeft+=r.left<box.left+8?r.left-box.left-8:r.right>box.right-8?r.right-box.right+8:0;}
+  rail.scrollTop=left;
+  if(selected&&O.materialScrollTarget!==key){const box=rail.getBoundingClientRect(),r=selected.getBoundingClientRect();rail.scrollTop+=r.top<box.top+8?r.top-box.top-8:r.bottom>box.bottom-8?r.bottom-box.bottom+8:0;}
   O.materialScrollTarget=key;
   O.tray?.refresh();
 }
@@ -2646,6 +2640,7 @@ async function leaveEditor(O, { requireSaved = false, waitForSync = false, tidy 
   O.materialLoading?.dispose();
   O.stripDrag?.destroy();
   O.tray?.destroy();
+  O.workspace?.destroy();
   if (accountFor(O.record)) {
     const uploading = pusher.flush(O.record.id);
     if (waitForSync) await uploading;            // 바깥 화면으로 가면 이 앱이 닫히므로 올리기까지 기다린다
@@ -3043,7 +3038,7 @@ function toggleCoPanel(O, open = !O.coPanel) {
   O.coButton?.setAttribute('aria-expanded', String(open));
   if (!open) return;
   O.coPanel = el('section', { class: 'cv-co-panel', dataset: { coPanel: '' }, 'aria-label': '같이 고치기' });
-  O.coPanel.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); toggleCoPanel(O, false); O.coButton?.focus(); } });
+  O.coPanel.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); toggleCoPanel(O, false); O.shell.querySelector('.cv-document-menu>summary')?.focus(); } });
   // 판 밖(그림 · 도구)을 누르면 접는다: 그림을 가리지 않게. 다시 보려면 위 막대의 단추를 누른다.
   const away = (e) => { if (!O.coPanel?.contains(e.target) && !O.coButton?.contains(e.target)) toggleCoPanel(O, false); };
   document.addEventListener('pointerdown', away, true);
@@ -3320,7 +3315,7 @@ async function openAccountFromHome(action=accountAction){
 }
 async function openInlineImport(O, context, action=importAction) {
   const work = O.shell.querySelector('.cv-work');
-  const protectedNodes = [O.shell.querySelector('.cv-bar'), O.shell.querySelector('.cv-side')];
+  const protectedNodes = [O.shell.querySelector('.cv-bar'), O.shell.querySelector('.cv-side'), O.strip, O.shell.querySelector('.cv-properties')];
   const readonlyInputs = protectedNodes.flatMap(node => [...node.querySelectorAll('input:not([type=file]),textarea')].map(input => [input, input.readOnly]));
   const previousChildren = [...work.children].map(node => [node, node.hidden]);
   const previousFocus = document.activeElement;

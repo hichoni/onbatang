@@ -15,22 +15,22 @@ export const HOME_STEPS = [
 ];
 
 // 꾸미는 화면의 안내와 새 기능 안내가 함께 쓰는 단계들
-const LINK_STEP = { target: '.cv-side', view: 'element', title: '연결선으로 잇기', text: '"꾸미기" 칸 맨 위의 "연결선"을 누르고, 화살표가 시작할 조각과 닿을 조각을 차례로 눌러요. 순서도·마인드맵을 그릴 때 좋아요.', tip: '선을 누르면 곧게·둥글게·꺾어서와 붙는 곳(↑→↓←)을 고르고, 가운데 손잡이로 휘어요' };
+const LINK_STEP = { target: '.fe-tabbody', view: 'element', title: '연결선으로 잇기', text: '"꾸미기" 칸 맨 위의 "연결선"을 누르고, 화살표가 시작할 조각과 닿을 조각을 차례로 눌러요. 순서도·마인드맵을 그릴 때 좋아요.', tip: '선을 누르면 곧게·둥글게·꺾어서와 붙는 곳(↑→↓←)을 고르고, 가운데 손잡이로 휘어요' };
 const SHOW_STEP = { target: '.cv-show-btn', title: '발표하기', text: '화면 가득 한 장씩 보여 줘요. 스페이스 바나 → 로 넘기고 Esc 로 끝내요. G 전체 보기 · C 내 얼굴 카메라 · A 자동 넘기기 · R 리허설(장마다 시간 재기).', tip: '발표 중 ? 를 누르면 글쇠 목록이 나와요' };
 const DOWN_STEP = { target: '.cv-down-btn', title: '내려받기', text: 'PNG·JPG 그림, PDF(노트·유인물), PPTX, 영상, GIF, HTML 수업으로 내려받아요. 저장할 장과 옵션을 확인한 뒤 내려받기를 눌러요.', tip: '영상과 GIF에도 이어 움직이기가 그대로 나와요' };
 const SAVE_STEP = { target: '.cv-status', title: '저절로 저장돼요', text: '고칠 때마다 이 기기(이 브라우저)에 저장되고, 새로 고쳐도 꾸미던 그림·장이 다시 열려요. 다른 기기에는 없으니 다 만든 그림은 내려받아 두세요.', tip: '새 기능은 첫 화면의 "새 기능"에서 자세히 봐요 · 사용법은 ? 단추로 다시 봐요' };
 
 /** 꾸미는 화면의 안내. view: 그 단계에서 옆 칸에 펼칠 도구(편집기의 칸 이름) */
 export const EDITOR_STEPS = [
-  { target: '.fe-tabs', view: 'layout', title: '왼쪽 도구 줄', text: '틀 · 글 · 꾸미기 · 내 자료 · 바탕색 · 겹 순서 · 움직임을 여기서 골라요. 고른 도구를 한 번 더 누르면 옆 칸이 접혀서 그림이 넓어져요.' },
-  { target: '.cv-side', view: 'text', title: '글 넣기', text: '큰 제목 · 작은 제목 · 이야기 글 중에서 눌러 넣어요. 카드의 글을 두 번 누르면 바로 고칠 수 있어요.', tip: '글꼴·크기·색은 위쪽 도구 막대에서' },
-  { target: '.cv-side', view: 'element', title: '꾸미기: 도형과 그림 1,000개', text: '도형, 선, 컬러 그림, 선 아이콘, 픽셀 그림, 사람 그림을 넣어요. "동물", "날씨"처럼 낱말로 찾을 수 있어요.', tip: '선 아이콘과 픽셀은 색도 바꿀 수 있어요' },
-  { target: '.cv-side', view: 'upload', title: '내 자료: 사진과 유튜브', text: '내 사진을 올리고, 유튜브 주소를 붙여 넣으면 영상이 카드에 들어가요. 영상은 발표할 때 스페이스 바로 틀고 멈춰요.', tip: '꾸미기 판에서 Ctrl+V 로 유튜브 주소를 붙여 넣어도 돼요' },
-  { target: '.fe-stage', title: '카드에서 바로 꾸며요', text: '모서리를 끌면 반대편은 그대로 두고 크기를 바꿔요. Shift는 비율 유지, Ctrl은 중심 기준이에요. 방향키로 1px, Shift+방향키로 10px 옮겨요.', tip: 'Shift 누르기로 여럿 고르기 · Ctrl+D 복제 · Ctrl+Z 실행 취소' },
+  { target: '.fe-tabs', view: 'layout', title: '위쪽 도구 줄', text: '틀 · 글 · 꾸미기 · 내 자료 · 바탕색 · 겹 순서 · 움직임을 여기서 골라요. 고른 도구를 한 번 더 누르면 옆 칸이 접혀서 그림이 넓어져요.' },
+  { target: '.fe-tabbody', view: 'text', title: '글 넣기', text: '큰 제목 · 작은 제목 · 이야기 글 중에서 눌러 넣어요. 카드의 글을 두 번 누르면 바로 고칠 수 있어요.', tip: '글꼴·크기·색은 오른쪽 속성에서' },
+  { target: '.fe-tabbody', view: 'element', title: '꾸미기: 도형과 그림 1,000개', text: '도형, 선, 컬러 그림, 선 아이콘, 픽셀 그림, 사람 그림을 넣어요. "동물", "날씨"처럼 낱말로 찾을 수 있어요.', tip: '선 아이콘과 픽셀은 색도 바꿀 수 있어요' },
+  { target: '.fe-tabbody', view: 'upload', title: '내 자료: 사진과 유튜브', text: '내 사진을 올리고, 유튜브 주소를 붙여 넣으면 영상이 카드에 들어가요. 영상은 발표할 때 스페이스 바로 틀고 멈춰요.', tip: '꾸미기 판에서 Ctrl+V 로 유튜브 주소를 붙여 넣어도 돼요' },
+  { target: '.fe-stage', view: 'canvas', title: '카드에서 바로 꾸며요', text: '모서리를 끌면 반대편은 그대로 두고 크기를 바꿔요. Shift는 비율 유지, Ctrl은 중심 기준이에요. 방향키로 1px, Shift+방향키로 10px 옮겨요.', tip: 'Shift 누르기로 여럿 고르기 · Ctrl+D 복제 · Ctrl+Z 실행 취소' },
   LINK_STEP,
-  { target: '.cv-side', view: 'motion', optional: true, title: '움직임', text: '조각이 나타나는 효과, 장이 넘어가는 효과, 누를 때 강조(두근두근·흔들기 등)를 골라요. "이어 움직이기"는 같은 조각을 새 자리로 부드럽게 옮겨요.', tip: '"모든 장에 똑같이"로 한 번에 맞추기' },
-  { target: '.cv-strip', title: '여러 장 만들기', text: '"새 장"으로 장을 더하고, 끌어서 순서를 바꿔요. 장을 오른쪽 클릭(길게 누르기)하면 복제 · 발표에서 숨기기 · 여기서 주제 시작이 있어요.', tip: '빈 곳을 오른쪽 클릭하면 찾아 바꾸기도 있어요' },
-  { target: '.cv-shapes', title: '모양 바꾸기', text: '정사각형·세로·가로·길게 중에서 골라요. 놓아 둔 것들은 찌그러지지 않게 맞춰 줘요.' },
+  { target: '.fe-tabbody', view: 'motion', optional: true, title: '움직임', text: '조각이 나타나는 효과, 장이 넘어가는 효과, 누를 때 강조(두근두근·흔들기 등)를 골라요. "이어 움직이기"는 같은 조각을 새 자리로 부드럽게 옮겨요.', tip: '"모든 장에 똑같이"로 한 번에 맞추기' },
+  { target: '.cv-strip', view: 'pages', title: '여러 장 만들기', text: '"새 장"으로 장을 더하고, 끌어서 순서를 바꿔요. 장을 오른쪽 클릭(길게 누르기)하면 복제 · 발표에서 숨기기 · 여기서 주제 시작이 있어요.', tip: '빈 곳을 오른쪽 클릭하면 찾아 바꾸기도 있어요' },
+  { target: '.cv-shapes', view: 'document', title: '모양 바꾸기', text: '정사각형·세로·가로·길게 중에서 골라요. 놓아 둔 것들은 찌그러지지 않게 맞춰 줘요.' },
   SHOW_STEP,
   DOWN_STEP,
   SAVE_STEP,
@@ -43,8 +43,8 @@ export const EDITOR_STEPS = [
 export const NEWS_KEY = 'news-0.45';
 export const NEWS_STEPS = [
   LINK_STEP,
-  { target: '.cv-side', view: 'motion', optional: true, title: '이어 움직이기 · 강조', text: '장 넘기기 효과에서 "이어 움직이기"를 고르면 앞 장과 같은 조각이 자리·크기·색을 이어 부드럽게 옮겨 가요. 누를 때 강조로 조각을 한 번 움직여요.', tip: '앞 장을 복제한 뒤 조각을 옮기면 쉬워요' },
-  { target: '.cv-strip', title: '장 숨기기 · 주제', text: '장을 오른쪽 클릭(길게 누르기)해서 발표에서 숨기거나, 여기서 주제를 시작해요. 주제는 발표 중 전체 보기(G)에서 묶여 확대돼요.', tip: '빈 곳 오른쪽 클릭: 찾아 바꾸기' },
+  { target: '.fe-tabbody', view: 'motion', optional: true, title: '이어 움직이기 · 강조', text: '장 넘기기 효과에서 "이어 움직이기"를 고르면 앞 장과 같은 조각이 자리·크기·색을 이어 부드럽게 옮겨 가요. 누를 때 강조로 조각을 한 번 움직여요.', tip: '앞 장을 복제한 뒤 조각을 옮기면 쉬워요' },
+  { target: '.cv-strip', view: 'pages', title: '장 숨기기 · 주제', text: '장을 오른쪽 클릭(길게 누르기)해서 발표에서 숨기거나, 여기서 주제를 시작해요. 주제는 발표 중 전체 보기(G)에서 묶여 확대돼요.', tip: '빈 곳 오른쪽 클릭: 찾아 바꾸기' },
   SHOW_STEP,
   DOWN_STEP,
   SAVE_STEP,
@@ -133,7 +133,7 @@ export function startTour({ steps, show = () => {}, title = '온바탕 둘러보
     clearInterval(timer);
     const rev = ++revision;
     const step = steps[index];
-    if (step.view) show(step.view);
+    show(step.view);
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     if (closed || rev !== revision) return;
     target = document.querySelector(step.target);

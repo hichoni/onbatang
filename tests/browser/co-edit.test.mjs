@@ -56,7 +56,7 @@ test('co-edit: start, join by link, edit together, locks, and the copy stays aft
   const host = await open(origin + '/fixture.html?s=host');
   await host.locator('.cv-item .cv-thumb').first().click();
   await host.locator('.cv-canvas .fe-stage').waitFor();
-  await host.locator('[data-co-edit]').click();
+  await host.getByLabel('문서 메뉴',{exact:true}).click();await host.locator('[data-co-edit]').click();
   await host.locator('[data-co-name]').fill('선생님');
   await host.locator('[data-co-start]').click();
   const link = await host.locator('[data-co-link]').inputValue();
@@ -70,11 +70,11 @@ test('co-edit: start, join by link, edit together, locks, and the copy stays aft
   await guest.locator('[data-co-name]').fill('민지');
   await guest.locator('[data-co-join]').click();
   await guest.locator('.cv-canvas .fe-stage').waitFor();
-  await guest.locator('.cv-co-btn.on').waitFor();
+  await guest.locator('.cv-co-btn.on').waitFor({state:'attached'});
   assert.equal(await guest.locator('.cv-name').inputValue(), '(같이 고치기) 모둠 발표');
   assert.equal(await guest.locator('.cv-strip .cv-slide[data-slide]').count(), 2);
   await host.locator('[data-co-people="2"]').waitFor();
-  assert.match(await host.locator('.cv-co-btn').innerText(), /같이 고치는 중 · 2명/);
+  assert.match(await host.locator('.cv-co-btn').textContent(), /같이 고치는 중 · 2명/);
 
   // 들어온 사람이 요소를 옮긴다 → 시작한 사람의 화면 · 저장에 들어온다
   const hostItem = () => host.evaluate(async () => (await window.read('dcoedithost1')).slides[0].items.find((it) => it.id === 'ecoa000001'));
@@ -102,9 +102,9 @@ test('co-edit: start, join by link, edit together, locks, and the copy stays aft
   await shot(guest, 'guest');
 
   // 끝내기 → 들어온 사람에게 알리고, 사본은 그대로 남는다
-  await host.locator('[data-co-edit]').click();
+  await host.getByLabel('문서 메뉴',{exact:true}).click();await host.locator('[data-co-edit]').click();
   await host.locator('[data-co-end]').click();
-  await guest.locator('.cv-co-btn:not(.on)').waitFor();
+  await guest.locator('.cv-co-btn:not(.on)').waitFor({state:'attached'});
   const kept = await guest.evaluate(async (id) => (await window.read(id)).slides.length, copyId);
   assert.equal(kept, 3);
   assert.equal(new URL(guest.url()).searchParams.has('co'), false, 'the link is taken off the address after the end');

@@ -1,6 +1,8 @@
 // Native horizontal scrolling stays separate from slide sorting. A thumbnail
 // can be dragged with a mouse; its grip also supports touch/pointer sorting.
-export function bindFilmstrip(list,{reorder,busy=()=>false}={}){
+export function bindFilmstrip(list,{reorder,busy=()=>false,vertical=false}={}){
+  const point=event=>vertical?event.clientY:event.clientX;
+  const edge=vertical?'top':'left',end=vertical?'bottom':'right',length=vertical?'height':'width',scroll=vertical?'scrollTop':'scrollLeft';
   let job=null,frame=0;
   const controller=new AbortController(),on=(node,type,fn,options={})=>node.addEventListener(type,fn,{...options,signal:controller.signal});
   const tiles=()=>[...list.querySelectorAll('.cv-slide:not(.add)')];
@@ -8,53 +10,113 @@ export function bindFilmstrip(list,{reorder,busy=()=>false}={}){
   function mark(x){
     if(!job)return;job.x=x;clearMark();
     const nodes=tiles();let slot=nodes.length;
-    for(let i=0;i<nodes.length;i++){const box=nodes[i].getBoundingClientRect();if(x<box.left+box.width/2){slot=i;break;}}
+    for(let i=0;i<nodes.length;i++){const box=nodes[i].getBoundingClientRect();if(x<box[edge]+box[length]/2){slot=i;break;}}
     job.to=Math.max(0,Math.min(nodes.length-1,slot-(slot>job.from?1:0)));
     if(slot<nodes.length)nodes[slot].classList.add('drop-before');else nodes.at(-1)?.classList.add('drop-after');
   }
   function autoScroll(){
     if(!job||!list.isConnected){stop();return;}
-    const box=list.getBoundingClientRect(),delta=job.x<box.left+38?-12:job.x>box.right-38?12:0;
-    if(delta){list.scrollLeft+=delta;mark(job.x);}frame=requestAnimationFrame(autoScroll);
+    const box=list.getBoundingClientRect(),delta=job.x<box[edge]+38?-12:job.x>box[end]-38?12:0;
+    if(delta){list[scroll]+=delta;mark(job.x);}frame=requestAnimationFrame(autoScroll);
   }
   function start(node,x){if(busy())return false;stop();job={from:tiles().indexOf(node),to:tiles().indexOf(node),x,node};node.classList.add('sorting');list.classList.add('is-sorting');frame=requestAnimationFrame(autoScroll);return true;}
   function stop(){cancelAnimationFrame(frame);clearMark();job?.node.classList.remove('sorting');job=null;list.classList.remove('is-sorting');}
   function finish(){const value=job;stop();if(value&&value.from!==value.to)reorder(value.from,value.to);}
   for(const node of tiles()){
     node.draggable=true;
-    on(node,'dragstart',event=>{if(!start(node,event.clientX)){event.preventDefault();return;}event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('text/plain','onbatang-slide');});
+    on(node,'dragstart',event=>{if(!start(node,point(event))){event.preventDefault();return;}event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('text/plain','onbatang-slide');});
     on(node,'dragend',stop);
-    on(node,'keydown',event=>{if(event.altKey&&['ArrowLeft','ArrowRight'].includes(event.key)){event.preventDefault();event.stopPropagation();const from=tiles().indexOf(node),to=from+(event.key==='ArrowLeft'?-1:1);if(!busy()&&to>=0&&to<tiles().length)reorder(from,to);}});
-    const grip=document.createElement('span');grip.className='cv-slide-grip';grip.textContent='⠿';grip.title='끌어서 순서 변경 · Alt+←/→';grip.setAttribute('aria-hidden','true');node.append(grip);
+    on(node,'keydown',async event=>{
+      if(!event.altKey||!(vertical?['ArrowUp','ArrowDown','ArrowLeft','ArrowRight']:['ArrowLeft','ArrowRight']).includes(event.key))return;
+      event.preventDefault();event.stopPropagation();
+      const from=tiles().indexOf(node),to=from+(['ArrowLeft','ArrowUp'].includes(event.key)?-1:1),rail=list.closest('.cv-strip');
+      if(busy()||to<0||to>=tiles().length)return;
+      await reorder(from,to);
+      // Rebuilding thumbnails must not strand the keyboard on document.body.
+      if(rail?.isConnected&&(document.activeElement===document.body||document.activeElement===node))rail.querySelectorAll('.cv-slide:not(.add)')[to]?.focus({preventScroll:true});
+    });
+    const grip=document.createElement('span');grip.className='cv-slide-grip';grip.textContent='⠿';grip.title=vertical?'끌어서 순서 변경 · Alt+↑/↓':'끌어서 순서 변경 · Alt+←/→';grip.setAttribute('aria-hidden','true');node.append(grip);
     on(grip,'click',event=>{event.preventDefault();event.stopPropagation();});
     on(grip,'pointerdown',event=>{
-      if(event.button>0||!start(node,event.clientX))return;
+      if(event.button>0||!start(node,point(event)))return;
       event.preventDefault();event.stopPropagation();grip.setPointerCapture(event.pointerId);
       // Browsers may enlarge a touch hit onto this grip. A tap still selects
       // its slide; only an intentional movement sorts it.
       let moved=false;
-      const move=e=>{if(e.pointerId!==event.pointerId)return;if(Math.hypot(e.clientX-event.clientX,e.clientY-event.clientY)>=6)moved=true;if(moved)mark(e.clientX);};
+      const move=e=>{if(e.pointerId!==event.pointerId)return;if(Math.hypot(e.clientX-event.clientX,e.clientY-event.clientY)>=6)moved=true;if(moved)mark(point(e));};
       const end=e=>{if(e.pointerId!==event.pointerId)return;cleanup();if(e.type==='pointercancel')stop();else if(moved)finish();else{stop();node.click();}};
       const cleanup=()=>{grip.removeEventListener('pointermove',move);grip.removeEventListener('pointerup',end);grip.removeEventListener('pointercancel',end);};
       on(grip,'pointermove',move);on(grip,'pointerup',end);on(grip,'pointercancel',end);
     });
   }
-  on(list,'dragover',event=>{if(!job)return;event.preventDefault();event.dataTransfer.dropEffect='move';mark(event.clientX);});
-  on(list,'drop',event=>{if(!job)return;event.preventDefault();mark(event.clientX);finish();});
+  on(list,'dragover',event=>{if(!job)return;event.preventDefault();event.dataTransfer.dropEffect='move';mark(point(event));});
+  on(list,'drop',event=>{if(!job)return;event.preventDefault();mark(point(event));finish();});
   on(list,'keydown',event=>{if(event.key==='Escape')stop();});
   on(list,'wheel',event=>{
-    if(event.ctrlKey||list.scrollWidth<=list.clientWidth)return;
+    if(vertical||event.ctrlKey||list.scrollWidth<=list.clientWidth)return;
     const by=(Math.abs(event.deltaX)>Math.abs(event.deltaY)?event.deltaX:event.deltaY)*(event.deltaMode===1?16:event.deltaMode===2?list.clientWidth:1);
     const old=list.scrollLeft;list.scrollLeft+=by;if(list.scrollLeft!==old)event.preventDefault();
   },{passive:false});
   on(list,'pointerdown',event=>{
     if(event.button>0||event.target.closest('.cv-slide'))return;
+    if(vertical)return; // Vertical rails keep native touch scrolling.
     const x=event.clientX,left=list.scrollLeft;list.setPointerCapture(event.pointerId);
     const move=e=>{if(e.pointerId===event.pointerId)list.scrollLeft=left+x-e.clientX;};
     const end=()=>{list.removeEventListener('pointermove',move);list.removeEventListener('pointerup',end);list.removeEventListener('pointercancel',end);};
     on(list,'pointermove',move);on(list,'pointerup',end);on(list,'pointercancel',end);
   });
   return {stop,destroy(){stop();controller.abort();}};
+}
+
+/** Page-centered workspace: the same navigation/actions in a vertical rail. */
+export function bindPageRail(strip,{key,navigation=()=>({}),step=()=>{}}={}){
+  const shell=strip.closest('.cv-page-workspace'),controller=new AbortController();
+  const on=(node,type,fn,options={})=>node.addEventListener(type,fn,{...options,signal:controller.signal});
+  let width=196,collapsed=false,drag=null;
+  try{const saved=JSON.parse(localStorage.getItem(key));if(saved){width=Math.max(152,Math.min(300,Number(saved.width)||196));collapsed=!!saved.collapsed;}}catch{}
+  const save=()=>{try{localStorage.setItem(key,JSON.stringify({width,collapsed}));}catch{}};
+  const closeMenu=()=>{const menu=strip.querySelector('.cv-tray-menu');if(menu)menu.open=false;};
+  function refresh(){
+    shell.style.setProperty('--cv-pages-width',`${collapsed?48:width}px`);
+    shell.classList.toggle('pages-collapsed',collapsed);
+    strip.classList.toggle('cv-tray-collapsed',collapsed);
+    const body=strip.querySelector('.cv-tray-body'),toggle=strip.querySelector('.cv-tray-toggle');
+    if(collapsed&&body?.contains(document.activeElement))toggle?.focus({preventScroll:true});
+    if(body)body.hidden=collapsed;
+    if(toggle){toggle.setAttribute('aria-expanded',String(!collapsed));toggle.setAttribute('aria-label',`장 목록 ${collapsed?'펼치기':'접기'}`);toggle.querySelector('span').textContent=collapsed?'장 목록 펼치기':'장 목록';}
+    const grip=strip.querySelector('.cv-tray-grip');
+    if(grip){grip.setAttribute('aria-valuenow',String(collapsed?48:width));grip.setAttribute('aria-valuetext',collapsed?'접힘':`목록 너비 ${width}px`);}
+    const size=strip.querySelector('[data-tray-width]');if(size)size.value=String(width);
+    const state=navigation();
+    for(const button of strip.querySelectorAll('[data-tray-step]'))button.disabled=Number(button.dataset.trayStep)<0?!state.previous:!state.next;
+    const count=strip.querySelector('.cv-slide-count');
+    const label=shell.querySelector('.cv-canvas-label');if(label&&count)label.textContent=`${count.textContent} · 편집 캔버스`;
+  }
+  on(strip,'click',event=>{
+    if(event.target.closest('.cv-tray-toggle')){collapsed=!collapsed;closeMenu();refresh();save();}
+    if(event.target.closest('[data-tray-reset]')){width=196;collapsed=false;refresh();save();}
+    const button=event.target.closest('[data-tray-step]');if(button&&!button.disabled)step(Number(button.dataset.trayStep));
+    if(event.target.closest('.cv-slide-tool,.cv-activity-add,.cv-activity-edit'))closeMenu();
+  });
+  on(strip,'input',event=>{if(event.target.matches('[data-tray-width]')){width=Number(event.target.value);collapsed=false;refresh();save();}});
+  on(strip,'keydown',event=>{
+    if(event.key==='Escape'&&strip.querySelector('.cv-tray-menu[open]')){event.preventDefault();closeMenu();strip.querySelector('.cv-tray-menu>summary').focus();return;}
+    if(!event.target.closest('.cv-tray-grip')||!['ArrowLeft','ArrowRight','Home','End','Enter',' '].includes(event.key))return;
+    event.preventDefault();event.stopPropagation();
+    if(['Enter',' '].includes(event.key))collapsed=!collapsed;
+    else if(event.key==='Home')collapsed=true;
+    else{width=event.key==='End'?300:Math.max(152,Math.min(300,width+(event.key==='ArrowLeft'?-16:16)));collapsed=false;}
+    refresh();save();
+  });
+  on(strip,'pointerdown',event=>{
+    if(event.button>0||!event.target.closest('.cv-tray-grip'))return;
+    event.preventDefault();closeMenu();drag={id:event.pointerId,x:event.clientX,width,collapsed};strip.setPointerCapture(event.pointerId);
+  });
+  on(strip,'pointermove',event=>{if(!drag||drag.id!==event.pointerId)return;width=Math.round(Math.max(152,Math.min(300,drag.width+event.clientX-drag.x)));collapsed=false;refresh();});
+  const finish=cancel=>{if(!drag)return;const before=drag;drag=null;if(cancel){width=before.width;collapsed=before.collapsed;}refresh();save();try{strip.releasePointerCapture(before.id);}catch{}};
+  on(strip,'pointerup',()=>finish(false));on(strip,'pointercancel',()=>finish(true));on(strip,'lostpointercapture',()=>finish(true));on(window,'blur',()=>finish(true));
+  on(document,'pointerdown',event=>{if(!strip.contains(event.target))closeMenu();},{capture:true});
+  return {refresh,destroy(){finish(true);controller.abort();}};
 }
 
 // Device-only workspace preferences. Folding/resizing never changes a drawing,

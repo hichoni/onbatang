@@ -40,11 +40,11 @@ test('a host share button: in the bar, flushes before opening, goTo opens a slid
   await page.goto(`http://127.0.0.1:${server.address().port}/fixture.html`);
   await page.waitForFunction(() => window.ready);
   const share = page.locator('[data-share-action]');
-  await share.waitFor();
+  await share.waitFor({state:'attached'});
   assert.match(await share.textContent(), /링크로 공유/);
   if (!await page.locator('.fe-textadd.title').isVisible()) await page.locator('.fe-tab[data-tab="text"]').click();
   await page.locator('.fe-textadd.title').click();
-  await share.click();
+  await page.getByLabel('문서 메뉴',{exact:true}).click();await share.click();
   await page.waitForFunction(() => window.opened.length === 1);
   assert.deepEqual(await page.evaluate(() => window.opened[0].slides), 2);
   await page.waitForFunction(() => window.saved.length > 0);

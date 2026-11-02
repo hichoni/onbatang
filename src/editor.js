@@ -94,12 +94,15 @@ const BLOB_CACHE = 12;         // 이번에 올린 사진의 파일 내용을 �
  *   - videoHint: 깔아 둔 영상이 어디에서 틀어지는지 알려 주는 글(비우면 "발표에서 소리와 함께 틀어져요 …". 영상 파일로 만드는 기능이 있는 프로젝트는 그것도 적는다).
  *   - onSelect(id): 고른 요소가 바뀔 때 그 요소의 이름표(id, 없으면 '')를 알려 준다(여럿이 함께 꾸미는 프로젝트가 "누가 무엇을 고르고 있는지" 나눌 때).
  *   - lockedBy(item): 그 요소를 다른 사람이 고르고 있으면 그 사람의 이름을, 아니면 ''를 돌려준다. 이름이 오면 그 요소를 고를 수 없다(함께 꾸밀 때).
+ *   - inspector: 선택 속성 제목을 보이고 실행 취소/다시 실행을 historyTools로 분리한다. 기본값 false로 기존 모듈 배치를 유지한다.
+ *   - onToolOpen/onToolClose: 호스트의 도구 칸 열기/닫기. onInsert는 새 조각을 넣은 뒤 작은 화면에서 칸을 접는 데 쓴다.
  *   함께 꾸밀 때 쓰는 것: merge(design, patch) — 다른 사람이 바꾼 것을 끼워 넣는다 · idle() — 지금 끼워 넣어도 되는지 · markOthers(list) — 다른 사람이 고른 요소에 테두리
  */
 export function createEditor({
   design = null, onChange = () => {}, uploadImage = null, loadImageBlob = null, fonts = fontList, notify = toast, onAspect = () => {},
   uploads = null, usedElsewhere = null, onRemoveUpload = null, onMotionAll = null, motionSets = null, slideFlow = null, onPhotoStudy = null, canPaste = () => true,
   documentImport = null, colorPalettes = null,
+  inspector = false, onToolOpen = null, onToolClose = null, onInsert = null,
   saveVideo = null, createCamera = null, videoLimits = null, videoNote = '', videoHint = '',
   onSelect = null, lockedBy = null, slideMenu = null, outline = null,
 } = {}) {
@@ -270,7 +273,11 @@ export function createEditor({
   }
   const bar = el('div', { class: 'fe-bar', role: 'toolbar', 'aria-label': '고른 조각의 도구' });
   const popBox = el('div', { class: 'fe-pop', hidden: true });
-  const toolbar = el('div', { class: 'fe-tools' }, bar, popBox);
+  const inspectorTitle = el('strong', { class: 'fe-inspector-title' });
+  const inspectorNote = el('span', { class: 'fe-inspector-note' });
+  const historyTools = el('div', { class: 'fe-history-tools', role: 'group', 'aria-label': '편집 기록' });
+  const toolbar = el('div', { class: `fe-tools${inspector ? ' fe-inspector' : ''}` },
+    inspector ? el('header', { class: 'fe-inspector-heading' }, inspectorTitle, inspectorNote) : null, bar, popBox);
   const panel = el('div', { class: 'fe-panel' });
   const fileInput = el('input', { type: 'file', accept: ACCEPT_IMAGES, hidden: true, onChange: onPhotoPicked });
   const videoInput = el('input', { type: 'file', accept: ACCEPT_VIDEOS, hidden: true, onChange: onVideoPicked });
@@ -432,6 +439,7 @@ export function createEditor({
   // 빈 장의 빠른 시작 단추 · 옆 칸의 그 도구 열기(옆 칸이 접혀 있으면 들어 있는 화면이 편다: 단추를 누른 것과 같다)
   function quick(pic, text, onClick) { return el('button', { class: 'fe-quick', type: 'button', onClick }, icon(pic), el('span', { text })); }
   function openTab(id) {
+    onToolOpen?.();
     const btn = panel.querySelector(`.fe-tab[data-tab="${id}"]`);
     if (btn && !btn.classList.contains('on')) btn.click(); else btn?.focus();
     btn?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
@@ -1265,6 +1273,7 @@ export function createEditor({
     remember();
     card.items = [...items(), placed];
     listChanged(card.items.length - 1);
+    onInsert?.();
     // 텍스트는 바로 글을 쓸 수 있게(글 전체가 골라진 채로), 나머지는 화살표 키로 옮길 수 있게.
     if (placed.t === 'text' && edit) startEdit(true); else if (focus) focusStage();
   }
@@ -2860,6 +2869,15 @@ export function createEditor({
     // 글자판으로 글꼴 목록이나 막대를 움직이던 중이면, 다시 그린 뒤에도 그 칸에 머물게 한다.
     const at = document.activeElement;
     const back = toolbar.contains(at) ? (at.classList.contains('fe-font') ? '.fe-font' : at.type === 'range' ? '.fe-pop input[type=range]' : null) : null;
+    if (inspector) {
+      const it = cur();
+      const names = { text: '글', image: '사진', shape: '도형', emoji: '그래픽', art: '그림', link: '연결선', math: '수식', chart: '차트', web: '웹사이트', yt: '유튜브' };
+      inspectorTitle.textContent = cropJob ? '사진 자르기' : many.length ? `${many.length}개 조각` : it ? names[it.t] || '선택한 조각' : '현재 장';
+      inspectorNote.textContent = it?.lock ? '잠긴 조각 · 잠금을 풀어 고쳐요' : many.length ? '함께 정렬하고 묶어 편집해요' : it ? '선택한 조각에 적용해요' : `${items().length}개 조각 · 장의 바탕을 꾸며요`;
+      historyTools.replaceChildren(
+        tb(icon('undo'), undo, { title: '실행 취소 (Ctrl+Z)', name: '실행 취소', disabled: !!cropJob || !past.length, cls: 'icon undo' }),
+        tb(icon('redo'), redo, { title: '다시 실행 (Ctrl+Y / Ctrl+Shift+Z)', name: '다시 실행', disabled: !!cropJob || !future.length, cls: 'icon redo' }));
+    }
     drawBar();
     tidySeps();
     if (back) toolbar.querySelector(back)?.focus({ preventScroll: true });
@@ -2879,7 +2897,7 @@ export function createEditor({
   function drawBar() {
     if(cropJob){drawCropBar();return;}
     const it = cur();
-    const always = [
+    const always = inspector ? [] : [
       tb(icon('undo'), undo, { title: '실행 취소 (Ctrl+Z)', name: '실행 취소', disabled: !past.length, cls: 'icon undo' }),
       tb(icon('redo'), redo, { title: '다시 실행 (Ctrl+Y / Ctrl+Shift+Z)', name: '다시 실행', disabled: !future.length, cls: 'icon redo' }),
       el('span', { class: 'fe-sep' }),
@@ -2912,6 +2930,8 @@ export function createEditor({
           title: '카드의 바탕색 바꾸기', name: '바탕색', on: pop === 'pagebg', cls: 'has-pop pagebg',
         }),
         eyedropper(backgroundOf(card.bg).bg,setBg),
+        inspector && settings().motion ? tb(lab('motion', '장 움직임'), () => openTab('motion'), { name: '장 움직임' }) : null,
+        inspector ? tb(lab('layers', '겹 순서'), () => openTab('layer'), { name: '겹 순서' }) : null,
         el('span', { class: 'fe-sep' }),
         el('span', { class: 'fe-hint', text: items().length
           ? '조각을 누르면 꾸미는 도구가 나와요 · Shift 누르기나 빈 곳 끌기로 여럿 고르기' : '도구 칸에서 틀이나 글을 넣어 시작해요.' }));
@@ -3565,7 +3585,9 @@ export function createEditor({
     if (!tabsHere().some((t) => t[0] === tab)) tab = 'text';
     const [, , title, desc] = tabsHere().find((t) => t[0] === tab);
     const body = el('div', { class: 'fe-tabbody', role: 'tabpanel', 'aria-label': title },
-      el('div', { class: 'fe-panel-head' }, el('b', { class: 'fe-panel-title', text: title }), el('span', { class: 'fe-panel-desc', text: desc })),
+      el('div', { class: 'fe-panel-head' },
+        onToolClose ? el('button', { class: 'fe-panel-close', type: 'button', 'aria-label': '도구 칸 닫기', onClick: onToolClose }, icon('close')) : null,
+        el('b', { class: 'fe-panel-title', text: title }), el('span', { class: 'fe-panel-desc', text: desc })),
       ...tabBody().filter(Boolean));
     panel.replaceChildren(tabs, body, fileInput, videoInput, replaceInput);
     tabs.scrollLeft = priorTabsLeft;
@@ -4749,13 +4771,13 @@ export function createEditor({
    */
   function mount(host) {
     host.classList.add('fe-app');
-    host.replaceChildren(el('div', { class: 'fe-app-stage' }, stage), el('div', { class: 'fe-app-tools' }, toolbar), el('div', { class: 'fe-app-panel' }, panel));
+    host.replaceChildren(el('div', { class: 'fe-app-stage' }, stage), el('div', { class: 'fe-app-tools' }, inspector ? historyTools : null, toolbar), el('div', { class: 'fe-app-panel' }, panel));
     syncSel();
     return api;
   }
 
   const api = {
-    stage, toolbar, panel, mount, setDesign, setSelectionSurface,
+    stage, toolbar, panel, historyTools, mount, setDesign, setSelectionSurface,
     /** 발표자 노트 칸(접고 펴는 칸). 프로젝트가 그림 아래 등 원하는 자리에 놓는다. 놓지 않으면 노트는 그대로 저장만 된다. */
     notes,
     /** 장(슬라이드) 자체의 표시를 바꾼다: hidden(발표에서 건너뛰기) · topic · dur(리허설 시간) · voice(녹음한 목소리). 그림이 아니라서 되돌리기 기록에는 넣지 않는다. */

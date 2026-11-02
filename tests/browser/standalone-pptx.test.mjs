@@ -551,7 +551,7 @@ test('standalone UI keeps all 21 pages across automatic parts, real editing, imm
  // A real editor aspect change affects only its 20-page part. The whole-deck
  // exporter must explain the mixed-size limitation instead of stretching it.
  await page.locator('[data-pptx-edit]').click();await page.locator('[data-inline-import]').waitFor({state:'detached'});await page.locator('.cv-name').waitFor();
- await page.locator('.cv-shape[data-ratio="16:9"]').click();await page.locator('[data-fit=fit]').click();
+ await page.getByLabel('문서 메뉴',{exact:true}).click();await page.locator('.cv-shape[data-ratio="16:9"]').click();await page.locator('[data-fit=fit]').click();
  await page.locator('.cv-back').click();await page.locator('.cv-home-title').waitFor();await showSavedMaterial(page);await page.locator('[data-pptx-save]').waitFor();
  await page.locator('[data-pptx-save]').click();
  await page.waitForFunction(()=>document.querySelector('[data-pptx-status]')?.textContent.includes('편집본을 저장했어요'));
