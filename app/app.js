@@ -1866,7 +1866,7 @@ async function configureActivity(O,editing=false,photoStart=null){
       if(O.recoveryRequired)await closeDesign(O);
     }finally{O.activityBusy=false;app.inert=false;}
   };
-  O.activityConfig=host;O.shell.querySelector('.cv-canvas').append(host);
+  O.workspace.showCanvas();O.activityConfig=host;O.shell.querySelector('.cv-canvas').append(host);
   if(photoStart){
     host.setAttribute('aria-label','사진 속으로 들어가기');
     host.append(el('p',{role:'status',text:'이 장의 사진을 준비하고 있어요.'}),el('button',{type:'button',text:'취소',onClick:cancel}));
@@ -1934,7 +1934,7 @@ async function configureQuiz(O,editing=false){
       if(O.recoveryRequired)await closeDesign(O);
     }finally{O.activityBusy=false;app.inert=false;}
   }}));
-  O.activityConfig=host;O.shell.querySelector('.cv-canvas').append(host);
+  O.workspace.showCanvas();O.activityConfig=host;O.shell.querySelector('.cv-canvas').append(host);
   host.querySelector('textarea,input')?.focus({preventScroll:true});
 }
 
@@ -1991,7 +1991,7 @@ async function configureGaiActivity(O,editing=false){
       }finally{O.activityBusy=false;app.inert=false;}
     }});
   host.append(maker);const remove=host.remove.bind(host);host.remove=()=>{maker.dispose();remove();};
-  O.activityConfig=host;O.shell.querySelector('.cv-canvas').append(host);
+  O.workspace.showCanvas();O.activityConfig=host;O.shell.querySelector('.cv-canvas').append(host);
 }
 
 // ---------- 발표: 화면 가득 한 장씩 보여 준다 ----------

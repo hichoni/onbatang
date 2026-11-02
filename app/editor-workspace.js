@@ -50,5 +50,6 @@ export function bindEditorWorkspace(shell) {
     if(compact.matches){if(pages.contains(document.activeElement))pageToggle.focus();if(properties.contains(document.activeElement))propToggle.focus();}
     setDrawer('pages',false);setDrawer('properties',false);
   });
-  return {openTools,closeTools:()=>closeTools(true),inserted:()=>{if(compact.matches)closeTools();},destroy:()=>controller.abort()};
+  const showCanvas=()=>{closeTools();setDrawer('pages',false);setDrawer('properties',false);};
+  return {openTools,showCanvas,closeTools:()=>closeTools(true),inserted:()=>{if(compact.matches)closeTools();},destroy:()=>controller.abort()};
 }
