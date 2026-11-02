@@ -41,7 +41,23 @@
 
 ## 반영 상태
 
-작업 브랜치는 `codex/onbatang-v2-ui-20261102`다. 공용 제품 커밋을 가이랩에 공식 sync하고 번들/원격 검증을 마친 기록은 아래 마감 항목에 추가한다. 이번 UI를 운영에 배포했다고 해석하지 않는다. 이전 운영 배포의 확정 기록은 [0.116.0 오프라인 모핑 인수인계](ONBATANG_HANDOFF_2026-11-02_OFFLINE_MORPH.md)다.
+양쪽 작업 브랜치는 `codex/onbatang-v2-ui-20261102`다. **PR 미리보기까지 반영했고 운영 머지·배포는 하지 않았다.** 이전 운영 배포의 확정 기록은 [0.116.0 오프라인 모핑 인수인계](ONBATANG_HANDOFF_2026-11-02_OFFLINE_MORPH.md)다.
+
+| 항목 | 마감 기준 |
+| --- | --- |
+| 공용 PR | [onbatang #109](https://github.com/hichoni/onbatang/pull/109), 0.117.0 |
+| 공용 제품 커밋 | `db9b67a322f98b2312afcd2738cd680e47a40db3` (기본 구현 `f7179fa…` + 활동 설정 가림 수정) |
+| 가이랩 PR | [g-ai-lab #223](https://github.com/hichoni/g-ai-lab/pull/223), 0.171.0 |
+| 가이랩 제품 커밋 | `674a1ce99b19aeaa1d77791273b8db24d915afbe` |
+| 검토용 미리보기 | [편집기 미리보기](https://504a6b48.gbe-ai-lab.pages.dev/minican-app.html), [사이트 시작 화면](https://504a6b48.gbe-ai-lab.pages.dev/) |
+| Cloudflare | deployment `504a6b48-4d6b-4184-a912-ad297fc16010`, 위 가이랩 커밋의 배포 성공 |
+| GitHub CI | [Community checks #41408751969](https://github.com/hichoni/g-ai-lab/actions/runs/41408751969), 위 가이랩 커밋에서 전체 성공. 일반 빌드·Supabase 번들 빌드·단위 검사·Firebase 검사 통과 |
+
+2026-11-02 16:52 KST, 미리보기의 실제 **‘테스트 v0.171.0’** 표시를 브라우저에서 확인했다. `version.json`은 위 가이랩 커밋과 `deploy-preview`, `SOURCE.json`은 공용 `db9b67a…`/0.117.0으로 일치한다. UI 핵심 5개 파일(app.js/app.css/editor-workspace.js/filmstrip.js/editor.js)을 로컬 원본과 바이트 대조했다. 증거는 가이랩 `work/v2-preview-proof.json`, `work/v2-preview-version.png`다. 뒤따르는 공용 문서 마감 커밋은 가이랩 SOURCE나 제품 버전을 다시 올리지 않는다.
+
+가이랩 단위 검사 752개 중 로컬 샌드박스에서 751개 통과, 임시 Git 저장소 쓰기 제한에 걸린 `app-sync`는 승인 실행에서 해당 파일 8개 모두 통과했다. 이후 위 원격 CI에서는 전체 `npm test`와 `npm run test:firebase`가 성공했다. 가이랩 빌드와 원본/번들 대조, 번들 환경의 여러 파트 PPT 5개·공동 편집·버전 기록·공유를 확인했다. 빌드 결과를 대상으로 새 UI 2개·HTML 모핑 2개·모핑 직접 편집 1개도 통과했다. 활동 설정이 삽입 칸에 가려지던 회귀는 공용에서 수정하고 실제 활동 추가·발표·결과 순서 검사로 확인했다. 가이랩의 인수인계는 해당 PR의 `docs/GAI_ONBATANG_HANDOFF_2026-11-02_EDITOR_V2.md`에 있다.
+
+공용의 마지막 단위 검사도 412개 통과했다. 제품 커밋으로 Firebase Hosting용 306개 파일(원본 278개, 앱 번들 132개 모듈)을 만들고 `--check` 대조를 마쳤다. 배포용 빌드 생성과 운영 배포를 구분한다.
 
 ## 다음 할 일
 
