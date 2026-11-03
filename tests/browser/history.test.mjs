@@ -34,12 +34,12 @@ test('version history: open and 10-minute versions, preview, restore (keeping th
  // 새 그림은 처음 저장할 때 판이 남는다(2장). 내 그림으로 나갔다가 다시 열면 열 때의 판은 내용이 같아 더 남지 않는다
  await page.locator('.cv-back').click();
  await page.locator('.cv-item-open').first().click();
- await page.locator('[data-history]').waitFor();
+ await page.locator('[data-history]').waitFor({state:'attached'});
  // 11분 뒤 고치면 자동 판(3장), 1분 뒤 또 고쳐도 10분이 안 돼 남지 않는다
  await page.clock.setFixedTime(T0+11*minute);await addSlide(3);
  await page.clock.setFixedTime(T0+12*minute);await addSlide(4);
  const rows=async()=>(await page.locator('.cv-history-row').allInnerTexts()).map(s=>s.replace(/\s+/g,' ').trim());
- const openHistory=async()=>{await page.locator('[data-history]').click();await page.locator('.cv-history').waitFor();await page.locator('.cv-history-row[aria-pressed=true]').waitFor();};
+ const openHistory=async()=>{await page.getByLabel('문서 메뉴',{exact:true}).click();await page.locator('[data-history]').click();await page.locator('.cv-history').waitFor();await page.locator('.cv-history-row[aria-pressed=true]').waitFor();};
  await page.waitForTimeout(300);
  await openHistory();
  assert.deepEqual(await rows(),['지금 판 꾸미고 있는 그대로','오늘 오전 9:11 고치는 중 자동 기록 · 3장','오늘 오전 9:00 고치는 중 자동 기록 · 2장']);
@@ -80,7 +80,7 @@ test('version history: open and 10-minute versions, preview, restore (keeping th
  await page.locator('.cv-item').first().waitFor();
  const original=page.locator('.cv-item',{has:page.locator('.cv-pages',{hasText:'4장'})});
  await original.locator('.cv-item-open').click();
- await page.locator('[data-history]').waitFor();
+ await page.locator('[data-history]').waitFor({state:'attached'});
  await page.waitForTimeout(300);
  await openHistory();
  // 두 번째 되돌리기 전 판은 바로 앞 판(되돌린 판 · 2장)과 같아 남지 않았다

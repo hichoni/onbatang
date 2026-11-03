@@ -168,7 +168,7 @@ test('the guide opens by itself only on the very first visit, even when the brow
     assert.equal(await page.locator('.onba-tour').count(), 0, `not again (visit ${visit + 2})`);
   }
   // ? 단추로는 언제든 다시 본다.
-  await page.locator('.cv-tour-btn[data-onba-tour=editor]').click();
+  await page.getByLabel('문서 메뉴',{exact:true}).click();await page.locator('.cv-tour-btn[data-onba-tour=editor]').click();
   await page.locator('.onba-tour').waitFor();
 });
 

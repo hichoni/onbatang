@@ -89,7 +89,7 @@ test('imported 16:9, 4:3 and custom 17:10 canvases follow original dimensions ac
  }
  // A deliberate teacher size change must stop claiming the original ratio.
  const changed=records[2];await page.locator(`[data-pptx-material="${changed.materialId}"]`).getByRole('button',{name:'자료 열기',exact:true}).click();await page.locator('[data-pptx-edit]').click();
- await page.locator('.cv-shape[data-ratio="4:5"]').click();await page.locator('.cv-fit[data-fit=keep]').click();await assertCanvas(page,4/5,{label:'현재 비율 · 4:5',preset:'4:5'});
+ await page.getByLabel('문서 메뉴',{exact:true}).click();await page.locator('.cv-shape[data-ratio="4:5"]').click();await page.locator('.cv-fit[data-fit=keep]').click();await assertCanvas(page,4/5,{label:'현재 비율 · 4:5',preset:'4:5'});
  const resized=await page.evaluate(async id=>(await import('/app/app.js')).flushSavedDesign(id),changed.documentId);assert.deepEqual(resized.originalSize,changed.saved.documents[0].payload.originalSize);assert.deepEqual(resized.source,changed.saved.documents[0].payload.source);assert.deepEqual(resized.size,{width:4,height:5,unit:'px'});
  const unchanged=await page.evaluate(async id=>(await import('/app/store.js')).getDesign(id),square.id);assert.deepEqual(unchanged,square);assert.equal(digest(await readFile(resolve(root,'tools/fixtures/pptx/self-authored-4x3.pptx'))),originalHash);assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
 });

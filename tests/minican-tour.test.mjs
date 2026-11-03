@@ -14,9 +14,9 @@ test('안내의 단계: 제목과 설명이 있고, 비추는 자리는 앱이 �
     assert.ok(cls, s.target);
     assert.ok(app.includes(cls) || editor.includes(cls), `${s.target} 는 화면에 있어야 해요`);
   }
-  // 펼치는 도구는 편집기의 칸 이름이다
+  // 편집기 도구 또는 앱이 여는 장 목록/문서 메뉴/캔버스다.
   const tabs = [...editor.matchAll(/\['([a-z]+)', '[a-zA-Z]+', '[^']+', '[^']+'\]/g)].map((m) => m[1]);
-  for (const s of [...EDITOR_STEPS, ...NEWS_STEPS].filter((x) => x.view)) assert.ok(tabs.includes(s.view), s.view);
+  for (const s of [...EDITOR_STEPS, ...NEWS_STEPS].filter((x) => x.view)) assert.ok(tabs.includes(s.view) || ['canvas','pages','document'].includes(s.view) && app.includes(`view==='${s.view}'`), s.view);
 });
 
 test('처음 꾸미는 화면을 열면 한 번 저절로 보여 주고, ? 단추로 언제든 다시 본다', () => {
