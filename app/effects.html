@@ -14,6 +14,8 @@
   #try-motion{display:inline-flex;align-items:center;min-height:44px;margin-top:8px;color:#a0e9d1;font-weight:700;text-underline-offset:4px}
   .cinema-links{display:flex;flex-wrap:wrap;gap:3px 18px;margin-top:12px}.cinema-links a{display:inline-flex;align-items:center;min-height:44px;color:#f6dbb0;text-underline-offset:4px}
   .settings textarea{max-width:100%;padding:7px 10px;background:#20303c;color:#f5f7f5;border:1px solid #57717b;border-radius:8px;font:inherit}
+  .card-custom{padding:0 16px 8px}.card-custom summary{cursor:pointer;min-height:44px;align-content:center;font-weight:700;color:#f6dbb0}.card-custom .fe-cinema-fields{color:#eff5f2;background:#202e38;border-color:#50666c}.card-custom .fe-cinema-fields :is(textarea,input,select,button){background:#182731;color:#f5f7f5;border:1px solid #638083}
+  .card-custom .fe-cinema-buttons button:is(:hover,:focus-visible,:active){background:#385455;color:#fff}
   small{font-size:.77rem;letter-spacing:.1em;font-weight:750;color:#9de0cc}
   h1{font-size:clamp(2.1rem,6vw,3.7rem);line-height:1.12;letter-spacing:-.06em;margin:16px 0}
   p{line-height:1.65;color:#c6d2d6;margin:0}
@@ -89,6 +91,7 @@
 </main>
 <script type="module">
   import { EFFECT_ASSETS, previewEffect } from '../src/effect-assets.js';
+  import {cinemaControls} from '../src/cinema-controls.js';
   import {playEffectCard} from './effect-card-playback.js';
   import {mountMotionStudy} from '../src/motion-study.js';
   import {setupPhotoDemo} from './photo-study-demo.js';
@@ -131,6 +134,7 @@
   const studyChoice=document.querySelector('#study-choice'),studyStage=document.querySelector('#study-stage');
   const studyAssets=EFFECT_ASSETS.filter(asset=>!asset.last).sort((a,b)=>Number(!!b.stops)-Number(!!a.stops));
   for(const asset of studyAssets)studyChoice.add(new Option(asset.name,asset.id));
+  const customizers=new Map();
   function cardOptions(asset,step=0){
     let content=asset.example;
     if(asset.id==='rollingnumber')content={t:'text',text:document.querySelector('#figure-caption').value};
@@ -138,13 +142,14 @@
     else if(asset.cinematic||asset.id==='kinetic')content={t:'text',text:title.value};
     else if(asset.id==='bars'&&chart.value==='change')content=changes;
     return {...asset.demo,pace:asset.id==='beatintro'?'normal':pace.value,palette:palette.value,step,bpm:Number(document.querySelector('#intro-tempo').value),
-      content};
+      content,...customizers.get(asset.id)?.read()};
   }
   let stopStudy;
   const cueDrafts=new Map();
   function showStudy(){
     stopStudy?.();
     const asset=studyAssets.find(item=>item.id===studyChoice.value);
+    if(customizers.has(asset.id)&&!customizers.get(asset.id).valid()){studyStage.textContent='효과에 표시할 문구를 확인해 주세요.';return;}
     stopStudy=mountMotionStudy(studyStage,asset,{...cardOptions(asset),stops:cueDrafts.get(asset.id)},
       null,stops=>cueDrafts.set(asset.id,stops));
   }
@@ -174,6 +179,9 @@
     updatePlayLabels.push(shouldStop=>{if(shouldStop)stop?.();label();});
     const render=animate=>{
       stop?.();
+      const form=customizers.get(asset.id);
+      button.disabled=!!form && !form.valid();
+      if(button.disabled){art.textContent='표시할 문구를 확인해 주세요.';label();return;}
       const options=cardOptions(asset,step);
       if(animate&&!asset.last){
         stop=playEffectCard(art,asset.id,options,()=>{stop=null;played=true;label();});
@@ -183,7 +191,7 @@
       }
       label();
     };
-    render(false); posters.push(()=>render(false));
+    render(false); posters.push(()=>{customizers.get(asset.id)?.refresh();render(false);});
     name.textContent=asset.name; hint.className='hint'; hint.textContent=asset.hint;
     button.append(art,name,play,hint);
     button.onclick=() => {if(asset.last)step=(step+1)%(asset.last(asset.example,asset.demo)+1);render(true);};
@@ -197,6 +205,20 @@
       studyChoice.focus({preventScroll:true});
     };
     group.append(button,link);
+    if(asset.cinematic){
+      const details=document.createElement('details'),summary=document.createElement('summary');
+      details.className='card-custom';summary.textContent='내 내용으로 꾸미기';
+      const form=cinemaControls(asset,{},()=>{
+        const {content}=cardOptions(asset);
+        return {text:content.text,palette:palette.value,pace:pace.value,bpm:Number(document.querySelector('#intro-tempo').value)||100};
+      },animate=>{
+        render(animate&&!reducedMotion(button));
+        if(studyChoice.value===asset.id)showStudy();
+      });
+      customizers.set(asset.id,form);
+      details.append(summary,form.node);
+      group.insertBefore(details,link);
+    }
     document.querySelector(asset.example?'#scenes':'#accents').append(group);
   }
   const linkedCard=document.getElementById(location.hash.slice(1));

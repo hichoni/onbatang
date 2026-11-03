@@ -4,14 +4,10 @@ import { clueAnswer } from './clue-card.js';
 
 // Content is taken from the current piece each time. Only offline lessons
 // carry a bounded copy, because their slide is otherwise a single picture.
-export function sceneContent(id, item) {
-  if (id === 'rollingnumber' && item?.t === 'text') {
-    const text = Array.from(String(item.text || '').trim()).slice(0,72).join('');
-    return numberIn(text) ? {t:'text',text} : null;
-  }
-  if (titleSceneIds.includes(id) && item?.t === 'text') {
-    const text = Array.from(String(item.text || '').trim()).slice(0, 72).join('');
-    return text ? {t:'text', text} : null;
+export function sceneContent(id, item, sceneText) {
+  if (Object.hasOwn(cinemaTuning,id) && item?.t === 'text') {
+    const text=boundedText(sceneText) || boundedText(item.text);
+    return text && (id!=='rollingnumber'||numberIn(text)) ? {t:'text',text} : null;
   }
   if (id==='cluecard') return clueAnswer(item);
   if (id === 'kinetic' && item?.t === 'text' && typeof item.text==='string') {
@@ -27,6 +23,28 @@ export function sceneContent(id, item) {
 
 export const titleExample = { t:'text', text:'작은 픽셀이 모여 그림이 된다' };
 export const titleSceneIds = ['beatintro','spotlighttitle','paperhorizon','fieldroute'];
+export const cinemaTuning = {
+  beatintro:{key:'bpm', label:'분당 박자',unit:'BPM',min:60,max:180,base:100},
+  rollingnumber:{key:'turns',label:'첫 자릿수가 굴러가는 칸',unit:'칸',min:1,max:8,base:4},
+  paperhorizon:{key:'depth',label:'능선 이동 폭',unit:'%',min:0,max:140,base:100},
+  fieldroute:{key:'legMs',label:'구간마다 이동하는 시간',unit:'초',min:300,max:1300,base:650,scale:1000,step:.01},
+  spotlighttitle:{key:'direction',label:'빛이 움직이는 방향',base:'right'},
+};
+const boundedText=s=>typeof s==='string'?Array.from(s.trim()).slice(0,72).join(''):'';
+export function cinemaSettings(id, raw) {
+  if(!Object.hasOwn(cinemaTuning,id))return {};
+  const dial=cinemaTuning[id], result={};
+  const text=boundedText(raw.sceneText);
+  if(text)result.sceneText=text;
+  if(typeof raw.accent==='string' && /^#[a-f\d]{6}$/i.test(raw.accent))result.accent=raw.accent.toLowerCase();
+  if(id==='spotlighttitle'){
+    if(raw.direction==='left')result.direction='left';
+  }else if(Number.isFinite(raw[dial.key])){
+    const value=Math.max(dial.min,Math.min(dial.max,Math.round(raw[dial.key])));
+    if(value!==dial.base || id==='beatintro')result[dial.key]=value;
+  }
+  return result;
+}
 export const introExample = {t:'text', text:'작은 점에서\n하나의 그림으로\n우리의 픽셀아트'};
 export const introBpm = value => Number.isFinite(value) ? Math.round(Math.max(60, Math.min(180, value))) : 100;
 export const chartExample = { t:'chart', kind:'bar', title:'도안에 쓴 픽셀', labels:['별','하트','로켓','나무'],
@@ -144,7 +162,7 @@ function numberIn(text) {
   return match && match[0].replace(/\D/g,'').length<=8 ? match[0].replace(/\s/g,'') : '';
 }
 
-export function rollingNumber({part,ink,content}) {
+export function rollingNumber({part,ink,content,options={}}) {
   const value = numberIn(content.text);
   const size = Math.min(100, 624 / (value.length * .82));
   const step = size * 1.17, advance = size * .82;
@@ -154,12 +172,14 @@ export function rollingNumber({part,ink,content}) {
   letter(part,'MEASURE   /   01',684,45,13,'#445658',{'text-anchor':'end','letter-spacing':2});
   part('path',{d:'M35 64H685 M35 264H685',stroke:'#78817a'});
   for(let i=0;i<=32;i++)part('path',{d:'M'+(40+20*i)+' 68v'+(i%4?4:9),stroke:'#7e8982'});
+  let digitIndex=0;
   [...value].forEach((char,i)=>{
     const x=360+(i-value.length/2+.5)*advance;
     const attrs={x,y:212,'text-anchor':'middle','font-family':FONT,'font-size':size,'font-weight':800,fill:ink[0]};
     if(!/\d/.test(char)){part('text',{...attrs,fill:'#2a3a3d'}).textContent=char;return;}
     const digit=Number(char), clip=document.createElementNS(ns,'clipPath');
-    const travel=4+i%4;
+    const travel=(options.turns??4)+digitIndex%4;
+    digitIndex++;
     part('rect',{x:x-advance*.48,y:210-size,width:advance*.96,height:step+5,rx:6,fill:'#1d2c31'});
     clip.id='ob-digit-'+ ++spotlightSerial;
     const window=document.createElementNS(ns,'rect');
@@ -173,14 +193,14 @@ export function rollingNumber({part,ink,content}) {
     for(let n=0;n<=travel;n++){
       const text=document.createElementNS(ns,'text');
       for(const [key,val] of Object.entries({...attrs,y:212+(n-travel)*step}))text.setAttribute(key,String(val));
-      text.textContent=String((digit-travel+n+10)%10);reel.append(text);
+      text.textContent=String((digit-travel+n+20)%10);reel.append(text);
     }
     part('path',{d:'M'+(x-advance*.47)+' '+(212-size*.38)+'h'+(advance*.94),stroke:'#101c22',opacity:.32,'stroke-width':2});
   });
   const caption=content.text.replace(/\s+/g,' ');
   letter(part,caption,360,313,fittedSize(caption,640,30),'#233338',{'text-anchor':'middle','font-weight':700},appear,560+value.length*85,680);
 }
-export function spotlightTitle({part,ink,content}) {
+export function spotlightTitle({part,ink,content,options={}}) {
   const lines=titleLines(content.text.replace(/\s+/g,' '));
   const ns='http://www.w3.org/2000/svg', defs=part('defs',{});
   const glow=document.createElementNS(ns,'radialGradient');
@@ -191,12 +211,13 @@ export function spotlightTitle({part,ink,content}) {
     glow.append(stop);
   }
   defs.append(glow);
-  const sweep=[{transform:'translateX(-720px)'},{transform:'translateX(0px)'}];
+  const reverse=options.direction==='left';
+  const sweep=[{transform:reverse?'translateX(720px)':'translateX(-720px)'},{transform:'translateX(0px)'}];
   part('rect',{width:720,height:360,fill:'#1b1927'});
-  part('ellipse',{cx:655,cy:92,rx:290,ry:234,fill:'url(#'+glow.id+')'},sweep,180,1660);
+  part('ellipse',{cx:reverse?65:655,cy:92,rx:290,ry:234,fill:'url(#'+glow.id+')'},sweep,180,1660);
   for(let i=0;i<3;i++){
     const left=584+i*32;
-    part('path',{d:'M'+left+' 0h'+(22-i*6)+'l-122 360h-'+(54-i*12)+'z',fill:ink[i],opacity:.045+i*.015},sweep,180,1660);
+    part('path',{d:'M'+left+' 0h'+(22-i*6)+'l-122 360h-'+(54-i*12)+'z',transform:reverse?'translate(720 0) scale(-1 1)':'translate(0)',fill:ink[i],opacity:.045+i*.015},sweep,180,1660);
   }
   letter(part,'IN FOCUS',36,40,14,ink[1],{'letter-spacing':4,'font-weight':700});
   part('path',{d:'M36 58H684 M36 311H684',stroke:'#444759'});
@@ -212,10 +233,10 @@ export function spotlightTitle({part,ink,content}) {
       part('text',{...attrs,fill:i===lines.lines.length-1?ink[0]:'#fffbed','clip-path':'url(#'+clip.id+')'}).textContent=word.text;
     }
   });
-  const glint=part('path',{d:'M718 61v242',stroke:'#fff3cf','stroke-width':2},
+  const glint=part('path',{d:reverse?'M2 61v242':'M718 61v242',stroke:'#fff3cf','stroke-width':2},
     [{...sweep[0],opacity:0},{opacity:.68,offset:.24},{opacity:.48,offset:.81},{...sweep[1],opacity:0}],180,1660);
   glint.parentNode.setAttribute('opacity',0);
-  part('path',{d:'M36 311H684',stroke:ink[0],'stroke-width':3,pathLength:1,'stroke-dasharray':'1 1'},
+  part('path',{d:reverse?'M684 311H36':'M36 311H684',stroke:ink[0],'stroke-width':3,pathLength:1,'stroke-dasharray':'1 1'},
     [{strokeDashoffset:1},{strokeDashoffset:0}],180,1660);
   for(let i=0;i<19;i++)part('path',{d:'M'+(38+i*9)+' 322v'+(i%3?4:9),stroke:'#807c84'});
   letter(part,'LIGHT STUDY',684,335,12,'#e2d0bf',{'text-anchor':'end','letter-spacing':3});

@@ -7,6 +7,19 @@ import { REVEALS } from '../src/reveal-scenes.js';
 import { CLUE_CARD } from '../src/clue-card.js';
 import { cleanMotionCues } from '../src/motion-cues.js';
 
+test('cinematic overrides stay on their own effect and survive cleaning without replacing slide text',()=>{
+  const item={t:'text',text:'이 장의 원래 문장'};
+  const raw={id:'rollingnumber',sceneText:'완성률 90.5%',turns:99,legMs:1300,accent:'#A15369'};
+  assert.deepEqual(cleanEffect(raw,item),{id:'rollingnumber',when:'press',turns:8,sceneText:'완성률 90.5%',accent:'#a15369'});
+  assert.equal(cleanEffect({...raw,sceneText:'숫자 없음'},item),null);
+  assert.equal(cleanEffect(raw,{t:'image'}),null);
+  assert.equal(sceneContent('rollingnumber',item,raw.sceneText).text,'완성률 90.5%');
+  assert.deepEqual(cleanEffect({id:'fieldroute',depth:130,accent:'url(https://example.org)',sceneText:'  '},item),{id:'fieldroute',when:'press'});
+  assert.deepEqual(cleanEffect({id:'paperhorizon',depth:0},item),{id:'paperhorizon',when:'press',depth:0});
+  assert.equal(cleanEffect({id:'beatintro',sceneText:'해'.repeat(80)},item).sceneText.length,72);
+  assert.equal(item.text,'이 장의 원래 문장');
+});
+
 test('teacher observation order survives cleaning and offline targets without changing old effects',()=>{
   const stops=[[91,' 결론 '],[0,'<첫 순간>'],[47,'가'.repeat(40)]];
   const effect=cleanEffect({id:'spectrum',when:'open',observe:true,stops});

@@ -2,7 +2,8 @@ import {introLines, letter, titleLines} from './effect-scenes.js';
 
 const rise = [{opacity:0,transform:'translateY(12px)'},{opacity:1,transform:'translateY(0px)'}];
 
-export function paperHorizon({part,ink,content}) {
+export function paperHorizon({part,ink,content,options={}}) {
+  const depth=(options.depth??100)/100;
   part('rect',{width:720,height:360,fill:'#f8edd5'});
   const sun=part('g',{},[{transform:'translateY(86px)'},{transform:'translateY(0px)'}],80,1760);
   part('circle',{cx:582,cy:127,r:81,fill:ink[0]},null,0,0,sun);
@@ -18,7 +19,7 @@ export function paperHorizon({part,ink,content}) {
     ['M-94 326Q24 303 113 314T314 288Q444 250 524 269T820 251','#28424a',64,35],
   ];
   for(const [edge,fill,dx,dy] of ridges){
-    const sheet=part('g',{},[{transform:'translate('+dx+'px,'+dy+'px)'},{transform:'translate(0px,0px)'}],0,2170);
+    const sheet=part('g',{},[{transform:'translate('+dx*depth+'px,'+dy*depth+'px)'},{transform:'translate(0px,0px)'}],0,2170);
     part('path',{d:edge+'V402H-94Z',fill},null,0,0,sheet);
     part('path',{d:edge,fill:'none',stroke:'#fff4d8','stroke-width':2,opacity:.65},null,0,0,sheet);
   }
@@ -39,7 +40,7 @@ export function paperHorizon({part,ink,content}) {
   letter(part,'HORIZON  /  01',36,339,12,'#f8edd5',{'letter-spacing':2});
 }
 
-export function fieldRoute({part,ink,content}) {
+export function fieldRoute({part,ink,content,options={}}) {
   const lines=introLines(content.text);
   part('rect',{width:720,height:360,fill:'#e7e4cc'});
   // A coastal survey map, with engraved contours and a bearing grid.
@@ -61,7 +62,7 @@ export function fieldRoute({part,ink,content}) {
     {x:633,y:80,d:'M505 162C573 153 558 85 633 80'},
   ];
   // Keep the route under every pin. Its moving tip samples the same path length as the stroke.
-  const travel=650;
+  const travel=options.legMs??650;
   for(let i=0;i<lines.length;i++){
     const delay=160+i*travel;
     const path=part('path',{d:legs[i].d,fill:'none',stroke:'#2a4847','stroke-width':4,pathLength:1,'stroke-dasharray':'1 1'},

@@ -65,6 +65,19 @@ test('home starts either a blank design or a selected PPT, then text openings su
     return saved;
   },base);
   const entry=origin+(hosted?'/minican-app.html':'/app/index.html');
+  await page.goto(origin+base+'/app/effects.html#spotlighttitle');
+  const gallery=page.locator('.effect-card').filter({has:page.locator('#spotlighttitle')});
+  await gallery.locator('.card-custom summary').click();
+  await gallery.getByLabel('효과 문구',{exact:true}).fill('갤러리만의 제목');
+  await gallery.getByLabel('빛이 움직이는 방향').selectOption('left');
+  await gallery.getByLabel('장면 색감').selectOption('iris');
+  await gallery.getByLabel('장면 재생 속도').selectOption('slow');
+  await gallery.getByLabel('강조색 코드').fill('#ab526d');
+  await gallery.getByRole('button',{name:'내 스타일 저장'}).click();
+  assert.match(await gallery.locator('.art').textContent(),/갤러리/);
+  await gallery.getByRole('button',{name:'꾸미기 초기화'}).click();
+  assert.equal(await gallery.getByLabel('빛이 움직이는 방향').inputValue(),'right');
+  assert.doesNotMatch(await gallery.locator('.art').textContent(),/갤러리/);
   await page.goto(entry);
   const create=page.getByRole('button',{name:'새 자료 만들기',exact:true});
   const importPpt=page.getByRole('button',{name:'PPT 가져오기',exact:true});
@@ -89,16 +102,41 @@ test('home starts either a blank design or a selected PPT, then text openings su
   const movieScenes=['beatintro','spotlighttitle','rollingnumber','paperhorizon','fieldroute'];
   for(const [i,id] of movieScenes.entries()){
     await page.locator('.cv-canvas .fi-text').nth(i).click();
-    await openTool(page,'motion');await page.getByLabel('움직임 종류').selectOption('그래픽 효과');
+    await page.getByRole('button',{name:'시네마 효과',exact:true}).click();
     const picker=page.locator('.fe-fx-picker');
     if(await picker.getAttribute('open')===null)await picker.locator('summary').click();
     await picker.locator('[data-effect-asset='+id+']').click();
     if(i===0)await picker.getByLabel('분당 박자',{exact:true}).fill('120');
+    if(id==='spotlighttitle'){
+      await picker.getByRole('button',{name:'내 스타일 불러오기'}).click();
+      assert.equal(await picker.getByLabel('효과 문구',{exact:true}).inputValue(),'별빛 아래 교실');
+      assert.equal(await picker.getByLabel('강조색 코드').inputValue(),'#ab526d');
+      assert.equal(await picker.getByLabel('장면 색감').inputValue(),'iris');
+      assert.equal(await picker.getByLabel('장면 재생 속도').inputValue(),'slow');
+    }else if(id==='rollingnumber'){
+      await picker.getByLabel('효과 문구',{exact:true}).fill('숫자 없음');
+      assert.ok(await picker.getByRole('button',{name:'고른 조각에 적용'}).isDisabled());
+      await picker.getByLabel('효과 문구',{exact:true}).fill('전년 대비 -90.5%');
+      await picker.getByLabel('첫 자릿수가 굴러가는 칸').fill('8');
+    }else if(id==='paperhorizon')await picker.getByLabel('능선 이동 폭').fill('140');
+    else if(id==='fieldroute'){
+      await picker.getByLabel('효과 문구',{exact:true}).fill('어제 관찰\n오늘 측정\n내일 비교');
+      await picker.getByLabel('구간마다 이동하는 시간').fill('1.05');
+    }
     await picker.getByRole('button',{name:'고른 조각에 적용'}).click();
     if(await page.getByRole('button',{name:'도구 칸 닫기'}).isVisible())await page.getByRole('button',{name:'도구 칸 닫기'}).click();
   }
   await page.locator('.cv-back').click();await page.getByRole('button',{name:'오프닝 검수 사본 열기',exact:true}).click();
   assert.equal((await readSaved()).slides[0].items[0].effect.bpm,120);
+  const stored=(await readSaved()).slides[0].items;
+  assert.deepEqual(stored.map(it=>it.text),existing.slides[0].items.map(it=>it.text));
+  assert.equal(stored[1].effect.direction,'left');assert.equal(stored[1].effect.sceneText,undefined);
+  assert.equal(stored[1].effect.palette,'iris');assert.equal(stored[1].effect.pace,'slow');
+  assert.equal(stored[3].effect.depth,140);
+  await page.locator('.cv-canvas .fi-text').nth(4).click();
+  await page.getByRole('button',{name:'효과 수정',exact:true}).click();
+  assert.equal(await page.locator('.fe-cinema-fields textarea').inputValue(),'어제 관찰\n오늘 측정\n내일 비교');
+  await page.getByRole('button',{name:'도구 칸 닫기'}).click();
   async function checkEffects(view){
     for(const id of movieScenes){
       await view.locator('[data-effect-trigger='+id+']').click();
@@ -110,15 +148,19 @@ test('home starts either a blank design or a selected PPT, then text openings su
         assert.ok(delays.includes(500)&&delays.includes(1000),'text is paced by the chosen BPM');
       }else if(id==='spotlighttitle'){
         assert.match(await scene.textContent(),/별빛/);assert.equal(await scene.locator('clipPath > rect').count(),1);
+        assert.ok(await scene.locator('text[fill="#ab526d"]').count()>0);
+        assert.match(await scene.locator('clipPath > rect').evaluate(n=>n.getAnimations()[0].effect.getKeyframes()[0].transform),/translateX\(720px\)/);
       }else if(id==='rollingnumber'){
-        assert.match(await scene.textContent(),/발아율 80\.5%/);
+        assert.match(await scene.textContent(),/전년 대비 -90\.5%/);
+        assert.equal(await scene.locator('g[clip-path]').first().locator('text').count(),9);
         assert.equal(await scene.locator('clipPath rect').count(),3);
         assert.ok(await scene.locator('g[clip-path]').nth(1).locator('text').count()>1,'the zero digit has its own moving reel');
       }else if(id==='paperhorizon'){
         assert.match(await scene.textContent(),/아침을/);
         assert.equal(await scene.evaluate(n=>n.getAnimations({subtree:true}).filter(a=>a.effect.getTiming().duration===2170).length),4);
       }else{
-        assert.match(await scene.textContent(),/흙.*씨앗.*기록하기/s);
+        assert.match(await scene.textContent(),/어제.*오늘.*내일/s);
+        assert.ok(await scene.evaluate(n=>n.getAnimations({subtree:true}).some(a=>a.effect.getTiming().duration===1050)));
         assert.equal(await scene.locator('path[pathLength="1"]').count(),3);
       }
       await scene.getByRole('button',{name:'강조 화면 닫기'}).click();

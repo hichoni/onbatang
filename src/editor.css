@@ -1032,6 +1032,14 @@ td .fe-chart-cell[inputmode] { text-align: right; font-variant-numeric: tabular-
 .fe-tabbody:has(> .fe-fx-picker) { grid-auto-rows: max-content; }
 .fe-fx-picker summary { padding: 14px; font-weight: 750; cursor: pointer; }
 .fe-fx-controls { display: grid; gap: 10px; padding: 0 12px 12px; }
+.fe-cinema-fields{display:grid;gap:8px;min-width:0;margin:0;padding:10px;border:1px solid #b2cec1;border-radius:10px;background:#f3f8f5;color:#233d36}
+.fe-cinema-fields legend{padding:0 4px;font-weight:750}
+.fe-cinema-fields label{display:grid;gap:4px;font-size:.86rem;font-weight:650;min-width:0}
+.fe-cinema-fields textarea{width:100%;box-sizing:border-box;resize:vertical;min-height:4.8em;padding:7px;font:inherit;border:1px solid #a5b9b0;border-radius:7px}
+.fe-cinema-values{display:grid;grid-template-columns:minmax(65px,.7fr) minmax(0,1.3fr);gap:8px}
+.fe-cinema-fields input,.fe-cinema-fields select{box-sizing:border-box;width:100%;min-width:0;min-height:44px}
+.fe-cinema-buttons{display:flex;gap:5px;flex-wrap:wrap}.fe-cinema-buttons button{min-height:40px;font:inherit;font-size:.82rem;border-radius:7px;padding:4px 8px;cursor:pointer}
+.fe-cinema-fields small:empty,.fe-fx-controls label[hidden],.fe-fx-settings[hidden]{display:none}
 .fe-fx-sample[hidden],.fe-study-author[hidden],.fe-fx-preview-actions [hidden]{display:none}
 .fe-fx-controls label.fe-observe-option{display:flex;align-items:center;gap:8px}
 .fe-fx-controls label.fe-observe-option[hidden]{display:none}

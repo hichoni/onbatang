@@ -1,6 +1,6 @@
 // Each asset draws its own transparent SVG at rest. The small set of animation
 // primitives is shared by the picker, the presentation and the offline lesson.
-import { kineticTitle, chartFocus, titleExample, chartExample, sceneContent, beatIntro, spotlightTitle, rollingNumber, introBpm, introExample } from './effect-scenes.js';
+import { kineticTitle, chartFocus, titleExample, chartExample, sceneContent, cinemaSettings, beatIntro, spotlightTitle, rollingNumber, introBpm, introExample } from './effect-scenes.js';
 import { REVEALS } from './reveal-scenes.js';
 import { paperHorizon, fieldRoute } from './cinematic-landscapes.js';
 import { CLASSROOM_ACCENTS } from './classroom-accents.js';
@@ -129,12 +129,13 @@ export const questionEffect = effect => !!registry.get(effect?.id)?.last;
 export const effectable = item => ['text','shape','image','art','emoji','chart','math'].includes(item?.t);
 export function cleanEffect(raw, item) {
   const asset=registry.get(raw?.id);
-  if (!asset || (item && asset.example && !sceneContent(asset.id,item))) return null;
+  if (!asset || (item && asset.example && !sceneContent(asset.id,item,raw.sceneText))) return null;
   const note = typeof raw.note === 'string' ? Array.from(raw.note.trim()).slice(0, 120).join('') : '';
   const observe = !asset.last && raw.observe === true;
   const stops = observe ? cleanMotionCues(raw.stops) : [];
   return { id: raw.id, when: !observe && (!asset.last || asset.id==='cluecard') && raw.when === 'open' ? 'open' : 'press', ...(note ? { note } : {}),
     ...(asset.id==='beatintro' ? {bpm:introBpm(raw.bpm)} : {}),
+    ...(asset.cinematic ? cinemaSettings(asset.id,raw) : {}),
     ...(observe ? {observe:true} : {}),
     ...(stops.length ? {stops} : {}),
     ...(asset.id==='cluecard' ? clueOptions(raw) : {}),
@@ -166,12 +167,13 @@ function drawArt(id, animate, {pace,palette,content,step=0,photo,playOnce=false,
     }
     return node;
   }
-  const data=asset.example && (sceneContent(id,content) || asset.example);
+  const data=asset.example && (sceneContent(id,content,settings.sceneText) || asset.example);
   if(id==='lens' && !photo && content?.t==='image' && content.url) {
     photo={...content,width:content.w || 4,height:(content.h || 3) / (content.aspect || 1)};
   }
-  const options=id==='cluecard'?clueOptions(settings):id==='beatintro'?{bpm:introBpm(settings.bpm)}:{};
-  asset.draw({ part, ink:typeof palette==='string' && Object.hasOwn(EFFECT_PALETTES,palette)?EFFECT_PALETTES[palette]:asset.ink,
+  const options=id==='cluecard'?clueOptions(settings):cinemaSettings(id,settings);
+  const ink=typeof palette==='string' && Object.hasOwn(EFFECT_PALETTES,palette)?EFFECT_PALETTES[palette]:asset.ink;
+  asset.draw({ part, ink:options.accent?[options.accent,ink[1],ink[2]]:ink,
     content:data,step:asset.last?Math.max(0,Math.min(asset.last(data,options),Math.trunc(step)||0)):0,photo,options });
   if(asset.last){
     art.removeAttribute('aria-hidden');art.setAttribute('role','img');

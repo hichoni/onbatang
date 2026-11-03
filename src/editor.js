@@ -2967,6 +2967,17 @@ export function createEditor({
 
     const own = [];
     if (it.t === 'text') {
+      if(settings().motion && (!it.effect||EFFECT_ASSETS.some(a=>a.cinematic&&a.id===it.effect.id))){
+        own.push(tb([icon('motion'),it.effect?'효과 수정':'시네마 효과'],()=>{
+          shelfChoice.motion='그래픽 효과';
+          openTab('motion');
+          const picker=panel.querySelector('.fe-fx-picker');
+          if(!picker)return;
+          picker.open=true;
+          picker.querySelector('[data-effect-asset="'+(it.effect?.id||'beatintro')+'"]')?.click();
+          picker.querySelector('.fe-cinema-fields textarea')?.focus({preventScroll:true});
+        }));
+      }
       const choices = fonts();
       const font = el('select', { class: 'fe-font', 'aria-label': '글꼴', title: '글꼴', onChange: () => {
         if (font.value) change({ font: font.value, typeface: undefined });

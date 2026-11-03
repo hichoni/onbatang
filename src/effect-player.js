@@ -129,7 +129,7 @@ export function mountEffectPlayer(host, bindings, { delay = 0,onQuestionChange }
     if (!node || !effect) continue;
     const asset = EFFECT_ASSETS.find(a => a.id === effect.id);
     const scene = asset.example;
-    const data = scene && sceneContent(effect.id,content);
+    const data = scene && sceneContent(effect.id,content,effect.sceneText);
     if (scene && !data) continue;
     if(asset.last){
       const question=mountQuestion(host,binding,effect,asset,data,close=>{
@@ -145,7 +145,8 @@ export function mountEffectPlayer(host, bindings, { delay = 0,onQuestionChange }
       }
       continue;
     }
-    const duration=(scene ? 4600 : 1450)*paceFactor(effect.pace);
+    const sceneDuration=effect.id==='fieldroute' && effect.legMs?Math.max(4600,3*effect.legMs+1250):4600;
+    const duration=(scene ? sceneDuration : 1450)*paceFactor(effect.pace);
     let graphic, caption, timer, opening, stopStudy;
     const automatic = effect.when === 'open';
     function clear() {
@@ -270,7 +271,7 @@ export function cleanEffectTargets(rows) {
     if (!effect || !['x','y','w','h','rot'].every(key => Number.isFinite(row[key])) ||
         Math.abs(row.x) > 550 || Math.abs(row.y) > 550 || row.w <= 0 || row.h <= 0 ||
         row.w > 1500 || row.h > 1500 || Math.abs(row.rot) > 180) return [];
-    const content=sceneContent(effect.id,row.content);
+    const content=sceneContent(effect.id,row.content,effect.sceneText);
     if (EFFECT_ASSETS.find(a=>a.id===effect.id).example && !content) return [];
     return [{ x:row.x, y:row.y, w:row.w, h:row.h, rot:row.rot, effect, ...(content ? {content} : {}),
       label:typeof row.label === 'string' ? row.label.slice(0,60) : '' }];

@@ -130,7 +130,7 @@ function measureEffects(card,nodes,items,width,height) {
   try {
     return items.flatMap((item,i) => {
       if (!item.effect || !nodes[i]?.offsetWidth || !nodes[i].offsetHeight) return [];
-      const content=sceneContent(item.effect.id,item);
+      const content=sceneContent(item.effect.id,item,item.effect.sceneText);
       return [{ effect:item.effect, ...(content?{content}:{}), x:item.x, y:item.y, w:nodes[i].offsetWidth / width * 100,
         h:nodes[i].offsetHeight / height * 100, rot:item.rot, label:(item.alt || item.text || '').slice(0,60) }];
     });
