@@ -3831,8 +3831,8 @@ export function createEditor({
     playEnter(nodes[sel], cur(), step.enter, { mirror: step.mirror });
   }
   /** 이 장을 발표할 때처럼 틀어 본다: 전환 효과 → 요소들 → "누를 때" 나오는 것은 조금씩 쉬었다가 차례로. */
-  function previewPage({ transition = true } = {}) {
-    onToolClose?.();
+  function previewPage({ transition = true, showCanvas = false } = {}) {
+    if(showCanvas)onToolClose?.();
     endEdit();
     stopDrag();
     stopPreview();
@@ -4014,7 +4014,7 @@ export function createEditor({
       // 장 넘김(전환)과 조각들의 움직임(조합)은 함께 쓴다: 장이 넘어온 뒤에 조각들이 움직인다. 같은 칸 안에서는 하나만 고른다.
       const both = here.tr && here.pa ? el('div', { class: 'fe-motion-both', dataset: { motionBoth: '' } },
         el('span', { text: `이 장: ${TRANSITIONS.find((t) => t.id === here.tr)?.name || ''} 로 넘어온 뒤 → ${COMBOS.find((c) => c.id === here.pa)?.name || ''}` }),
-        el('button', { class: 'btn btn-ghost', type: 'button', onClick: () => previewPage() }, '함께 미리 보기')) : null;
+        el('button', { class: 'btn btn-ghost', type: 'button', onClick: () => previewPage({showCanvas:true}) }, '함께 미리 보기')) : null;
       const combos = motionPart('combo', `${here.pa || ''}|${here.tr || ''}`, () => [
         both,
         el('div', { class: 'fe-head', text: '조각들이 나오는 모양 · 조합 효과' }),
@@ -4057,7 +4057,7 @@ export function createEditor({
           icon('motion'),inspector ? '사진 · RGB' : '사진 속으로 들어가기 · RGB 수업'),
         slideFlow?.open ? el('button',{class:'fe-outline-start',type:'button',dataset:{slideFlow:''},onClick:()=>slideFlow.open()},icon('motion'),inspector ? '모핑 · 카메라' : '모핑 · 카메라 직접 편집') : null,
       ];
-      const previewButton = el('button', { class: 'fe-btn primary', type: 'button', onClick: () => previewPage() }, icon('play'), '이 장 미리 보기');
+      const previewButton = el('button', { class: 'fe-btn primary', type: 'button', onClick: () => previewPage({showCanvas:true}) }, icon('play'), '이 장 미리 보기');
       if (inspector) {
         const timeline = motionTimeline();
         const groups = [
