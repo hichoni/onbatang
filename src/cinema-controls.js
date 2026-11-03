@@ -1,9 +1,10 @@
 import {el} from './dom.js';
 import {cinemaSettings, cinemaTuning, sceneContent} from './effect-scenes.js';
 import {EFFECT_PALETTES} from './effect-assets.js';
+import {openCinemaStudio} from './cinema-studio.js';
 
 // The gallery and editor both edit a draft. Only the editor's Apply command writes a slide.
-export function cinemaControls(asset, initial, source, onEdit) {
+export function cinemaControls(asset, initial, source, onEdit, commit) {
   const dial=cinemaTuning[asset.id], key='onbatang-cinema-style-v1-'+asset.id;
   const scale=dial.scale||1;
   function styleOptions(raw){
@@ -48,6 +49,8 @@ export function cinemaControls(asset, initial, source, onEdit) {
     const text=Array.from(words.value.trim()).slice(0,72).join('');
     if(text && text!==source().text)draft.sceneText=text;
     else delete draft.sceneText;
+    // Replacing the whole message resets per-phrase wording, but keeps its layout.
+    if(draft.sceneTracks)draft.sceneTracks=draft.sceneTracks.map(({text,...layout})=>layout);
     changed();
   };
   words.onblur=()=>{words.value=draft.sceneText??source().text;};
@@ -81,12 +84,18 @@ export function cinemaControls(asset, initial, source, onEdit) {
       const stored=localStorage.getItem(key);
       if(!stored){report('이 효과에서 먼저 내 스타일을 저장해 주세요.');return;}
       const style=JSON.parse(stored);
-      draft={...styleOptions({...style,sceneText:undefined}),sceneText:draft.sceneText};
+      draft={...styleOptions({...style,sceneText:undefined}),sceneText:draft.sceneText,sceneTracks:draft.sceneTracks};
       refresh();changed(true,'현재 문구에 저장한 스타일을 적용했어요.');
     }catch{report('저장한 스타일을 읽을 수 없어요.');}
   });
   const label=asset.id==='fieldroute'?'수업 단계 · 한 줄에 한 단계':asset.id==='rollingnumber'?'숫자가 든 문장':'효과 문구';
+  const studio=action('화면 · 타임라인 편집',()=>{
+    if(!valid())return;
+    openCinemaStudio(asset,{palette:colors.value,pace:speed.value,...draft},
+      {t:'text',text:source().text},result=>{draft=styleOptions(result);refresh();changed();commit?.();},{commit:!!commit});
+  });
   const node=el('fieldset',{class:'fe-cinema-fields'},el('legend',{},asset.name+' 꾸미기'),
+    studio,el('small',{},'구절을 직접 옮기고 크기·등장 순서·시간을 한 화면에서 조절해요. 아래 전체 문구를 바꾸면 구절별 글도 새 문구를 따라가요.'),
     field(label,words),el('small',{},'첫 72자를 사용해요. 문구를 비우면 원래 글을 따라가요.'),
     el('div',{class:'fe-cinema-values'},field('장면 색감',colors),asset.id!=='beatintro'&&field('재생 속도',speed)),
     el('div',{class:'fe-cinema-values'},field('강조색',color),field('색상 코드',hex)),

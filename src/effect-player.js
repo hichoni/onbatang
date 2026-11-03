@@ -1,5 +1,6 @@
 import { cleanEffect, playEffectArt, EFFECT_ASSETS, paceFactor } from './effect-assets.js';
 import { sceneContent } from './effect-scenes.js';
+import {cinemaEnd} from './cinema-layout.js';
 import { mountMotionStudy } from './motion-study.js';
 
 const labelOf = id => EFFECT_ASSETS.find(asset => asset.id === id)?.name || '';
@@ -146,7 +147,7 @@ export function mountEffectPlayer(host, bindings, { delay = 0,onQuestionChange }
       continue;
     }
     const sceneDuration=effect.id==='fieldroute' && effect.legMs?Math.max(4600,3*effect.legMs+1250):4600;
-    const duration=(scene ? sceneDuration : 1450)*paceFactor(effect.pace);
+    const duration=(scene ? Math.max(sceneDuration,cinemaEnd(effect.id,effect)+700) : 1450)*paceFactor(effect.pace);
     let graphic, caption, timer, opening, stopStudy;
     const automatic = effect.when === 'open';
     function clear() {

@@ -177,6 +177,158 @@ test('home starts either a blank design or a selected PPT, then text openings su
   await openExport(offline,file);await checkEffects(offline);assert.deepEqual(errors,[]);
 });
 
+test('direct scene editing and cue timing survive cancel, slide reopen and offline playback', {
+  skip:!process.env.MINICAN_PLAYWRIGHT_PATH,timeout:150000,
+},async t=>{
+  const {page,browser,hosted,base,origin:localOrigin,errors}=await openBrowser(t);
+  const origin=process.env.MINICAN_START_LIVE_ORIGIN||localOrigin;
+  await page.goto(origin+base+'/app/effects.html#beatintro');
+  const card=page.locator('.effect-card').filter({has:page.locator('#beatintro')});
+  await card.locator('.card-custom summary').click();
+  await card.getByRole('button',{name:'화면 · 타임라인 편집'}).click();
+  const studio=page.getByRole('dialog'),track=key=>studio.locator('.ce-hit[data-track='+key+']');
+  await track('phrase2').dblclick();
+  await studio.getByLabel('화면에서 문구 수정').fill('미리보기만 바꾸기');
+  await studio.getByRole('button',{name:'취소',exact:true}).click();
+  assert.doesNotMatch(await card.locator('.art').textContent(),/미리보기만/);
+
+  const existing=await page.evaluate(async base=>{
+    const {newRecord}=await import(base+'/app/designs.js'),store=await import(base+'/app/store.js');
+    const {EFFECT_ASSETS}=await import(base+'/src/effect-assets.js');
+    store.setStorageName(base?'gailab-minican':'minican');
+    const r=newRecord('16:9');r.name='장면 타임라인 검수 사본';
+    r.slides[0].items=EFFECT_ASSETS.filter(a=>a.cinematic).map((a,i)=>({
+      id:'ecinemaedit0'+i,t:'text',text:a.example.text,x:50,y:12+i*17,w:85,size:3,color:'#16352f',effect:{id:a.id,when:'press'}}));
+    const saved=await store.putDesign(r),tour=await import(base+'/app/tour.js');
+    for(const id of ['home','editor',tour.NEWS_KEY])tour.markTourSeen(id);
+    return saved;
+  },base);
+  await page.goto(origin+(hosted?'/minican-app.html':'/app/index.html'));
+  await page.getByRole('button',{name:'장면 타임라인 검수 사본 열기',exact:true}).click();
+  const ids=['beatintro','spotlighttitle','rollingnumber','paperhorizon','fieldroute'];
+  const keys=['phrase2','title','number','title','step2'];
+  const savedEffects=[];
+  for(const [i,id] of ids.entries()){
+    await page.locator('.cv-canvas .fe-stage').click({position:{x:3,y:3}});
+    await page.locator('.cv-canvas .fi-text').nth(i).click();
+    await page.getByRole('button',{name:'효과 수정',exact:true}).click();
+    await page.locator('.fe-fx-picker').getByRole('button',{name:'화면 · 타임라인 편집'}).click();
+    await track(keys[i]).dblclick();
+    const title=id==='rollingnumber'?'-42.5%':'직접 고친 수업 '+(i+1);
+    await studio.getByLabel('화면에서 문구 수정').fill(title);
+    await studio.getByRole('button',{name:'배치 편집',exact:true}).click();
+    const set=async(label,value)=>{const input=studio.getByLabel(label,{exact:true});await input.fill(String(value));await input.press('Tab');};
+    await set('가로 위치 (%)',51);await set('세로 위치 (%)',45);await set('크기 (%)',115);
+    await set('등장 (초)',2.4);await set('움직임 (초)',1.2);
+    if(i===0){
+      await studio.getByRole('button',{name:'구절 2 먼저',exact:true}).click();
+      const before=Number(await studio.getByLabel('가로 위치 (%)').inputValue());
+      const box=await track(keys[i]).boundingBox();
+      await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();
+      await page.mouse.move(box.x+box.width/2+25,box.y+box.height/2+10,{steps:4});await page.mouse.up();
+      assert.ok(Number(await studio.getByLabel('가로 위치 (%)').inputValue())>before+1,'drag updates the same position field');
+      await studio.getByRole('button',{name:'실행 취소',exact:true}).click();
+      assert.ok(Math.abs(Number(await studio.getByLabel('가로 위치 (%)').inputValue())-before)<.1);
+      await studio.getByRole('button',{name:'다시 실행',exact:true}).click();
+      const sizeHandle=await track(keys[i]).locator('[data-size]').boundingBox();
+      await page.mouse.move(sizeHandle.x+sizeHandle.width/2,sizeHandle.y+sizeHandle.height/2);await page.mouse.down();
+      await page.mouse.move(sizeHandle.x+sizeHandle.width/2+25,sizeHandle.y+sizeHandle.height/2+10,{steps:4});await page.mouse.up();
+      assert.ok(Number(await studio.getByLabel('크기 (%)').inputValue())>115);
+      const startBefore=Number(await studio.getByLabel('등장 (초)').inputValue());
+      const bar=await studio.locator('[data-bar=phrase2]').boundingBox();
+      await page.mouse.move(bar.x+Math.min(20,bar.width/2),bar.y+bar.height/2);await page.mouse.down();
+      await page.mouse.move(bar.x+Math.min(20,bar.width/2)+35,bar.y+bar.height/2,{steps:4});await page.mouse.up();
+      assert.ok(Number(await studio.getByLabel('등장 (초)').inputValue())>startBefore);
+      const lengthBefore=Number(await studio.getByLabel('움직임 (초)').inputValue());
+      const end=await studio.locator('[data-bar=phrase2] [data-end]').boundingBox();
+      await page.mouse.move(end.x+end.width/2,end.y+end.height/2);await page.mouse.down();
+      await page.mouse.move(end.x+end.width/2+25,end.y+end.height/2,{steps:4});await page.mouse.up();
+      assert.ok(Number(await studio.getByLabel('움직임 (초)').inputValue())>lengthBefore);
+    }
+    const slider=studio.getByLabel('장면 재생 위치');await slider.fill('0');
+    const initial=await studio.locator('.ce-picture').screenshot();await slider.fill('1000');
+    assert.notDeepEqual(await studio.locator('.ce-picture').screenshot(),initial,'the scrubber samples the authored timings');
+    await studio.getByRole('button',{name:'▶ 재생',exact:true}).click();
+    await page.waitForFunction(()=>Number(document.querySelector('.ce-transport input').value)>30);
+    await studio.getByRole('button',{name:'Ⅱ 멈춤',exact:true}).click();
+    const paused=await slider.inputValue();await page.waitForTimeout(110);assert.equal(await slider.inputValue(),paused);
+    await studio.getByRole('button',{name:'슬라이드에 적용',exact:true}).click();
+    assert.equal(await page.getByRole('dialog').count(),0);
+    if(await page.getByRole('button',{name:'도구 칸 닫기'}).isVisible())await page.getByRole('button',{name:'도구 칸 닫기'}).click();
+  }
+  await page.locator('.cv-back').click();
+  await page.getByRole('button',{name:'장면 타임라인 검수 사본 열기',exact:true}).waitFor();
+  await page.reload();
+  await page.getByRole('button',{name:'장면 타임라인 검수 사본 열기',exact:true}).click();
+  const stored=await page.evaluate(async({base,id})=>{
+    const store=await import(base+'/app/store.js');store.setStorageName(base?'gailab-minican':'minican');return store.getDesign(id);
+  },{base,id:existing.id});
+  assert.deepEqual(stored.slides[0].items.map(it=>it.text),existing.slides[0].items.map(it=>it.text));
+  for(const [i,item] of stored.slides[0].items.entries()){
+    const cue=item.effect.sceneTracks.find(t=>t.key===keys[i]);savedEffects.push(item.effect);
+    assert.equal(cue.text,i===2?'-42.5%':'직접 고친 수업 '+(i+1));assert.ok(cue.scale>=1.15);
+  }
+  await page.locator('.cv-canvas .fi-text').first().click();await page.getByRole('button',{name:'효과 수정',exact:true}).click();
+  await page.getByRole('button',{name:'화면 · 타임라인 편집'}).click();
+  await track('phrase2').click();assert.equal(await studio.getByLabel('선택한 문구').inputValue(),'직접 고친 수업 1');
+  await studio.getByRole('button',{name:'취소',exact:true}).click();await page.getByRole('button',{name:'도구 칸 닫기'}).click();
+  async function check(view){
+    for(const [i,id] of ids.entries()){
+      await view.locator('[data-effect-trigger='+id+']').click();
+      const node=view.locator('[data-effect-playing='+id+'] [data-cinema-track='+keys[i]+']');await node.waitFor();
+      const values=await node.evaluate(n=>({text:n.dataset.trackText,start:+n.dataset.trackStart,duration:+n.dataset.trackDuration,transform:n.getAttribute('transform')}));
+      const cue=savedEffects[i].sceneTracks.find(t=>t.key===keys[i]);
+      assert.equal(values.text,cue.text);assert.ok(Math.abs(values.start-cue.start)<.01);assert.ok(Math.abs(values.duration-cue.duration)<.01);
+      assert.match(values.transform,new RegExp('scale\\('+cue.scale+'\\)'));
+      await view.getByRole('button',{name:'강조 화면 닫기'}).click();
+    }
+  }
+  await page.emulateMedia({reducedMotion:'no-preference'});await page.locator('.cv-show-btn').click();await check(page);await page.keyboard.press('Escape');
+  await page.locator('.cv-down-btn').click();await page.locator('[data-type=html]').click();
+  const downloading=page.waitForEvent('download');await page.locator('[data-download-save]').click();
+  const dir=await mkdtemp(join(tmpdir(),'onbatang-studio-')),file=join(dir,'edited.html');
+  t.after(async()=>{await rm(file,{force:true});await rmdir(dir);});await(await downloading).saveAs(file);
+  const context=await browser.newContext({offline:true,reducedMotion:'no-preference'});t.after(()=>context.close());
+  const offline=await context.newPage();offline.on('pageerror',e=>errors.push(e.message));await openExport(offline,file);await check(offline);
+  assert.deepEqual(errors,[]);
+});
+
+test('scene studio keeps touch editing and timeline reachable in portrait and landscape',{
+  skip:!process.env.MINICAN_PLAYWRIGHT_PATH,timeout:60000,
+},async t=>{
+  const {page,origin,base,errors}=await openBrowser(t,{phone:true});
+  await page.goto(origin+base+'/app/effects.html#paperhorizon');
+  const card=page.locator('.effect-card').filter({has:page.locator('#paperhorizon')});
+  await card.locator('.card-custom summary').tap();await card.getByRole('button',{name:'화면 · 타임라인 편집'}).tap();
+  const studio=page.getByRole('dialog');
+  for(const size of [{width:390,height:844},{width:844,height:390},{width:320,height:740}]){
+    await page.setViewportSize(size);
+    assert.ok(await studio.evaluate(n=>n.scrollWidth<=n.clientWidth+1));
+    await studio.getByRole('button',{name:'글 · 배치',exact:true}).tap();
+    await studio.locator('.ce-hit[data-track=title]').tap();
+    await studio.getByLabel('선택한 문구').fill('함께 관찰하는 아침');
+    assert.match(await studio.locator('.ce-picture').textContent(),/함께/);
+    await studio.getByRole('button',{name:'타임라인',exact:true}).tap();
+    const before=await studio.locator('.ce-track').evaluateAll(nodes=>nodes.findIndex(n=>n.dataset.track==='title'));
+    if(before>0){
+      await studio.getByRole('button',{name:'제목 먼저',exact:true}).tap();
+      assert.equal(await studio.locator('.ce-track').evaluateAll(nodes=>nodes.findIndex(n=>n.dataset.track==='title')),before-1);
+    }
+    await studio.getByRole('slider',{name:'장면 재생 위치'}).fill('0');
+    await studio.getByRole('button',{name:'▶ 재생',exact:true}).tap();
+    await page.waitForFunction(()=>Number(document.querySelector('.ce-transport input').value)>15);
+    await studio.getByRole('button',{name:'Ⅱ 멈춤',exact:true}).tap();
+    const stage=await studio.locator('.ce-stage').boundingBox();assert.ok(stage.width>150&&stage.height>75,'preview remains visible beside the controls');
+    assert.ok(await studio.evaluate(n=>n.scrollWidth<=n.clientWidth+1));
+  }
+  await studio.getByRole('button',{name:'꾸미기에 반영',exact:true}).tap();
+  assert.match(await card.locator('.art').textContent(),/함께/);
+  await card.getByRole('button',{name:'화면 · 타임라인 편집'}).tap();
+  await studio.getByRole('button',{name:'타임라인',exact:true}).tap();
+  assert.equal(await studio.locator('.ce-track').first().getAttribute('data-track'),'title');
+  await studio.getByRole('button',{name:'취소',exact:true}).tap();assert.deepEqual(errors,[]);
+});
+
 test('mobile gallery paints motion on tap, including a scoped opt-in under reduced motion', {
   skip:!process.env.MINICAN_PLAYWRIGHT_PATH, timeout:60000,
 }, async t=>{

@@ -1,6 +1,7 @@
 import { cleanChart, chartScale, chartNumber } from './chart.js';
 import { revealContent } from './reveal-scenes.js';
 import { clueAnswer } from './clue-card.js';
+import {cleanCinemaTracks} from './cinema-layout.js';
 
 // Content is taken from the current piece each time. Only offline lessons
 // carry a bounded copy, because their slide is otherwise a single picture.
@@ -34,6 +35,8 @@ const boundedText=s=>typeof s==='string'?Array.from(s.trim()).slice(0,72).join('
 export function cinemaSettings(id, raw) {
   if(!Object.hasOwn(cinemaTuning,id))return {};
   const dial=cinemaTuning[id], result={};
+  const tracks=cleanCinemaTracks(id,raw.sceneTracks);
+  if(tracks.length)result.sceneTracks=tracks;
   const text=boundedText(raw.sceneText);
   if(text)result.sceneText=text;
   if(typeof raw.accent==='string' && /^#[a-f\d]{6}$/i.test(raw.accent))result.accent=raw.accent.toLowerCase();
@@ -142,11 +145,13 @@ export function beatIntro({part,ink,content,options}) {
   part('path',{d:'M36 56H450 M36 302H684',fill:'none',stroke:'#43656b'});
   lines.forEach((line,i) => {
     const y = 177 + (i - (lines.length-1)/2)*71;
+    part.layer('phrase'+(i+1),{label:'구절 '+(i+1),text:line,cx:278,cy:y-20,start:i*beat,duration:beat*.94},(part,text)=>{
     letter(part,String(i+1).padStart(2,'0'),38,y,14,ink[0],{'font-weight':700},
       [{opacity:0},{opacity:1}],i*beat,beat*.5);
-    letter(part,line,72,y,fittedSize(line,412,56),i===lines.length-1?ink[0]:'#fafaf0',
+    letter(part,text,72,y,fittedSize(text,412,56),i===lines.length-1?ink[0]:'#fafaf0',
       {'font-weight':800},[{opacity:0,transform:'translateY(25px)'},{opacity:1,transform:'translateY(-2px)',offset:.78},
         {opacity:1,transform:'translateY(0px)'}],i*beat,beat*.94);
+    });
   });
   for (let i=0;i<lines.length;i++) {
     const x=36+i*44;
@@ -163,15 +168,17 @@ function numberIn(text) {
 }
 
 export function rollingNumber({part,ink,content,options={}}) {
-  const value = numberIn(content.text);
-  const size = Math.min(100, 624 / (value.length * .82));
-  const step = size * 1.17, advance = size * .82;
-  const defs = part('defs',{}), ns = 'http://www.w3.org/2000/svg';
+  const source = numberIn(content.text);
   part('rect',{width:720,height:360,fill:'#f0e9d8'});
   letter(part,'수치로 보기',34,47,21,'#243136',{'font-weight':800});
   letter(part,'MEASURE   /   01',684,45,13,'#445658',{'text-anchor':'end','letter-spacing':2});
   part('path',{d:'M35 64H685 M35 264H685',stroke:'#78817a'});
   for(let i=0;i<=32;i++)part('path',{d:'M'+(40+20*i)+' 68v'+(i%4?4:9),stroke:'#7e8982'});
+  const digits=options.sceneTracks?.find(t=>t.key==='number')?.text||source;
+  part.layer('number',{label:'숫자판',text:source,cx:360,cy:165,start:120,duration:1140+(digits.length-1)*85},(part,value)=>{
+  const size = Math.min(100, 624 / (value.length * .82));
+  const step = size * 1.17, advance = size * .82;
+  const defs = part('defs',{}), ns = 'http://www.w3.org/2000/svg';
   let digitIndex=0;
   [...value].forEach((char,i)=>{
     const x=360+(i-value.length/2+.5)*advance;
@@ -197,11 +204,14 @@ export function rollingNumber({part,ink,content,options={}}) {
     }
     part('path',{d:'M'+(x-advance*.47)+' '+(212-size*.38)+'h'+(advance*.94),stroke:'#101c22',opacity:.32,'stroke-width':2});
   });
+  });
   const caption=content.text.replace(/\s+/g,' ');
-  letter(part,caption,360,313,fittedSize(caption,640,30),'#233338',{'text-anchor':'middle','font-weight':700},appear,560+value.length*85,680);
+  const captionStart=560+source.length*85;
+  part.layer('caption',{label:'설명 문장',text:caption,cx:360,cy:303,start:captionStart,duration:680},(part,text)=>{
+    letter(part,text,360,313,fittedSize(text,640,30),'#233338',{'text-anchor':'middle','font-weight':700},appear,captionStart,680);
+  });
 }
 export function spotlightTitle({part,ink,content,options={}}) {
-  const lines=titleLines(content.text.replace(/\s+/g,' '));
   const ns='http://www.w3.org/2000/svg', defs=part('defs',{});
   const glow=document.createElementNS(ns,'radialGradient');
   glow.id='ob-stage-light-'+ ++spotlightSerial;
@@ -214,16 +224,21 @@ export function spotlightTitle({part,ink,content,options={}}) {
   const reverse=options.direction==='left';
   const sweep=[{transform:reverse?'translateX(720px)':'translateX(-720px)'},{transform:'translateX(0px)'}];
   part('rect',{width:720,height:360,fill:'#1b1927'});
+  part.layer('light',{label:'무대 조명',cx:360,cy:180,start:180,duration:1660},part=>{
   part('ellipse',{cx:reverse?65:655,cy:92,rx:290,ry:234,fill:'url(#'+glow.id+')'},sweep,180,1660);
   for(let i=0;i<3;i++){
     const left=584+i*32;
     part('path',{d:'M'+left+' 0h'+(22-i*6)+'l-122 360h-'+(54-i*12)+'z',transform:reverse?'translate(720 0) scale(-1 1)':'translate(0)',fill:ink[i],opacity:.045+i*.015},sweep,180,1660);
   }
+  });
   letter(part,'IN FOCUS',36,40,14,ink[1],{'letter-spacing':4,'font-weight':700});
   part('path',{d:'M36 58H684 M36 311H684',stroke:'#444759'});
+  part.layer('title',{label:'제목',text:content.text,cx:360,cy:180,start:180,duration:1660},(part,text)=>{
+  const lines=titleLines(text.replace(/\s+/g,' '));
+  const localDefs=part('defs',{});
   const clip=document.createElementNS(ns,'clipPath');
   clip.id='ob-title-light-'+ ++spotlightSerial;
-  defs.append(clip);
+  localDefs.append(clip);
   part('rect',{x:0,y:0,width:720,height:360},sweep,180,1660,clip);
   lines.lines.forEach((row,i)=>{
     const y=184+(i-(lines.lines.length-1)/2)*lines.size*1.18;
@@ -232,6 +247,7 @@ export function spotlightTitle({part,ink,content,options={}}) {
       part('text',{...attrs,fill:'#767687'}).textContent=word.text;
       part('text',{...attrs,fill:i===lines.lines.length-1?ink[0]:'#fffbed','clip-path':'url(#'+clip.id+')'}).textContent=word.text;
     }
+  });
   });
   const glint=part('path',{d:reverse?'M2 61v242':'M718 61v242',stroke:'#fff3cf','stroke-width':2},
     [{...sweep[0],opacity:0},{opacity:.68,offset:.24},{opacity:.48,offset:.81},{...sweep[1],opacity:0}],180,1660);

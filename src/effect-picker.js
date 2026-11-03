@@ -77,7 +77,7 @@ export function effectPicker(item, apply, aspect=1) {
     speed.hidden=selected==='beatintro';
     if(speed.hidden)pace.value='normal';
     custom=asset.cinematic?cinemaControls(asset,drafts.get(selected)??(saved?.id===selected?saved:{}),
-      ()=>({text:Array.from((item.text||'').trim()).slice(0,72).join(''),bpm:100}),preview):null;
+      ()=>({text:Array.from((item.text||'').trim()).slice(0,72).join(''),bpm:100}),preview,()=>save.click()):null;
     customSlot.replaceChildren(...(custom?[custom.node]:[]));
     customSlot.hidden=!custom;
     basicSettings.hidden=!!custom;

@@ -6,6 +6,22 @@ import { cleanEffectTargets } from '../src/effect-player.js';
 import { REVEALS } from '../src/reveal-scenes.js';
 import { CLUE_CARD } from '../src/clue-card.js';
 import { cleanMotionCues } from '../src/motion-cues.js';
+import {cleanCinemaTracks,cinemaEnd} from '../src/cinema-layout.js';
+
+test('scene layout is bounded, portable and idempotent without changing an original slide',()=>{
+  const tracks=[{key:'phrase2',text:'새 구절',dx:45,dy:-19,scale:1.4,start:2250,duration:900},
+    {key:'phrase1',dx:Infinity,start:-1,scale:999,duration:999999},
+    {key:'phrase2',text:'duplicate'},{key:'unknown',text:'ignored'}];
+  const effect=cleanEffect({id:'beatintro',sceneTracks:tracks},{t:'text',text:'원래 문장'});
+  assert.deepEqual(effect.sceneTracks,[tracks[0],{key:'phrase1',start:0,scale:2.5,duration:10000}]);
+  assert.deepEqual(cleanEffect(effect),effect);
+  assert.deepEqual(cleanEffectTargets([{x:50,y:40,w:30,h:20,rot:0,effect,content:{t:'text',text:'원래 문장'}}])[0].effect,effect);
+  assert.equal(cinemaEnd(effect.id,effect),10000);
+  assert.deepEqual(cleanCinemaTracks('rollingnumber',[{key:'number',text:'bad'},{key:'caption',text:'가'.repeat(100)}]),[{key:'caption',text:'가'.repeat(72)}]);
+  assert.deepEqual(cleanCinemaTracks('paperhorizon',[{key:'sun',text:'ignored',dy:-999}]),[{key:'sun',dy:-180}]);
+  assert.equal(cleanEffect({id:'signal',sceneTracks:tracks}).sceneTracks,undefined);
+  assert.equal(tracks[1].scale,999);
+});
 
 test('cinematic overrides stay on their own effect and survive cleaning without replacing slide text',()=>{
   const item={t:'text',text:'이 장의 원래 문장'};

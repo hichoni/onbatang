@@ -8,6 +8,7 @@ import { OBSERVATION_ACCENTS } from './observation-accents.js';
 import { CLUE_CARD, clueOptions } from './clue-card.js';
 import { reducedMotion } from './motion-preference.js';
 import { cleanMotionCues } from './motion-cues.js';
+import {sceneLayerPart} from './cinema-layout.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 function svg(tag, attributes) {
@@ -172,6 +173,7 @@ function drawArt(id, animate, {pace,palette,content,step=0,photo,playOnce=false,
     photo={...content,width:content.w || 4,height:(content.h || 3) / (content.aspect || 1)};
   }
   const options=id==='cluecard'?clueOptions(settings):cinemaSettings(id,settings);
+  if(asset.cinematic)sceneLayerPart(part,frame,options);
   const ink=typeof palette==='string' && Object.hasOwn(EFFECT_PALETTES,palette)?EFFECT_PALETTES[palette]:asset.ink;
   asset.draw({ part, ink:options.accent?[options.accent,ink[1],ink[2]]:ink,
     content:data,step:asset.last?Math.max(0,Math.min(asset.last(data,options),Math.trunc(step)||0)):0,photo,options });
