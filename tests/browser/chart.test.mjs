@@ -26,11 +26,12 @@ test('chart: add from the decorate tab, paste a table, apply, reopen by double c
  await page.goto(origin+'/app/');
  await page.locator('.cv-hero .cv-new-btn').click();
  await page.getByRole('tab',{name:'꾸미기',exact:true}).click();
+ await page.getByLabel('꾸미기 종류').selectOption('차트');
  await page.locator('[data-add-chart="bar"]').click();
  const dlg=page.locator('.fe-chart-dlg');await dlg.waitFor();
  // 보기 표가 들어 있다
  assert.equal(await dlg.locator('[data-chart-label="0"]').inputValue(),'사과');
- assert.equal(await page.locator('.fe-card .fi-chart').count(),1,'the chart is placed right away');
+ assert.equal(await page.locator('.cv-canvas .fi-chart').count(),1,'the chart is placed right away');
  // 엑셀에서 복사한 표를 첫 칸에 붙여 넣는다(탭 · 줄 바꿈) → 표 전체가 바뀐다
  const tsv='과목\t1반\t2반\n국어\t85\t78\n수학\t72\t88\n과학\t90\t81\n사회\t68\t74';
  await dlg.locator('[data-chart-label="0"]').evaluate((input,text)=>{const data=new DataTransfer();data.setData('text/plain',text);input.dispatchEvent(new ClipboardEvent('paste',{clipboardData:data,bubbles:true,cancelable:true}));},tsv);
@@ -42,7 +43,7 @@ test('chart: add from the decorate tab, paste a table, apply, reopen by double c
  assert.equal(await dlg.locator('.fe-chart-preview .fc-title').innerText(),'1학기 과목별 평균');
  await dlg.locator('[data-chart-apply]').click();
  await dlg.waitFor({state:'detached'});
- const chart=page.locator('.fe-card .fi-chart').first();
+ const chart=page.locator('.cv-canvas .fi-chart');
  assert.equal(await chart.locator('.fc-bar').count(),8);
  assert.deepEqual(await chart.locator('.fc-names span').allInnerTexts(),['국어','수학','과학','사회']);
  assert.equal(await chart.locator('.fc-legend .fc-key').count(),2);

@@ -48,6 +48,40 @@ async function setup(t,viewport={width:1440,height:1000}){
 }
 
 const title=page=>page.locator('.cv-canvas .fi-text').first();
+
+test('new widescreen documents open a short horizontal tool shelf above the canvas',options,async t=>{
+  const {page,errors,shot}=await setup(t);
+  await page.locator('.cv-back').click();
+  await page.evaluate(()=>localStorage.setItem('minican.ratio','1:1'));
+  await page.locator('.cv-new-btn').click();
+  const stage=page.locator('.cv-canvas .fe-stage');
+  await stage.waitFor();
+  const box=await stage.boundingBox();
+  assert.ok(Math.abs(box.width/box.height-16/9)<0.02);
+  await page.locator('[data-tab=motion]').click();
+  for(const [width,height] of [[1440,900],[932,449],[390,844],[320,568]]){
+    await page.setViewportSize({width,height});
+    const metrics=await page.locator('.fe-tabbody').evaluate(panel=>({
+      width:panel.clientWidth,height:panel.clientHeight,scroll:panel.scrollHeight,
+      bottom:panel.getBoundingClientRect().bottom,canvas:document.querySelector('.cv-canvas').getBoundingClientRect().top,
+      pageWidth:document.documentElement.scrollWidth,
+    }));
+    assert.ok(metrics.width>=width-4 && metrics.scroll<=metrics.height+2 && metrics.bottom<=metrics.canvas+1,
+      'motion fits its shelf at '+width+'px: '+JSON.stringify(metrics));
+    assert.ok(metrics.pageWidth<=width+1);
+    await shot('motion-shelf-'+width);
+  }
+  await page.getByLabel('움직임 종류').selectOption('조합 효과');
+  await page.locator('[data-group=combo] [data-motion=impact]').click();
+  assert.equal(await page.getByLabel('움직임 종류').inputValue(),'조합 효과');
+  assert.ok(await page.locator('[data-group=combo] [data-motion=impact].on').count());
+  await page.getByRole('button',{name:'도구 칸 닫기'}).click();
+  await page.locator('[data-tab=element]').click();
+  await page.getByLabel('꾸미기 종류').selectOption('차트');
+  assert.ok(await page.locator('[data-add-chart]').first().isVisible());
+  assert.deepEqual(errors,[]);
+});
+
 const saved=page=>page.evaluate(()=>window.readSaved());
 async function persisted(page,predicate){
   for(let i=0;i<80;i++){const value=await saved(page);if(predicate(value))return value;await page.waitForTimeout(100);}

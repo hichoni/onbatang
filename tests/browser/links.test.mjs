@@ -336,6 +336,7 @@ test('the 꾸미기 panel and a single selected piece both start joining: pick t
   const hint = page.locator('.cv-canvas .fe-link-hint');
   // From the panel: a card with a picture explains it, then two picks make the line (from the first to the second).
   await page.locator('.fe-tab[data-tab="element"]').click();
+  await page.getByLabel('꾸미기 종류').selectOption('잇기');
   const start = page.locator('[data-start-link]');
   assert.match(await start.textContent(), /연결선두 조각을 화살표로 이어요/);
   await start.click();

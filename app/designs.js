@@ -28,6 +28,7 @@ export const RATIOS = [
   { id: '16:9', name: '가로', desc: '발표 화면처럼', aspect: 16 / 9 },
   { id: '9:16', name: '길게', desc: '휴대폰 화면처럼', aspect: 9 / 16 },
 ];
+export const DEFAULT_RATIO = '16:9';
 export const MAX_DESIGNS = 60;        // 둘 수 있는 그림 수(내 그림의 칸 수: 한 PPT 를 나눠 담은 파트들은 한 칸으로 센다, homeEntries)
 export const MAX_SLIDES = 20;         // 그림 한 편의 슬라이드 수
 export const MAX_NAME = 30;
@@ -85,7 +86,7 @@ export function canvasRatioOf(record) {
   return { id, aspect, preset: preset?.id || null, original,
     label: `${original ? '원본 비율' : '현재 비율'} · ${id}` };
 }
-/** 새 그림의 모양으로 쓸, 지난번에 고른 모양을 기억해 두는 자리(localStorage). */
+/** 이전 버전에서 마지막으로 고른 비율을 저장하던 키. */
 export const RATIO_KEY = 'minican.ratio';
 /** 꾸미는 화면의 발표자 노트 칸을 펴 두었는지 기억해 두는 자리(localStorage). */
 export const NOTES_OPEN_KEY = 'minican.notes-open';
@@ -260,7 +261,7 @@ export function dropPhoto(slides, url) {
 }
 
 /** 새 기록(빈 슬라이드 한 장). n 은 "그림 n" 이름에 쓸 번호. */
-export function newRecord(ratio, n = 1, now = Date.now()) {
+export function newRecord(ratio = DEFAULT_RATIO, n = 1, now = Date.now()) {
   return migrateRecord({ id: newDesignId(now), name: `그림 ${n}`, ratio: ratioOf(ratio).id, slides: [{ items: [] }], updatedAt: now });
 }
 /** 최근에 고친 것부터. */

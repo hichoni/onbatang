@@ -57,7 +57,7 @@ for(const [label,profile] of [['desktop',{viewport:{width:1440,height:1000}}],['
     const name=`연수 편집 검수 ${label}`;
     await page.locator('input.cv-name').fill(name);await page.locator('input.cv-name').press('Tab');
     await page.locator('.fe-tab[data-tab="layout"]').click();
-    assert.equal(await page.locator('.fe-layout').count(),74);
+    assert.equal(await page.locator('.fe-layout').count(),await page.evaluate(async()=>(await import('/src/model.js')).layoutList().length));
     await page.getByRole('searchbox',{name:'틀 찾기',exact:true}).fill('식순');
     assert.equal(await visibleLayouts(page),1);
     await page.getByRole('searchbox',{name:'틀 찾기',exact:true}).fill('');
@@ -122,6 +122,7 @@ for(const [label,profile] of [['desktop',{viewport:{width:1440,height:1000}}],['
     await screenshot('five-slide-story');
     await page.goto(origin+'/fixture.html');await page.waitForFunction(()=>window.ready);
     await page.locator('.cv-item').filter({hasText:'이야기 지도'}).locator('.cv-item-open').click();
+    if(profile.isMobile)await page.getByRole('button',{name:'장 목록',exact:true}).click();
     await page.locator('.cv-slide[data-slide="4"]').waitFor();
     assert.equal(await page.locator('.cv-slide[data-slide]').count(),5);
     await screenshot('reopened-story');
@@ -154,7 +155,7 @@ test('desktop: an occasion cover at the visible rail edge opens on its first cli
 test('a coordinated design set opens five saved editable pages and keeps them after reopening',options,async t=>{
   const{page,origin,errors,screenshot}=await setup(t,{viewport:{width:1440,height:1000}});
   await page.locator('[data-starts="collection"]').click();
-  assert.equal(await page.locator('.cv-start').count(),4);
+  assert.equal(await page.locator('.cv-start').count(),await page.evaluate(async()=>(await import('/app/design-collections.js')).COLLECTIONS.length));
   await page.locator('.cv-start[data-layout="collection-fieldnote-1"]').click();
   await page.locator('.cv-canvas .fe-stage').waitFor();
   const saved=await awaitSaved(page,'현장 노트',r=>r.slides.length===5);
