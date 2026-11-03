@@ -49,7 +49,7 @@ async function setup(t,viewport={width:1440,height:1000}){
 
 const title=page=>page.locator('.cv-canvas .fi-text').first();
 
-test('new widescreen documents open a short horizontal tool shelf above the canvas',options,async t=>{
+test('the horizontal tool menu overlays a new widescreen document without moving or resizing it',options,async t=>{
   const {page,errors,shot}=await setup(t);
   await page.locator('.cv-back').click();
   await page.evaluate(()=>localStorage.setItem('minican.ratio','1:1'));
@@ -58,19 +58,35 @@ test('new widescreen documents open a short horizontal tool shelf above the canv
   await stage.waitFor();
   const box=await stage.boundingBox();
   assert.ok(Math.abs(box.width/box.height-16/9)<0.02);
-  await page.locator('[data-tab=motion]').click();
+  const bounds=()=>page.evaluate(()=>['.cv-canvas','.cv-canvas .fe-stage','.cv-slide.on'].map(selector=>{
+    const {x,y,width,height}=document.querySelector(selector).getBoundingClientRect();
+    return [x,y,width,height];
+  }));
   for(const [width,height] of [[1440,900],[932,449],[390,844],[320,568]]){
     await page.setViewportSize({width,height});
+    await page.evaluate(()=>new Promise(done=>requestAnimationFrame(()=>requestAnimationFrame(done))));
+    const before=await bounds();
+    for(const tool of ['text','layout','element','upload','bg','layer','motion']){
+      await page.locator(`[data-tab="${tool}"]`).click();
+      await page.locator(`.fe-tabbody[data-panel="${tool}"]`).waitFor();
+      assert.deepEqual(await bounds(),before,`${tool} keeps the page still at ${width}px`);
+    }
     const metrics=await page.locator('.fe-tabbody').evaluate(panel=>({
       width:panel.clientWidth,height:panel.clientHeight,scroll:panel.scrollHeight,
-      bottom:panel.getBoundingClientRect().bottom,canvas:document.querySelector('.cv-canvas').getBoundingClientRect().top,
+      top:panel.getBoundingClientRect().top,work:document.querySelector('.cv-work').getBoundingClientRect().top,
+      onTop:panel.contains(document.elementFromPoint(innerWidth/2,panel.getBoundingClientRect().top+5)),
       pageWidth:document.documentElement.scrollWidth,
     }));
-    assert.ok(metrics.width>=width-4 && metrics.scroll<=metrics.height+2 && metrics.bottom<=metrics.canvas+1,
+    assert.ok(metrics.width>=width-4 && metrics.scroll<=metrics.height+2 && Math.abs(metrics.top-metrics.work)<1 && metrics.onTop,
       'motion fits its shelf at '+width+'px: '+JSON.stringify(metrics));
     assert.ok(metrics.pageWidth<=width+1);
     await shot('motion-shelf-'+width);
+    await page.getByRole('button',{name:'사용 안내',exact:true}).click();
+    assert.deepEqual(await bounds(),before,'expanded help keeps the canvas still');
+    await page.getByRole('button',{name:'도구 칸 닫기'}).click();
+    assert.deepEqual(await bounds(),before,'closing the overlay keeps the canvas still');
   }
+  await page.locator('[data-tab=motion]').click();
   await page.getByLabel('움직임 종류').selectOption('조합 효과');
   await page.locator('[data-group=combo] [data-motion=impact]').click();
   assert.equal(await page.getByLabel('움직임 종류').inputValue(),'조합 효과');

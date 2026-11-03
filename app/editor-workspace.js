@@ -28,8 +28,6 @@ export function bindEditorWorkspace(shell) {
   on(propToggle,'click',()=>{const open=!shell.classList.contains('properties-open');closeTools();setDrawer('pages',false);setDrawer('properties',open);if(open)properties.querySelector('.cv-properties-close')?.focus({preventScroll:true});});
   on(properties.querySelector('.cv-properties-close'),'click',()=>{setDrawer('properties',false);propToggle.focus({preventScroll:true});});
   on(pages,'click',event=>{if(compact.matches&&event.target.closest('.cv-slide:not(.add)'))setDrawer('pages',false);});
-  // The ribbon reserves height. Folding it during pointerdown would move the
-  // canvas between the first and second click, or while starting a drag.
   on(shell.querySelector('.cv-canvas'),'pointerdown',()=>{setDrawer('pages',false);setDrawer('properties',false);});
   const menus=()=>[...shell.querySelectorAll('.cv-document-menu[open]')];
   on(document,'pointerdown',event=>{for(const menu of menus())if(!menu.contains(event.target))menu.open=false;});
