@@ -4,6 +4,7 @@ import {createServer} from 'node:http';
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {resolve,extname,sep} from 'node:path';
+import {createHash} from 'node:crypto';
 import {createHtmlLesson} from '../../app/html-lesson.js';
 const repo=resolve(fileURLToPath(new URL('../../',import.meta.url)));
 const options={skip:!process.env.MINICAN_PLAYWRIGHT_PATH,timeout:120000};
@@ -21,7 +22,9 @@ async function setup(t){
   const browser=await(process.env.MINICAN_BROWSER==='webkit'?pw.webkit.launch():pw.chromium.launch({channel:'msedge'}));t.after(()=>browser.close());
   const page=await browser.newPage({viewport:{width:1280,height:900},acceptDownloads:true,reducedMotion:'no-preference'}),errors=[];
   page.setDefaultTimeout(15000);page.on('pageerror',e=>errors.push(e.message));
-  const origin=`http://127.0.0.1:${server.address().port}`,work=resolve(repo,'work/html-morph-'+(hosted?'host':'common')+'-'+(process.env.MINICAN_BROWSER||'edge'));await mkdir(work,{recursive:true});
+  const origin=process.env.MINICAN_HTML_LIVE_ORIGIN || `http://127.0.0.1:${server.address().port}`;
+  if(process.env.MINICAN_HTML_LIVE_ORIGIN)await page.route(origin+'/seed',route=>route.fulfill({contentType:'text/html',body:'<!doctype html><title>Isolated browser fixture</title>'}));
+  const work=resolve(repo,'work/html-morph-'+(hosted?'host':'common')+'-'+(process.env.MINICAN_BROWSER||'edge'));await mkdir(work,{recursive:true});
   return {browser,page,origin,base,hosted,work,errors};
 }
 
@@ -124,4 +127,115 @@ test('bad embedded layer and interrupted decode fall back to intact slide images
   await page.getByRole('button',{name:'다음',exact:true}).click();await page.getByRole('button',{name:'이전',exact:true}).click();
   await page.emulateMedia({reducedMotion:'reduce'});await page.waitForTimeout(500);
   assert.equal(await page.locator('.lesson-flow-stage').count(),0);assert.match(await page.locator('.lesson-count').textContent(),/^2 \/ 3/);assert.deepEqual(errors,[]);
+});
+
+test('local teacher PPT copy retains a chosen connection and camera in a resaved offline lesson',{
+  skip:!process.env.MINICAN_PLAYWRIGHT_PATH || !process.env.MINICAN_TEACHER_PPTX || !!process.env.MINICAN_HTML_LIVE_ORIGIN,
+  timeout:180000,
+},async t=>{
+  const {page, browser, origin, hosted, base, work, errors} = await setup(t);
+  const path = process.env.MINICAN_TEACHER_PPTX;
+  const fingerprint = async () => createHash('sha256').update(await readFile(path)).digest('hex');
+  const initialHash = await fingerprint();
+  t.after(async () => assert.equal(await fingerprint(), initialHash, 'input PPTX bytes are unchanged'));
+  // Private input and output stay on this machine. No requests leave loopback.
+  await page.context().route(/^https?:/,r=>new URL(r.request().url()).origin===origin?r.continue():r.abort());
+  await page.goto(origin+'/seed');
+  await page.evaluate(() => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    document.body.append(input);
+  });
+  await page.locator('input').setInputFiles(path);
+  const source=await page.evaluate(async base=>{
+    const {convertPptx}=await import(base+'/app/pptx-import/client.js');
+    const {document:record}=await convertPptx(document.querySelector('input').files[0],{selectedPages:[4,5]});
+    const store = await import(base+'/app/store.js');
+    store.setStorageName(base ? 'gailab-minican' : 'minican');
+    const kept=await store.putDesign({...record,name:'실과 수업 모핑 검수'});
+    const tour=await import(base+'/app/tour.js');for(const key of ['home','editor',tour.NEWS_KEY])tour.markTourSeen(key);
+    const nearestText = slide => slide.items.filter(item => item.t === 'text')
+      .map((item, index) => ({index, distance:Math.abs(item.x-50) + Math.abs(item.y-50)}))
+      .sort((a,b) => a.distance-b.distance)[0].index;
+    return {
+      id:kept.id,
+      ids:kept.slides.map(slide => slide.id),
+      textIndices:kept.slides.map(nearestText),
+      geometry:kept.slides.map(slide => slide.items.map(item => [item.id,item.x,item.y,item.w,item.h]))
+    };
+  },base);
+  await page.goto(origin+(hosted?'/minican-app.html':'/app/index.html'));
+  await page.getByRole('button',{name:'실과 수업 모핑 검수 열기',exact:true}).click();
+  await page.locator('[data-tab=motion]').click();await page.locator('[data-slide-flow]').click();
+  const panel=page.locator('.flow-panel');await panel.waitFor();
+  for(const [i,side] of ['source','target'].entries())await panel.locator('[data-flow-'+side+'] .fi-text').nth(source.textIndices[i]).press('Enter');
+  await panel.getByRole('button',{name:'선택한 두 요소 연결',exact:true}).click();
+  await panel.getByRole('button',{name:'카메라 구도',exact:true}).click();
+  await panel.getByLabel('카메라 확대',{exact:true}).evaluate(el=>{el.value='2';el.dispatchEvent(new Event('input',{bubbles:true}));});
+  await panel.getByLabel('카메라 가로 중심').fill('65');await panel.getByLabel('모핑 이동 시간').selectOption('2400');
+  await panel.getByRole('button',{name:'자료에 적용·저장',exact:true}).click();await panel.waitFor({state:'detached'});
+  const readDraft = () => page.evaluate(async ({base,id}) => {
+    const store = await import(base+'/app/store.js');
+    store.setStorageName(base ? 'gailab-minican' : 'minican');
+    return store.getDesign(id);
+  }, {base,id:source.id});
+  const saved = await readDraft();
+  // The editor normalizes imported EMU fractions to four decimals on open.
+  // Compare both sides at editor precision, then require exact equality across export.
+  const geometry=rows=>rows.map(row=>row.map(cell=>cell.map(v=>typeof v==='number'?Math.round(v*10000)/10000:v)));
+  assert.deepEqual(geometry(saved.slides.map(s=>s.items.map(i=>[i.id,i.x,i.y,i.w,i.h]))),geometry(source.geometry));
+  const a=saved.slides[0].items.find(i=>i.morphKey),b=saved.slides[1].items.find(i=>i.morphKey===a?.morphKey);
+  assert.ok(a && b);assert.deepEqual(saved.slides[1].camera,{x:65,y:50,z:2});
+  await page.locator('.cv-down-btn').click();await page.locator('[data-type=html]').click();
+  const download=page.waitForEvent('download',{timeout:90000});await page.locator('[data-download-save]').click();
+  const html=resolve(work,'teacher-copy.html');await(await download).saveAs(html);
+  const after = await readDraft();
+  assert.deepEqual(after.slides,saved.slides,'export leaves the saved source slides exactly intact');
+  const fileSession=async file=>{
+    const context = await browser.newContext({offline:true, acceptDownloads:true, reducedMotion:'no-preference'});
+    t.after(() => context.close());
+    const view = await context.newPage(), requests = [];
+    view.on('request', request => requests.push(request.url()));
+    view.on('pageerror', error => errors.push(error.message));
+    await view.goto(pathToFileURL(file).href);
+    return {view,requests};
+  };
+  const seedOf=view=>view.locator('#onbatang-lesson-data').evaluate(n=>JSON.parse(n.textContent));
+  const forward=async view=>{
+    await view.getByRole('button',{name:'다음',exact:true}).click();
+    await view.locator('[data-flow-playing=playing]').waitFor();
+    const sample=await view.evaluate(id=>{
+      const stage = document.querySelector('.lesson-flow-stage');
+      const data = JSON.parse(document.querySelector('#onbatang-lesson-data').textContent);
+      const index = data.pages[1].flow.items.findIndex(item => item.id === id);
+      const node = stage.lastElementChild.querySelectorAll('.fi')[index];
+      const animations = stage.getAnimations({subtree:true});
+      if(node.dataset.moved !== '1') throw Error('Chosen PPT element was not paired');
+      const widths = [0,1200,2399].map(ms => {
+        for (const animation of animations) { animation.pause(); animation.currentTime = ms; }
+        return node.getBoundingClientRect().width;
+      });
+      const duration = animations[0].effect.getTiming().duration;
+      animations.forEach(animation => animation.finish());
+      return {widths,duration};
+    },b.id);
+    assert.equal(sample.duration,2400);assert.ok(Math.abs(sample.widths[0]-sample.widths[2])>1);
+    assert.ok(sample.widths[1]>Math.min(sample.widths[0],sample.widths[2]) && sample.widths[1]<Math.max(sample.widths[0],sample.widths[2]));
+    await view.locator('[data-flow-playing]').waitFor({state:'detached'});
+  };
+  const first = await fileSession(html), seed = await seedOf(first.view);
+  assert.deepEqual(seed.pages.map(p => p.id), source.ids);
+  assert.deepEqual(seed.pages.map(p => p.sourcePage), [4,5]);
+  const editorX=Math.round(b.x*10000)/10000;
+  assert.equal(seed.pages[1].flow.items.find(it=>it.id===b.id).x,Math.round((50+(editorX-65)*2)*10000)/10000);
+  await forward(first.view);
+  const downloading = first.view.waitForEvent('download');
+  await first.view.getByRole('button',{name:'현재 수업 내려받기',exact:true}).click();
+  const copy = resolve(work,'teacher-resaved.html');
+  await (await downloading).saveAs(copy);
+  const again = await fileSession(copy);
+  assert.deepEqual((await seedOf(again.view)).pages, seed.pages);
+  await forward(again.view);
+  assert.ok([...first.requests,...again.requests].every(u => /^(file:|data:|blob:)/.test(u)));
+  assert.deepEqual(errors,[]);
 });
