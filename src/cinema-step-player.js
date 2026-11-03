@@ -3,6 +3,23 @@ import {effectFrames,runEffectFrames} from './effect-frames.js';
 import {paceFactor} from './effect-assets.js';
 import {cinemaCues} from './cinema-cues.js';
 
+const states=new WeakMap();
+export const cinemaStepState=panel=>states.get(panel)||null;
+function sceneCues(frames,options){
+  return cinemaCues([...frames.svg.querySelectorAll('[data-cinema-track]')].map(n=>({
+    key:n.dataset.cinemaTrack,label:n.dataset.trackLabel,text:n.dataset.trackText,
+    teacherNote:options.sceneTracks?.find(t=>t.key===n.dataset.cinemaTrack)?.teacherNote||'',
+    editable:n.dataset.trackEditable==='true',start:+n.dataset.trackStart,duration:+n.dataset.trackDuration})),paceFactor(options.pace));
+}
+function snapshot(asset,options,cues,index,phase){
+  const phrase=c=>c?{key:c.key,label:c.label,text:c.text,note:c.teacherNote}:null;
+  return {scene:options.cueScene||asset.id,title:asset.name,index,total:cues.length,phase,
+    current:phrase(cues[index-1]),next:phrase(cues[index])};
+}
+export function cinemaStepPreview(asset,options){
+  return snapshot(asset,options,sceneCues(effectFrames(asset.id,options),options),0,'ready');
+}
+
 const style=`
 .ob-cinema-steps{position:absolute;inset:0;z-index:12;display:grid;grid-template-rows:auto minmax(0,1fr) auto;gap:8px;padding:12px;box-sizing:border-box;background:#10242c;color:#eff9f3;font:500 clamp(12px,1.7cqw,19px)/1.4 system-ui;pointer-events:auto;overflow:auto;container-type:size}
 .cs-head,.cs-controls{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}.cs-head{grid-row:1}.cs-head strong{font-size:1em}.cs-controls{grid-row:3;justify-content:center}
@@ -25,12 +42,9 @@ const style=`
 // Each phrase samples its own authored clock. Future text and associated route
 // paths/pins remain hidden even when their original time windows overlap.
 export function mountCinemaSteps(host,asset,options,onClose,{start=false}={}){
-  const frames=effectFrames(asset.id,options),factor=paceFactor(options.pace);
-  const cues=cinemaCues([...frames.svg.querySelectorAll('[data-cinema-track]')].map(n=>({
-    key:n.dataset.cinemaTrack,label:n.dataset.trackLabel,editable:n.dataset.trackEditable==='true',
-    start:+n.dataset.trackStart,duration:+n.dataset.trackDuration})),factor);
+  const frames=effectFrames(asset.id,options),cues=sceneCues(frames,options);
   const groups=[...frames.svg.querySelectorAll('[data-cinema-cue]')];
-  let count=0,progress=0,busy=false,stop=null,background=0,destroyed=false;
+  let count=0,progress=0,busy=false,stop=null,background=0,destroyed=false,lastState='';
   const action=(text,cls,fn)=>el('button',{type:'button',class:cls,text,onClick:fn});
   const art=action('','cs-art',()=>next()),readout=el('output',{class:'cs-order','aria-live':'polite'}),compact=el('span',{class:'cs-compact-count','aria-hidden':'true'});
   art.setAttribute('aria-label','화면을 눌러 다음 구절 공개');art.append(frames.svg);
@@ -62,6 +76,13 @@ export function mountCinemaSteps(host,asset,options,onClose,{start=false}={}){
     compact.textContent=count+' / '+cues.length;
     forward.textContent=busy?(stop?'현재 구절 완성':'이어 재생'):count===cues.length?'슬라이드로 돌아가기':count?'다음 구절 보기':'첫 구절 보기';
     bar.style.width=(cues.length?(count-(busy?1-progress:0))/cues.length*100:0)+'%';
+    const waiting=busy&&progress*(active.wait+active.duration)<active.wait;
+    const state=snapshot(asset,options,cues,count-(waiting?1:0),busy?(!stop?'paused':waiting?'waiting':'playing'):count===cues.length?'complete':'ready');
+    const signature=JSON.stringify(state);
+    if(signature!==lastState){
+      lastState=signature;states.set(panel,state);
+      panel.dispatchEvent(new CustomEvent('onbatang-cinema-change',{bubbles:true}));
+    }
   }
   function animate(){
     const cue=cues[count-1],duration=cue.wait+cue.duration;
@@ -90,7 +111,7 @@ export function mountCinemaSteps(host,asset,options,onClose,{start=false}={}){
   const visibility=()=>{if(document.hidden&&busy){halt();paint();}};
   document.addEventListener('visibilitychange',visibility);
   paint();if(start)next();forward.focus({preventScroll:true});
-  const destroy=()=>{destroyed=true;halt();document.removeEventListener('visibilitychange',visibility);panel.remove();};
+  const destroy=()=>{destroyed=true;halt();document.removeEventListener('visibilitychange',visibility);states.delete(panel);panel.remove();host.dispatchEvent(new CustomEvent('onbatang-cinema-change',{bubbles:true}));};
   destroy.pause=()=>{halt();paint();};
   return destroy;
 }

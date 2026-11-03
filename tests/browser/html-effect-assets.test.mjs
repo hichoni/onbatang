@@ -993,6 +993,14 @@ test('stepped cinema follows saved preset timing through remote commands, reopen
     await page.getByRole('button',{name:'효과 수정',exact:true}).click();const picker=page.locator('.fe-fx-picker');
     await picker.getByLabel('발표 방식',{exact:true}).selectOption('step');
     if(i===0){
+      await picker.getByRole('button',{name:'화면 · 타임라인 편집',exact:true}).click();
+      const studio=page.locator('.fe-cinema-studio');
+      for(const [key,note]of [['phrase2','교사만 볼 메모: 학생 답 먼저 듣기'],['phrase3','다음 구절 메모: 그림으로 연결하기']]){
+        await studio.locator('.ce-track[data-track='+key+'] .ce-button').first().click();
+        await studio.getByLabel('이 구절의 교사 메모',{exact:true}).fill(note);
+      }
+      await studio.getByRole('button',{name:'슬라이드에 적용',exact:true}).click();
+      await page.locator('.cv-canvas .fi-text').first().click();await page.getByRole('button',{name:'효과 수정',exact:true}).click();
       await picker.getByRole('button',{name:'움직임 이름 붙여 저장'}).click();
       const dialog=page.getByRole('dialog',{name:'움직임 이름 붙여 저장'});await dialog.getByLabel('프리셋 이름').fill('구절마다 수업 시작');await dialog.getByRole('button',{name:'새 프리셋 저장'}).click();
       await picker.getByLabel('발표 방식',{exact:true}).selectOption('continuous');
@@ -1006,7 +1014,8 @@ test('stepped cinema follows saved preset timing through remote commands, reopen
   await page.locator('.cv-back').click();await page.getByRole('button',{name:'구절 공개 검수 사본 열기',exact:true}).waitFor();await page.reload();
   const stored=await page.evaluate(async({base,id})=>{const s=await import(base+'/app/store.js');s.setStorageName(base?'gailab-minican':'minican');return s.getDesign(id);},{base,id:original.id});
   for(let i=0;i<5;i++){assert.equal(stored.slides[i].items[0].effect.reveal,'step');assert.equal(stored.slides[i].items[0].text,original.slides[i].items[0].text);}
-  assert.deepEqual(stored.slides[0].items[0].effect.sceneTracks,original.slides[0].items[0].effect.sceneTracks);
+  assert.deepEqual(stored.slides[0].items[0].effect.sceneTracks.map(({teacherNote,...track})=>track).sort((a,b)=>a.key.localeCompare(b.key)),original.slides[0].items[0].effect.sceneTracks);
+  assert.equal(stored.slides[0].items[0].effect.sceneTracks.find(t=>t.key==='phrase2').teacherNote,'교사만 볼 메모: 학생 답 먼저 듣기');
 
   // Use the public host-remote adapter contract, with no account/relay/network writes.
   await page.goto(origin+base+'/app/effects.html');
@@ -1015,19 +1024,24 @@ test('stepped cinema follows saved preset timing through remote commands, reopen
     for(const css of ['app/app.css','app/brand.css']){const link=document.createElement('link');link.rel='stylesheet';link.href=base+'/'+css;document.head.append(link);}
     document.body.className='mc-app';const root=document.createElement('main');root.id='app';document.body.replaceChildren(root);
     const app=await import(base+'/app/app.js');
-    await app.startMinican({storage:base?'gailab-minican':'minican',showRemote:{open:async({command})=>{window.cueRemote=command;return {update(){},close(){}};}}});
+    await app.startMinican({storage:base?'gailab-minican':'minican',showRemote:{open:async({command,state})=>{window.cueRemote=command;window.cueStates=[state()];return {update(value){window.cueStates.push(value);},close(){}};}}});
     await app.openSavedDesign(id);
   },{base,id:original.id});
   await page.locator('.cv-slide:not(.add)').first().click();await page.locator('.cv-show-btn').click();
   await page.locator('[data-show-remote]').click();await page.waitForFunction(()=>typeof window.cueRemote==='function');
+  assert.equal(await page.evaluate(()=>window.cueStates.at(-1).cue.next.note),'교사만 볼 메모: 학생 답 먼저 듣기');
   await page.clock.install();await page.emulateMedia({reducedMotion:'reduce'});
   const remote=action=>page.evaluate(action=>window.cueRemote({action}),action);
   const panel=page.locator('[data-cinema-steps]');
   const visible=key=>panel.locator('[data-cinema-track='+key+']').evaluate(n=>n.style.visibility==='visible');
   await remote('next');await panel.waitFor();assert.equal(await panel.getAttribute('data-step'),'1');
   await page.clock.runFor(900);assert.equal(await visible('phrase2'),false,'authored initial delay is preserved');
+  assert.equal(await page.evaluate(()=>window.cueStates.at(-1).cue.index),0,'delayed phrase is still next, not already public');
   await page.clock.runFor(400);assert.equal(await visible('phrase2'),true);assert.equal(await visible('phrase3'),false);assert.equal(await visible('phrase1'),false);
   assert.equal(await panel.getAttribute('data-busy'),'true');
+  const cue=await page.evaluate(()=>window.cueStates.at(-1).cue);
+  assert.equal(cue.current.key,'phrase2');assert.equal(cue.current.note,'교사만 볼 메모: 학생 답 먼저 듣기');assert.equal(cue.next.note,'다음 구절 메모: 그림으로 연결하기');
+  assert.equal(await panel.textContent().then(t=>t.includes('교사만 볼 메모')),false,'private note is absent from the audience screen');
   await page.clock.runFor(900);assert.equal(await panel.getAttribute('data-busy'),'false');
   assert.equal(await panel.getAttribute('data-step'),'1','overlapping next phrase waits for input');
   if(process.env.MINICAN_CUE_SHOTS)await page.screenshot({path:resolve(process.env.MINICAN_CUE_SHOTS+'-desktop.png')});
@@ -1047,6 +1061,7 @@ test('stepped cinema follows saved preset timing through remote commands, reopen
   assert.equal(await panel.getAttribute('data-busy'),'false');await remote('prev');assert.equal(await panel.getAttribute('data-step'),'2');assert.equal(await visible('phrase1'),false);
   await page.keyboard.press('PageDown');await page.clock.runFor(1800);assert.equal(await panel.getAttribute('data-step'),'3');
   await panel.locator('.cs-reset').click();assert.equal(await panel.getAttribute('data-step'),'0');
+  assert.equal(await page.evaluate(()=>window.cueStates.at(-1).cue.current),null);
   const auto=page.locator('.cv-show').getByRole('button',{name:/자동 넘기기/});await auto.click();await page.clock.runFor(20000);
   assert.equal(await panel.getAttribute('data-step'),'0');assert.match(await page.locator('.cv-show-count').textContent(),/^1 \/ 6/);await auto.click();
   await panel.locator('.cs-close').click();await remote('next');assert.match(await page.locator('.cv-show-count').textContent(),/^2 \/ 6/);
@@ -1066,6 +1081,8 @@ test('stepped cinema follows saved preset timing through remote commands, reopen
   await page.locator('.cv-slide:not(.add)').first().click();await page.locator('.cv-down-btn').click();await page.locator('[data-type=html]').click();
   const downloading=page.waitForEvent('download');await page.locator('[data-download-save]').click();
   const dir=await mkdtemp(join(tmpdir(),'onbatang-cues-')),file=join(dir,'lesson.html');t.after(async()=>{await rm(file,{force:true});await rmdir(dir);});await(await downloading).saveAs(file);
+  const lesson=JSON.parse((await readFile(file,'utf8')).match(/id="onbatang-lesson-data">([\s\S]*?)<\/script>/)[1]);
+  assert.equal(JSON.stringify(lesson).includes('teacherNote'),false,'student export excludes private phrase notes');
   const context=await browser.newContext({offline:true,reducedMotion:'reduce'});t.after(()=>context.close());const offline=await context.newPage();offline.on('pageerror',e=>errors.push(e.message));
   await openExport(offline,file);await offline.clock.install();const nav=offline.locator('.lesson-navigation');
   await nav.getByRole('button',{name:'다음',exact:true}).click();const out=offline.locator('[data-cinema-steps]');await out.waitFor();

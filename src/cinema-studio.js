@@ -35,6 +35,13 @@ export function openCinemaStudio(asset,initial,content,apply,{commit=false}={}){
   };
   const words=el('textarea',{rows:3,maxlength:144,'aria-label':'선택한 문구'});
   const wordLabel=el('label',{},'문구 · 화면을 두 번 눌러도 고쳐요',words);
+  const teacherNote=el('textarea',{rows:3,maxlength:1000,'aria-label':'이 구절의 교사 메모',placeholder:'예: 학생 답을 듣고 다음 구절을 공개하세요.'});
+  const noteLabel=el('label',{},'이 구절의 교사 메모',teacherNote);
+  const noteHelp=el('small',{class:'ce-help'},'리모컨에서 볼 메모예요. 움직임 프리셋에도 함께 저장돼요.');
+  teacherNote.oninput=()=>{
+    const before=record();patch({teacherNote:teacherNote.value});remember(before);
+    undo.disabled=!history.length;redo.disabled=!future.length;
+  };
   const selectedName=el('h3');
   const reveal=el('select',{'aria-label':'발표 방식'},el('option',{value:'continuous'},'한 번에 연속 재생'),el('option',{value:'step'},'클릭·리모컨으로 하나씩 공개'));
   reveal.onchange=()=>change(()=>{if(reveal.value==='step')draft.reveal='step';else delete draft.reveal;});
@@ -67,7 +74,7 @@ export function openCinemaStudio(asset,initial,content,apply,{commit=false}={}){
     if(save.disabled)return;halt();finishInline();
     openMotionLibrary({effectId:asset.id,content,onApply:(_id,result)=>change(()=>{draft=result;})});
   });
-  const controls=el('aside',{class:'ce-inspector'},el('label',{},'발표 방식',reveal),selectedName,wordLabel,
+  const controls=el('aside',{class:'ce-inspector'},el('label',{},'발표 방식',reveal),selectedName,wordLabel,noteLabel,noteHelp,
     el('div',{class:'ce-values'},field('dx','가로 위치 (%)',-50,150,.1),field('dy','세로 위치 (%)',-50,150,.1)),
     field('scale','크기 (%)',40,250),
     el('div',{class:'ce-values'},field('start','등장 (초)',0,30*factor,.1),field('duration','움직임 (초)',.2*factor,10*factor,.1)),
@@ -120,6 +127,7 @@ export function openCinemaStudio(asset,initial,content,apply,{commit=false}={}){
     const track=current();if(!track)return;
     const edit=(draft.sceneTracks||[]).find(t=>t.key===selected)||{};
     selectedName.textContent=track.label;wordLabel.hidden=!track.editable;
+    noteLabel.hidden=noteHelp.hidden=!track.editable;teacherNote.value=edit.teacherNote||'';
     words.value=track.text;
     const values={dx:(track.cx+(edit.dx||0))/7.2,dy:(track.cy+(edit.dy||0))/3.6,scale:(edit.scale??1)*100,
       start:track.start*factor/1000,duration:track.duration*factor/1000};

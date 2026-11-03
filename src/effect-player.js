@@ -2,7 +2,15 @@ import { cleanEffect, playEffectArt, EFFECT_ASSETS, paceFactor,steppedEffect } f
 import { sceneContent } from './effect-scenes.js';
 import {cinemaEnd} from './cinema-layout.js';
 import { mountMotionStudy } from './motion-study.js';
-import {mountCinemaSteps} from './cinema-step-player.js';
+import {mountCinemaSteps,cinemaStepState,cinemaStepPreview} from './cinema-step-player.js';
+
+const cinemaPreviews=new WeakMap();
+export function cinemaRemoteState(stage){
+  const panel=stage?.querySelector('[data-cinema-steps]:not([inert])');
+  if(panel)return cinemaStepState(panel);
+  const waiting=stage?.querySelector('[data-cinema-step-trigger]:not([data-cinema-visited]):not([inert])');
+  return waiting?cinemaPreviews.get(waiting)||null:null;
+}
 
 const labelOf = id => EFFECT_ASSETS.find(asset => asset.id === id)?.name || '';
 
@@ -144,6 +152,8 @@ export function mountEffectPlayer(host, bindings, { delay = 0,onQuestionChange }
     const data = scene && sceneContent(effect.id,content,effect.sceneText);
     if (scene && !data) continue;
     if(steppedEffect(effect)){
+      const sceneOptions={...effect,content:data,cueScene:content?.id||effect.id};
+      cinemaPreviews.set(node,cinemaStepPreview(asset,sceneOptions));
       const attrs=['role','tabindex','aria-label','aria-expanded','data-effect-trigger','data-cinema-step-trigger','data-cinema-visited'];
       const original=attrs.map(name=>node.getAttribute(name)),oldStyle={pointerEvents:node.style.pointerEvents,cursor:node.style.cursor},wasInert=node.inert;
       let panel,dispose,opening;
@@ -155,7 +165,7 @@ export function mountEffectPlayer(host, bindings, { delay = 0,onQuestionChange }
         for(const pending of queuedScenes)clearTimeout(pending);queuedScenes.clear();
         closeScene?.();closeNote?.();clear();closeScene=clear;
         node.dataset.cinemaVisited='';node.setAttribute('aria-expanded','true');
-        dispose=mountCinemaSteps(host,asset,{...effect,content:data},()=>{clear();node.focus({preventScroll:true});},{start});
+        dispose=mountCinemaSteps(host,asset,sceneOptions,()=>{clear();node.focus({preventScroll:true});},{start});
         panel=host.querySelector('[data-cinema-steps]');panel.dataset.effectPlaying=effect.id;onQuestionChange?.(true);
       }
       node.dataset.effectTrigger=effect.id;node.dataset.cinemaStepTrigger='';node.removeAttribute('data-cinema-visited');
@@ -165,9 +175,10 @@ export function mountEffectPlayer(host, bindings, { delay = 0,onQuestionChange }
       const key=event=>{if(['Enter',' '].includes(event.key)){event.preventDefault();event.stopPropagation();if(!event.repeat)open();}};
       node.addEventListener('click',click);node.addEventListener('keydown',key);
       if(effect.when==='open'&&!hasOpeningQuestion){hasOpeningQuestion=true;opening=setTimeout(()=>open(false),delay);queuedScenes.add(opening);}
-      const restore=()=>{clear();node.removeEventListener('click',click);node.removeEventListener('keydown',key);Object.assign(node.style,oldStyle);node.inert=wasInert;
+      const restore=()=>{clear();cinemaPreviews.delete(node);node.removeEventListener('click',click);node.removeEventListener('keydown',key);Object.assign(node.style,oldStyle);node.inert=wasInert;
         attrs.forEach((name,i)=>original[i]===null?node.removeAttribute(name):node.setAttribute(name,original[i]));};
       cleanups.push(freeze=>{clearTimeout(opening);queuedScenes.delete(opening);if(!freeze){restore();return;}dispose?.pause();node.inert=true;if(panel)panel.inert=true;return restore;});
+      host.dispatchEvent(new CustomEvent('onbatang-cinema-change',{bubbles:true}));
       continue;
     }
     if(asset.last){

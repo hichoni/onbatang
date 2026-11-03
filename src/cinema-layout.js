@@ -17,9 +17,20 @@ export function cleanCinemaTracks(id,raw){
       const text=Array.from(row.text.trim()).slice(0,72).join('');
       if(text&&(row.key!=='number'||/^[+−-]?\d[\d,]*(?:\.\d+)?[%％]?$/.test(text)&&text.replace(/\D/g,'').length<=8))value.text=text;
     }
+    if(texts[id].includes(row.key)&&typeof row.teacherNote==='string'){
+      const note=row.teacherNote.trim().slice(0,1000);
+      if(note)value.teacherNote=note;
+    }
     if(Object.keys(value).length>1)out.push(value);
   }
   return out;
+}
+// Student HTML omits private cue notes together with the slide's speaker notes.
+export function withoutCinemaNotes(effect){
+  if(!effect?.sceneTracks)return effect;
+  const sceneTracks=effect.sceneTracks.map(({teacherNote,...track})=>track).filter(t=>Object.keys(t).length>1);
+  const {sceneTracks:old,...rest}=effect;
+  return sceneTracks.length?{...rest,sceneTracks}:rest;
 }
 export function cinemaEnd(id,options){
   return Math.max(0,...cleanCinemaTracks(id,options.sceneTracks).map(t=>

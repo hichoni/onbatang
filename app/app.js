@@ -66,7 +66,8 @@ import { openMotionSetPanel } from './motion-set-panel.js';
 import {openSlideFlowPanel} from './slide-flow-panel.js';
 import { COLLECTIONS, createCollectionSlides } from './design-collections.js';
 import { questionEffect,steppedEffect } from '../src/effect-assets.js';
-import { stepOpenQuestion } from '../src/effect-player.js';
+import { stepOpenQuestion,cinemaRemoteState } from '../src/effect-player.js';
+import { withoutCinemaNotes } from '../src/cinema-layout.js';
 import { addVersion, listVersions, readVersion, dropHistory, pruneHistory, restoredRecord, whenLabel, HISTORY_REASONS, HISTORY_GAP } from './history.js';
 import { mergeAccount, createPusher, syncsRecord } from './sync.js';
 
@@ -2031,7 +2032,7 @@ async function present(O) {
   const stage = el('div', { class: 'cv-show-stage' });
   const count = el('span', { class: 'cv-show-count' });
   // 휴대폰 리모컨(호스트 · GBE-AI Lab): 휴대폰에서 다음 · 앞 · 그 장으로 · 검은 화면을 보내고, 발표는 지금 장 · 발표자 노트를 알려 준다.
-  let remote = null, remoteJob = null;
+  let remote = null, remoteJob = null,remoteCueView=null;
   const pageTitle = (k) => { const t = (slides[k]?.items || []).filter((it) => it.t === 'text' && String(it.text || '').trim()).sort((a, b) => (Number(a.y) || 0) - (Number(b.y) || 0))[0]; return t ? Array.from(String(t.text).replace(/\s+/g, ' ').trim()).slice(0, 60).join('') : ''; };
   const remoteThumbs = new WeakMap(), remoteThumbJobs = new WeakSet();
   // Only rasterize the two teacher-visible pages when a remote is connected.
@@ -2048,8 +2049,10 @@ async function present(O) {
     }
   };
   const remoteState = () => ({ at: i, total: slides.length, title: O.record.name, page: pageTitle(i), next: i + 1 < slides.length ? pageTitle(i + 1) : '', notes: spokenNotes(slides[i]?.notes).slice(0, 2000),
+    cue:remoteCueView?.isConnected?cinemaRemoteState(remoteCueView):null,
     preview: remoteThumbs.get(slides[i]) || '', nextPreview: remoteThumbs.get(slides[i + 1]) || '', black: tools?.curtain?.() === 'black', activity: !!slides[i]?.activity });
   const tellRemote = () => { if (!remote || closed) return; warmRemotePreviews(); try { remote.update?.(remoteState()); } catch (error) { console.warn(error); } };
+  stage.addEventListener('onbatang-cinema-change',()=>queueMicrotask(tellRemote));
   const remoteCommand = (cmd) => {
     if (closed || !cmd || typeof cmd !== 'object') return;
     // 넘기기는 글쇠와 같은 길로(검은 화면이면 먼저 걷고, 펜 · 전체 보기 칸도 글쇠처럼 다룬다).
@@ -2271,6 +2274,7 @@ async function present(O) {
     const ar=aspectOf(entries[i].record);
     overlay.style.setProperty('--cv-show-ratio',String(ar));
     const view = slideView(design, ar, 1920);
+    remoteCueView=view;
     view.style.setProperty('--fe-card-radius', '0');
     shownDesigns.set(view, design);
     const old = stage.firstElementChild;
@@ -4227,7 +4231,7 @@ async function makeHtmlLesson(O,{notes=false}={}){
       const image=await new Promise((yes,no)=>{const reader=new FileReader();reader.onload=()=>yes(reader.result);reader.onerror=no;reader.readAsDataURL(blob);});
       const activity=value.page.activity;
       pages.push({id:value.page.id,image,aspect,...(notes?slideNotes(value.page):{}),...(topics.get(value.page.id)?{topic:topics.get(value.page.id)}:{}),...slideDur(value.page),...(value.page.source?.kind==='result'?{result:true}:{}),...(activity?{activity,binding:{documentId:value.record.id,pageId:value.page.id,activityId:activity.id,kind:activity.kind,definitionHash:await activityDefinitionHash(activity)}}:{})});
-      if (effects) pages[pages.length-1].effects = effects;
+      if (effects) pages[pages.length-1].effects = notes?effects:effects.map(row=>({...row,effect:withoutCinemaNotes(row.effect)}));
       if(flowPages.has(index)){
         const flow=await designToHtmlFlow(value.page,{width,aspect,signal:abort.signal});
         if(flow)pages[pages.length-1].flow=flow;

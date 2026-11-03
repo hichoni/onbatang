@@ -25,10 +25,10 @@
     "app/pptx-import/preview-punctuation.js": "8ff4f855942dde60b6302e775e5a06b58b411e34b015c129088157533934c90e",
     "app/pptx-import/worker.js": "e4ea8c3a9237c1e1b2fc8dc93f57389cbb2f7966134252b8078ab44ef01dc14c",
     "app/zip.js": "c7c09e5385bab4e403509ab734acb182d15ff017c469e731b05a5d1f3eead18e",
-    "package-lock.json": "256a26b45fa24c3c3c7d67762ca63566dc61f5e47e9621614c553a0421093efe",
+    "package-lock.json": "e5ff00683dc7fd7510e1f3d8678d3c6f8ee1bac89b9815105b8c17350cc37e32",
     "src/activity.js": "7e6ff97046d62a8b63f6dd4a85ba2cc0760fc74605e9ae308eaa73d4b25ae29f",
     "src/chart.js": "ec041e78d1221d41f66e304ecdff4173ec0f23d4394632a409dc2dc7d83eb407",
-    "src/cinema-layout.js": "a85aa5908515cfa79a67c7df54d40b13d2ced73a9ce297c0ec031e689b8d04de",
+    "src/cinema-layout.js": "8515317fdbfc512977a4975ea6b31ab49943498e39ab7be272ec52c096cebdeb",
     "src/cinematic-landscapes.js": "fb745121f44e1dc1bc8eeb28740e533d065f97461bde0869b4ed7fd3a20e8f80",
     "src/classroom-accents.js": "41b27fa7ca336ef4c700c00c606b0bc9983d352299ce62362305c1212ffb9aa8",
     "src/clue-card.js": "b298780516482ead7cc49da2293dba41882cb9ee62be7fd8a174fb4a5e95d824",
@@ -107,8 +107,8 @@
       "sha256": "a681e9d183c72b4af4856935893805eb48c08f0f5a3f260203db7444c20fb98a"
     },
     "pptx-worker.js": {
-      "bytes": 274149,
-      "sha256": "397f999a2900208e96213231b2e861a7b3bb4ee6769f0d8d19d0be0735e855f5"
+      "bytes": 274268,
+      "sha256": "1f42776aa7068b268e713b7141a301c0846fbc294a1f39264dd983565402f33b"
     },
     "preview-frame.html": {
       "bytes": 1243897,
