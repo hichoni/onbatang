@@ -2,6 +2,7 @@ import {el} from './dom.js';
 import {cinemaSettings, cinemaTuning, sceneContent} from './effect-scenes.js';
 import {EFFECT_PALETTES} from './effect-assets.js';
 import {openCinemaStudio} from './cinema-studio.js';
+import {openSaveMotionPreset,openMotionLibrary} from './motion-preset-dialog.js';
 
 // The gallery and editor both edit a draft. Only the editor's Apply command writes a slide.
 export function cinemaControls(asset, initial, source, onEdit, commit) {
@@ -89,18 +90,25 @@ export function cinemaControls(asset, initial, source, onEdit, commit) {
     }catch{report('저장한 스타일을 읽을 수 없어요.');}
   });
   const label=asset.id==='fieldroute'?'수업 단계 · 한 줄에 한 단계':asset.id==='rollingnumber'?'숫자가 든 문장':'효과 문구';
+  const snapshot=()=>({palette:colors.value,pace:speed.value,[dial.key]:tuneValue(),...draft});
+  const savePreset=action('움직임 이름 붙여 저장',()=>{
+    if(valid())openSaveMotionPreset(asset,snapshot(),{t:'text',text:source().text},()=>report('내 움직임 보관함에 저장했어요.'));
+  });
+  const library=action('내 움직임 보관함',()=>openMotionLibrary({effectId:asset.id,content:{t:'text',text:source().text},
+    onApply:(_id,result)=>{draft=styleOptions(result);refresh();changed(false,'프리셋을 불러왔어요. 적용하면 슬라이드에 저장돼요.');}}));
   const studio=action('화면 · 타임라인 편집',()=>{
     if(!valid())return;
-    openCinemaStudio(asset,{palette:colors.value,pace:speed.value,...draft},
+    openCinemaStudio(asset,snapshot(),
       {t:'text',text:source().text},result=>{draft=styleOptions(result);refresh();changed();commit?.();},{commit:!!commit});
   });
   const node=el('fieldset',{class:'fe-cinema-fields'},el('legend',{},asset.name+' 꾸미기'),
-    studio,el('small',{},'구절을 직접 옮기고 크기·등장 순서·시간을 한 화면에서 조절해요. 아래 전체 문구를 바꾸면 구절별 글도 새 문구를 따라가요.'),
+    studio,el('div',{class:'fe-cinema-buttons'},savePreset,library),
+    el('small',{},'구절을 직접 옮기고 크기·등장 순서·시간을 한 화면에서 조절해요. 아래 전체 문구를 바꾸면 구절별 글도 새 문구를 따라가요.'),
     field(label,words),el('small',{},'첫 72자를 사용해요. 문구를 비우면 원래 글을 따라가요.'),
     el('div',{class:'fe-cinema-values'},field('장면 색감',colors),asset.id!=='beatintro'&&field('재생 속도',speed)),
     el('div',{class:'fe-cinema-values'},field('강조색',color),field('색상 코드',hex)),
     field(dial.label+(dial.unit?' ('+dial.unit+')':''),tuning),
-    el('div',{class:'fe-cinema-buttons'},reset,saveStyle,loadStyle),message);
+    reset,el('details',{},el('summary',{},'이전 단일 스타일'),el('div',{class:'fe-cinema-buttons'},saveStyle,loadStyle)),message);
   refresh();
   return {node,read:()=>({...draft}),valid,refresh};
 }

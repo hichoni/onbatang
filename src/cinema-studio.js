@@ -2,13 +2,15 @@ import {el} from './dom.js';
 import {effectArt,paceFactor} from './effect-assets.js';
 import {effectFrames,runEffectFrames} from './effect-frames.js';
 import {cleanCinemaTracks} from './cinema-layout.js';
+import {openSaveMotionPreset,openMotionLibrary} from './motion-preset-dialog.js';
 
-// A local editing transaction: Cancel never changes a slide or a saved style.
+// Cancel discards the slide draft. Explicit library saves are independent transactions.
 export function openCinemaStudio(asset,initial,content,apply,{commit=false}={}){
   let draft=structuredClone(initial),selected='',tracks=[],frames,stop,drag,playing=false;
   let lastTap;
   const history=[],future=[],opener=document.activeElement,overlays=new Map();
-  const factor=paceFactor(initial.pace),options=()=>({...draft,content});
+  let factor=paceFactor(initial.pace);
+  const options=()=>({...draft,content});
   const button=(text,fn,cls='')=>el('button',{type:'button',class:'ce-button '+cls,text,onClick:fn});
   const preview=el('div',{class:'ce-picture'}),hits=el('div',{class:'ce-hits'});
   const inline=el('textarea',{class:'ce-inline',hidden:true,'aria-label':'화면에서 문구 수정',maxlength:144});
@@ -55,6 +57,14 @@ export function openCinemaStudio(asset,initial,content,apply,{commit=false}={}){
   const placementTab=button('글 · 배치',()=>setMobileView('fields'));
   const timelineTab=button('타임라인',()=>setMobileView('timeline'));
   const mobileTabs=el('nav',{class:'ce-mobile-tabs','aria-label':'장면 편집 도구'},placementTab,timelineTab);
+  const savePreset=button('움직임 저장',()=>{
+    if(save.disabled)return;halt();finishInline();
+    openSaveMotionPreset(asset,draft,content,()=>{status.textContent='내 움직임 보관함에 저장했어요.';});
+  });
+  const library=button('보관함',()=>{
+    if(save.disabled)return;halt();finishInline();
+    openMotionLibrary({effectId:asset.id,content,onApply:(_id,result)=>change(()=>{draft=result;})});
+  });
   const controls=el('aside',{class:'ce-inspector'},selectedName,wordLabel,
     el('div',{class:'ce-values'},field('dx','가로 위치 (%)',-50,150,.1),field('dy','세로 위치 (%)',-50,150,.1)),
     field('scale','크기 (%)',40,250),
@@ -65,7 +75,7 @@ export function openCinemaStudio(asset,initial,content,apply,{commit=false}={}){
       el('p',{},'화면에서 끌어 배치하고, 아래에서 등장 순서와 시간을 맞추세요.')),
       el('div',{class:'ce-actions'},cancel,save)),mobileTabs,
     el('div',{class:'ce-workspace'},el('section',{class:'ce-visual'},
-      el('div',{class:'ce-actions'},undo,redo,el('small',{},'두 번 눌러 글 수정 · 모서리로 크기 조절')),el('div',{class:'ce-board'},stage)),controls),
+      el('div',{class:'ce-actions'},undo,redo,savePreset,library,el('small',{},'두 번 눌러 글 수정 · 모서리로 크기 조절')),el('div',{class:'ce-board'},stage)),controls),
     el('section',{class:'ce-timeline'},el('div',{class:'ce-transport'},play,edit,scrub,time),rows,
       el('small',{class:'ce-help'},'막대를 끌면 등장 시점, 오른쪽 끝을 끌면 움직이는 시간이 바뀌어요.')));
 
@@ -121,6 +131,8 @@ export function openCinemaStudio(asset,initial,content,apply,{commit=false}={}){
     for(const row of rows.children)row.classList.toggle('selected',row.dataset.track===selected);
   }
   function render(fill=true){
+    factor=paceFactor(draft.pace);
+    fields.start.max=30*factor;fields.duration.min=.2*factor;fields.duration.max=10*factor;
     halt();playing=false;hits.hidden=false;
     if(fill){save.disabled=false;words.setAttribute('aria-invalid','false');inline.setAttribute('aria-invalid','false');status.textContent='';}
     const art=effectArt(asset.id,false,options());preview.replaceChildren(art);

@@ -4,6 +4,7 @@ import { CLUE_LIMITS, clueOptions } from './clue-card.js';
 import { reducedMotion } from './motion-preference.js';
 import { mountMotionStudy } from './motion-study.js';
 import {cinemaControls} from './cinema-controls.js';
+import {openMotionLibrary} from './motion-preset-dialog.js';
 
 export function effectPicker(item, apply, aspect=1) {
   const saved = cleanEffect(item.effect,item);
@@ -71,8 +72,9 @@ export function effectPicker(item, apply, aspect=1) {
     previewEffect(sample,selected,animate,{content:{...item,aspect},step,pace:pace.value,palette:palette.value,playOnce,...opts});
   }
   pace.onchange=palette.onchange=() => {custom?.refresh();preview(true);};
-  function pick(asset, animate) {
+  function pick(asset, animate, preset) {
     if(custom)drafts.set(selected,custom.read());
+    if(preset)drafts.set(asset.id,preset);
     selected = asset.id;active=asset;step=0;
     speed.hidden=selected==='beatintro';
     if(speed.hidden)pace.value='normal';
@@ -105,9 +107,11 @@ export function effectPicker(item, apply, aspect=1) {
   const save = el('button', { class:'fe-btn primary', type:'button', dataset:{applyEffect:''}, text:'고른 조각에 적용',
     onClick:() => apply(cleanEffect({ id:selected, when:when.value, observe:!active.last && observe.checked, stops:cueDrafts.get(selected), note:note.value, pace:pace.value, palette:palette.value,...options() },item)) });
   const basicSettings=el('div',{class:'fe-fx-settings'},speed,el('label',{},'효과 색감',palette));
+  const library=el('button',{type:'button',class:'fe-btn',text:'모든 내 움직임 보기',hidden:item.t!=='text',onClick:()=>openMotionLibrary({content:item,
+    onApply:(id,options)=>pick(EFFECT_ASSETS.find(a=>a.id===id),false,options)})});
   const controls=el('div', { class:'fe-fx-controls' }, sample,study,
       el('div',{class:'fe-fx-preview-actions'},hint,replay),
-      customSlot,cardFields, choices,basicSettings,
+      library,customSlot,cardFields, choices,basicSettings,
       studyOption, el('label',{},'재생 시점',when), note,
       el('div', { class:'fe-row' }, save, saved && el('button', { class:'fe-btn', type:'button', text:'효과 빼기', onClick:() => apply(null) })));
   pick(EFFECT_ASSETS.find(asset => asset.id === selected),false);

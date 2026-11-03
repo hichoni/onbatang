@@ -67,12 +67,13 @@ test('home starts either a blank design or a selected PPT, then text openings su
   const entry=origin+(hosted?'/minican-app.html':'/app/index.html');
   await page.goto(origin+base+'/app/effects.html#spotlighttitle');
   const gallery=page.locator('.effect-card').filter({has:page.locator('#spotlighttitle')});
-  await gallery.locator('.card-custom summary').click();
+  await gallery.locator('.card-custom>summary').click();
   await gallery.getByLabel('효과 문구',{exact:true}).fill('갤러리만의 제목');
   await gallery.getByLabel('빛이 움직이는 방향').selectOption('left');
   await gallery.getByLabel('장면 색감').selectOption('iris');
   await gallery.getByLabel('장면 재생 속도').selectOption('slow');
   await gallery.getByLabel('강조색 코드').fill('#ab526d');
+  await gallery.getByText('이전 단일 스타일',{exact:true}).click();
   await gallery.getByRole('button',{name:'내 스타일 저장'}).click();
   assert.match(await gallery.locator('.art').textContent(),/갤러리/);
   await gallery.getByRole('button',{name:'꾸미기 초기화'}).click();
@@ -108,6 +109,7 @@ test('home starts either a blank design or a selected PPT, then text openings su
     await picker.locator('[data-effect-asset='+id+']').click();
     if(i===0)await picker.getByLabel('분당 박자',{exact:true}).fill('120');
     if(id==='spotlighttitle'){
+      await picker.getByText('이전 단일 스타일',{exact:true}).click();
       await picker.getByRole('button',{name:'내 스타일 불러오기'}).click();
       assert.equal(await picker.getByLabel('효과 문구',{exact:true}).inputValue(),'별빛 아래 교실');
       assert.equal(await picker.getByLabel('강조색 코드').inputValue(),'#ab526d');
@@ -184,7 +186,7 @@ test('direct scene editing and cue timing survive cancel, slide reopen and offli
   const origin=process.env.MINICAN_START_LIVE_ORIGIN||localOrigin;
   await page.goto(origin+base+'/app/effects.html#beatintro');
   const card=page.locator('.effect-card').filter({has:page.locator('#beatintro')});
-  await card.locator('.card-custom summary').click();
+  await card.locator('.card-custom>summary').click();
   await card.getByRole('button',{name:'화면 · 타임라인 편집'}).click();
   const studio=page.getByRole('dialog'),track=key=>studio.locator('.ce-hit[data-track='+key+']');
   await track('phrase2').dblclick();
@@ -303,7 +305,7 @@ test('scene studio keeps touch editing and timeline reachable in portrait and la
   const {page,origin,base,errors}=await openBrowser(t,{phone:true});
   await page.goto(origin+base+'/app/effects.html#paperhorizon');
   const card=page.locator('.effect-card').filter({has:page.locator('#paperhorizon')});
-  await card.locator('.card-custom summary').tap();await card.getByRole('button',{name:'화면 · 타임라인 편집'}).tap();
+  await card.locator('.card-custom>summary').tap();await card.getByRole('button',{name:'화면 · 타임라인 편집'}).tap();
   const studio=page.getByRole('dialog');
   for(const size of [{width:390,height:844},{width:844,height:390},{width:320,height:740}]){
     await page.setViewportSize(size);
@@ -831,5 +833,139 @@ test('a teacher edits a question on a text box, controls each clue, and reopens 
   await check(opened.locator('.lesson-effects-frame'),()=>next.click(),()=>nav.getByRole('button',{name:'이전',exact:true}).click());
   assert.ok(await nav.getByRole('button',{name:'이전',exact:true}).isDisabled());await next.click();
   assert.match(await nav.textContent(),/2 \/ 5/);
+  assert.deepEqual(errors,[]);
+});
+
+test('named motion presets preview, manage, transfer and survive reuse in other slides and documents',{
+  skip:!process.env.MINICAN_PLAYWRIGHT_PATH,timeout:150000,
+},async t=>{
+  const {page,browser,hosted,base,origin:localOrigin,errors}=await openBrowser(t);
+  const origin=process.env.MINICAN_START_LIVE_ORIGIN||localOrigin;
+  const gallery=origin+base+'/app/effects.html#beatintro',entry=origin+(hosted?'/minican-app.html':'/app/index.html');
+  await page.goto(gallery);
+  const card=id=>page.locator('.effect-card').filter({has:page.locator('#'+id)});
+  const lib=page.getByRole('dialog',{name:'내 움직임 보관함',exact:true});
+  const saveDialog=page.getByRole('dialog',{name:'움직임 이름 붙여 저장',exact:true});
+  const beat=card('beatintro');await beat.locator('.card-custom>summary').click();
+  await beat.getByLabel('효과 문구',{exact:true}).fill('나의 시작\n내가 찾은 발견\n함께 나누어요');
+  await beat.getByRole('button',{name:'화면 · 타임라인 편집'}).click();
+  const studio=page.locator('.fe-cinema-studio');
+  await studio.locator('[data-track=phrase2].ce-hit').click();
+  await studio.getByLabel('선택한 문구').fill('저장한 두 번째 구절');
+  for(const [label,value] of [['가로 위치 (%)','56'],['크기 (%)','125'],['등장 (초)','1.8'],['움직임 (초)','1.3']]){
+    const field=studio.getByLabel(label,{exact:true});await field.fill(value);await field.press('Tab');
+  }
+  await studio.getByRole('button',{name:'움직임 저장',exact:true}).click();
+  await saveDialog.getByLabel('프리셋 이름',{exact:true}).fill('우리 반 오프닝');
+  await saveDialog.getByRole('button',{name:'새 프리셋 저장'}).click();
+  await studio.getByRole('button',{name:'취소',exact:true}).click();
+  assert.doesNotMatch(await beat.locator('.art').textContent(),/저장한 두 번째/,'saving a library entry does not commit the gallery draft');
+  const paper=card('paperhorizon');await paper.locator('.card-custom>summary').click();
+  await paper.getByRole('button',{name:'움직임 이름 붙여 저장'}).click();
+  await saveDialog.getByLabel('프리셋 이름',{exact:true}).fill('아침 풍경');await saveDialog.getByRole('button',{name:'새 프리셋 저장'}).click();
+  await page.reload();await beat.locator('.card-custom>summary').click();await beat.getByRole('button',{name:'내 움직임 보관함',exact:true}).click();
+  assert.equal(await lib.locator('.mp-preset').count(),1,'effect-specific picker filters without losing other effects');
+  assert.match(await lib.locator('.mp-count').textContent(),/2 \/ 60/);
+  await lib.getByLabel('프리셋 문구 적용').selectOption('saved');
+  assert.match(await lib.locator('.mp-preview').textContent(),/저장한 두 번째 구절/);
+  await lib.getByLabel('프리셋 재생 위치').fill('0');const initial=await lib.locator('.mp-preview').screenshot();
+  await lib.getByLabel('프리셋 재생 위치').fill('1000');assert.notDeepEqual(initial,await lib.locator('.mp-preview').screenshot());
+  await lib.getByRole('button',{name:'▶ 미리보기',exact:true}).click();
+  await page.waitForFunction(()=>+document.querySelector('.mp-transport input').value>20);
+  await lib.getByRole('button',{name:'Ⅱ 멈춤',exact:true}).click();
+  const paused=await lib.getByLabel('프리셋 재생 위치').inputValue();await page.waitForTimeout(100);
+  assert.equal(await lib.getByLabel('프리셋 재생 위치').inputValue(),paused);
+  if(process.env.MINICAN_PRESET_SHOTS)await page.screenshot({path:resolve(process.env.MINICAN_PRESET_SHOTS+'-desktop.png')});
+  await lib.locator('.mp-manage>summary').click();
+  await lib.getByRole('button',{name:'복제',exact:true}).click();
+  await lib.getByLabel('선택한 프리셋 이름').fill('발표용 사본');await lib.getByRole('button',{name:'이름 변경',exact:true}).click();
+  await lib.getByRole('button',{name:'삭제',exact:true}).click();await lib.getByRole('button',{name:'취소',exact:true}).click();
+  assert.equal(await lib.locator('.mp-preset').count(),2);
+  await lib.getByRole('button',{name:'삭제',exact:true}).click();await lib.getByRole('button',{name:'삭제 확인',exact:true}).click();
+  assert.equal(await lib.locator('.mp-preset').count(),1);
+  const downloading=page.waitForEvent('download');await lib.getByRole('button',{name:'보관함 파일 내려받기'}).click();
+  const fileDownload=await downloading;const file=await fileDownload.path();const portable=await readFile(file);
+  assert.equal(JSON.parse(portable).presets.length,2);
+  await lib.getByRole('button',{name:'닫기',exact:true}).click();
+
+  // A fresh browser context has no library; the exported file carries only scene data.
+  const fresh=await browser.newContext();t.after(()=>fresh.close());const other=await fresh.newPage();
+  other.on('pageerror',e=>errors.push(e.message));await other.goto(gallery);
+  const otherCard=other.locator('.effect-card').filter({has:other.locator('#beatintro')});
+  await otherCard.locator('.card-custom>summary').click();await otherCard.getByRole('button',{name:'내 움직임 보관함',exact:true}).click();
+  const otherLib=other.getByRole('dialog',{name:'내 움직임 보관함'});assert.equal(await otherLib.locator('.mp-preset').count(),0);
+  await otherLib.getByLabel('움직임 보관함 파일').setInputFiles({name:'motion.json',mimeType:'application/json',buffer:portable});
+  await otherLib.getByRole('button',{name:/우리 반 오프닝/}).waitFor();
+  assert.match(await otherLib.locator('.mp-count').textContent(),/2 \/ 60/);
+  for(const size of [{width:390,height:844},{width:844,height:390},{width:320,height:740}]){
+    await other.setViewportSize(size);
+    assert.ok(await otherLib.evaluate(n=>n.scrollWidth<=n.clientWidth+1));
+    await otherLib.getByLabel('프리셋 문구 적용').selectOption('saved');
+    await otherLib.getByLabel('프리셋 재생 위치').fill('500');
+    if(process.env.MINICAN_PRESET_SHOTS&&size.width===390)await other.screenshot({path:resolve(process.env.MINICAN_PRESET_SHOTS+'-phone.png')});
+  }
+  await otherLib.getByLabel('움직임 보관함 파일').setInputFiles({name:'again.json',mimeType:'application/json',buffer:portable});
+  await other.waitForFunction(()=>document.querySelector('.mp-status').textContent.includes('0개 추가'));
+  await other.close();
+
+  const originals=await page.evaluate(async base=>{
+    const {newRecord}=await import(base+'/app/designs.js'),store=await import(base+'/app/store.js');
+    store.setStorageName(base?'gailab-minican':'minican');const rows=[];
+    for(let i=0;i<2;i++){
+      const r=newRecord('16:9');r.name='프리셋 검수 자료 '+i;
+      r.slides[0].items=[{id:'emypreset'+i+'001',t:'text',text:'다른 자료의 제목\n이 자료의 둘째 글\n다음 수업으로',x:50,y:50,w:80,size:6,color:'#173f30'}];
+      r.slides.push({...structuredClone(r.slides[0]),id:'spreset'+i+'002',items:[{...structuredClone(r.slides[0].items[0]),id:'emypreset'+i+'002'}]});
+      rows.push(await store.putDesign(r));
+    }
+    const tour=await import(base+'/app/tour.js');for(const id of ['home','editor',tour.NEWS_KEY])tour.markTourSeen(id);return rows;
+  },base);
+  await page.goto(entry);
+  for(let i=0;i<2;i++){
+    await page.getByRole('button',{name:'프리셋 검수 자료 '+i+' 열기',exact:true}).click();
+    if(i)await page.locator('.cv-slide:not(.add)').nth(1).click();
+    await page.locator('.cv-canvas .fi-text').first().click();await page.getByRole('button',{name:'시네마 효과',exact:true}).click();
+    const picker=page.locator('.fe-fx-picker');await picker.getByRole('button',{name:'모든 내 움직임 보기'}).click();
+    assert.equal(await lib.locator('.mp-preset').count(),2);
+    await lib.getByRole('button',{name:/아침 풍경/}).click();
+    await lib.getByRole('button',{name:'이 움직임 불러오기'}).click();
+    assert.match(await picker.locator('.fe-cinema-fields legend').textContent(),/종이 지평선/);
+    await picker.getByRole('button',{name:'모든 내 움직임 보기'}).click();
+    await lib.getByRole('button',{name:/우리 반 오프닝/}).click();
+    if(i)await lib.getByLabel('프리셋 문구 적용').selectOption('saved');
+    assert.match(await lib.locator('.mp-preview').textContent(),i?/저장한 두 번째 구절/:/이 자료의 둘째 글/);
+    await lib.getByRole('button',{name:'이 움직임 불러오기'}).click();await picker.locator('[data-apply-effect]').click();
+    if(await page.getByRole('button',{name:'도구 칸 닫기'}).isVisible())await page.getByRole('button',{name:'도구 칸 닫기'}).click();
+    await page.locator('.cv-back').click();await page.getByRole('button',{name:'프리셋 검수 자료 '+i+' 열기',exact:true}).waitFor();
+  }
+  await page.reload();
+  const saved=await page.evaluate(async({base,ids})=>{
+    const store=await import(base+'/app/store.js');store.setStorageName(base?'gailab-minican':'minican');return Promise.all(ids.map(id=>store.getDesign(id)));
+  },{base,ids:originals.map(r=>r.id)});
+  for(let i=0;i<2;i++){
+    assert.deepEqual(saved[i].slides.map(s=>s.items.map(it=>it.text)),originals[i].slides.map(s=>s.items.map(it=>it.text)));
+    const effect=saved[i].slides[i].items[0].effect,track=effect.sceneTracks.find(t=>t.key==='phrase2');
+    assert.equal(track.scale,1.25);assert.equal(track.start,1800);assert.equal(track.duration,1300);
+    assert.equal(track.text,i?'저장한 두 번째 구절':undefined);
+    assert.equal(saved[i].slides[1-i].items[0].effect,undefined,'other slide remains unchanged');
+  }
+  await page.getByRole('button',{name:'프리셋 검수 자료 1 열기',exact:true}).click();await page.locator('.cv-slide:not(.add)').nth(1).click();
+  await page.locator('.cv-canvas .fi-text').first().click();await page.getByRole('button',{name:'효과 수정',exact:true}).click();
+  await page.getByRole('button',{name:'모든 내 움직임 보기'}).click();await lib.getByRole('button',{name:/우리 반 오프닝/}).click();
+  await lib.locator('.mp-manage>summary').click();await lib.getByRole('button',{name:'삭제',exact:true}).click();await lib.getByRole('button',{name:'삭제 확인',exact:true}).click();
+  await lib.getByRole('button',{name:'닫기',exact:true}).click();await page.getByRole('button',{name:'도구 칸 닫기'}).click();
+  await page.locator('.cv-show-btn').click();await page.locator('[data-effect-trigger=beatintro]').click();
+  assert.match(await page.locator('[data-effect-playing=beatintro]').textContent(),/저장한 두 번째 구절/);
+  await page.getByRole('button',{name:'강조 화면 닫기'}).click();await page.keyboard.press('Escape');
+  await page.locator('.cv-down-btn').click();await page.locator('[data-type=html]').click();
+  const htmlDownload=page.waitForEvent('download');await page.locator('[data-download-save]').click();
+  const dir=await mkdtemp(join(tmpdir(),'onbatang-preset-')),html=join(dir,'lesson.html');
+  t.after(async()=>{await rm(html,{force:true});await rmdir(dir);});await(await htmlDownload).saveAs(html);
+  const offlineContext=await browser.newContext({offline:true});t.after(()=>offlineContext.close());const offline=await offlineContext.newPage();
+  offline.on('pageerror',e=>errors.push(e.message));await openExport(offline,html);
+  // Export includes both slides; use the existing lesson navigation before opening the scene.
+  await offline.locator('.lesson-navigation').getByRole('button',{name:'다음',exact:true}).click();
+  await offline.locator('[data-effect-trigger=beatintro]').click();
+  const cue=offline.locator('[data-effect-playing=beatintro] [data-cinema-track=phrase2]');await cue.waitFor();
+  assert.equal(await cue.getAttribute('data-track-text'),'저장한 두 번째 구절');assert.equal(await cue.getAttribute('data-track-start'),'1800');
   assert.deepEqual(errors,[]);
 });
