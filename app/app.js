@@ -65,7 +65,7 @@ import { applyMotionSet, createMotionSequence, MOTION_SETS } from './motion-sets
 import { openMotionSetPanel } from './motion-set-panel.js';
 import {openSlideFlowPanel} from './slide-flow-panel.js';
 import { COLLECTIONS, createCollectionSlides } from './design-collections.js';
-import { questionEffect } from '../src/effect-assets.js';
+import { questionEffect,steppedEffect } from '../src/effect-assets.js';
 import { stepOpenQuestion } from '../src/effect-player.js';
 import { addVersion, listVersions, readVersion, dropHistory, pruneHistory, restoredRecord, whenLabel, HISTORY_REASONS, HISTORY_GAP } from './history.js';
 import { mergeAccount, createPusher, syncsRecord } from './sync.js';
@@ -2375,7 +2375,7 @@ async function present(O) {
   // 앱 안을 누른 뒤에도 프레젠터(리모컨)의 넘기기 단추와 Esc 는 발표가 듣는다(앱이 그 글쇠를 쓰지 않았을 때 앱이 알려 준다).
   const appKey = (key) => { if (['PageDown', 'PageUp', 'Escape'].includes(key)) tools?.handle({ key, code: key }); };
   const onKey = (e) => {
-    if(e.target?.closest?.('.ob-compare, .ob-study'))return;
+    if(e.target?.closest?.('.ob-compare, .ob-study, .ob-cinema-steps'))return;
     if(e.target?.closest?.('[data-question-panel]') && ['Escape','ArrowLeft','ArrowRight','PageUp','PageDown'].includes(e.key))return;
     // 앱·그림판 안에서 치는 글쇠는 앱의 것이다. 프레젠터의 넘기기(PageDown · PageUp)와 Esc 만 발표가 듣는다.
     if(e.target?.closest?.('.cv-show-activity:not([data-quiz])')&&!['Escape','PageDown','PageUp'].includes(e.key))return;
@@ -2446,7 +2446,7 @@ async function present(O) {
     label: (k) => (slides[k]?.activity ? '활동' : entries[k]?.page.source?.kind === 'result' ? '결과' : ''),
     // 자동 넘기기: 리허설로 잰 시간(없으면 기본) · 누를 때 나오는 걸음 수. 리허설: 잰 시간을 발표가 끝난 뒤 저장할지 묻는다.
     dwell: (k) => slides[k]?.dur, steps: (k) => (slides[k] && !slides[k].activity ? planMotion(slides[k]).clicks.length : 0),
-    waitForTeacher: k=>!!slides[k]?.activity?.photoStudy || slides[k]?.items?.some(it=>questionEffect(it.effect)),
+    waitForTeacher: k=>!!slides[k]?.activity?.photoStudy || slides[k]?.items?.some(it=>questionEffect(it.effect)||steppedEffect(it.effect)),
     saveTimes: (seconds) => { rehearsed = entries.map((v, k) => [v.page.id, seconds[k]]).filter(([, s]) => s != null); },
     title: O.record.name, notify: toast, keyClass: 'cv-show-key', stateChanged: tellRemote,
   });

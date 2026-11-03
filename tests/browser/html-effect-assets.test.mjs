@@ -969,3 +969,131 @@ test('named motion presets preview, manage, transfer and survive reuse in other 
   assert.equal(await cue.getAttribute('data-track-text'),'저장한 두 번째 구절');assert.equal(await cue.getAttribute('data-track-start'),'1800');
   assert.deepEqual(errors,[]);
 });
+
+test('stepped cinema follows saved preset timing through remote commands, reopen and offline HTML',{
+  skip:!process.env.MINICAN_PLAYWRIGHT_PATH,timeout:150000,
+},async t=>{
+  const {page,browser,hosted,base,origin:localOrigin,errors}=await openBrowser(t);
+  const origin=process.env.MINICAN_START_LIVE_ORIGIN||localOrigin,entry=origin+(hosted?'/minican-app.html':'/app/index.html');
+  await page.goto(origin+base+'/app/effects.html');
+  const original=await page.evaluate(async base=>{
+    const {newRecord}=await import(base+'/app/designs.js'),store=await import(base+'/app/store.js');
+    const {EFFECT_ASSETS}=await import(base+'/src/effect-assets.js');store.setStorageName(base?'gailab-minican':'minican');
+    const record=newRecord('16:9');record.name='구절 공개 검수 사본';const first=record.slides[0];
+    record.slides=EFFECT_ASSETS.filter(a=>a.cinematic).map((a,i)=>({...structuredClone(first),id:'scuecheck00'+i,items:[{
+      id:'ecuecheck00'+i,t:'text',text:a.example.text,x:50,y:50,w:80,size:5,color:'#163c31',effect:{id:a.id,when:'press',
+        ...(i===0?{sceneTracks:[{key:'phrase1',start:2800,duration:800},{key:'phrase2',start:1000,duration:1000},{key:'phrase3',start:1000,duration:600}]}:{}),
+        ...(a.id==='fieldroute'?{pace:'slow',sceneTracks:[{key:'step3',start:0,duration:600},{key:'step1',start:1000,duration:800},{key:'step2',start:1000,duration:700}]}:{})}}]}));
+    record.slides.push({...structuredClone(first),id:'scuefinal00',items:[]});
+    const saved=await store.putDesign(record),tour=await import(base+'/app/tour.js');for(const id of ['home','editor',tour.NEWS_KEY])tour.markTourSeen(id);return saved;
+  },base);
+  await page.goto(entry);await page.getByRole('button',{name:'구절 공개 검수 사본 열기',exact:true}).click();
+  for(let i=0;i<5;i++){
+    await page.locator('.cv-slide:not(.add)').nth(i).click();await page.locator('.cv-canvas .fi-text').first().click();
+    await page.getByRole('button',{name:'효과 수정',exact:true}).click();const picker=page.locator('.fe-fx-picker');
+    await picker.getByLabel('발표 방식',{exact:true}).selectOption('step');
+    if(i===0){
+      await picker.getByRole('button',{name:'움직임 이름 붙여 저장'}).click();
+      const dialog=page.getByRole('dialog',{name:'움직임 이름 붙여 저장'});await dialog.getByLabel('프리셋 이름').fill('구절마다 수업 시작');await dialog.getByRole('button',{name:'새 프리셋 저장'}).click();
+      await picker.getByLabel('발표 방식',{exact:true}).selectOption('continuous');
+      await picker.getByRole('button',{name:'모든 내 움직임 보기'}).click();
+      await page.getByRole('dialog',{name:'내 움직임 보관함'}).getByRole('button',{name:'이 움직임 불러오기'}).click();
+      assert.equal(await picker.getByLabel('발표 방식',{exact:true}).inputValue(),'step');
+    }
+    await picker.locator('[data-apply-effect]').click();
+    if(await page.getByRole('button',{name:'도구 칸 닫기'}).isVisible())await page.getByRole('button',{name:'도구 칸 닫기'}).click();
+  }
+  await page.locator('.cv-back').click();await page.getByRole('button',{name:'구절 공개 검수 사본 열기',exact:true}).waitFor();await page.reload();
+  const stored=await page.evaluate(async({base,id})=>{const s=await import(base+'/app/store.js');s.setStorageName(base?'gailab-minican':'minican');return s.getDesign(id);},{base,id:original.id});
+  for(let i=0;i<5;i++){assert.equal(stored.slides[i].items[0].effect.reveal,'step');assert.equal(stored.slides[i].items[0].text,original.slides[i].items[0].text);}
+  assert.deepEqual(stored.slides[0].items[0].effect.sceneTracks,original.slides[0].items[0].effect.sceneTracks);
+
+  // Use the public host-remote adapter contract, with no account/relay/network writes.
+  await page.goto(origin+base+'/app/effects.html');
+  await page.evaluate(async({base,id})=>{
+    document.querySelectorAll('head style').forEach(n=>n.remove());
+    for(const css of ['app/app.css','app/brand.css']){const link=document.createElement('link');link.rel='stylesheet';link.href=base+'/'+css;document.head.append(link);}
+    document.body.className='mc-app';const root=document.createElement('main');root.id='app';document.body.replaceChildren(root);
+    const app=await import(base+'/app/app.js');
+    await app.startMinican({storage:base?'gailab-minican':'minican',showRemote:{open:async({command})=>{window.cueRemote=command;return {update(){},close(){}};}}});
+    await app.openSavedDesign(id);
+  },{base,id:original.id});
+  await page.locator('.cv-slide:not(.add)').first().click();await page.locator('.cv-show-btn').click();
+  await page.locator('[data-show-remote]').click();await page.waitForFunction(()=>typeof window.cueRemote==='function');
+  await page.clock.install();await page.emulateMedia({reducedMotion:'reduce'});
+  const remote=action=>page.evaluate(action=>window.cueRemote({action}),action);
+  const panel=page.locator('[data-cinema-steps]');
+  const visible=key=>panel.locator('[data-cinema-track='+key+']').evaluate(n=>n.style.visibility==='visible');
+  await remote('next');await panel.waitFor();assert.equal(await panel.getAttribute('data-step'),'1');
+  await page.clock.runFor(900);assert.equal(await visible('phrase2'),false,'authored initial delay is preserved');
+  await page.clock.runFor(400);assert.equal(await visible('phrase2'),true);assert.equal(await visible('phrase3'),false);assert.equal(await visible('phrase1'),false);
+  assert.equal(await panel.getAttribute('data-busy'),'true');
+  await page.clock.runFor(900);assert.equal(await panel.getAttribute('data-busy'),'false');
+  assert.equal(await panel.getAttribute('data-step'),'1','overlapping next phrase waits for input');
+  if(process.env.MINICAN_CUE_SHOTS)await page.screenshot({path:resolve(process.env.MINICAN_CUE_SHOTS+'-desktop.png')});
+  for(const size of [{width:390,height:844},{width:844,height:390},{width:320,height:740}]){
+    await page.setViewportSize(size);assert.ok(await panel.evaluate(n=>n.scrollWidth<=n.clientWidth+1));
+    assert.ok(await panel.evaluate(n=>{const p=n.getBoundingClientRect(),a=n.querySelector('.cs-art').getBoundingClientRect(),c=n.querySelector('.cs-controls').getBoundingClientRect();return a.bottom<=c.top+1&&c.bottom<=p.bottom+1;}),'art and controls stay separate and inside the slide');
+    if(process.env.MINICAN_CUE_SHOTS&&size.width===390)await page.screenshot({path:resolve(process.env.MINICAN_CUE_SHOTS+'-phone.png')});
+  }
+  await page.setViewportSize({width:1280,height:800});
+  await panel.locator('.cs-art').click();await page.clock.runFor(150);assert.equal(await panel.getAttribute('data-step'),'2');
+  await remote('next');assert.equal(await panel.getAttribute('data-step'),'2','rapid next finishes only the active cue');assert.equal(await panel.getAttribute('data-busy'),'false');
+  await remote('next');await page.clock.runFor(500);assert.equal(await visible('phrase1'),false,'positive gap before final cue is preserved');
+  await page.clock.runFor(600);assert.equal(await visible('phrase1'),true);
+  await page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'));});
+  assert.equal(await panel.getAttribute('data-paused'),'true');await page.clock.runFor(4000);assert.equal(await panel.getAttribute('data-busy'),'true');
+  await page.evaluate(()=>{delete document.hidden;document.dispatchEvent(new Event('visibilitychange'));});await remote('next');await page.clock.runFor(700);
+  assert.equal(await panel.getAttribute('data-busy'),'false');await remote('prev');assert.equal(await panel.getAttribute('data-step'),'2');assert.equal(await visible('phrase1'),false);
+  await page.keyboard.press('PageDown');await page.clock.runFor(1800);assert.equal(await panel.getAttribute('data-step'),'3');
+  await panel.locator('.cs-reset').click();assert.equal(await panel.getAttribute('data-step'),'0');
+  const auto=page.locator('.cv-show').getByRole('button',{name:/자동 넘기기/});await auto.click();await page.clock.runFor(20000);
+  assert.equal(await panel.getAttribute('data-step'),'0');assert.match(await page.locator('.cv-show-count').textContent(),/^1 \/ 6/);await auto.click();
+  await panel.locator('.cs-close').click();await remote('next');assert.match(await page.locator('.cv-show-count').textContent(),/^2 \/ 6/);
+  for(let i=1;i<5;i++){
+    await remote('next');await panel.waitFor();const keys=await panel.locator('[data-cinema-track][data-track-editable=true]').evaluateAll(ns=>ns.map(n=>({key:n.dataset.cinemaTrack,start:+n.dataset.trackStart})).sort((a,b)=>a.start-b.start).map(n=>n.key));
+    for(let n=0;n<keys.length;n++){
+      assert.equal(await panel.getAttribute('data-step'),String(n+1));
+      await remote('next');assert.equal(await panel.getAttribute('data-busy'),'false');
+      for(let k=0;k<keys.length;k++)assert.equal(await visible(keys[k]),k<=n);
+      if(i===4){const visibility=await panel.locator('[data-cinema-cue=step2]').evaluateAll(ns=>ns.map(n=>n.style.visibility));assert.ok(visibility.every(v=>v===(n===2?'visible':'hidden')),'route and pins follow their phrase');}
+      await remote('next');
+    }
+    assert.equal(await panel.count(),0);await remote('next');
+  }
+  assert.match(await page.locator('.cv-show-count').textContent(),/^6 \/ 6/);await page.keyboard.press('Escape');
+  await page.clock.resume();
+  await page.locator('.cv-slide:not(.add)').first().click();await page.locator('.cv-down-btn').click();await page.locator('[data-type=html]').click();
+  const downloading=page.waitForEvent('download');await page.locator('[data-download-save]').click();
+  const dir=await mkdtemp(join(tmpdir(),'onbatang-cues-')),file=join(dir,'lesson.html');t.after(async()=>{await rm(file,{force:true});await rmdir(dir);});await(await downloading).saveAs(file);
+  const context=await browser.newContext({offline:true,reducedMotion:'reduce'});t.after(()=>context.close());const offline=await context.newPage();offline.on('pageerror',e=>errors.push(e.message));
+  await openExport(offline,file);await offline.clock.install();const nav=offline.locator('.lesson-navigation');
+  await nav.getByRole('button',{name:'다음',exact:true}).click();const out=offline.locator('[data-cinema-steps]');await out.waitFor();
+  await offline.clock.runFor(1300);assert.equal(await out.locator('[data-cinema-track=phrase2]').evaluate(n=>n.style.visibility),'visible');
+  assert.equal(await out.locator('[data-cinema-track=phrase3]').evaluate(n=>n.style.visibility),'hidden');
+  await offline.clock.runFor(1000);await offline.keyboard.press('PageDown');await offline.clock.runFor(700);assert.equal(await out.getAttribute('data-step'),'2');
+  await offline.keyboard.press('PageUp');assert.equal(await out.getAttribute('data-step'),'1');
+  await out.locator('.cs-close').click();await offline.clock.resume();await offline.reload();
+  await offline.locator('[data-effect-trigger=beatintro]').click();await offline.locator('[data-cinema-steps]').waitFor();assert.equal(await offline.locator('[data-cinema-steps]').getAttribute('data-step'),'1');
+  assert.deepEqual(errors,[]);
+});
+
+test('cinema step opening waits for the teacher and stops queued scenes, disposal restores bindings',{
+  skip:!process.env.MINICAN_PLAYWRIGHT_PATH,timeout:60000,
+},async t=>{
+  const {page,base,origin,errors}=await openBrowser(t);await page.goto(origin+base+'/app/effects.html');await page.clock.install();
+  await page.evaluate(async base=>{
+    const {mountEffectPlayer,stepOpenQuestion}=await import(base+'/src/effect-player.js');
+    const host=document.createElement('div');host.style.cssText='position:fixed;inset:0;width:720px;height:360px;background:white;z-index:9999';document.body.append(host);
+    const nodes=[0,1].map(i=>{const n=document.createElement('button');n.textContent='수업 구절 '+i;n.style.cssText='position:absolute;left:50%;top:50%;width:50%;height:20%';host.append(n);return n;});
+    window.cueFixture={host,nodes,step:stepOpenQuestion,dispose:mountEffectPlayer(host,nodes.map((node,i)=>({node,content:{t:'text',text:'먼저 살펴요\n함께 해요\n나누어요'},effect:{id:i?'spotlighttitle':'beatintro',when:'open',...(i?{}:{reveal:'step'})}})),{delay:30})};
+  },base);
+  await page.clock.runFor(15000);const panel=page.locator('[data-cinema-steps]');assert.equal(await panel.getAttribute('data-step'),'0');assert.equal(await page.locator('[data-effect-playing]').count(),1);
+  await panel.locator('.cs-next').click();await page.clock.runFor(200);assert.equal(await panel.getAttribute('data-busy'),'true');
+  await page.evaluate(()=>window.cueFixture.dispose(true));assert.equal(await panel.getAttribute('inert'),'');
+  assert.equal(await page.evaluate(()=>window.cueFixture.step(window.cueFixture.host,1)),false);
+  await page.clock.runFor(3000);assert.equal(await panel.getAttribute('data-paused'),'true');
+  await page.evaluate(()=>window.cueFixture.dispose());assert.equal(await panel.count(),0);
+  assert.deepEqual(await page.evaluate(()=>window.cueFixture.nodes.map(n=>[n.getAttribute('role'),n.getAttribute('data-cinema-step-trigger'),n.getAttribute('data-cinema-visited'),n.inert])),[[null,null,null,false],[null,null,null,false]]);
+  assert.deepEqual(errors,[]);
+});

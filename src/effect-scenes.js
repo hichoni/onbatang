@@ -35,6 +35,7 @@ const boundedText=s=>typeof s==='string'?Array.from(s.trim()).slice(0,72).join('
 export function cinemaSettings(id, raw) {
   if(!Object.hasOwn(cinemaTuning,id))return {};
   const dial=cinemaTuning[id], result={};
+  if(raw.reveal==='step')result.reveal='step';
   const tracks=cleanCinemaTracks(id,raw.sceneTracks);
   if(tracks.length)result.sceneTracks=tracks;
   const text=boundedText(raw.sceneText);

@@ -32,10 +32,10 @@ export function sceneLayerPart(part,root,options){
   function layer(key,spec,draw,timingOnly=false){
     const edit=options.sceneTracks?.find(t=>t.key===key)||{};
     const start=edit.start??spec.start,duration=edit.duration??spec.duration;
-    const group=part('g',timingOnly?{}:{'data-cinema-track':key,'data-track-label':spec.label,
+    const group=part('g',{'data-cinema-cue':key,...(timingOnly?{}:{'data-cinema-track':key,'data-track-label':spec.label,
       'data-track-text':edit.text??spec.text??'','data-track-editable':spec.text===undefined?'false':'true',
       'data-track-cx':spec.cx,'data-track-cy':spec.cy,'data-track-start':start,'data-track-duration':duration,
-      transform:`translate(${spec.cx+(edit.dx||0)} ${spec.cy+(edit.dy||0)}) scale(${edit.scale??1}) translate(${-spec.cx} ${-spec.cy})`},null,0,0,root);
+      transform:`translate(${spec.cx+(edit.dx||0)} ${spec.cy+(edit.dy||0)}) scale(${edit.scale??1}) translate(${-spec.cx} ${-spec.cy})`})},null,0,0,root);
     const timed=edit.start!==undefined||edit.duration!==undefined;
     // Static glyphs/pins in a moved cue must not leak before its new start.
     const gate=timed?part('g',{},[{opacity:0},{opacity:1}],start,1,group):group;

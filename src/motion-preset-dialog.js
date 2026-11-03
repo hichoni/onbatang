@@ -72,7 +72,7 @@ export function openMotionLibrary({effectId,content,onApply}={}){
   function renderPreview(){
     halt();confirmDelete.hidden=true;
     const preset=current();detail.hidden=!preset;empty.hidden=!!preset;frames=null;if(!preset)return;
-    title.textContent=preset.name;type.textContent=assetFor(preset.effectId).name;name.value=preset.name;
+    title.textContent=preset.name;type.textContent=assetFor(preset.effectId).name+(preset.options.reveal==='step'?' · 하나씩 공개':'');name.value=preset.name;
     const options=applied(),source=content||{t:'text',text:preset.options.sceneText};
     const valid=!!sceneContent(preset.effectId,source,options.sceneText);
     apply.disabled=!valid;play.disabled=!valid;seek.disabled=!valid;

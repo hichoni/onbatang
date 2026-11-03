@@ -1099,7 +1099,7 @@ td .fe-chart-cell[inputmode] { text-align: right; font-variant-numeric: tabular-
 .ce-inspector{display:grid;align-content:start;gap:10px;padding:0 4px 4px 20px;border-left:1px solid #d6e1db;min-width:0;overflow:auto}
 .ce-inspector h3{font-size:15px;margin:0;color:#234b3d}
 .ce-inspector label{display:grid;gap:5px;font-size:12px;font-weight:650;letter-spacing:0;color:#415b50;min-width:0}
-.ce-inspector :is(input,textarea){width:100%;min-width:0;min-height:40px;border:1px solid #bdcec4;border-radius:8px;background:#fff;color:#203e32;padding:7px 9px;font:inherit;letter-spacing:0}
+.ce-inspector :is(input,textarea,select){width:100%;min-width:0;min-height:40px;border:1px solid #bdcec4;border-radius:8px;background:#fff;color:#203e32;padding:7px 9px;font:inherit;letter-spacing:0}
 .ce-inspector textarea{resize:vertical;max-height:150px}
 .ce-values{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .ce-inspector .ce-help{margin:0;font-size:12px;font-weight:400;color:#65766e;line-height:1.5}

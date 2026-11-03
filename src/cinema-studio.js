@@ -36,6 +36,8 @@ export function openCinemaStudio(asset,initial,content,apply,{commit=false}={}){
   const words=el('textarea',{rows:3,maxlength:144,'aria-label':'선택한 문구'});
   const wordLabel=el('label',{},'문구 · 화면을 두 번 눌러도 고쳐요',words);
   const selectedName=el('h3');
+  const reveal=el('select',{'aria-label':'발표 방식'},el('option',{value:'continuous'},'한 번에 연속 재생'),el('option',{value:'step'},'클릭·리모컨으로 하나씩 공개'));
+  reveal.onchange=()=>change(()=>{if(reveal.value==='step')draft.reveal='step';else delete draft.reveal;});
   const undo=button('실행 취소',()=>restore(history,future)),redo=button('다시 실행',()=>restore(future,history));
   const play=button('▶ 재생',()=>{
     if(stop){halt();return;}
@@ -65,7 +67,7 @@ export function openCinemaStudio(asset,initial,content,apply,{commit=false}={}){
     if(save.disabled)return;halt();finishInline();
     openMotionLibrary({effectId:asset.id,content,onApply:(_id,result)=>change(()=>{draft=result;})});
   });
-  const controls=el('aside',{class:'ce-inspector'},selectedName,wordLabel,
+  const controls=el('aside',{class:'ce-inspector'},el('label',{},'발표 방식',reveal),selectedName,wordLabel,
     el('div',{class:'ce-values'},field('dx','가로 위치 (%)',-50,150,.1),field('dy','세로 위치 (%)',-50,150,.1)),
     field('scale','크기 (%)',40,250),
     el('div',{class:'ce-values'},field('start','등장 (초)',0,30*factor,.1),field('duration','움직임 (초)',.2*factor,10*factor,.1)),
@@ -114,6 +116,7 @@ export function openCinemaStudio(asset,initial,content,apply,{commit=false}={}){
   function finishInline(){inline.hidden=true;}
   inline.onkeydown=e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();finishInline();}else if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();finishInline();}};
   function fillFields(){
+    reveal.value=draft.reveal==='step'?'step':'continuous';
     const track=current();if(!track)return;
     const edit=(draft.sceneTracks||[]).find(t=>t.key===selected)||{};
     selectedName.textContent=track.label;wordLabel.hidden=!track.editable;

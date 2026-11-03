@@ -8,7 +8,7 @@ import { mountQuiz } from './quiz.js';
 import { el } from '../src/dom.js';
 import { createShowTools } from './show-tools.js';
 import { cleanEffectTargets, mountOfflineEffects,stepOpenQuestion } from '../src/effect-player.js';
-import { questionEffect } from '../src/effect-assets.js';
+import { questionEffect,steppedEffect } from '../src/effect-assets.js';
 import {cleanLessonTarget,cleanLessonBinding,returnedResultsFromLesson} from './lesson-results.js';
 import {cleanHtmlFlow,playHtmlFlow} from './html-lesson-flow.js';
 
@@ -129,7 +129,7 @@ export function mountHtmlLesson(raw, host = document.getElementById('onbatang-le
     host.classList.add('lesson-show');
     const tools = createShowTools(host, {
       total: () => pages.length, index: () => current, next: () => navigate(1), prev: () => navigate(-1), go: goTo, close: endShow,
-      waitForTeacher: k=>!!pages[k]?.activity?.photoStudy || pages[k]?.effects?.some(row=>questionEffect(row.effect)),
+      waitForTeacher: k=>!!pages[k]?.activity?.photoStudy || pages[k]?.effects?.some(row=>questionEffect(row.effect)||steppedEffect(row.effect)),
       thumb: slideImage, preview: slideImage, ratio: k => pages[k].aspect,
       pageId:k=>pages[k].id,
       sourcePage:k=>pages[k].sourcePage,
@@ -232,7 +232,7 @@ export function mountHtmlLesson(raw, host = document.getElementById('onbatang-le
     if(autoPhoto && page.activity?.photoStudy)scene.querySelector('.lesson-start')?.click();
   }
   const keys = event => {
-    if(event.target?.closest?.('.ob-compare'))return;
+    if(event.target?.closest?.('.ob-compare, .ob-cinema-steps'))return;
     if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
     // 앱·그림판 안에서 치는 글쇠는 앱의 것이다. 프레젠터의 넘기기(PageDown · PageUp)와 발표 모드의 Esc 만 수업이 듣는다.
     const clicker = ['PageDown', 'PageUp'].includes(event.key) || (show && event.key === 'Escape');

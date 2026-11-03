@@ -127,12 +127,13 @@ export const EFFECT_ASSETS = Object.freeze([
 ]);
 const registry = new Map(EFFECT_ASSETS.map(asset => [asset.id, asset]));
 export const questionEffect = effect => !!registry.get(effect?.id)?.last;
+export const steppedEffect = effect => !!registry.get(effect?.id)?.cinematic && effect?.reveal==='step';
 export const effectable = item => ['text','shape','image','art','emoji','chart','math'].includes(item?.t);
 export function cleanEffect(raw, item) {
   const asset=registry.get(raw?.id);
   if (!asset || (item && asset.example && !sceneContent(asset.id,item,raw.sceneText))) return null;
   const note = typeof raw.note === 'string' ? Array.from(raw.note.trim()).slice(0, 120).join('') : '';
-  const observe = !asset.last && raw.observe === true;
+  const observe = !asset.last && !steppedEffect(raw) && raw.observe === true;
   const stops = observe ? cleanMotionCues(raw.stops) : [];
   return { id: raw.id, when: !observe && (!asset.last || asset.id==='cluecard') && raw.when === 'open' ? 'open' : 'press', ...(note ? { note } : {}),
     ...(asset.id==='beatintro' ? {bpm:introBpm(raw.bpm)} : {}),

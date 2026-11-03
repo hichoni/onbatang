@@ -45,7 +45,9 @@ export function effectPicker(item, apply, aspect=1) {
   const observe=el('input',{type:'checkbox',checked:saved?.observe});
   const studyOption=el('label',{class:'fe-observe-option'},observe,'발표에서 멈춰 보며 설명하기');
   function updateWhen(){
-    when.disabled=(!!active.last && active.id!=='cluecard') || (!active.last && observe.checked);
+    const stepped=custom?.read()?.reveal==='step';
+    observe.disabled=stepped;studyOption.hidden=!!active.last||stepped;
+    when.disabled=(!!active.last && active.id!=='cluecard') || (!active.last && !stepped && observe.checked);
     if(when.disabled)when.value='press';
   }
   observe.onchange=()=>{updateWhen();preview(false);};
@@ -54,9 +56,10 @@ export function effectPicker(item, apply, aspect=1) {
     preview(true,!active.last && reducedMotion(sample));
   }});
   function preview(animate, playOnce=false) {
+    updateWhen();
     const opts=options();
     stopStudy?.();stopStudy=null;
-    const observing=!active.last && observe.checked;
+    const observing=!active.last && opts.reveal!=='step' && observe.checked;
     save.disabled=!!custom && !custom.valid();
     if(save.disabled){
       study.hidden=true;sample.hidden=false;replay.disabled=true;sample.textContent='표시할 문구를 확인해 주세요.';return;

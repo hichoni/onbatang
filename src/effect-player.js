@@ -1,13 +1,20 @@
-import { cleanEffect, playEffectArt, EFFECT_ASSETS, paceFactor } from './effect-assets.js';
+import { cleanEffect, playEffectArt, EFFECT_ASSETS, paceFactor,steppedEffect } from './effect-assets.js';
 import { sceneContent } from './effect-scenes.js';
 import {cinemaEnd} from './cinema-layout.js';
 import { mountMotionStudy } from './motion-study.js';
+import {mountCinemaSteps} from './cinema-step-player.js';
 
 const labelOf = id => EFFECT_ASSETS.find(asset => asset.id === id)?.name || '';
 
 // Presenter buttons, keyboard and remote use the same controls as a tap.
 // At either end, return to the slide before the next navigation command.
 export function stepOpenQuestion(stage,direction) {
+  const cinema=stage?.querySelector('[data-cinema-steps]:not([inert])');
+  if(cinema){
+    const button=cinema.querySelector(direction>0?'.cs-next':'.cs-back');
+    if(button.disabled)cinema.querySelector('.cs-close').click();else button.click();
+    return true;
+  }
   const study=stage?.querySelector('[data-effect-observation]');
   if(study){
     const button=study.querySelector(direction>0?'.obs-next':'.obs-back');
@@ -16,7 +23,11 @@ export function stepOpenQuestion(stage,direction) {
     return true;
   }
   const panel=stage?.querySelector('[data-question-panel]:not([inert])');
-  if(!panel)return false;
+  if(!panel){
+    const waiting=direction>0&&stage?.querySelector('[data-cinema-step-trigger]:not([data-cinema-visited]):not([inert])');
+    if(waiting){waiting.click();return true;}
+    return false;
+  }
   const button=panel.querySelector(direction>0?'[data-question-next]':'[data-question-back]');
   if(button.disabled || (direction>0 && panel.dataset.last==='true'))panel.querySelector('[data-question-close]').click();
   else button.click();
@@ -132,6 +143,33 @@ export function mountEffectPlayer(host, bindings, { delay = 0,onQuestionChange }
     const scene = asset.example;
     const data = scene && sceneContent(effect.id,content,effect.sceneText);
     if (scene && !data) continue;
+    if(steppedEffect(effect)){
+      const attrs=['role','tabindex','aria-label','aria-expanded','data-effect-trigger','data-cinema-step-trigger','data-cinema-visited'];
+      const original=attrs.map(name=>node.getAttribute(name)),oldStyle={pointerEvents:node.style.pointerEvents,cursor:node.style.cursor},wasInert=node.inert;
+      let panel,dispose,opening;
+      function clear(){
+        if(!dispose)return;dispose();dispose=null;panel=null;node.setAttribute('aria-expanded','false');
+        if(closeScene===clear)closeScene=null;onQuestionChange?.(false);
+      }
+      function open(start=true){
+        for(const pending of queuedScenes)clearTimeout(pending);queuedScenes.clear();
+        closeScene?.();closeNote?.();clear();closeScene=clear;
+        node.dataset.cinemaVisited='';node.setAttribute('aria-expanded','true');
+        dispose=mountCinemaSteps(host,asset,{...effect,content:data},()=>{clear();node.focus({preventScroll:true});},{start});
+        panel=host.querySelector('[data-cinema-steps]');panel.dataset.effectPlaying=effect.id;onQuestionChange?.(true);
+      }
+      node.dataset.effectTrigger=effect.id;node.dataset.cinemaStepTrigger='';node.removeAttribute('data-cinema-visited');
+      node.setAttribute('role','button');node.setAttribute('tabindex','0');node.setAttribute('aria-expanded','false');
+      node.setAttribute('aria-label',asset.name+' 하나씩 공개 시작');node.style.pointerEvents='auto';node.style.cursor='pointer';
+      const click=event=>{event.stopPropagation();open();};
+      const key=event=>{if(['Enter',' '].includes(event.key)){event.preventDefault();event.stopPropagation();if(!event.repeat)open();}};
+      node.addEventListener('click',click);node.addEventListener('keydown',key);
+      if(effect.when==='open'&&!hasOpeningQuestion){hasOpeningQuestion=true;opening=setTimeout(()=>open(false),delay);queuedScenes.add(opening);}
+      const restore=()=>{clear();node.removeEventListener('click',click);node.removeEventListener('keydown',key);Object.assign(node.style,oldStyle);node.inert=wasInert;
+        attrs.forEach((name,i)=>original[i]===null?node.removeAttribute(name):node.setAttribute(name,original[i]));};
+      cleanups.push(freeze=>{clearTimeout(opening);queuedScenes.delete(opening);if(!freeze){restore();return;}dispose?.pause();node.inert=true;if(panel)panel.inert=true;return restore;});
+      continue;
+    }
     if(asset.last){
       const question=mountQuestion(host,binding,effect,asset,data,close=>{
         for(const timer of queuedScenes)clearTimeout(timer);

@@ -23,6 +23,7 @@ export function cinemaControls(asset, initial, source, onEdit, commit) {
   const select=(name,items)=>el('select',{'aria-label':name},...items.map(([value,text])=>el('option',{value},text)));
   const colors=select('장면 색감',[['original','기본 색감'],['lagoon','민트 · 바다'],['sunset','노을 · 산호'],['iris','보라 · 오로라']]);
   const speed=select('장면 재생 속도',[['normal','보통'],['fast','빠르게'],['slow','여유롭게']]);
+  const reveal=select('발표 방식',[['continuous','한 번에 연속 재생'],['step','클릭·리모컨으로 하나씩 공개']]);
   const tuning=asset.id==='spotlighttitle'
     ? el('select',{'aria-label':dial.label},el('option',{value:'right'},'왼쪽 → 오른쪽'),el('option',{value:'left'},'오른쪽 → 왼쪽'))
     : el('input',{type:'number',min:dial.min/scale,max:dial.max/scale,step:dial.step||1,'aria-label':dial.label});
@@ -36,6 +37,7 @@ export function cinemaControls(asset, initial, source, onEdit, commit) {
   function refresh(){
     const base=source();
     words.value=draft.sceneText??base.text;
+    reveal.value=draft.reveal==='step'?'step':'continuous';
     colors.value=draft.palette??(base.palette||'original');speed.value=draft.pace??(base.pace||'normal');
     color.value=draft.accent??(EFFECT_PALETTES[colors.value]||asset.ink)[0];
     hex.value=color.value;
@@ -58,6 +60,7 @@ export function cinemaControls(asset, initial, source, onEdit, commit) {
   color.oninput=()=>{draft.accent=color.value;hex.value=color.value;changed();};
   colors.onchange=()=>{draft.palette=colors.value;delete draft.accent;refresh();changed();};
   speed.onchange=()=>{draft.pace=speed.value;changed(true);};
+  reveal.onchange=()=>{if(reveal.value==='step')draft.reveal='step';else delete draft.reveal;changed(false);};
   hex.oninput=()=>{
     const value=hex.value.trim().replace(/^#?/,'#');
     if(/^#[a-f\d]{6}$/i.test(value)){draft.accent=value.toLowerCase();color.value=value;changed();}
@@ -103,6 +106,7 @@ export function cinemaControls(asset, initial, source, onEdit, commit) {
   });
   const node=el('fieldset',{class:'fe-cinema-fields'},el('legend',{},asset.name+' 꾸미기'),
     studio,el('div',{class:'fe-cinema-buttons'},savePreset,library),
+    field('발표 방식',reveal),el('small',{},'하나씩 공개는 구절의 등장 시각 순서·움직이는 시간·사이의 빈 시간을 따릅니다. 발표의 다음/이전과 리모컨으로 진행해요.'),
     el('small',{},'구절을 직접 옮기고 크기·등장 순서·시간을 한 화면에서 조절해요. 아래 전체 문구를 바꾸면 구절별 글도 새 문구를 따라가요.'),
     field(label,words),el('small',{},'첫 72자를 사용해요. 문구를 비우면 원래 글을 따라가요.'),
     el('div',{class:'fe-cinema-values'},field('장면 색감',colors),asset.id!=='beatintro'&&field('재생 속도',speed)),

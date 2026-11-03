@@ -56,13 +56,17 @@ export function effectFrames(id,options) {
       attributeTrack(node,frames,'strokeDashoffset','stroke-dashoffset',0),
     ].filter(Boolean);
     length=Math.max(length,delay+duration);
-    tracks.push(ms=>{
+    const cue=node.closest('[data-cinema-cue]')?.dataset.cinemaCue;
+    const paint=ms=>{
       const p=ease((ms-delay)/duration);
       for(const paint of attributes)paint(p);
-    });
+    };
+    tracks.push({cue,paint});
   });
   return {svg,duration:length,paint(progress){
-    for(const track of tracks)track(progress*length);
+    for(const track of tracks)track.paint(progress*length);
+  },paintCues(times,backgroundMs){
+    for(const track of tracks)track.paint(times[track.cue]??backgroundMs);
   }};
 }
 

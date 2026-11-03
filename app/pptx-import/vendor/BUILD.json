@@ -25,18 +25,18 @@
     "app/pptx-import/preview-punctuation.js": "8ff4f855942dde60b6302e775e5a06b58b411e34b015c129088157533934c90e",
     "app/pptx-import/worker.js": "e4ea8c3a9237c1e1b2fc8dc93f57389cbb2f7966134252b8078ab44ef01dc14c",
     "app/zip.js": "c7c09e5385bab4e403509ab734acb182d15ff017c469e731b05a5d1f3eead18e",
-    "package-lock.json": "bb99ddb17d9f7a0e5ba4196964a8664835bc7fe50829c09c44c9a124404a8d75",
+    "package-lock.json": "256a26b45fa24c3c3c7d67762ca63566dc61f5e47e9621614c553a0421093efe",
     "src/activity.js": "7e6ff97046d62a8b63f6dd4a85ba2cc0760fc74605e9ae308eaa73d4b25ae29f",
     "src/chart.js": "ec041e78d1221d41f66e304ecdff4173ec0f23d4394632a409dc2dc7d83eb407",
-    "src/cinema-layout.js": "349536f9f453e1298ed490c026a9b9101928b5420b61bd80b785ff04de02d695",
+    "src/cinema-layout.js": "a85aa5908515cfa79a67c7df54d40b13d2ced73a9ce297c0ec031e689b8d04de",
     "src/cinematic-landscapes.js": "fb745121f44e1dc1bc8eeb28740e533d065f97461bde0869b4ed7fd3a20e8f80",
     "src/classroom-accents.js": "41b27fa7ca336ef4c700c00c606b0bc9983d352299ce62362305c1212ffb9aa8",
     "src/clue-card.js": "b298780516482ead7cc49da2293dba41882cb9ee62be7fd8a174fb4a5e95d824",
     "src/crop.js": "ec9159574565f560476ede8f5292609ab74eae42d130fe0bf59a1ad8844ac1fb",
     "src/document.js": "4b7bf138e5055212d6764282660034d9b840cfd89d0506a123686c02bf147a70",
     "src/dom.js": "381c1e39c6b79f846820e6dd8a9e214e0afda803c65fbb6c5272cd36326ac5b6",
-    "src/effect-assets.js": "7b8b721955c6c04ed0e484d007dd5c6bee8c4918ea7de9db85fdff34b539af2d",
-    "src/effect-scenes.js": "5e794b0ca4e5b1eed5440c93de1c7504dc302a2930c1690ef9134c0aac5394b2",
+    "src/effect-assets.js": "b28e8d38a5f9099e2c96a91b82bfe9932827afbcef1449447819521f1c6e9d28",
+    "src/effect-scenes.js": "76f21f554798156965a8e795a2c4251c9ed0b4b811ad96a5ae3c08b2c548080a",
     "src/gai-app.js": "b475f79811d851731cc5b65ab312b0b4b64274e7661b6a5b79e71b6e5d072073",
     "src/links.js": "b1900f5a82be0132590e8abb5d0eebe974e5873a524b5264f8f413272d94a70b",
     "src/live.js": "8751bcb9e360138d5b257811b0f7afa09916eb58d664be8b48498eb3cc1d7cd9",
@@ -107,8 +107,8 @@
       "sha256": "a681e9d183c72b4af4856935893805eb48c08f0f5a3f260203db7444c20fb98a"
     },
     "pptx-worker.js": {
-      "bytes": 274047,
-      "sha256": "6957828e2a063a20dc39e4abc2404086c89bdafb0be56e6e02d54440d4b7a5e9"
+      "bytes": 274149,
+      "sha256": "397f999a2900208e96213231b2e861a7b3bb4ee6769f0d8d19d0be0735e855f5"
     },
     "preview-frame.html": {
       "bytes": 1243897,
