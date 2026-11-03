@@ -216,6 +216,10 @@ test('direct scene editing and cue timing survive cancel, slide reopen and offli
     await track(keys[i]).dblclick();
     const title=id==='rollingnumber'?'-42.5%':'직접 고친 수업 '+(i+1);
     await studio.getByLabel('화면에서 문구 수정').fill(title);
+    assert.ok(await studio.getByRole('button',{name:'실행 취소',exact:true}).isEnabled());
+    await studio.getByRole('button',{name:'실행 취소',exact:true}).click();
+    await studio.getByRole('button',{name:'다시 실행',exact:true}).click();
+    assert.equal(await studio.getByLabel('선택한 문구').inputValue(),title);
     await studio.getByRole('button',{name:'배치 편집',exact:true}).click();
     const set=async(label,value)=>{const input=studio.getByLabel(label,{exact:true});await input.fill(String(value));await input.press('Tab');};
     await set('가로 위치 (%)',51);await set('세로 위치 (%)',45);await set('크기 (%)',115);

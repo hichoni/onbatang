@@ -154,7 +154,8 @@ export function openCinemaStudio(asset,initial,content,apply,{commit=false}={}){
     for(const [key,hit] of overlays)if(!tracks.some(t=>t.key===key)){hit.remove();overlays.delete(key);}
     if(!current())selected=tracks.find(t=>t.editable)?.key||tracks[0]?.key;
     frames=effectFrames(asset.id,options());scrub.value=1000;showTime(1);
-    renderTimeline();if(fill)fillFields();updateSelection();
+    renderTimeline();if(fill)fillFields();
+    undo.disabled=!history.length;redo.disabled=!future.length;updateSelection();
   }
   function reorder(key,direction){
     const ordered=[...tracks].sort((a,b)=>a.start-b.start),index=ordered.findIndex(t=>t.key===key),target=index+direction;
