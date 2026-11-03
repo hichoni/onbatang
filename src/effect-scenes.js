@@ -165,9 +165,8 @@ export function spotlightTitle({part,ink,content}) {
   const ns='http://www.w3.org/2000/svg', clip=document.createElementNS(ns,'clipPath');
   clip.id='ob-title-light-'+ ++spotlightSerial;
   part('defs',{}).append(clip);
-  const shutter=part('rect',{x:0,y:0,width:720,height:360},
-    [{transform:'translateX(-720px)'},{transform:'translateX(0px)'}],150,1450);
-  clip.append(shutter.parentNode);
+  part('rect',{x:0,y:0,width:720,height:360},
+    [{transform:'translateX(-720px)'},{transform:'translateX(0px)'}],150,1450,clip);
   lines.lines.forEach((row,i)=>{
     const y=184+(i-(lines.lines.length-1)/2)*lines.size*1.18;
     for(const word of row){

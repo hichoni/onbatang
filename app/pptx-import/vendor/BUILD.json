@@ -25,7 +25,7 @@
     "app/pptx-import/preview-punctuation.js": "8ff4f855942dde60b6302e775e5a06b58b411e34b015c129088157533934c90e",
     "app/pptx-import/worker.js": "e4ea8c3a9237c1e1b2fc8dc93f57389cbb2f7966134252b8078ab44ef01dc14c",
     "app/zip.js": "c7c09e5385bab4e403509ab734acb182d15ff017c469e731b05a5d1f3eead18e",
-    "package-lock.json": "3f442092003db3c186face17bf1cdf93c09f7ceb49b7fdc8eddb0e46b011b5e5",
+    "package-lock.json": "5a20324f6d5847e60754f3e39b561d3c079d23f509ec06ea0264cc0a0716a1fe",
     "src/activity.js": "7e6ff97046d62a8b63f6dd4a85ba2cc0760fc74605e9ae308eaa73d4b25ae29f",
     "src/chart.js": "ec041e78d1221d41f66e304ecdff4173ec0f23d4394632a409dc2dc7d83eb407",
     "src/classroom-accents.js": "41b27fa7ca336ef4c700c00c606b0bc9983d352299ce62362305c1212ffb9aa8",
@@ -33,8 +33,8 @@
     "src/crop.js": "ec9159574565f560476ede8f5292609ab74eae42d130fe0bf59a1ad8844ac1fb",
     "src/document.js": "4b7bf138e5055212d6764282660034d9b840cfd89d0506a123686c02bf147a70",
     "src/dom.js": "381c1e39c6b79f846820e6dd8a9e214e0afda803c65fbb6c5272cd36326ac5b6",
-    "src/effect-assets.js": "b48fe2d8c0550568ae87935c7ddb4e3b901e6a7059ac3b825943e1affdce18a2",
-    "src/effect-scenes.js": "6e37c0b98990874771bf8b78a186aabc42f552de93bbc46160e90ed64538a98c",
+    "src/effect-assets.js": "625337a666ec0a88b7067908bb57c1f44650c0e0a04a7ccdd1de37577ce9dd7f",
+    "src/effect-scenes.js": "2b431ecfdbedeb69c755adee7318490cefc5787c30b58cb8f01e913abe09f2f1",
     "src/gai-app.js": "b475f79811d851731cc5b65ab312b0b4b64274e7661b6a5b79e71b6e5d072073",
     "src/links.js": "b1900f5a82be0132590e8abb5d0eebe974e5873a524b5264f8f413272d94a70b",
     "src/live.js": "8751bcb9e360138d5b257811b0f7afa09916eb58d664be8b48498eb3cc1d7cd9",
@@ -105,8 +105,8 @@
       "sha256": "a681e9d183c72b4af4856935893805eb48c08f0f5a3f260203db7444c20fb98a"
     },
     "pptx-worker.js": {
-      "bytes": 263391,
-      "sha256": "08a4fa40715df65e9ba48f3bb2068b9fddf921c8c93b5f75b19eb67aec11a2c3"
+      "bytes": 263364,
+      "sha256": "23250449f86a409dcad73e1484a3acaaf4492ffffb7210c0a32d9661a37c5339"
     },
     "preview-frame.html": {
       "bytes": 1243897,

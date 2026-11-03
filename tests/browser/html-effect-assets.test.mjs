@@ -106,7 +106,7 @@ test('home starts either a blank design or a selected PPT, then text openings su
         const delays=await scene.evaluate(n=>n.getAnimations({subtree:true}).map(a=>a.effect.getTiming().delay));
         assert.ok(delays.includes(500)&&delays.includes(1000),'text is paced by the chosen BPM');
       }else if(id==='spotlighttitle'){
-        assert.match(await scene.textContent(),/별빛/);assert.equal(await scene.locator('clipPath rect').count(),1);
+        assert.match(await scene.textContent(),/별빛/);assert.equal(await scene.locator('clipPath > rect').count(),1);
       }else{
         assert.match(await scene.textContent(),/발아율 82\.5%/);
         assert.equal(await scene.locator('clipPath rect').count(),3);

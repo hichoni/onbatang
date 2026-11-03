@@ -144,13 +144,15 @@ function drawArt(id, animate, {pace,palette,content,step=0,photo,playOnce=false,
   art.style.cssText = 'width:100%;height:100%;display:block;overflow:visible;pointer-events:none';
   if (container) container.replaceChildren(art);
   const running = animate && (playOnce || !reducedMotion(container));
-  function part(tag, attrs, frames, delay = 0, duration = 1050) {
-    const group = svg('g', {});
+  function part(tag, attrs, frames, delay = 0, duration = 1050, parent = art) {
     const node=svg(tag,attrs);
-    group.append(node); art.append(group);
-    if (frames && collect) collect(group, frames, delay*paceFactor(pace), duration*paceFactor(pace));
-    if (running && frames && group.animate) {
-      const animation = group.animate(frames, {
+    // A clipPath needs a direct graphics child. Animate its shape in place.
+    const target=parent.localName==='clipPath'?node:svg('g',{});
+    if(target!==node)target.append(node);
+    parent.append(target);
+    if (frames && collect) collect(target, frames, delay*paceFactor(pace), duration*paceFactor(pace));
+    if (running && frames && target.animate) {
+      const animation = target.animate(frames, {
         duration:duration*paceFactor(pace), delay:delay*paceFactor(pace), fill:'both', easing:'cubic-bezier(.22,.68,.32,1)',
       });
       animations?.push(animation);
