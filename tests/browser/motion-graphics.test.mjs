@@ -61,26 +61,31 @@ test('사라지기 · 빠르기 · 늦추기: picked in the panel they are saved
   ]);
   await page.locator('.fe-tab[data-tab="motion"]').click();
   // The timeline: two pieces come in when the slide opens, one waits for a click.
+  await page.getByLabel('움직임 종류').selectOption('재생 차례');
   const rows = page.locator('.fe-timeline .fe-tl-pick');
   await rows.first().waitFor();
   assert.equal(await rows.count(), 3);
   assert.match(await page.locator('.fe-timeline').textContent(), /쾅 내려앉기[\s\S]*줄 아래서 솟기[\s\S]*누름 1/);
   // Picking a row selects that piece and shows its own motion choices.
   await page.locator('.fe-timeline [data-timeline="1"]').click();
-  await page.locator('.fe-head', {hasText: '고른 조각 · 텍스트: 설명 글'}).waitFor();
+  assert.match(await page.getByLabel('움직임 종류').textContent(), /고른 조각 · 텍스트: 설명 글/);
+  await page.getByLabel('움직임 종류').selectOption('누를 때 사라지기');
   await page.locator('.fe-motions[data-group="exit"] .fe-mo[data-motion="away"]').click();
   await saved(page, r => r.slides[0].items[1].ex === 'away');
+  await page.getByLabel('움직임 종류').selectOption('빠르기 · 늦추기');
   await page.locator('.fe-motion-speed [data-speed="slow"]').click();
   await saved(page, r => r.slides[0].items[1].sp === 'slow');
   await page.locator('.fe-motion-delay [data-delay="0.6"]').click();
   await saved(page, r => r.slides[0].items[1].dl === 0.6);
   assert.match(await page.locator('.fe-tabbody').textContent(), /0\.6초 늦게 나와요/);
   // The exit now shows up as its own click step, after the circle (reading order).
+  await page.getByLabel('움직임 종류').selectOption('재생 차례');
   assert.match(await page.locator('.fe-timeline').textContent(), /누름 2[\s\S]*사라지기 · 휙 날아가기/);
   // Previewing an exit on the card brings the piece back afterwards (editing goes on).
   await page.waitForTimeout(1800);
   assert.equal(await page.evaluate(() => document.querySelectorAll('.cv-canvas .fe-card .fi-text')[1].style.visibility), '');
   // "보통" and "늦추지 않기" clear the values.
+  await page.getByLabel('움직임 종류').selectOption('빠르기 · 늦추기');
   await page.locator('.fe-motion-speed [data-speed="normal"]').click();
   await page.locator('.fe-motion-delay [data-delay="0"]').click();
   await saved(page, r => !('sp' in r.slides[0].items[1]) && !('dl' in r.slides[0].items[1]) && r.slides[0].items[1].ex === 'away');
@@ -155,20 +160,26 @@ test('임팩트: new combo, effects and transitions are picked in the panel, sav
     {id: 'pmogr00011', bg: '#f2c14e', items: [text('enext00011', '둘째 장', {size: 9})]},
   ]);
   await page.locator('.fe-tab[data-tab="motion"]').click();
+  await page.getByLabel('움직임 종류').selectOption('조합 효과');
   await page.locator('.fe-motions[data-group="combo"] .fe-mo[data-motion="impact"]').click();
   await saved(page, r => r.slides[0].pa === 'impact');
+  await page.getByLabel('움직임 종류').selectOption('재생 차례');
   assert.match(await page.locator('.fe-timeline').textContent(), /확 박히기[\s\S]*끼익 멈추기/);
   // 둘째 장에 회오리 전환, 첫 장의 동그라미에 강조 · 사라지기.
   await page.locator('.cv-slide').nth(1).click();
+  await page.getByLabel('움직임 종류').selectOption('장 전환');
   await page.locator('.fe-motions[data-group="tr"] .fe-mo[data-motion="spin"]').click();
   await saved(page, r => r.slides[1].tr === 'spin');
   // 장 넘김과 조합은 함께 쓴다: 둘 다 고르면 무엇이 어떤 차례로 움직이는지 보여 주고 함께 미리 본다.
+  await page.getByLabel('움직임 종류').selectOption('조합 효과');
   await page.locator('.fe-motions[data-group="combo"] .fe-mo[data-motion="storm"]').click();
   await saved(page, r => r.slides[1].tr === 'spin' && r.slides[1].pa === 'storm');
   assert.match(await page.locator('[data-motion-both]').innerText(), /회오리 로 넘어온 뒤 → 휘몰아치기/);
   await page.locator('.cv-slide').nth(0).click();
   await page.locator('.cv-canvas .fe-card .fi-shape').click();
+  await page.getByLabel('움직임 종류').selectOption('누를 때 강조하기');
   await page.locator('.fe-motions[data-group="emph"] .fe-mo[data-motion="boom"]').click();
+  await page.getByLabel('움직임 종류').selectOption('누를 때 사라지기');
   await page.locator('.fe-motions[data-group="exit"] .fe-mo[data-motion="blast"]').click();
   await saved(page, r => r.slides[0].items[2].em === 'boom' && r.slides[0].items[2].ex === 'blast');
   // 저장된 그림에 모두 남아 있다(새 값을 정리하며 버리지 않는다).

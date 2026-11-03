@@ -213,6 +213,7 @@ test('element effects survive editor saves and run in the presenter and the down
   await page.getByRole('button',{name:'모션 에셋 수업 열기',exact:true}).click();
   await page.locator('.cv-canvas .fe-stage .fi-text').first().click();
   await page.locator('.fe-tab[data-tab=motion]').click();
+  await page.getByLabel('움직임 종류').selectOption('그래픽 효과');
   await page.locator('.fe-fx-picker summary').click();
   assert.ok(await page.locator('[data-effect-asset=bars]').isDisabled());
   for (const id of ['prism','orbit','confetti','underline','constellation','signal']) {
@@ -235,6 +236,7 @@ test('element effects survive editor saves and run in the presenter and the down
     await item.click();
     const tab=page.locator('.fe-tab[data-tab=motion]');
     if (await tab.getAttribute('aria-selected')!=='true' || await page.locator('.cv-app.folded').count()) await tab.click();
+    await page.getByLabel('움직임 종류').selectOption('그래픽 효과');
     const picker=page.locator('.fe-fx-picker');
     if (await picker.getAttribute('open')===null) await picker.locator('summary').click();
     await picker.locator('[data-effect-asset='+asset+']').click();
@@ -467,7 +469,7 @@ test('a teacher edits a question on a text box, controls each clue, and reopens 
   const text=stage.locator('.fi-text').filter({hasText:'작은 달'});
   await text.click();
   const textTab=page.locator('.fe-tab[data-tab=text]');
-  if(await textTab.getAttribute('aria-selected')!=='true')await textTab.click();
+  if(!await page.locator('[data-make-clue-card]').isVisible())await textTab.click();
   await page.locator('[data-make-clue-card]').click();
   await page.getByLabel('학생에게 보여 줄 질문').fill(prompt);
   await page.getByLabel('힌트 1 (선택)').fill(hints[0]);

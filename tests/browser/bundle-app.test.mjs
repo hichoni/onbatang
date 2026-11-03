@@ -38,6 +38,7 @@ async function visit(browser,origin){
  seen.home=(await page.locator('.cv-hero').innerText()).trim();
  await page.locator('.cv-hero .cv-new-btn').click();
  await page.getByRole('tab',{name:'꾸미기',exact:true}).click();
+ await page.getByLabel('꾸미기 종류').selectOption('차트');
  await page.locator('[data-add-chart="bar"]').click();
  const chart=page.locator('.fe-chart-dlg');await chart.waitFor();await chart.locator('[data-chart-apply]').click();await chart.waitFor({state:'detached'});
  await page.getByRole('tab',{name:'글',exact:true}).click();

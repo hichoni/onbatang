@@ -62,6 +62,7 @@ test('계속 움직이기: chosen in the panel it is saved; in the show it loops
   const circle = page.locator('.cv-canvas .fe-card .fi-shape').first();
   await circle.click();
   await page.locator('.fe-tab[data-tab="motion"]').click();
+  await page.getByLabel('움직임 종류').selectOption('머무는 동안 계속 움직이기');
   await page.locator('.fe-motions[data-group="idle"] .fe-mo[data-motion="float"]').click();
   await saved(page, r => r.slides[0].items[1].lp === 'float');
   assert.match(await page.locator('.fe-tabbody').textContent(), /숨 쉬듯/);
@@ -110,10 +111,12 @@ test('모션그래픽 한 번에: picking the combo makes small pieces loop in t
     {id: 'ploop00003', bg: '#ffffff', items: [text('etitle0003', '제목'), shape('ecircle003'), shape('ecircle004', {x: 70, shape: 'star'})]},
   ]);
   await page.locator('.fe-tab[data-tab="motion"]').click();
+  await page.getByLabel('움직임 종류').selectOption('조합 효과');
   await page.locator('.fe-motions[data-group="combo"] .fe-mo[data-motion="motion"]').click();
   await saved(page, r => r.slides[0].pa === 'motion');
   // The second shape: the panel says which loop the combo gave it, and "가만히" turns it off.
   await page.locator('.cv-canvas .fe-card .fi-shape').nth(1).click();
+  await page.getByLabel('움직임 종류').selectOption('머무는 동안 계속 움직이기');
   await page.locator('.fe-motions[data-group="idle"] .fe-mo.on[data-motion="follow"]').waitFor();
   assert.equal(await page.locator('.fe-motions[data-group="idle"] .fe-mo[data-motion="none"]').count(), 1);
   assert.match(await page.locator('.fe-tabbody').textContent(), /"모션그래픽" 효과대로 "숨쉬기" 움직여요/);

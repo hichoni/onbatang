@@ -3535,7 +3535,68 @@ export function createEditor({
   // top: 칸을 맨 위부터 보여 준다. 아니면 같은 칸을 다시 그릴 때 보던 자리(스크롤)를 그대로 둔다
   // (긴 목록의 아래쪽에서 무엇을 눌렀을 때 목록이 맨 위로 튀어 올라가지 않게).
   let shownTab = '';
+  const shelfChoice = { motion: '장 전환', element: SHAPE_GROUPS[0].name };
+  let galleryObserver;
+
+  function galleryStrip(gallery) {
+    gallery.classList.add('fe-shelf-gallery');
+    gallery.tabIndex = 0;
+    const move = (name, pic, direction) => el('button', {
+      type: 'button', class: 'fe-shelf-arrow', 'aria-label': name, title: name,
+      onClick: () => gallery.scrollBy({ left: direction * Math.max(80, gallery.clientWidth * 0.8) }),
+    }, icon(pic));
+    const before = move('이전 선택지', 'left', -1), after = move('다음 선택지', 'right', 1);
+    const update = () => {
+      before.disabled = gallery.scrollLeft < 1;
+      after.disabled = gallery.scrollLeft + gallery.clientWidth >= gallery.scrollWidth - 1;
+    };
+    // Motion galleries are cached and mounted again after an edit.
+    gallery.onscroll = update;
+    if (typeof ResizeObserver === 'function') {
+      galleryObserver = new ResizeObserver(update);
+      galleryObserver.observe(gallery);
+      for (const section of gallery.querySelectorAll('.fe-template-section')) galleryObserver.observe(section);
+    } else requestAnimationFrame(update);
+    return el('div', { class: 'fe-shelf-strip' }, before, gallery, after);
+  }
+
+  // Keep each gallery's original controls and handlers. Only its active group
+  // takes space in the workspace ribbon.
+  function shelfGroups(label, groups, actions = [], extraNotes = []) {
+    const available = groups.filter(group => group.nodes.some(Boolean));
+    const active = available.find(group => group.name === shelfChoice[tab]) || available[0];
+    const select = el('select', {
+      'aria-label': label, class: 'fe-shelf-select',
+      onChange: () => {
+        shelfChoice[tab] = select.value;
+        renderPanel({ top: true });
+        panel.querySelector('.fe-shelf-select')?.focus({ preventScroll: true });
+      },
+    }, ...available.map(group => el('option', { value: group.name, text: group.name })));
+    select.value = active.name;
+    const content = active.nodes.filter(Boolean);
+    const notes = [...content.filter(node => node.matches('p.fe-note')), ...extraNotes];
+    const gallery = content.find(node => node.matches('.fe-motions,.fe-shapes'));
+    const help = el('div', { class: 'fe-shelf-help', hidden: true }, ...notes);
+    const toggle = el('button', { class: 'fe-btn', type: 'button', 'aria-expanded': 'false',
+      onClick: () => { help.hidden = !help.hidden; toggle.setAttribute('aria-expanded', String(!help.hidden)); } }, '사용 안내');
+    return [
+      el('div', { class: 'fe-shelf-actions' }, select, ...actions, notes.length ? toggle : null),
+      ...content.filter(node => !notes.includes(node)).map(node => node === gallery ? galleryStrip(node) : node),
+      help,
+    ];
+  }
+
+  function groupsByHeading(nodes) {
+    const groups = [];
+    for (const node of nodes.filter(Boolean)) {
+      if (node.classList.contains('fe-head')) groups.push({ name: node.textContent, nodes: [] });
+      else groups.at(-1).nodes.push(node);
+    }
+    return groups;
+  }
   function renderPanel({ top = false } = {}) {
+    galleryObserver?.disconnect();
     if (!card) { panel.replaceChildren(); shownTab = ''; return; }
     const focused = panel.contains(document.activeElement) ? document.activeElement : null;
     const focusedUploadTab = focused?.dataset.uploadTab;
@@ -3584,15 +3645,18 @@ export function createEditor({
     // 칸의 머리말(이름 + 한 줄 설명)은 짧게, 그 아래에 바로 고를 것이 나온다.
     if (!tabsHere().some((t) => t[0] === tab)) tab = 'text';
     const [, , title, desc] = tabsHere().find((t) => t[0] === tab);
-    const body = el('div', { class: 'fe-tabbody', role: 'tabpanel', 'aria-label': title },
+    const shelfScroll = !top && shownTab === tab ? was?.querySelector('.fe-shelf-gallery')?.scrollLeft : 0;
+    const body = el('div', { class: 'fe-tabbody', dataset: { panel: tab }, role: 'tabpanel', 'aria-label': title },
       el('div', { class: 'fe-panel-head' },
         onToolClose ? el('button', { class: 'fe-panel-close', type: 'button', 'aria-label': '도구 칸 닫기', onClick: onToolClose }, icon('close')) : null,
-        el('b', { class: 'fe-panel-title', text: title }), el('span', { class: 'fe-panel-desc', text: desc })),
+        el('b', { class: 'fe-panel-title', text: title }), inspector ? null : el('span', { class: 'fe-panel-desc', text: desc })),
       ...tabBody().filter(Boolean));
     panel.replaceChildren(tabs, body, fileInput, videoInput, replaceInput);
     tabs.scrollLeft = priorTabsLeft;
     shownTab = tab;
     if (keep) body.scrollTop = keep;
+    const gallery = body.querySelector('.fe-shelf-gallery');
+    if (gallery && shelfScroll) gallery.scrollLeft = shelfScroll;
     fileInput.multiple = libraryOn();        // 올린 파일 목록을 쓰면 여러 장을 한꺼번에 고를 수 있다
     if (tab === 'upload') {
       if (focusedUploadTab) panel.querySelector(`[data-upload-tab="${uploadTab}"]`)?.focus({ preventScroll: true });
@@ -3954,16 +4018,34 @@ export function createEditor({
         },
       }, ALL) : null;
       const hint = it?.lock ? '잠근 조각은 잠금을 풀면 움직임을 정할 수 있어요. ' : it ? '' : '조각을 하나 고르면 그 조각만 다르게 움직이게 할 수 있어요. ';
-      return [
+      const shortcuts = [
         typeof motionSets?.open === 'function' ? el('button', { class: 'fe-outline-start', type: 'button', dataset: { motionSets: '' }, onClick: () => motionSets.open() },
-          icon('motion'), el('span', {}, el('b', { text: '이야기가 이어지는 움직임 묶음' }), el('small', { text: '전체 지도 → 주제 확대 → 정리 · 숨 쉬는 요소' }))) : null,
+          icon('motion'), inspector ? '움직임 묶음' : el('span', {}, el('b', { text: '이야기가 이어지는 움직임 묶음' }), el('small', { text: '전체 지도 → 주제 확대 → 정리 · 숨 쉬는 요소' }))) : null,
         onPhotoStudy && !card.activity && items().length>0 && el('button',{class:'fe-outline-start',type:'button',dataset:{photoStudy:''},onClick:()=>onPhotoStudy(cur() || {})},
-          icon('motion'),'사진 속으로 들어가기 · RGB 수업'),
-        slideFlow?.open ? el('button',{class:'fe-outline-start',type:'button',dataset:{slideFlow:''},onClick:()=>slideFlow.open()},icon('motion'),'모핑 · 카메라 직접 편집') : null,
+          icon('motion'),inspector ? '사진 · RGB' : '사진 속으로 들어가기 · RGB 수업'),
+        slideFlow?.open ? el('button',{class:'fe-outline-start',type:'button',dataset:{slideFlow:''},onClick:()=>slideFlow.open()},icon('motion'),inspector ? '모핑 · 카메라' : '모핑 · 카메라 직접 편집') : null,
+      ];
+      const previewButton = el('button', { class: 'fe-btn primary', type: 'button', onClick: () => previewPage() }, icon('play'), '이 장 미리 보기');
+      if (inspector) {
+        const timeline = motionTimeline();
+        const groups = [
+          { name: '장 전환', nodes: turns.filter(node => !node.classList.contains('fe-head')) },
+          { name: '조합 효과', nodes: combos.filter(node => !node.classList.contains('fe-head')) },
+          ...groupsByHeading(mine),
+          { name: '그래픽 효과', nodes: it && !it.lock && effectable(it) ? graphics : [] },
+          { name: '재생 차례', nodes: timeline },
+        ];
+        const notes = [settings().motionNote, hint.trim(),
+          waits && `누르면 움직이는 조각 ${waits}개`, card.camera && `발표 카메라 ${card.camera.z}배`]
+          .filter(Boolean).map(text => el('p', { class: 'fe-note', text }));
+        return shelfGroups('움직임 종류', groups, [...shortcuts, previewButton, all], notes);
+      }
+      return [
+        ...shortcuts,
         card.camera ? el('p',{class:'fe-note',text:`발표 카메라 ${card.camera.z}배를 저장했어요. 이 편집판은 원래 배치이며 발표·내려받기에는 지정한 구도가 보여요.`}) : null,
         ...graphics, ...mine, ...motionTimeline(), ...combos, ...turns,
         el('div', { class: 'fe-row fe-motion-go' },
-          el('button', { class: 'fe-btn primary', type: 'button', onClick: () => previewPage() }, icon('play'), '이 장 미리 보기'), all),
+          previewButton, all),
         hint || waits ? el('p', { class: 'fe-note', text: `${hint}${waits ? `이 장에는 누를 때 나오거나 강조하는 요소가 ${waits}개 있어요.` : ''}`.trim() }) : null,
         el('p', { class: 'fe-note', text: settings().motionNote || '움직임은 "발표"를 누르면 보여요. 내려받은 그림에는 움직임이 없어요.' }),
       ];
@@ -4002,14 +4084,17 @@ export function createEditor({
           }
           group.node.hidden = found === 0; count += found;
         }
-        result.textContent = count ? `${count}개 틀 · 모든 글과 도형을 직접 고칠 수 있어요.` : '맞는 틀이 없어요. 다른 낱말이나 전체 분류로 찾아보세요.';
+        result.textContent = count ? (inspector ? `${count}개 틀` : `${count}개 틀 · 모든 글과 도형을 직접 고칠 수 있어요.`) : '맞는 틀이 없어요. 다른 낱말이나 전체 분류로 찾아보세요.';
       };
       const search = el('input', { class: 'fe-template-search', type: 'search', value: layoutQuery, placeholder: '연수, 식순, 체육대회…', 'aria-label': '틀 찾기', onInput: e => { layoutQuery = e.target.value; filter(); } });
       const category = el('select', { class: 'fe-template-category', 'aria-label': '틀 분류', onChange: e => { layoutGroup = e.target.value; filter(); } },
         el('option', { value: '' }, '전체 분류'), ...groups.filter(g => g.name).map(g => el('option', { value: g.name }, g.name)));
       if (!groups.some(g => g.name === layoutGroup)) layoutGroup = '';
       category.value = layoutGroup; filter();
-      return [...fromOutline, el('div', { class: 'fe-template-filters' }, search, category), result, ...sections.map(g => g.node)];
+      const filters = el('div', { class: 'fe-template-filters' }, search, category);
+      if (inspector) return [el('div', { class: 'fe-shelf-actions' }, ...fromOutline, filters, result),
+        galleryStrip(el('div', { class: 'fe-shelf-templates', role: 'group', 'aria-label': '틀 미리보기' }, ...sections.map(g => g.node)))];
+      return [...fromOutline, filters, result, ...sections.map(g => g.node)];
     }
     if (tab === 'text') {
       return [
@@ -4019,15 +4104,16 @@ export function createEditor({
         settings().motion && el('button',{class:'fe-math-add',type:'button',dataset:{makeClueCard:''},onClick:()=>{
           const item=cur();
           if(!clueAnswer(item)||item.lock){toast('정답으로 쓸 80자 이하의 잠금 해제된 글상자 하나를 먼저 골라 주세요.');return;}
+          shelfChoice.motion = '그래픽 효과';
           openTab('motion');
           const picker=panel.querySelector('.fe-fx-picker');
           if(!picker)return;
           picker.open=true;picker.querySelector('[data-effect-asset=cluecard]').click();
           picker.querySelector('.fe-clue-fields input').focus();
         }},icon('text'),el('span',{},el('b',{text:'단서 카드 만들기'}),el('small',{text:'고른 글을 정답으로 쓰고, 발표에서 질문과 힌트를 공개해요.'}))),
-        el('p', { class: 'fe-note', text: '터치 화면에서는 글을 고른 뒤 한 번 더 누르면 고칠 수 있어요. 글꼴·크기·색은 도구 막대에서 바꿔요.' }),
+        !inspector && el('p', { class: 'fe-note', text: '터치 화면에서는 글을 고른 뒤 한 번 더 누르면 고칠 수 있어요. 글꼴·크기·색은 도구 막대에서 바꿔요.' }),
         // 수식: 분수 · 루트 · 화학식(TeX). 창에서 적고 미리 본 뒤 넣는다.
-        el('div', { class: 'fe-head', text: '수식' }),
+        !inspector && el('div', { class: 'fe-head', text: '수식' }),
         el('button', { class: 'fe-math-add', type: 'button', dataset: { addMath: '' }, onClick: addMath },
           el('span', { class: 'fe-math-add-art', 'aria-hidden': 'true', text: '√x' }),
           el('span', {}, el('b', { text: '수식 넣기' }), el('small', { text: '분수 · 제곱 · 루트 · 화학식(H₂O)을 단추로 넣어요' }))),
@@ -4036,7 +4122,7 @@ export function createEditor({
     if (tab === 'element') {
       // 연결선: 두 조각을 화살표로 잇는 선(순서도 · 마인드맵 · 관계도). 누르면 이을 조각을 차례로 고른다.
       const linkArt = '<svg viewBox="0 0 120 52" aria-hidden="true" focusable="false"><rect x="3" y="4" width="34" height="24" rx="7" fill="#3d4bc0"/><circle cx="101" cy="34" r="15" fill="#ffc93c"/><path d="M38 16H62Q70 16 70 24V30Q70 34 78 34H80" fill="none" stroke="#1d2433" stroke-width="2.6" stroke-linecap="round"/><path d="M85 34l-7-4.5v9z" fill="#1d2433"/></svg>';
-      return [
+      const elements = [
         el('div', { class: 'fe-head', text: '잇기' }),
         el('button', { class: 'fe-link-start', type: 'button', dataset: { startLink: '' }, onClick: () => startLinking(sel) },
           el('span', { class: 'fe-link-start-art', html: linkArt }),
@@ -4050,6 +4136,7 @@ export function createEditor({
         artPicker((p) => add(p.emoji ? newEmoji(p.emoji) : newArt(p.art, artColorable(p.art) ? { color: backgroundOf(card.bg).ink } : {}))),
         ...shapePicker((shape) => add(newShape(shape, visibleColor(shape)))),
       ];
+      return inspector ? shelfGroups('꾸미기 종류', groupsByHeading(elements)) : elements;
     }
     if (tab === 'upload') return uploadPane();
     if (tab === 'bg') return [bgPicker(), el('p', { class: 'fe-note', text: bgNote })];
@@ -4829,6 +4916,7 @@ export function createEditor({
     forget: () => { past = []; future = []; if (card) renderBar(); },
     /** 편집기를 치운다(열린 메뉴와 지켜보던 것들을 정리한다). 화면 조각은 프로젝트가 떼어 낸다. */
     destroy: () => {
+      galleryObserver?.disconnect();
       setSelectionSurface(null);
       dismissCrop();
       document.removeEventListener('pointerdown',onCropOutside,true);

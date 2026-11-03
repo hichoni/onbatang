@@ -61,6 +61,7 @@ test('text look emphasis: a toggle per text box, a click step in the show, then 
   // 움직임 칸의 이 장의 차례에 "누름 1 · 강조 · 글자 효과(폴짝 뛰기)"가 든다.
   await page.keyboard.press('Escape'); await page.keyboard.press('Escape');
   await page.locator('.fe-tab[data-tab="motion"]').click();
+  await page.getByLabel('움직임 종류').selectOption('재생 차례');
   assert.match(await page.locator('.fe-timeline').innerText(), /누름 1[\s\S]*강조 · 글자 효과\(폴짝 뛰기\)/);
 
   // 발표: 첫 누름은 강조(장은 그대로, 글이 위로 뛴다), 다음 누름에 (사라지는 움직임 뒤) 둘째 장.

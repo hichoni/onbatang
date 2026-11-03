@@ -50,7 +50,7 @@ import { fixWebmBlob } from './webm.js';
 // 영상 장면을 카메라로 찍을 때 쓰는 카메라(찍기 · 멈추기 · 앞뒤 카메라 바꾸기).
 import { createCamera, canRecord } from './camera.js';
 import {
-  RATIOS, RATIO_KEY, NOTES_OPEN_KEY, MAX_DESIGNS, MAX_SLIDES, MAX_NAME, EXPORT_SIZES, DEFAULT_EXPORT, EXPORT_KEY, VIDEO_SIZES, DEFAULT_VIDEO, exportSize, ratioOf, newRecord, nextNumber,
+  RATIOS, DEFAULT_RATIO, NOTES_OPEN_KEY, MAX_DESIGNS, MAX_SLIDES, MAX_NAME, EXPORT_SIZES, DEFAULT_EXPORT, EXPORT_KEY, VIDEO_SIZES, DEFAULT_VIDEO, exportSize, ratioOf, newRecord, nextNumber,
   isBlank, fileName, whenText, sortRecords, homeEntries, arrangeEntries, createdOf, HOME_SORTS, HOME_KINDS, addSlide, copySlide, removeSlide, moveSlide,
   libraryOf, dropPhoto, slideMotion, slideVideo, slideExtra, hasVideo, deckVideos, deckVoices, unusedVideos, cleanBrand,
   migrateRecord, aspectOf, canvasRatioOf, copyRecord, withSlideMotion,
@@ -258,14 +258,6 @@ function upsert(record) {
   S.list = sortRecords(S.list);
 }
 
-// 지난번에 고른 그림 모양(새 그림은 그 모양으로 시작한다). 기억하지 못하는 창에서는 정사각형.
-function lastRatio() {
-  try { return ratioOf(localStorage.getItem(RATIO_KEY)).id; } catch { return RATIOS[0].id; }
-}
-function keepRatio(id) {
-  try { localStorage.setItem(RATIO_KEY, id); } catch { /* 기억하지 못해도 괜찮다 */ }
-}
-
 // ---------- 첫 화면: 소개 + 새로 만들기(빈 그림 · 템플릿) 띠 · 내 그림 ----------
 // 대문의 "만들 수 있는 것": [작은 그림, 이름, 색]
 const FEATS = [
@@ -321,22 +313,22 @@ function mountStartRail(track, previous, next) {
     if (frame) cancelAnimationFrame(frame);
   } };
 }
-// 템플릿의 작은 그림의 모양: 테마는 그것으로 시작할 때의 모양(16:9), 기본 짜임은 정사각형.
-const thumbAspect = (layout) => (layout?.ratio ? ratioOf(layout.ratio).aspect : 1);
+// 첫 화면의 미리보기와 그 틀에서 만든 그림은 같은 비율을 쓴다.
+const thumbAspect = (layout) => ratioOf(layout?.ratio || DEFAULT_RATIO).aspect;
 function layoutThumb(layout) {
   const aspect = thumbAspect(layout);
   configure({ aspect });
   return fitView(designView({ bg: layout.bg, items: layoutItems(layout.id) }), aspect);
 }
 /**
- * 새 그림을 연다. layoutId 를 주면 그 템플릿을 깔고 시작한다. 모양은 템플릿에 적힌 것(테마는 16:9), 없으면 지난번에 고른 것.
+ * 새 그림을 연다. 지정된 틀의 비율을 따르고, 빈 그림과 비율 없는 틀은 16:9로 시작한다.
  * tile 은 누른 템플릿 단추(그 작은 그림이 커지면서 열린다).
  */
 function startNew(layoutId = '', tile = null) {
   if (S.open || !S.list || moving) return;
   const layout = layoutId ? layoutList().find((l) => l.id === layoutId) : null;
   if (layout?.collection && layout.cover) { void startCollection(layout.collection); return; }
-  const record = newRecord(layout?.ratio || lastRatio(), nextNumber(S.list || []));
+  const record = newRecord(layout?.ratio || DEFAULT_RATIO, nextNumber(S.list || []));
   if (layout) {
     setupApp(record.ratio);          // 템플릿의 도형 높이는 그림의 모양에 맞춰 만들어진다
     record.slides = [{ bg: layout.bg, items: layoutItems(layout.id) }];
@@ -828,7 +820,6 @@ function openDesign(record, isNew) {
     onAspect: (aspect) => {
       O.record.size = { width: aspect * O.record.size.height, height: O.record.size.height, unit: O.record.size.unit };
       O.record.ratio = `${O.record.size.width}:${O.record.size.height}`;
-      keepRatio(O.record.ratio);
       markRatio(O, shapes);
     },
   });
@@ -2515,7 +2506,6 @@ function setRatio(O, id, shapes) {
     O.record.ratio = r.id;
     const [width, height] = r.id.split(':').map(Number);
     O.record.size = { width, height, unit: 'px' };
-    keepRatio(r.id);
     markRatio(O, shapes);
     const after = O.editor.setAspect(r.aspect, { fit });       // 지금 장. 요소가 있으면 onChange → touched 로 저장이 걸린다
     slideIn(stageCard(O));

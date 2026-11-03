@@ -62,6 +62,7 @@ test('emphasis: chosen in the motion panel, then a click in the show moves the v
   const circle = page.locator('.cv-canvas .fe-card .fi-shape').first();
   await circle.click();
   await page.locator('.fe-tab[data-tab="motion"]').click();
+  await page.getByLabel('움직임 종류').selectOption('누를 때 강조하기');
   await page.locator('.fe-motions[data-group="emph"] .fe-mo[data-motion="pulse"]').click();
   await saved(page, r => r.slides[0].items[1].em === 'pulse');
   assert.match(await page.locator('.fe-tabbody').textContent(), /누를 때 한 번 움직이고/);
