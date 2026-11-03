@@ -1,3 +1,4 @@
+import {openTool} from './open-tool.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
@@ -166,7 +167,7 @@ test('local teacher PPT copy retains a chosen connection and camera in a resaved
   },base);
   await page.goto(origin+(hosted?'/minican-app.html':'/app/index.html'));
   await page.getByRole('button',{name:'실과 수업 모핑 검수 열기',exact:true}).click();
-  await page.locator('[data-tab=motion]').click();await page.locator('[data-slide-flow]').click();
+  await openTool(page,'motion');await page.locator('[data-slide-flow]').click();
   const panel=page.locator('.flow-panel');await panel.waitFor();
   for(const [i,side] of ['source','target'].entries())await panel.locator('[data-flow-'+side+'] .fi-text').nth(source.textIndices[i]).press('Enter');
   await panel.getByRole('button',{name:'선택한 두 요소 연결',exact:true}).click();

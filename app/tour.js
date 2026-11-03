@@ -22,7 +22,7 @@ const SAVE_STEP = { target: '.cv-status', title: '저절로 저장돼요', text:
 
 /** 꾸미는 화면의 안내. view: 그 단계에서 옆 칸에 펼칠 도구(편집기의 칸 이름) */
 export const EDITOR_STEPS = [
-  { target: '.fe-tabs', view: 'layout', title: '위쪽 도구 줄', text: '도구를 누르면 캔버스 위에 선택지가 펼쳐져요. 화살표로 옆의 미리보기를 보고, 같은 도구를 한 번 더 눌러 접어요.' },
+  { target: '.fe-tabs', view: 'layout', title: '추가 · 자료 · 디자인', text: '추가에서 글과 도형을 넣고, 자료에서 내 파일을 불러와요. 디자인에서 틀·바탕색·겹 순서·움직임을 고르세요. 같은 메뉴를 다시 누르면 접혀요.' },
   { target: '.fe-tabbody', view: 'text', title: '글 넣기', text: '큰 제목 · 작은 제목 · 이야기 글 중에서 눌러 넣어요. 카드의 글을 두 번 누르면 바로 고칠 수 있어요.', tip: '글꼴·크기·색은 오른쪽 속성에서' },
   { target: '.fe-tabbody', view: 'element', title: '꾸미기: 도형과 그림 1,000개', text: '도형, 선, 컬러 그림, 선 아이콘, 픽셀 그림, 사람 그림을 넣어요. "동물", "날씨"처럼 낱말로 찾을 수 있어요.', tip: '선 아이콘과 픽셀은 색도 바꿀 수 있어요' },
   { target: '.fe-tabbody', view: 'upload', title: '내 자료: 사진과 유튜브', text: '내 사진을 올리고, 유튜브 주소를 붙여 넣으면 영상이 카드에 들어가요. 영상은 발표할 때 스페이스 바로 틀고 멈춰요.', tip: '꾸미기 판에서 Ctrl+V 로 유튜브 주소를 붙여 넣어도 돼요' },

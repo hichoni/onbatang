@@ -1,3 +1,4 @@
+import {openTool} from './open-tool.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
@@ -23,7 +24,7 @@ test('teacher connects elements, edits camera and timing, previews and saves wit
   const tour=await import(base+'/app/tour.js');for(const id of['home','editor',tour.NEWS_KEY])tour.markTourSeen(id);return record.id;
  },base);
  await page.goto(origin+(hosted?'/minican-app.html':'/app/index.html'));await page.getByRole('button',{name:'이어지는 별 관측 열기',exact:true}).click();
- await page.locator('[data-tab=motion]').click();await page.locator('[data-slide-flow]').click();
+ await openTool(page,'motion');await page.locator('[data-slide-flow]').click();
  const panel=page.locator('.flow-panel');await panel.waitFor();
  assert.ok(await panel.locator('.sf-stage').evaluate(n=>n.clientHeight>150),'transition preview has a visible canvas');
  await panel.locator('[data-flow-source] .fi-shape').first().click();await panel.locator('[data-flow-target] .fi-shape').last().click();
@@ -40,9 +41,9 @@ test('teacher connects elements, edits camera and timing, previews and saves wit
  await page.setViewportSize({width:390,height:844});assert.ok(await panel.evaluate(n=>n.scrollWidth<=n.clientWidth+1),'mobile has no horizontal overflow');
  await panel.getByRole('button',{name:'자료에 적용·저장',exact:true}).click();await panel.waitFor({state:'detached'});
  await page.reload();
- await page.locator('[data-tab=motion],button[aria-label="이어지는 별 관측 열기"]').first().waitFor();
+ await page.locator('[data-tool-group=design],button[aria-label="이어지는 별 관측 열기"]').first().waitFor();
  const reopen=page.getByRole('button',{name:'이어지는 별 관측 열기',exact:true});if(await reopen.isVisible())await reopen.click();
- await page.locator('[data-tab=motion]').click();await page.locator('[data-slide-flow]').click();await panel.waitFor();
+ await openTool(page,'motion');await page.locator('[data-slide-flow]').click();await panel.waitFor();
  await panel.getByRole('button',{name:'카메라 구도',exact:true}).click();assert.equal(await panel.getByLabel('카메라 확대',{exact:true}).inputValue(),'2');assert.equal(await panel.getByLabel('모핑 이동 시간').inputValue(),'2400');
  await panel.screenshot({path:resolve(repo,`work/flow-review/${hosted?'gai':'public'}-phone.png`),scale:'css'});
  await panel.getByRole('button',{name:'앞 장 카메라 편집',exact:true}).click();

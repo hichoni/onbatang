@@ -5,6 +5,14 @@ import { clueAnswer } from './clue-card.js';
 // Content is taken from the current piece each time. Only offline lessons
 // carry a bounded copy, because their slide is otherwise a single picture.
 export function sceneContent(id, item) {
+  if (id === 'rollingnumber' && item?.t === 'text') {
+    const text = Array.from(String(item.text || '').trim()).slice(0,72).join('');
+    return numberIn(text) ? {t:'text',text} : null;
+  }
+  if ((id === 'beatintro' || id === 'spotlighttitle') && item?.t === 'text') {
+    const text = Array.from(String(item.text || '').trim()).slice(0, 72).join('');
+    return text ? {t:'text', text} : null;
+  }
   if (id==='cluecard') return clueAnswer(item);
   if (id === 'kinetic' && item?.t === 'text' && typeof item.text==='string') {
     const chars = Array.from(item.text.trim().replace(/\s+/g, ' '));
@@ -18,6 +26,8 @@ export function sceneContent(id, item) {
 }
 
 export const titleExample = { t:'text', text:'작은 픽셀이 모여 그림이 된다' };
+export const introExample = {t:'text', text:'작은 점에서\n하나의 그림으로\n우리의 픽셀아트'};
+export const introBpm = value => Number.isFinite(value) ? Math.round(Math.max(60, Math.min(180, value))) : 100;
 export const chartExample = { t:'chart', kind:'bar', title:'도안에 쓴 픽셀', labels:['별','하트','로켓','나무'],
   unit:'칸', series:[{name:'색칠한 칸',values:[18,26,34,22]}] };
 
@@ -75,6 +85,99 @@ export function kineticTitle({part,ink,content}) {
   part('path',{d:'M38 307H681',stroke:'#49606a','stroke-width':1});
   part('path',{d:'M38 307H197',stroke:ink[0],'stroke-width':4,pathLength:1,'stroke-dasharray':'1 1'},
     [{strokeDashoffset:1},{strokeDashoffset:0}],220,960);
+}
+
+function introLines(text) {
+  const lines = text.trim().split(/\n+/).map(line => line.trim()).filter(Boolean);
+  if (lines.length > 1) return [...lines.slice(0, 2), lines.slice(2).join(' ')].filter(Boolean);
+  const words = text.trim().split(/\s+/), perLine = Math.ceil(words.length / 3);
+  const result = [];
+  for (let i = 0; i < words.length; i += perLine) result.push(words.slice(i, i + perLine).join(' '));
+  return result;
+}
+
+function fittedSize(text, width, max) {
+  const ctx = document.createElement('canvas').getContext('2d');
+  ctx.font = '800 ' + max + 'px ' + FONT;
+  return Math.min(max, max * width / Math.max(1, ctx.measureText(text).width));
+}
+
+export function beatIntro({part,ink,content,options}) {
+  const bpm = introBpm(options.bpm), beat = 60000 / bpm, lines = introLines(content.text);
+  part('rect',{width:720,height:360,rx:12,fill:'#101e26'});
+  letter(part,'OPENING     /     '+bpm+' BPM',36,36,13,ink[0],{'letter-spacing':2,'font-weight':700});
+  part('path',{d:'M36 52H684 M36 302H684',fill:'none',stroke:'#446067'});
+  lines.forEach((line,i) => {
+    const y = 177 + (i - (lines.length-1)/2)*71;
+    letter(part,String(i+1).padStart(2,'0'),38,y,14,ink[0],{'font-weight':700},
+      [{opacity:0},{opacity:1}],i*beat,beat*.5);
+    letter(part,line,84,y,fittedSize(line,590,52),i===lines.length-1?ink[0]:'#fafaf0',
+      {'font-weight':800},[{opacity:0,transform:'translateY(18px)'},{opacity:1,transform:'none'}],i*beat,beat*.85);
+  });
+  for (let i=0;i<lines.length;i++) {
+    const x=36+i*44;
+    part('rect',{x,y:320,width:34,height:5,rx:2,fill:'#355059'});
+    part('rect',{x,y:320,width:34,height:5,rx:2,fill:ink[0]},[{opacity:0},{opacity:1}],i*beat,beat*.4);
+  }
+}
+
+let spotlightSerial = 0;
+function numberIn(text) {
+  const match=text.match(/[+−-]?\d[\d,]*(?:\.\d+)?(?:\s?[%％])?/);
+  return match && match[0].replace(/\D/g,'').length<=8 ? match[0].replace(/\s/g,'') : '';
+}
+
+export function rollingNumber({part,ink,content}) {
+  const value = numberIn(content.text);
+  const size = Math.min(104, 620 / (value.length * .68));
+  const step = size * 1.12, advance = size * .68;
+  const defs = part('defs',{}), ns = 'http://www.w3.org/2000/svg';
+  part('rect',{width:720,height:360,rx:12,fill:'#12212a'});
+  letter(part,'수치로 보기',36,42,18,ink[0],{'font-weight':700});
+  part('path',{d:'M36 61H684 M36 266H684',stroke:'#516371'});
+  [...value].forEach((char,i)=>{
+    const x=360+(i-value.length/2+.5)*advance;
+    const attrs={x,y:212,'text-anchor':'middle','font-family':FONT,'font-size':size,'font-weight':800,fill:ink[0]};
+    if(!/\d/.test(char)){part('text',attrs).textContent=char;return;}
+    const digit=Number(char), clip=document.createElementNS(ns,'clipPath');
+    clip.id='ob-digit-'+ ++spotlightSerial;
+    const window=document.createElementNS(ns,'rect');
+    for(const [key,val] of Object.entries({x:x-advance/2,y:212-size,width:advance,height:step}))window.setAttribute(key,String(val));
+    clip.append(window);defs.append(clip);
+    const reel=part('g',{},[{transform:'translateY('+(digit*step)+'px)'},{transform:'translateY(0px)'}],i*45,930);
+    const wrap=document.createElementNS(ns,'g');
+    wrap.setAttribute('clip-path','url(#'+clip.id+')');
+    reel.parentNode.before(wrap);wrap.append(reel.parentNode);
+    for(let n=0;n<=digit;n++){
+      const text=document.createElementNS(ns,'text');
+      for(const [key,val] of Object.entries({...attrs,y:212+(n-digit)*step}))text.setAttribute(key,String(val));
+      text.textContent=String(n);reel.append(text);
+    }
+  });
+  const caption=content.text.replace(/\s+/g,' ');
+  letter(part,caption,360,313,fittedSize(caption,640,26),'#f7f4e8',{'text-anchor':'middle'});
+}
+export function spotlightTitle({part,ink,content}) {
+  const lines=titleLines(content.text.replace(/\s+/g,' '));
+  part('rect',{width:720,height:360,rx:12,fill:'#171925'});
+  letter(part,'IN FOCUS',36,40,14,ink[1],{'letter-spacing':4,'font-weight':700});
+  part('path',{d:'M36 58H684 M36 311H684',stroke:'#444759'});
+  const ns='http://www.w3.org/2000/svg', clip=document.createElementNS(ns,'clipPath');
+  clip.id='ob-title-light-'+ ++spotlightSerial;
+  part('defs',{}).append(clip);
+  const shutter=part('rect',{x:0,y:0,width:720,height:360},
+    [{transform:'translateX(-720px)'},{transform:'translateX(0px)'}],150,1450);
+  clip.append(shutter.parentNode);
+  lines.lines.forEach((row,i)=>{
+    const y=184+(i-(lines.lines.length-1)/2)*lines.size*1.18;
+    for(const word of row){
+      const attrs={x:38+word.x,y,'font-family':FONT,'font-size':lines.size,'font-weight':800};
+      part('text',{...attrs,fill:'#767687'}).textContent=word.text;
+      part('text',{...attrs,fill:i===lines.lines.length-1?ink[0]:'#fffbed','clip-path':'url(#'+clip.id+')'}).textContent=word.text;
+    }
+  });
+  part('path',{d:'M36 311H684',stroke:ink[0],'stroke-width':3,pathLength:1,'stroke-dasharray':'1 1'},
+    [{strokeDashoffset:1},{strokeDashoffset:0}],150,1450);
 }
 
 const short = (str,n) => Array.from(str).length>n ? Array.from(str).slice(0,n-1).join('')+'…' : str;

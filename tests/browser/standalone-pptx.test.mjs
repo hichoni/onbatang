@@ -1,3 +1,4 @@
+import {openTool} from './open-tool.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
@@ -39,10 +40,10 @@ test('a touch file picker imports the original PPT bytes and reopens both pages'
 });
 
 test('touch tabs open a palette from the horizontal tool rail',options,async t=>{
- const {page,entry}=await setup(t,{viewport:{width:390,height:844},touch:true});await page.goto(entry);await page.locator('.cv-hero .cv-new-btn').tap();await page.locator('.fe-tab[data-tab=bg]').tap();await page.locator('.cv-side .fe-palettes').waitFor({timeout:3000});
+ const {page,entry}=await setup(t,{viewport:{width:390,height:844},touch:true});await page.goto(entry);await page.locator('.cv-hero .cv-new-btn').tap();await openTool(page,'bg','tap');await page.locator('.cv-side .fe-palettes').waitFor({timeout:3000});
 });
 test('touch tabs open a palette after PPT import',options,async t=>{
- const {page,entry}=await setup(t,{viewport:{width:390,height:844},touch:true});await enterImport(page,entry);await inspectFile(page,'self-authored-21-pages.pptx',21);await page.locator('[data-import-save]').tap();await page.locator('[data-inline-import]').waitFor({state:'detached'});await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);await page.locator('.fe-tab[data-tab=bg]').tap();await page.locator('.cv-side .fe-palettes').waitFor({timeout:3000});
+ const {page,entry}=await setup(t,{viewport:{width:390,height:844},touch:true});await enterImport(page,entry);await inspectFile(page,'self-authored-21-pages.pptx',21);await page.locator('[data-import-save]').tap();await page.locator('[data-inline-import]').waitFor({state:'detached'});await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);await openTool(page,'bg','tap');await page.locator('.cv-side .fe-palettes').waitFor({timeout:3000});
 });
 
 test('a delayed native touch click cannot fold a replayed tool, while a second touch can fold it',options,async t=>{
@@ -50,9 +51,9 @@ test('a delayed native touch click cannot fold a replayed tool, while a second t
  // Force the fallback before Chromium delivers its trusted compatibility click.
  // Only the next application frame is changed; the click itself remains native.
  await page.evaluate(()=>{const raf=requestAnimationFrame;window.requestAnimationFrame=callback=>{window.requestAnimationFrame=raf;callback(performance.now());return 0;};});
- await page.locator('.fe-tab[data-tab=bg]').tap();await page.locator('.cv-side .fe-palettes').waitFor();assert.equal(await page.locator('.cv-app.folded').count(),0);
- await page.locator('.fe-tab[data-tab=bg]').tap();assert.equal(await page.locator('.cv-app.folded').count(),1,'a different gesture still folds the current tool');
- await page.locator('.fe-tab[data-tab=bg]').tap();await page.locator('.cv-side .fe-palettes').waitFor();assert.equal(await page.locator('.cv-app.folded').count(),0);
+ await page.locator('[data-tool-group=design]').tap();await page.locator('.fe-tabbody[data-panel=layout]').waitFor();assert.equal(await page.locator('.cv-app.folded').count(),0);
+ await page.locator('[data-tool-group=design]').tap();assert.equal(await page.locator('.cv-app.folded').count(),1,'a different gesture still folds the current tool');
+ await page.locator('[data-tool-group=design]').tap();await page.locator('.fe-tabbody[data-panel=layout]').waitFor();assert.equal(await page.locator('.cv-app.folded').count(),0);
 });
 
 test('touch tool swipes do not select a tab, and rotating or leaving import retains the selected slide',options,async t=>{
@@ -63,7 +64,7 @@ test('touch tool swipes do not select a tab, and rotating or leaving import reta
  await page.evaluate(()=>window.retainedTouchPreview=document.querySelector('[data-large-preview] img'));
  await page.setViewportSize({width:844,height:390});
  assert.equal(await page.locator('[data-page-number="2"]').getAttribute('data-active'),'true');
- await page.locator('.fe-tab[data-tab=text]').tap();await page.locator('[data-inline-import]').waitFor({state:'detached'});
+ await page.locator('[data-tool-group=add]').tap();await page.locator('[data-inline-import]').waitFor({state:'detached'});
  await page.locator('.fe-tab[data-tab=text][aria-selected=true]').waitFor();
  await page.setViewportSize({width:320,height:568});
  const rail=page.locator('.cv-side .fe-tabs');await rail.scrollIntoViewIfNeeded();await rail.evaluate(n=>n.scrollLeft=0);
@@ -71,8 +72,8 @@ test('touch tool swipes do not select a tab, and rotating or leaving import reta
  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point]});
  for(let i=1;i<=8;i++){await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...point,x:point.x-box.width*.65*i/8}]});await page.evaluate(()=>new Promise(requestAnimationFrame));}
  await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await cdp.detach();
- assert.equal(await page.locator('.fe-tab[aria-selected=true]').getAttribute('data-tab'),'text','scrolling the tools must not activate a crossed tab');
- assert.ok(await rail.evaluate(n=>n.scrollLeft)>0,'the tool rail can be scrolled by touch');
+ assert.equal(await rail.locator('[aria-selected=true]').getAttribute('data-tool-group'),'add','swiping the tools must not activate a crossed group');
+ assert.ok(await rail.evaluate(n=>n.scrollWidth<=n.clientWidth+1),'all three groups fit on the phone');
  await page.locator('.fe-tab[data-tab=upload]').tap();await page.locator('[data-upload-tab=ppt]').tap();await page.locator('[data-document-import]').tap();
  await page.locator('[data-page-number="2"][data-active=true]').waitFor();
  assert.equal(await page.evaluate(()=>document.querySelector('[data-large-preview] img')===window.retainedTouchPreview),true);
@@ -106,8 +107,8 @@ for(const [label,width,height] of [['small-phone',320,568],['phone',390,844],['p
   await cdp.detach();
   await page.waitForFunction(()=>document.querySelector('[data-material-page="0"]')?.getAttribute('aria-label')?.includes('원본 2쪽'));
   const reordered=await readLibrary(page,base);assert.deepEqual(reordered.originals,original.originals);assert.deepEqual(reordered.sources,original.sources);
-  await page.locator('.fe-tab[data-tab=bg]').scrollIntoViewIfNeeded();await page.evaluate(()=>new Promise(done=>requestAnimationFrame(()=>requestAnimationFrame(done))));
-  await page.locator('.fe-tab[data-tab=bg]').tap();const palette=page.locator('.cv-side .fe-palettes');
+  await page.locator('[data-tool-group=design]').scrollIntoViewIfNeeded();await page.evaluate(()=>new Promise(done=>requestAnimationFrame(()=>requestAnimationFrame(done))));
+  await openTool(page,'bg','tap');const palette=page.locator('.cv-side .fe-palettes');
   await palette.waitFor({timeout:3000});
   assert.doesNotMatch(await palette.innerText(),/\bnull\b/,'empty palette must not print a null placeholder');
   await palette.locator('.fe-palette-slots button').nth(3).tap();await palette.getByLabel('팔레트 이름').fill('터치 수업 색');await palette.getByLabel('팔레트 이름').press('Tab');
@@ -115,7 +116,7 @@ for(const [label,width,height] of [['small-phone',320,568],['phone',390,844],['p
   assert.ok((await palette.locator('.fe-palette-color').first().boundingBox()).height>=44);assert.ok((await palette.locator('.fe-palette-remove').first().boundingBox()).height>=44);
   const name=await page.locator('.cv-name').inputValue();await page.locator('.cv-back').tap();await page.locator('.cv-home-title').waitFor();await page.reload();await openListed(page,name,'tap');
   await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);assert.match(await page.locator('[data-material-page="0"]').getAttribute('aria-label'),/원본 2쪽/);
-  if(!await page.locator('.fe-tab[data-tab=bg][aria-selected=true]').count()||await page.locator('.cv-app.folded').count())await page.locator('.fe-tab[data-tab=bg]').tap();assert.equal(await page.locator('.cv-side').getByLabel('팔레트 이름').inputValue(),'터치 수업 색');assert.equal(await page.locator('.cv-side .fe-palette-colors').first().getByRole('button',{name:color+' 적용',exact:true}).count(),1);
+  if(!await page.locator('.fe-tab[data-tab=bg][aria-selected=true]').count()||await page.locator('.cv-app.folded').count())await openTool(page,'bg','tap');assert.equal(await page.locator('.cv-side').getByLabel('팔레트 이름').inputValue(),'터치 수업 색');assert.equal(await page.locator('.cv-side .fe-palette-colors').first().getByRole('button',{name:color+' 적용',exact:true}).count(),1);
   for(const mode of ['editable','image']){
    await page.locator('.cv-down-btn').tap();const down=page.getByRole('dialog',{name:'내려받기',exact:true});await down.locator('[data-type=pptx]').tap();await down.locator('[data-scope=all]').tap();await down.locator(`[data-pptx=${mode}]`).tap();
    const box=await down.locator('[data-pptx-save]').boundingBox();assert.ok(box.y>=0&&box.y+box.height<=height,'download action stays visible, including landscape');
@@ -232,7 +233,7 @@ test('tray follows a short viewport until manually chosen; compact tools stay re
  const {page,entry,checkIsolation}=await setup(t,{viewport:{width:1366,height:900}});await page.goto(entry);await page.locator('.cv-hero .cv-new-btn').click();
  assert.equal(await page.getByRole('button',{name:'슬라이드 목록 접기'}).getAttribute('aria-expanded'),'true');
  await page.setViewportSize({width:1024,height:600});await page.getByRole('button',{name:'슬라이드 목록 펼치기'}).waitFor();
- await page.locator('.fe-tab[data-tab=text]').click();await page.getByRole('button',{name:'큰 제목',exact:true}).click();const bar=page.locator('.cv-tools .fe-bar');assert.ok((await bar.boundingBox()).height<=64,'short-screen tools use one horizontal row');
+ await openTool(page,'text');await page.getByRole('button',{name:'큰 제목',exact:true}).click();const bar=page.locator('.cv-tools .fe-bar');assert.ok((await bar.boundingBox()).height<=64,'short-screen tools use one horizontal row');
  const remove=bar.getByRole('button',{name:'삭제',exact:true});await remove.scrollIntoViewIfNeeded();const rb=await remove.boundingBox(),bb=await bar.boundingBox();assert.ok(rb.x>=bb.x-1&&rb.x+rb.width<=bb.x+bb.width+1,'last tool can scroll into view');
  await page.getByRole('button',{name:'슬라이드 목록 펼치기'}).click();await page.setViewportSize({width:1000,height:560});assert.equal(await page.getByRole('button',{name:'슬라이드 목록 접기'}).getAttribute('aria-expanded'),'true');
  assert.ok((await page.locator('.cv-strip').boundingBox()).height<=560*.42+1);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
@@ -264,7 +265,7 @@ test('tray pixel height persists across documents/reload, clamps temporarily and
  const {page,context,entry,origin,base,checkIsolation}=await setup(t,{viewport:{width:1366,height:900}});await page.goto(entry);await page.locator('.cv-hero .cv-new-btn').click();
  const tray=page.locator('.cv-strip'),grip=page.getByRole('separator',{name:'슬라이드 목록 높이 조절'});
  assert.ok((await tray.boundingBox()).height<=128,'new default is a thin thumbnail strip');assert.equal(await page.locator('.cv-slide-tools').isVisible(),false,'page tools are tucked into the contextual menu');
- await page.locator('.fe-tab[data-tab=text]').click();await page.locator('.fe-tabbody .fe-textadd').first().click();
+ await openTool(page,'text');await page.locator('.fe-tabbody .fe-textadd').first().click();
  await page.locator('.cv-name').fill('창 높이 유지 확인');await page.locator('.cv-back').click();await page.getByRole('button',{name:'창 높이 유지 확인 열기',exact:true}).click();
  const record=await page.evaluate(async base=>(await (await import(base+'/app/store.js')).listDesigns()).find(r=>r.name==='창 높이 유지 확인'),base);
  const height=async()=>Math.round((await tray.boundingBox()).height);
@@ -283,7 +284,7 @@ test('tray pixel height persists across documents/reload, clamps temporarily and
 });
 
 test('direct eyedropper, four named palettes, undo, cancel, stale selection and reload',options,async t=>{
- const {page,entry}=await setup(t);await page.goto(entry);await page.locator('.cv-hero .cv-new-btn').click();await page.locator('.fe-tab[data-tab=bg]').click();
+ const {page,entry}=await setup(t);await page.goto(entry);await page.locator('.cv-hero .cv-new-btn').click();await openTool(page,'bg');
  await page.evaluate(()=>{window.EyeDropper=class{async open(){return {sRGBHex:'#123456'};}};});
  await page.locator('.cv-side .fe-eyedropper').click();assert.equal(await page.locator('.cv-canvas .fe-card').evaluate(node=>getComputedStyle(node).backgroundColor),'rgb(18, 52, 86)');
  await page.locator('.cv-side .fe-palette-slots button').nth(2).click();await page.locator('.cv-side').getByLabel('팔레트 이름').fill('수업 색');await page.locator('.cv-side').getByLabel('팔레트 이름').press('Tab');
@@ -294,11 +295,11 @@ test('direct eyedropper, four named palettes, undo, cancel, stale selection and 
  const state=await page.evaluate(()=>localStorage.getItem('onbatang.palettes.v1.minican'));
  await page.evaluate(()=>{window.EyeDropper=class{async open(){throw new DOMException('cancel','AbortError');}};});await page.locator('.cv-side .fe-eyedropper').click();assert.equal(await page.evaluate(()=>localStorage.getItem('onbatang.palettes.v1.minican')),state);
  await page.evaluate(()=>{window.EyeDropper=class{open(){return new Promise(resolve=>window.finishPick=resolve);}};});await page.locator('.cv-side .fe-eyedropper').click();
- await page.locator('.fe-tab[data-tab=text]').click();await page.locator('.fe-tabbody .fe-textadd').first().click();await page.evaluate(()=>window.finishPick({sRGBHex:'#654321'}));
+ await openTool(page,'text');await page.locator('.fe-tabbody .fe-textadd').first().click();await page.evaluate(()=>window.finishPick({sRGBHex:'#654321'}));
  assert.equal(await page.evaluate(()=>localStorage.getItem('onbatang.palettes.v1.minican')),state,'async pick never applies to a different selected element');
  await page.evaluate(()=>{window.EyeDropper=class{async open(){return {sRGBHex:'#224466'};}};});await page.locator('.cv-canvas .fe-stage').focus();await page.keyboard.press('i');
  await page.waitForFunction(()=>localStorage.getItem('onbatang.palettes.v1.minican')?.includes('#224466'));
- await page.locator('.cv-back').click();await page.locator('.cv-home-title').waitFor();await page.reload();await page.getByRole('button',{name:'그림 1 열기',exact:true}).click();await page.locator('.fe-tab[data-tab=bg]').click();
+ await page.locator('.cv-back').click();await page.locator('.cv-home-title').waitFor();await page.reload();await page.getByRole('button',{name:'그림 1 열기',exact:true}).click();await openTool(page,'bg');
  assert.equal(await page.locator('.cv-side').getByLabel('팔레트 이름').inputValue(),'수업 색');
  assert.ok(await page.locator('.cv-side .fe-palette-color[aria-label="#224466 적용"]').count()>0);
  await page.evaluate(()=>{delete window.EyeDropper;window.pickerFallbacks=0;HTMLInputElement.prototype.showPicker=function(){window.pickerFallbacks++;};});await page.locator('.cv-side .fe-eyedropper').click();assert.equal(await page.evaluate(()=>window.pickerFallbacks),1);

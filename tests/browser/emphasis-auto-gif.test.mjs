@@ -1,3 +1,4 @@
+import {openTool} from './open-tool.mjs';
 // Local-only browser contract for v0.38: emphasis effects, auto-advance with loop, rehearsal timings and GIF export.
 // No accounts or network.
 import test from 'node:test';
@@ -61,7 +62,7 @@ test('emphasis: chosen in the motion panel, then a click in the show moves the v
   ]);
   const circle = page.locator('.cv-canvas .fe-card .fi-shape').first();
   await circle.click();
-  await page.locator('.fe-tab[data-tab="motion"]').click();
+  await openTool(page,'motion');
   await page.getByLabel('움직임 종류').selectOption('누를 때 강조하기');
   await page.locator('.fe-motions[data-group="emph"] .fe-mo[data-motion="pulse"]').click();
   await saved(page, r => r.slides[0].items[1].em === 'pulse');

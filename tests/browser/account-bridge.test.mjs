@@ -1,3 +1,4 @@
+import {openTool} from './open-tool.mjs';
 // GBE-AI Lab 계정으로 이어 쓰기(브라우저): 집 컴퓨터에서 그림을 계정에 올리고, 다른(빈) 컴퓨터에서 가져온다.
 // GBE-AI Lab 연결 창은 다른 주소(localhost)의 시험용 창이 맡는다(계정 보관은 그 서버의 메모리). 바깥 요청은 없다.
 import test from 'node:test';
@@ -72,7 +73,7 @@ test('home → GBE-AI Lab 계정에 올리기, then an empty computer takes it f
   // 집: 그림을 하나 만들고(제목 하나) 첫 화면으로 돌아와 계정에 올린다.
   const home = await computer();
   await home.page.locator('.cv-hero .cv-new-btn').click();
-  if (!await home.page.locator('.fe-textadd.title').isVisible()) await home.page.locator('.fe-tab[data-tab="text"]').click();
+  if (!await home.page.locator('.fe-textadd.title').isVisible()) await openTool(home.page,'text');
   await home.page.locator('.fe-textadd.title').click();
   await home.page.locator('.cv-back').click();
   await home.page.locator('[data-account-bridge]').waitFor();

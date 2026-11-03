@@ -48,6 +48,7 @@ export async function startOnbatang({root=document.getElementById('app'),fonts=O
      }
     }});
    }
+   if(context.file) session.local.openFile(context.file);
    let disposed=false;
    return {requestClose:()=>session.local.requestClose(),async dispose(){
     if(disposed)return;disposed=true;
@@ -95,7 +96,7 @@ export async function startOnbatang({root=document.getElementById('app'),fonts=O
   try{await controller.restoreEditorContext(graph);}catch{recoveryRequired=true;}
   return {title:graph.manifest.title,documents:rows,materialRef:graph.materialRef,pageOrder:graph.pages.map(v=>v.page.id),warnings,recoveryRequired};
  }};
- await startMinican({...options,root:editor,fonts,titleFont,storage,materialNavigation,importAction:{label:'PPTX 가져오기',hideHome:true,editorLabel:'내 PPT 올리기',editorMode:'inline',open:openPptx},onView:next=>{
+ await startMinican({...options,root:editor,fonts,titleFont,storage,materialNavigation,importAction:{label:'PPTX 가져오기',homeFile:true,hideHome:true,editorLabel:'내 PPT 올리기',editorMode:'inline',open:openPptx},onView:next=>{
   view=next;onView?.(next);
   if(next==='home'){usingPptx=false;workspace.hidden=true;editor.hidden=false;}
  }});

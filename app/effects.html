@@ -72,6 +72,8 @@
   <h2>질문하고 단계별 공개</h2><section id="questions" aria-label="질문하고 단계별 공개"></section>
   <div class="settings">
     <label>시연할 제목<input id="title" value="작은 픽셀이 모여 그림이 된다" maxlength="72"></label>
+    <label>박자 오프닝 BPM<input id="intro-tempo" type="number" min="60" max="180" value="100"></label>
+    <label>롤링 숫자에 쓸 문장<input id="figure-caption" value="발아율 82.5%" maxlength="72"></label>
     <label>시연할 차트<select id="chart"><option value="pixels">도안별 픽셀 수 · 세로</option><option value="change">모둠별 증감 · 가로</option></select></label>
     <label>재생 속도<select id="pace"><option value="">보통</option><option value="slow">여유롭게</option><option value="fast">빠르게</option></select></label>
     <label>효과 색감<select id="palette"><option value="">기본 색감</option><option value="lagoon">민트 · 바다</option><option value="sunset">노을 · 산호</option><option value="iris">보라 · 오로라</option></select></label>
@@ -125,8 +127,8 @@
   const studyAssets=EFFECT_ASSETS.filter(asset=>!asset.last).sort((a,b)=>Number(!!b.stops)-Number(!!a.stops));
   for(const asset of studyAssets)studyChoice.add(new Option(asset.name,asset.id));
   function cardOptions(asset,step=0){
-    return {...asset.demo,pace:pace.value,palette:palette.value,step,
-      content:asset.id==='kinetic'?{t:'text',text:title.value}:asset.id==='bars'&&chart.value==='change'?changes:asset.example};
+    return {...asset.demo,pace:asset.id==='beatintro'?'normal':pace.value,palette:palette.value,step,bpm:Number(document.querySelector('#intro-tempo').value),
+      content:asset.id==='rollingnumber'?{t:'text',text:document.querySelector('#figure-caption').value}:['kinetic','beatintro','spotlighttitle'].includes(asset.id)?{t:'text',text:title.value}:asset.id==='bars'&&chart.value==='change'?changes:asset.example};
   }
   let stopStudy;
   const cueDrafts=new Map();
@@ -146,6 +148,7 @@
     button.dataset.asset=asset.id;
     if(asset.id==='cluecard')button.id='clue-card';
     if(asset.id==='prism')button.id='prism-demo';
+    if(['beatintro','spotlighttitle','rollingnumber'].includes(asset.id))button.id=asset.id;
     art.className='art';
     let step=0,stop=null,played=false;
     const label=()=>{
@@ -182,13 +185,13 @@
     group.append(button,link);
     document.querySelector(asset.example?'#scenes':'#accents').append(group);
   }
-  if(location.hash==='#clue-card')document.getElementById('clue-card').scrollIntoView({block:'center'});
+  if(['#clue-card','#beatintro','#spotlighttitle','#rollingnumber'].includes(location.hash))document.getElementById(location.hash.slice(1)).scrollIntoView({block:'center'});
   document.querySelector('#try-motion').onclick=event=>{
     event.preventDefault();
     const tile=document.getElementById('prism-demo');
     tile.scrollIntoView({block:'center'});
     tile.focus({preventScroll:true});tile.click();
   };
-  title.oninput=chart.onchange=pace.onchange=palette.onchange=()=>{posters.forEach(draw=>draw());showStudy();};
+  document.querySelector('#figure-caption').oninput=document.querySelector('#intro-tempo').onchange=title.oninput=chart.onchange=pace.onchange=palette.onchange=()=>{posters.forEach(draw=>draw());showStudy();};
 </script>
 </html>

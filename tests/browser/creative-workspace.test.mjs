@@ -1,3 +1,4 @@
+import {openTool} from './open-tool.mjs';
 // Real local app flows for occasion templates, outside-paper selection and
 // connected motion stories. Fresh browser storage only; no accounts/network.
 import test from 'node:test';
@@ -56,7 +57,7 @@ for(const [label,profile] of [['desktop',{viewport:{width:1440,height:1000}}],['
     await page.locator('.cv-canvas .fe-stage').waitFor();
     const name=`연수 편집 검수 ${label}`;
     await page.locator('input.cv-name').fill(name);await page.locator('input.cv-name').press('Tab');
-    await page.locator('.fe-tab[data-tab="layout"]').click();
+    await openTool(page,'layout');
     assert.equal(await page.locator('.fe-layout').count(),await page.evaluate(async()=>(await import('/src/model.js')).layoutList().length));
     await page.getByRole('searchbox',{name:'틀 찾기',exact:true}).fill('식순');
     assert.equal(await visibleLayouts(page),1);
@@ -101,7 +102,7 @@ for(const [label,profile] of [['desktop',{viewport:{width:1440,height:1000}}],['
     }
     // Use the actual editor entry, not a direct panel/sequence API.
     const unfold=page.locator('.cv-fold');if(await unfold.isVisible()&&await unfold.getAttribute('title')==='옆 칸 펴기')await unfold.click();
-    await page.locator('.fe-tab[data-tab="motion"]').click();
+    await openTool(page,'motion');
     await page.locator('[data-motion-sets]').click();
     const motion=page.getByRole('dialog',{name:'움직임 묶음',exact:true});await motion.waitFor();
     if(!profile.isMobile){const action=await motion.locator('.ms-create').boundingBox();assert.ok(action.y+action.height<profile.viewport.height-8,'new story action stays visible beside the desktop preview');}

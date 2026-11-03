@@ -1,3 +1,4 @@
+import {openTool} from './open-tool.mjs';
 // 글자 효과의 강조 움직임(src/live.js 의 emphasisAt): 글상자의 "누를 때 강조하기"를 켜면 움직임 칸의 누를 때 차례에 들고,
 // 발표에서 그 차례에 누르면 그 효과답게 한 번 크게 움직였다가 돌아온다(넘기기는 그다음 누름). 영상은 그 차례에 저절로. 바깥 요청은 없다.
 import test from 'node:test';
@@ -60,7 +61,7 @@ test('text look emphasis: a toggle per text box, a click step in the show, then 
   await page.waitForFunction(() => /-[\d.]+em\s*$/.test(document.querySelector('.cv-canvas .fe-stage .fi-text').style.translate), null, {timeout: 2000});
   // 움직임 칸의 이 장의 차례에 "누름 1 · 강조 · 글자 효과(폴짝 뛰기)"가 든다.
   await page.keyboard.press('Escape'); await page.keyboard.press('Escape');
-  await page.locator('.fe-tab[data-tab="motion"]').click();
+  await openTool(page,'motion');
   await page.getByLabel('움직임 종류').selectOption('재생 차례');
   assert.match(await page.locator('.fe-timeline').innerText(), /누름 1[\s\S]*강조 · 글자 효과\(폴짝 뛰기\)/);
 

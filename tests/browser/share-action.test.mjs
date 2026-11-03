@@ -1,3 +1,4 @@
+import {openTool} from './open-tool.mjs';
 // Local-only browser contract for a host share button (GBE-AI Lab 공유 링크): startMinican({ shareAction }).
 // The button sits in the editor bar, opens the host with a flush and goTo (slide + 내 자료 · 유튜브), and every local save calls saved(record).
 import test from 'node:test';
@@ -42,7 +43,7 @@ test('a host share button: in the bar, flushes before opening, goTo opens a slid
   const share = page.locator('[data-share-action]');
   await share.waitFor({state:'attached'});
   assert.match(await share.textContent(), /링크로 공유/);
-  if (!await page.locator('.fe-textadd.title').isVisible()) await page.locator('.fe-tab[data-tab="text"]').click();
+  if (!await page.locator('.fe-textadd.title').isVisible()) await openTool(page,'text');
   await page.locator('.fe-textadd.title').click();
   await page.getByLabel('문서 메뉴',{exact:true}).click();await share.click();
   await page.waitForFunction(() => window.opened.length === 1);

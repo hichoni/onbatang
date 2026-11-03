@@ -1,3 +1,4 @@
+import {openTool} from './open-tool.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
@@ -80,7 +81,7 @@ test('material tabs default to photos, expose real ARIA panels, retain selection
   await page.keyboard.press('ArrowLeft'); await assertSelected(page, 'video', true);
   await page.keyboard.press('ArrowLeft'); await assertSelected(page, 'ppt', true);
   await page.evaluate(() => window.editor.refresh()); await assertSelected(page, 'ppt', true);
-  await page.locator('.fe-tab[data-tab=text]').click(); await page.locator('.fe-tab[data-tab=upload]').click(); await assertSelected(page, 'ppt');
+  await openTool(page,'text'); await page.locator('.fe-tab[data-tab=upload]').click(); await assertSelected(page, 'ppt');
   await page.evaluate(() => { window.editor.setDesign({items: []}); window.editor.openTab('upload'); }); await assertSelected(page, 'ppt');
   await page.evaluate(() => window.makeEditor()); await assertSelected(page, 'photo');
   assert.deepEqual(f.errors, []); assert.deepEqual(f.external, []);

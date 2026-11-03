@@ -20,10 +20,11 @@ export function bindEditorWorkspace(shell) {
     (kind==='pages'?pageToggle:propToggle).setAttribute('aria-expanded',String(open));
   };
   const closeTools=(focus=false)=>{
-    if(focus&&shell.querySelector('.fe-tabbody')?.contains(document.activeElement))shell.querySelector('.fe-tab.on')?.focus({preventScroll:true});
+    if(focus&&shell.querySelector('.fe-tabbody')?.contains(document.activeElement))shell.querySelector('.fe-tool-group.on')?.focus({preventScroll:true});
     shell.classList.add('folded');
+    shell.querySelector('.fe-tool-group.on')?.setAttribute('aria-expanded','false');
   };
-  const openTools=()=>{shell.classList.remove('folded');if(compact.matches){setDrawer('pages',false);setDrawer('properties',false);}};
+  const openTools=()=>{shell.classList.remove('folded');shell.querySelector('.fe-tool-group.on')?.setAttribute('aria-expanded','true');if(compact.matches){setDrawer('pages',false);setDrawer('properties',false);}};
   on(pageToggle,'click',()=>{const open=!shell.classList.contains('pages-open');closeTools();setDrawer('properties',false);setDrawer('pages',open);if(open){if(pages.classList.contains('cv-tray-collapsed'))pages.querySelector('.cv-tray-toggle')?.click();pages.querySelector('.cv-slide.on')?.focus({preventScroll:true});}});
   on(propToggle,'click',()=>{const open=!shell.classList.contains('properties-open');closeTools();setDrawer('pages',false);setDrawer('properties',open);if(open)properties.querySelector('.cv-properties-close')?.focus({preventScroll:true});});
   on(properties.querySelector('.cv-properties-close'),'click',()=>{setDrawer('properties',false);propToggle.focus({preventScroll:true});});

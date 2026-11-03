@@ -22,6 +22,8 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero-lead{font-size:1re
 body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero-tag{margin-left:0;color:#626f6b;font-size:.8rem;line-height:1.6}
 body.mc-app :is(#app,.cv-app-root)[data-view="home"] .btn.cv-cta{background:#24322d;box-shadow:0 5px 14px #24322d1a;font-size:1rem;font-weight:650;min-height:52px;padding:12px 24px}
 body.mc-app :is(#app,.cv-app-root)[data-view="home"] .btn.cv-cta:hover:not(:disabled){background:#345144}
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .btn.cv-cta.cv-ppt-start{background:#eef6ef;color:#215d4d;border:1px solid #a3bdb0}
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .btn.cv-cta.cv-ppt-start:hover:not(:disabled){background:#dcece2}
 body.mc-app :is(#app,.cv-app-root)[data-view="home"] .btn.cv-cta:focus-visible{outline-color:#286f62}
 body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-feat{font-weight:550;font-size:.86rem}
 body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-starts-head h2,body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-section-head h2{font-weight:700;letter-spacing:-.035em}

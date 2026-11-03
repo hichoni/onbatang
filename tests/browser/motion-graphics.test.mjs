@@ -1,3 +1,4 @@
+import {openTool} from './open-tool.mjs';
 // 모션그래픽(브라우저): 사라지기 · 빠르기 · 늦추기를 움직임 칸에서 고르면 저장되고, 움직임 차례에서 조각을 고를 수 있으며,
 // 발표에서 누르면 사라지고(앞 장으로 돌아와도 사라진 채), 흐림 · 늘이기 효과가 실제로 화면에 걸리는지.
 // MINICAN_PLAYWRIGHT_PATH 가 없으면 건너뛴다(emphasis-auto-gif.test.mjs 와 같다).
@@ -59,7 +60,7 @@ test('사라지기 · 빠르기 · 늦추기: picked in the panel they are saved
   const {page, errors} = await setup(t, [
     {id: 'pmogr00001', bg: '#ffffff', pa: 'kinetic', items: [text('etitle0001', '제목', {size: 9}), text('ebody00001', '설명 글', {y: 60}), shape('ecircle001', {aw: true})]},
   ]);
-  await page.locator('.fe-tab[data-tab="motion"]').click();
+  await openTool(page,'motion');
   // The timeline: two pieces come in when the slide opens, one waits for a click.
   await page.getByLabel('움직임 종류').selectOption('재생 차례');
   const rows = page.locator('.fe-timeline .fe-tl-pick');
@@ -159,7 +160,7 @@ test('임팩트: new combo, effects and transitions are picked in the panel, sav
     {id: 'pmogr00010', bg: '#16324f', items: [text('etitle0010', '임팩트!', {size: 10, color: '#ffffff'}), text('ebody00010', '끼익 미끄러져 서는 글', {y: 60, color: '#ffffff'}), shape('ecircle010', {x: 75})]},
     {id: 'pmogr00011', bg: '#f2c14e', items: [text('enext00011', '둘째 장', {size: 9})]},
   ]);
-  await page.locator('.fe-tab[data-tab="motion"]').click();
+  await openTool(page,'motion');
   await page.getByLabel('움직임 종류').selectOption('조합 효과');
   await page.locator('.fe-motions[data-group="combo"] .fe-mo[data-motion="impact"]').click();
   await saved(page, r => r.slides[0].pa === 'impact');

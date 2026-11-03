@@ -1,3 +1,4 @@
+import {openTool} from './open-tool.mjs';
 // 머무는 동안 계속 움직이기: 움직임 칸에서 고르고 저장되는지, 발표에서 되풀이해 움직이고 장을 떠나면 멈추는지(브라우저).
 // MINICAN_PLAYWRIGHT_PATH 가 없으면 건너뛴다(emphasis-auto-gif.test.mjs 와 같다).
 import test from 'node:test';
@@ -61,7 +62,7 @@ test('계속 움직이기: chosen in the panel it is saved; in the show it loops
   ]);
   const circle = page.locator('.cv-canvas .fe-card .fi-shape').first();
   await circle.click();
-  await page.locator('.fe-tab[data-tab="motion"]').click();
+  await openTool(page,'motion');
   await page.getByLabel('움직임 종류').selectOption('머무는 동안 계속 움직이기');
   await page.locator('.fe-motions[data-group="idle"] .fe-mo[data-motion="float"]').click();
   await saved(page, r => r.slides[0].items[1].lp === 'float');
@@ -110,7 +111,7 @@ test('모션그래픽 한 번에: picking the combo makes small pieces loop in t
   const {page, errors} = await setup(t, [
     {id: 'ploop00003', bg: '#ffffff', items: [text('etitle0003', '제목'), shape('ecircle003'), shape('ecircle004', {x: 70, shape: 'star'})]},
   ]);
-  await page.locator('.fe-tab[data-tab="motion"]').click();
+  await openTool(page,'motion');
   await page.getByLabel('움직임 종류').selectOption('조합 효과');
   await page.locator('.fe-motions[data-group="combo"] .fe-mo[data-motion="motion"]').click();
   await saved(page, r => r.slides[0].pa === 'motion');

@@ -493,7 +493,15 @@ function render() {
   // ① 대문: 왼쪽은 이름 · 한 줄 소개 · 만들 수 있는 것 · 시작 단추, 오른쪽은 꾸미는 화면을 본뜬 그림(실제 템플릿과 그림 묶음으로 그린다).
   const title = el('h1', { id: 'onba-title', class: 'cv-home-title' }, onbatangLogo());
   const start = el('button', { class: 'btn cv-cta cv-new-btn', type: 'button', disabled: loading || full, onClick: () => startNew() },
-    el('span', { text: '내 생각 펼치기' }), ic('right'));
+    ic('plus'), el('span', { text: '새 자료 만들기' }));
+  const pptFile = importAction?.homeFile ? el('input', {type:'file', accept:'.pptx',hidden:true,
+    'aria-label':'시작 화면에서 PPTX 선택', onChange:event=>{
+      const file = event.target.files?.[0];
+      event.target.value = '';
+      if (file) void openHomeWorkspace(importAction, file);
+    }}) : null;
+  const pptStart = pptFile && el('button', {type:'button',class:'btn cv-cta cv-ppt-start',disabled:loading||full,
+    onClick:()=>pptFile.click()},ic('upload'),'PPT 가져오기');
   const hero = el('section', { class: 'cv-hero', 'aria-labelledby': 'onba-title' }, el('div', { class: 'cv-hero-in' },
     el('div', { class: 'cv-hero-text' },
       el('div', { class: 'cv-home-heading' }, title),
@@ -501,14 +509,15 @@ function render() {
       el('p', { class: 'cv-hero-lead' }, '글·도형·사진으로 나답게 만들어요.', el('br'), '작은 카드부터 포스터, 발표 자료까지.'),
       el('ul', { class: 'cv-feats', 'aria-label': '만들 수 있는 것' }, ...FEATS.map(([pic, text, tone]) => el('li', { class: `cv-feat ${tone}` },
         el('span', { class: 'cv-feat-icon', 'aria-hidden': 'true' }, ic(pic)), el('span', { text })))),
-      el('div', { class: 'cv-hero-go' }, start, tourButton('home'), newsButton(),
+      el('div', { class: 'cv-start-paths','aria-label':'자료 시작',role:'group'},start,pptStart,pptFile),
+      el('div', { class: 'cv-hero-go' }, tourButton('home'), newsButton(),
         importAction && !importAction.hideHome ? el('button', { class: 'btn cv-import-btn', type: 'button', disabled: loading, onClick: async (event) => {
           const button = event.currentTarget; button.disabled = true;
           try { await importAction.open(); } catch (error) { console.warn(error); toast('가져오기 화면을 열지 못했어요. 다시 시도해주세요.'); }
           finally { button.disabled = false; }
         } }, importAction.label) : null,
-        cloudAction ? el('button',{class:'btn cv-cloud-btn',type:'button',disabled:loading,dataset:{cloudAction:''},title:cloudAction.title||'',onClick:()=>openAccountFromHome(cloudAction)},...face('cloud',cloudAction.label)) : null,
-        accountAction ? el('button',{class:'btn cv-account-btn',type:'button',disabled:loading,dataset:{accountAction:''},onClick:()=>openAccountFromHome()},accountAction.label) : null,
+        cloudAction ? el('button',{class:'btn cv-cloud-btn',type:'button',disabled:loading,dataset:{cloudAction:''},title:cloudAction.title||'',onClick:()=>openHomeWorkspace(cloudAction)},...face('cloud',cloudAction.label)) : null,
+        accountAction ? el('button',{class:'btn cv-account-btn',type:'button',disabled:loading,dataset:{accountAction:''},onClick:()=>openHomeWorkspace(accountAction)},accountAction.label) : null,
         ...fileOpenButton(loading),
         ...pdfOpenButton(loading),
         accountBridge && !sync ? el('button', { class: 'btn cv-bridge-btn', type: 'button', disabled: loading, dataset: { accountBridge: '' }, title: '집에서 만든 그림을 학교에서: GBE-AI Lab 선생님 계정에 올리고 가져와요', onClick: () => openBridgeFromHome() }, ...face('cloud', 'GBE-AI Lab 계정으로 이어 쓰기')) : null,
@@ -921,7 +930,7 @@ function editorShell(O, bar) {
     O.activityConfig?.remove();O.activityConfig=null;
     const same = tab.classList.contains('on');
     const wasFolded = shell.classList.contains('folded');
-    if (!wasFolded && same) O.workspace.closeTools(); else O.workspace.openTools();
+    if (!wasFolded && same && tab.dataset.toolGroup) O.workspace.closeTools(); else O.workspace.openTools();
   }, true);
   // 장 목록과 선택 속성은 서로 독립적이다. 편집 엔진의 도구 DOM은 한 번만 놓는다.
   O.strip = el('div', { class: 'cv-strip', role: 'group', 'aria-label': '슬라이드' });
@@ -3288,20 +3297,27 @@ async function openLessonFromEditor(O,action=lessonAction){
  finally{O.leaving=false;if(S.open===O&&!O.closed)app.inert=false;}
 }
 /** Account lists do not require creating an empty drawing on a new device. action: 계정 수업(accountAction) 또는 내 클라우드(cloudAction). */
-async function openAccountFromHome(action=accountAction){
+async function openHomeWorkspace(action,file){
  if(!action||accountHome||S.open||moving||S.phase!=='home')return;
  const session={controller:null,disposed:false,closing:false};accountHome=session;
  const outlet=el('div',{class:'cv-account-home-body'}),back=el('button',{class:'btn',type:'button',disabled:true},'내 그림으로 돌아가기');
- const shell=el('section',{class:'cv-account-home',role:'region','aria-label':action.editorTitle||action.label},
+ const heading = file ? 'PPT 가져오기' : action.editorTitle||action.label;
+ const shell=el('section',{class:'cv-account-home',role:'region','aria-label':heading},
   el('style',{},'.cv-account-home{height:100dvh;display:flex;flex-direction:column;background:#fbfdfb;color:#233f36}.cv-account-home>header{padding:16px 24px;display:flex;gap:16px;align-items:center;justify-content:space-between;border-bottom:1px solid #d8e6df}.cv-account-home h2{margin:0}.cv-account-home-body{flex:1;min-height:0;overflow:auto}'),
-  el('header',{},el('h2',{},action.editorTitle||action.label),back),outlet);
+  el('header',{},el('h2',{},heading),back),outlet);
  const dispose=async()=>{if(session.disposed)return;session.disposed=true;await session.controller?.dispose?.();if(accountHome===session)accountHome=null;};
  const close=async()=>{if(session.closing||session.disposed)return;session.closing=true;await dispose();await refresh();};
- const open=async(id,options={})=>{const record=await getDesign(id);if(!record||session.disposed)throw Error('DOCUMENT_NOT_FOUND');await dispose();await openSavedDesign(id,options);};
+ const open=async(id,options={})=>{
+   const record=await getDesign(id);
+   if(!record||session.disposed)throw Error('DOCUMENT_NOT_FOUND');
+   await dispose();
+   try{await openSavedDesign(id,options);}
+   catch(error){if(!S.open)await refresh();throw error;}
+ };
  back.onclick=async()=>{if(session.controller?.requestClose)await session.controller.requestClose({reason:'return'});else await close();};
  setView('edit');app.replaceChildren(shell);
- try{session.controller=await action.open({from:'home',inline:{root:outlet,close,openDesign:open}})||{};if(session.disposed)await session.controller.dispose?.();else back.disabled=false;}
- catch(error){await dispose();await refresh();toast(error.message||(action===cloudAction?'내 클라우드를 열지 못했어요.':'내 수업을 열지 못했어요.'));}
+ try{session.controller=await action.open({from:'home',...(file?{file}:{}),inline:{root:outlet,close,openDesign:open}})||{};if(session.disposed)await session.controller.dispose?.();else back.disabled=false;}
+ catch(error){await dispose();await refresh();toast(error.message||heading+' 화면을 열지 못했어요.');}
 }
 async function openInlineImport(O, context, action=importAction) {
   const work = O.shell.querySelector('.cv-work');
@@ -3333,6 +3349,7 @@ async function openInlineImport(O, context, action=importAction) {
     readonlyInputs.forEach(([input, readonly]) => { input.readOnly = readonly; });
   };
   const replayControl = target => {
+    if (target.dataset.toolTarget) return () => O.editor.openTab(target.dataset.toolTarget);
     if (target.matches('.fe-tab[data-tab]')) {
       const tab = target.dataset.tab;
       return () => O.editor.openTab(tab);
@@ -3367,7 +3384,8 @@ async function openInlineImport(O, context, action=importAction) {
     const target = controlFor(event); if (!target) return;
     event.preventDefault(); event.stopImmediatePropagation();
     if (target.matches('[data-document-import]')) return;
-    const action = target.dataset.tab ? `tool:${target.dataset.tab}` : target.dataset.uploadTab ? `upload:${target.dataset.uploadTab}` : target.matches('.cv-back') ? 'home' : target.matches('[data-material-action]') ? 'material' : 'control';
+    const tool = target.dataset.toolTarget || target.dataset.tab;
+    const action = tool ? `tool:${tool}` : target.dataset.uploadTab ? `upload:${target.dataset.uploadTab}` : target.matches('.cv-back') ? 'home' : target.matches('[data-material-action]') ? 'material' : 'control';
     void request({reason: 'navigate', action}, replayControl(target));
   };
   const guardFocus = event => {

@@ -1,6 +1,6 @@
 // Each asset draws its own transparent SVG at rest. The small set of animation
 // primitives is shared by the picker, the presentation and the offline lesson.
-import { kineticTitle, chartFocus, titleExample, chartExample, sceneContent } from './effect-scenes.js';
+import { kineticTitle, chartFocus, titleExample, chartExample, sceneContent, beatIntro, spotlightTitle, rollingNumber, introBpm, introExample } from './effect-scenes.js';
 import { REVEALS } from './reveal-scenes.js';
 import { CLASSROOM_ACCENTS } from './classroom-accents.js';
 import { OBSERVATION_ACCENTS } from './observation-accents.js';
@@ -104,6 +104,9 @@ export const EFFECT_PALETTES = Object.freeze({
 export const paceFactor = pace => pace === 'slow' ? 1.55 : pace === 'fast' ? 0.7 : 1;
 export const EFFECT_ASSETS = Object.freeze([
   { id: 'prism', name: '프리즘 리본', hint: '빛 띠가 대각선으로 스쳐 가요', ink: ['#9071ff', '#53e6ff', '#ff86bc'], draw: prism },
+  {id:'beatintro', name:'박자 오프닝', hint:'글의 첫 72자를 세 구절까지 나눠 한 박자씩 올려요. 줄바꿈으로 구절을 정해요.', ink:EFFECT_PALETTES.lagoon, draw:beatIntro, example:introExample},
+  {id:'spotlighttitle', name:'스포트라이트 타이틀', hint:'빛이 왼쪽에서 오른쪽으로 지나며 글의 첫 72자를 밝혀요.', ink:EFFECT_PALETTES.sunset, draw:spotlightTitle, example:titleExample},
+  {id:'rollingnumber', name:'롤링 숫자', hint:'글 속 첫 수치가 자릿수별로 올라와 멈춰요. 부호·소수점·퍼센트를 함께 보여줘요.', requires:'숫자가 있는 글 전용 (최대 8자리)', ink:EFFECT_PALETTES.sunset, draw:rollingNumber, example:{t:'text',text:'발아율 82.5%'}},
   { id: 'orbit', name: '포커스 링', hint: '세 겹의 렌즈가 한 곳에 초점을 맞춰요', ink: ['#ffac45', '#fcea97', '#ff685a'], draw: orbit },
   { id: 'signal', name: '회로 신호', hint: '선을 따라 빛이 차례로 도착해요', ink: ['#35e3b8', '#73bdff', '#ab9bff'], draw: signal },
   { id: 'confetti', name: '별빛 파티클', hint: '별과 색종이가 피어올라 흩어져요', ink: ['#ffd44f', '#ff6197', '#54d9db'], draw: confetti },
@@ -126,10 +129,11 @@ export function cleanEffect(raw, item) {
   const observe = !asset.last && raw.observe === true;
   const stops = observe ? cleanMotionCues(raw.stops) : [];
   return { id: raw.id, when: !observe && (!asset.last || asset.id==='cluecard') && raw.when === 'open' ? 'open' : 'press', ...(note ? { note } : {}),
+    ...(asset.id==='beatintro' ? {bpm:introBpm(raw.bpm)} : {}),
     ...(observe ? {observe:true} : {}),
     ...(stops.length ? {stops} : {}),
     ...(asset.id==='cluecard' ? clueOptions(raw) : {}),
-    ...(['slow','fast'].includes(raw.pace) ? {pace:raw.pace} : {}),
+    ...(asset.id!=='beatintro' && ['slow','fast'].includes(raw.pace) ? {pace:raw.pace} : {}),
     ...(typeof raw.palette==='string' && Object.hasOwn(EFFECT_PALETTES,raw.palette) ? {palette:raw.palette} : {}) };
 }
 
@@ -157,7 +161,7 @@ function drawArt(id, animate, {pace,palette,content,step=0,photo,playOnce=false,
   if(id==='lens' && !photo && content?.t==='image' && content.url) {
     photo={...content,width:content.w || 4,height:(content.h || 3) / (content.aspect || 1)};
   }
-  const options=id==='cluecard'?clueOptions(settings):{};
+  const options=id==='cluecard'?clueOptions(settings):id==='beatintro'?{bpm:introBpm(settings.bpm)}:{};
   asset.draw({ part, ink:typeof palette==='string' && Object.hasOwn(EFFECT_PALETTES,palette)?EFFECT_PALETTES[palette]:asset.ink,
     content:data,step:asset.last?Math.max(0,Math.min(asset.last(data,options),Math.trunc(step)||0)):0,photo,options });
   if(asset.last){

@@ -1,3 +1,4 @@
+import {openTool} from './open-tool.mjs';
 // Real app checks: V2 changes placement, never the saved drawing contract.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -67,7 +68,7 @@ test('the horizontal tool menu overlays a new widescreen document without moving
     await page.evaluate(()=>new Promise(done=>requestAnimationFrame(()=>requestAnimationFrame(done))));
     const before=await bounds();
     for(const tool of ['text','layout','element','upload','bg','layer','motion']){
-      await page.locator(`[data-tab="${tool}"]`).click();
+      await openTool(page,tool);
       await page.locator(`.fe-tabbody[data-panel="${tool}"]`).waitFor();
       assert.deepEqual(await bounds(),before,`${tool} keeps the page still at ${width}px`);
     }
@@ -86,13 +87,13 @@ test('the horizontal tool menu overlays a new widescreen document without moving
     await page.getByRole('button',{name:'도구 칸 닫기'}).click();
     assert.deepEqual(await bounds(),before,'closing the overlay keeps the canvas still');
   }
-  await page.locator('[data-tab=motion]').click();
+  await openTool(page,'motion');
   await page.getByLabel('움직임 종류').selectOption('조합 효과');
   await page.locator('[data-group=combo] [data-motion=impact]').click();
   assert.equal(await page.getByLabel('움직임 종류').inputValue(),'조합 효과');
   assert.ok(await page.locator('[data-group=combo] [data-motion=impact].on').count());
   await page.getByRole('button',{name:'도구 칸 닫기'}).click();
-  await page.locator('[data-tab=element]').click();
+  await openTool(page,'element');
   await page.getByLabel('꾸미기 종류').selectOption('차트');
   assert.ok(await page.locator('[data-add-chart]').first().isVisible());
   assert.deepEqual(errors,[]);
@@ -130,7 +131,7 @@ test('page workspace edits text/photos, orders pages, undoes, presents, exports 
   await title(page).click();await shot('text-properties');
   await page.locator('.cv-canvas .fi-text').last().click();assert.match(await page.locator('.fe-inspector-note').textContent(),/잠긴/);
   await page.getByRole('button',{name:'잠금 해제',exact:true}).click();await persisted(page,r=>!r.slides[0].items[3].lock);
-  await page.locator('.fe-tab[data-tab=text]').click();await page.locator('.fe-textadd').first().click();
+  await openTool(page,'text');await page.locator('.fe-textadd').first().click();
   await page.locator('.cv-canvas .fi-text.editing').fill('관찰한 내용을 적어요');await page.keyboard.press('Escape');
   await page.getByRole('button',{name:'도구 칸 닫기',exact:true}).click();await persisted(page,r=>r.slides[0].items.length===5);
   // Vertical keyboard sorting preserves page identity and the selected page.
@@ -170,7 +171,7 @@ test('1024px and small screens keep canvas visible, with usable page, tool and p
     assert.equal(await page.locator('.fe-inspector-title').textContent(),'글');assert.ok(await page.getByRole('button',{name:'굵게',exact:true}).isVisible());
     await shot(`phone-${width}-properties`);await page.getByRole('button',{name:'속성 닫기',exact:true}).click();
     assert.equal(await page.locator('.cv-properties').isVisible(),false);
-    await page.locator('[data-tab=text]').click();await page.locator('.fe-textadd').first().click();
+    await openTool(page,'text');await page.locator('.fe-textadd').first().click();
     assert.equal(await page.locator('.fe-tabbody').isVisible(),false,'inserting on a small screen returns to the canvas');
     await page.locator('.cv-canvas .fi-text.editing').fill(`좁은 화면 ${width}`);await page.keyboard.press('Escape');
     await persisted(page,r=>r.slides[2].items.some(i=>i.text===`좁은 화면 ${width}`));

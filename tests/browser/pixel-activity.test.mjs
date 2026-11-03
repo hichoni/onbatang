@@ -1,3 +1,4 @@
+import {openTool} from './open-tool.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
@@ -105,7 +106,7 @@ test('an imported PPT reopens with its authored clue card and original page orde
  const answer=(await text.innerText()).trim().replace(/\s+/g,' ');
  assert.ok(answer && Array.from(answer).length<=80);
  await text.click();
- if(!await page.locator('[data-make-clue-card]').isVisible())await page.locator('.fe-tab[data-tab=text]').click();
+ if(!await page.locator('[data-make-clue-card]').isVisible())await openTool(page,'text');
  await page.locator('[data-make-clue-card]').click();
  await page.getByLabel('학생에게 보여 줄 질문').fill('표지에는 어떤 말이 있었나요?');
  await page.getByLabel('힌트 1 (선택)').fill('첫 장을 떠올려 보세요.');
@@ -131,7 +132,7 @@ test('photo study samples a chosen PPT pixel, pauses, draws and reopens the resu
  const original=await order(),at=Math.min(2,pageCount-2);
  await page.locator('[data-material-page="'+at+'"]').click();
  await page.locator('[data-material-page="'+at+'"][aria-pressed=true]').waitFor();
- await page.locator('.fe-tab[data-tab=motion]').click();await page.locator('[data-photo-study]').click();
+ await openTool(page,'motion');await page.locator('[data-photo-study]').click();
  const picker=page.locator('.ps-picker'),bounds=await picker.locator('canvas').boundingBox();
  assert.ok(bounds);await picker.click({position:{x:Math.floor(bounds.width*.69),y:Math.floor(bounds.height*.41)}});
  await picker.press('ArrowRight');

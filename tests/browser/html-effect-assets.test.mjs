@@ -1,3 +1,4 @@
+import {openTool} from './open-tool.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
@@ -43,6 +44,86 @@ async function openBrowser(t, {phone=false} = {}) {
   await page.goto(origin+'/seed');
   return {hosted,base,origin,browser,page,errors};
 }
+
+test('home starts either a blank design or a selected PPT, then text openings survive an offline download', {
+  skip:!process.env.MINICAN_PLAYWRIGHT_PATH,timeout:150000
+},async t=>{
+  const {page,browser,hosted,base,origin:localOrigin,errors}=await openBrowser(t);
+  const origin=process.env.MINICAN_START_LIVE_ORIGIN || localOrigin;
+  if(origin!==localOrigin)await page.goto(origin+base+'/app/effects.html');
+  const existing=await page.evaluate(async base=>{
+    const {newRecord}=await import(base+'/app/designs.js'),store=await import(base+'/app/store.js');
+    store.setStorageName(base?'gailab-minican':'minican');
+    const r=newRecord('16:9');r.name='오프닝 검수 사본';r.slides[0].items=[
+      {id:'eintrobeat001',t:'text',text:'관찰을 열고\n작은 점을 이어\n그림을 만들어요',x:35,y:56,w:40,size:4,color:'#16352f'},
+      {id:'eintrospot001',t:'text',text:'별빛 아래 교실',x:72,y:65,w:28,size:4,color:'#86482a'},
+      {id:'eintronum001',t:'text',text:'발아율 82.5%',x:50,y:86,w:50,size:4,color:'#17372c'}];
+    const saved=await store.putDesign(r),tour=await import(base+'/app/tour.js');
+    for(const id of ['home','editor',tour.NEWS_KEY])tour.markTourSeen(id);
+    return saved;
+  },base);
+  const entry=origin+(hosted?'/minican-app.html':'/app/index.html');
+  await page.goto(entry);
+  const create=page.getByRole('button',{name:'새 자료 만들기',exact:true});
+  const importPpt=page.getByRole('button',{name:'PPT 가져오기',exact:true});
+  await create.click();await page.locator('.cv-canvas .fe-stage').waitFor();
+  assert.deepEqual(await page.locator('.fe-tool-groups .fe-tab>span:not(.fe-ic)').allTextContents(),['추가','자료','디자인']);
+  await page.locator('.cv-back').click();
+  let pending=page.waitForEvent('filechooser');await importPpt.click();await(await pending).setFiles([]);
+  assert.ok(await create.isVisible(),'cancelling selection stays home');
+  pending=page.waitForEvent('filechooser');await importPpt.click();
+  const fixture=fileURLToPath(new URL('../../tools/fixtures/pptx/self-authored-4x3.pptx',import.meta.url));
+  await(await pending).setFiles(fixture);await page.locator('[data-page-number="2"]').waitFor();
+  await page.locator('[data-import-save]').click();
+  await page.locator('.cv-canvas .fe-stage').waitFor({timeout:35000});
+  const stage=await page.locator('.cv-canvas .fe-stage').boundingBox();
+  assert.ok(Math.abs(stage.width/stage.height-4/3)<.02);
+  assert.equal(await page.locator('.cv-slide:not(.add)').count(),2);
+  await page.locator('.cv-back').click();await page.getByRole('button',{name:'오프닝 검수 사본 열기',exact:true}).click();
+  const readSaved=()=>page.evaluate(async({base,id})=>{
+    const store=await import(base+'/app/store.js');store.setStorageName(base?'gailab-minican':'minican');return store.getDesign(id);
+  },{base,id:existing.id});
+  assert.deepEqual((await readSaved()).slides,existing.slides);
+  for(const [i,id] of ['beatintro','spotlighttitle','rollingnumber'].entries()){
+    await page.locator('.cv-canvas .fi-text').nth(i).click();
+    await openTool(page,'motion');await page.getByLabel('움직임 종류').selectOption('그래픽 효과');
+    const picker=page.locator('.fe-fx-picker');
+    if(await picker.getAttribute('open')===null)await picker.locator('summary').click();
+    await picker.locator('[data-effect-asset='+id+']').click();
+    if(i===0)await picker.getByLabel('분당 박자',{exact:true}).fill('120');
+    await picker.getByRole('button',{name:'고른 조각에 적용'}).click();
+    if(await page.getByRole('button',{name:'도구 칸 닫기'}).isVisible())await page.getByRole('button',{name:'도구 칸 닫기'}).click();
+  }
+  await page.locator('.cv-back').click();await page.getByRole('button',{name:'오프닝 검수 사본 열기',exact:true}).click();
+  assert.equal((await readSaved()).slides[0].items[0].effect.bpm,120);
+  async function checkEffects(view){
+    for(const id of ['beatintro','spotlighttitle','rollingnumber']){
+      await view.locator('[data-effect-trigger='+id+']').click();
+      const scene=view.locator('[data-effect-playing='+id+']');
+      await scene.waitFor();
+      if(id==='beatintro'){
+        assert.match(await scene.textContent(),/120 BPM/);assert.match(await scene.textContent(),/작은 점을 이어/);
+        const delays=await scene.evaluate(n=>n.getAnimations({subtree:true}).map(a=>a.effect.getTiming().delay));
+        assert.ok(delays.includes(500)&&delays.includes(1000),'text is paced by the chosen BPM');
+      }else if(id==='spotlighttitle'){
+        assert.match(await scene.textContent(),/별빛/);assert.equal(await scene.locator('clipPath rect').count(),1);
+      }else{
+        assert.match(await scene.textContent(),/발아율 82\.5%/);
+        assert.equal(await scene.locator('clipPath rect').count(),3);
+      }
+      await scene.getByRole('button',{name:'강조 화면 닫기'}).click();
+    }
+  }
+  await page.emulateMedia({reducedMotion:'no-preference'});
+  await page.locator('.cv-show-btn').click();await checkEffects(page);await page.keyboard.press('Escape');
+  await page.locator('.cv-down-btn').click();await page.locator('[data-type=html]').click();
+  const downloading=page.waitForEvent('download');await page.locator('[data-download-save]').click();
+  const dir=await mkdtemp(join(tmpdir(),'onbatang-intro-')),file=join(dir,'intro.html');
+  t.after(async()=>{await rm(file,{force:true});await rmdir(dir);});await(await downloading).saveAs(file);
+  const context=await browser.newContext({offline:true,reducedMotion:'no-preference'});t.after(()=>context.close());
+  const offline=await context.newPage();offline.on('pageerror',e=>errors.push(e.message));
+  await openExport(offline,file);await checkEffects(offline);assert.deepEqual(errors,[]);
+});
 
 test('mobile gallery paints motion on tap, including a scoped opt-in under reduced motion', {
   skip:!process.env.MINICAN_PLAYWRIGHT_PATH, timeout:60000,
@@ -212,7 +293,7 @@ test('element effects survive editor saves and run in the presenter and the down
   await page.goto(origin+(hosted?'/minican-app.html':'/app/index.html'));
   await page.getByRole('button',{name:'모션 에셋 수업 열기',exact:true}).click();
   await page.locator('.cv-canvas .fe-stage .fi-text').first().click();
-  await page.locator('.fe-tab[data-tab=motion]').click();
+  await openTool(page,'motion');
   await page.getByLabel('움직임 종류').selectOption('그래픽 효과');
   await page.locator('.fe-fx-picker summary').click();
   assert.ok(await page.locator('[data-effect-asset=bars]').isDisabled());
@@ -228,14 +309,16 @@ test('element effects survive editor saves and run in the presenter and the down
     const d=await (await import(base+'/app/store.js')).getDesign(id);
     return d?.slides[0].items[0]?.effect?.note === '전기가 흐르는 길';
   },{base,id});
+  await openTool(page,'motion');
   await page.getByRole('button',{name:'이 장 미리 보기',exact:true}).click();
   await interact(page.locator('.cv-canvas .fe-stage'));
   // Stop preview by reopening the motion tab, then author both content scenes.
-  await page.locator('.fe-tab[data-tab=motion]').click();
+  await openTool(page,'motion');
   async function applyScene(item,asset,observe=false) {
+    const close=page.getByRole('button',{name:'도구 칸 닫기',exact:true});
+    if(await close.isVisible())await close.click();
     await item.click();
-    const tab=page.locator('.fe-tab[data-tab=motion]');
-    if (await tab.getAttribute('aria-selected')!=='true' || await page.locator('.cv-app.folded').count()) await tab.click();
+    await openTool(page,'motion');
     await page.getByLabel('움직임 종류').selectOption('그래픽 효과');
     const picker=page.locator('.fe-fx-picker');
     if (await picker.getAttribute('open')===null) await picker.locator('summary').click();
@@ -260,6 +343,7 @@ test('element effects survive editor saves and run in the presenter and the down
   await page.waitForFunction(async ({base,id}) => (await (await import(base+'/app/store.js')).getDesign(id))?.slides[0].items[2].effect?.id==='bars',{base,id});
   await page.locator('.cv-slide[data-slide="1"]').click();
   await applyScene(page.locator('.cv-canvas .fe-stage .fi-text').filter({hasText:'인공지능'}),'initials');
+  await openTool(page,'motion');
   await page.getByRole('button',{name:'이 장 미리 보기',exact:true}).click();
   await page.locator('.cv-canvas [data-effect-trigger=initials]').click();
   await page.locator('.cv-canvas [data-effect-playing=initials]').getByRole('button',{name:'첫 글자 공개'}).click();
@@ -468,8 +552,7 @@ test('a teacher edits a question on a text box, controls each clue, and reopens 
   const stage=page.locator('.cv-canvas .fe-stage');
   const text=stage.locator('.fi-text').filter({hasText:'작은 달'});
   await text.click();
-  const textTab=page.locator('.fe-tab[data-tab=text]');
-  if(!await page.locator('[data-make-clue-card]').isVisible())await textTab.click();
+  if(!await page.locator('[data-make-clue-card]').isVisible())await openTool(page,'text');
   await page.locator('[data-make-clue-card]').click();
   await page.getByLabel('학생에게 보여 줄 질문').fill(prompt);
   await page.getByLabel('힌트 1 (선택)').fill(hints[0]);

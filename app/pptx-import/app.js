@@ -145,6 +145,7 @@ export function mountPptxApp({root,storage='minican',fonts,fontServices=defaultI
   return disposal;
  }
  return {library,requestClose,async resume(){paused=false;await workspace.resume();if(!materialRoot.hidden)await paint();},getEditorContext:()=>({materialRef:current?clone(current.materialRef):null,active}),
+  openFile(file){if(disposed||!workspace.startNewImport())return;latestImport=null;importRoot.hidden=false;materialRoot.hidden=true;void workspace.chooseFile(file).catch(error=>say(message(error),true));},
   async restoreEditorContext(context){current=context?.materialRef?await library.getMaterial(context.materialRef):null;active=context?.active||0;readOnly=false;},
   async open({newImport=false}={}){if(disposed)throw Error('가져오기 화면을 다시 열어주세요.');importRoot.hidden=false;materialRoot.hidden=true;if(newImport&&workspace.startNewImport())latestImport=null;},showMaterial,showLibrary,reportError:error=>say(message(error),true),async editorClosed(){if(current&&!disposed){importRoot.hidden=true;materialRoot.hidden=false;await paint();}},dispose};
 }

@@ -1,3 +1,4 @@
+import {openTool} from './open-tool.mjs';
 // 글자 효과의 계속 움직이기(src/live.js 의 loopAt): 글상자의 "계속 움직이기"를 켜면 나타난 뒤 머무는 동안 그 효과답게 계속 움직인다.
 // 꾸미기 판 · 발표에서 순간마다 자리가 바뀌고(콩콩 뛰기), 움직임 칸의 차례에 "계속 움직이는 조각"으로 적힌다. 영상도 같은 때에 같은 모습. 바깥 요청은 없다.
 import test from 'node:test';
@@ -57,7 +58,7 @@ test('text look loops: a toggle per text box, moving all the time in the editor 
   const ed = await ySeries('.cv-canvas .fe-stage .fi-text');
   assert.ok(Math.min(...ed) < -0.15 && new Set(ed.map((v) => v.toFixed(2))).size > 3, `hops in the editor: ${ed}`);
   // 움직임 칸의 차례: 머무는 동안 계속 움직이는 조각에 적힌다.
-  await page.locator('.fe-tab[data-tab="motion"]').click();
+  await openTool(page,'motion');
   assert.match(await page.locator('.fe-note', {hasText: '머무는 동안 계속 움직이는 조각'}).innerText(), /글자 효과 · 콩콩 뛰기/);
 
   // 발표: 나타나는 움직임(떨어져 튀기)이 끝난 뒤에도 계속 콩콩 뛴다. 켜지 않은 글은 자리를 옮기지 않는다.

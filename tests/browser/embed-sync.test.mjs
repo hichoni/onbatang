@@ -1,3 +1,4 @@
+import {openTool} from './open-tool.mjs';
 // Local-only browser contract for a host that saves drawings itself (GBE-AI Lab 받은함): startMinican({ embed, sync, syncDelay }).
 // The editor opens straight away with the host's button label and no close button, edits go up after the given delay,
 // and a newer record from the host wins when the drawing opens.
@@ -52,7 +53,7 @@ test('a host that saves drawings: its own button label, no close, edits go up af
   assert.equal(await page.locator('[data-share-action]').count(), 0, 'no share button unless the host gives one');
   assert.equal(await page.locator('.cv-canvas .fe-card .fi-text').textContent(), '서버에 있던 글', 'the newer host copy opened');
   // An edit goes up once, after the delay (not at once).
-  if (!await page.locator('.fe-textadd.title').isVisible()) await page.locator('.fe-tab[data-tab="text"]').click();
+  if (!await page.locator('.fe-textadd.title').isVisible()) await openTool(page,'text');
   await page.locator('.fe-textadd.title').click();
   const before = await page.evaluate(() => window.pushed.length);
   await page.waitForFunction((n) => window.pushed.length > n, before, {timeout: 8000});

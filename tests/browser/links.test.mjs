@@ -1,3 +1,4 @@
+import {openTool} from './open-tool.mjs';
 // Local-only browser contract for connector lines (연결선): join two selected pieces, follow them, style, delete, duplicate, export.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -335,7 +336,7 @@ test('the 꾸미기 panel and a single selected piece both start joining: pick t
   const shapes = page.locator('.cv-canvas .fe-card .fi-shape');
   const hint = page.locator('.cv-canvas .fe-link-hint');
   // From the panel: a card with a picture explains it, then two picks make the line (from the first to the second).
-  await page.locator('.fe-tab[data-tab="element"]').click();
+  await openTool(page,'element');
   await page.getByLabel('꾸미기 종류').selectOption('잇기');
   const start = page.locator('[data-start-link]');
   assert.match(await start.textContent(), /연결선두 조각을 화살표로 이어요/);
@@ -366,7 +367,7 @@ test('the 꾸미기 panel and a single selected piece both start joining: pick t
   await page.keyboard.press('Control+z');
   await saved(page, r => !r.slides[0].items.some(it => it.t === 'link') && r.slides[0].items.filter(it => it.t === 'shape').length === 2);
   // In step ① an empty spot still stops.
-  if (!await page.locator('[data-start-link]').isVisible()) await page.locator('.fe-tab[data-tab="element"]').click();
+  if (!await page.locator('[data-start-link]').isVisible()) await openTool(page,'element');
   await page.locator('[data-start-link]').click();
   await page.mouse.click(card.x + card.width * .5, card.y + card.height * .85);
   assert.equal(await hint.isVisible(), false, 'an empty spot before a start stops');

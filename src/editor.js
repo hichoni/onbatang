@@ -50,6 +50,11 @@ const TABS = [
 // 움직임 칸은 configure({ motion: true }) 를 한 프로젝트에만 나온다(발표 화면이 있는 곳).
 const MOTION_TAB = ['motion', 'motion', '움직임', '발표할 때 조각과 장이 움직여요.'];
 const tabList = () => (settings().motion ? [...TABS, MOTION_TAB] : TABS);
+const TOOL_GROUPS = [
+  {id:'add', name:'추가', icon:'plus', tabs:['text','element']},
+  {id:'media', name:'자료', icon:'upload', tabs:['upload']},
+  {id:'design', name:'디자인', icon:'template', tabs:['layout','bg','layer','motion']},
+];
 // 영상(바탕 영상 · 유튜브)은 "내 자료"의 "영상" 칸 한곳에 있다. 바탕 영상(그 장의 바탕에 까는 영상 파일 · 찍은 것)은 편집기에 saveVideo 를 준 프로젝트에만 나온다.
 // 영상 장면의 한도(기본값): 카메라로 한 번에 찍는 길이(초) · 골라 넣는 파일의 길이(초)와 크기(바이트)
 const VIDEO_LIMITS = { maxSeconds: 60, maxFileSeconds: 300, maxBytes: 200 * 1024 * 1024 };
@@ -164,6 +169,7 @@ export function createEditor({
   let future = [];            // 다시 실행 기록
   let drag = null;
   let tab = 'layout';         // 옆 메뉴에서 열려 있는 칸
+  const lastTool = new Map();
   let pop = null;             // 도구 막대 아래에 펼쳐진 칸: 'color' · 'bgc' · 'edge' · 'corner' · 'thick' · 'size' · 'op' · 'flip' · 'pos' · 'swap' · 'mask' · 'cut' · null
   let busy = false;           // 사진 올리는 중
   let cropJob = null;         // Preview only; Apply creates a single undo step.
@@ -440,6 +446,12 @@ export function createEditor({
   function quick(pic, text, onClick) { return el('button', { class: 'fe-quick', type: 'button', onClick }, icon(pic), el('span', { text })); }
   function openTab(id) {
     onToolOpen?.();
+    if (inspector) {
+      stopPreview(); tab = id; armed = null; armedFile = null;
+      renderPanel({top:true});
+      (panel.querySelector('.fe-subtools .on') || panel.querySelector('.fe-tool-group.on'))?.focus({preventScroll:true});
+      return;
+    }
     const btn = panel.querySelector(`.fe-tab[data-tab="${id}"]`);
     if (btn && !btn.classList.contains('on')) btn.click(); else btn?.focus();
     btn?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
@@ -3604,10 +3616,14 @@ export function createEditor({
     const was = panel.querySelector('.fe-tabbody');
     const keep = !top && was && shownTab === tab ? was.scrollTop : 0;
     const priorTabsLeft = panel.querySelector('.fe-tabs')?.scrollLeft || 0;
-    const tabButton = ([id, pic, name]) => {
+    const tabButton = ([id, pic, name], group = null) => {
+      const chosen = group ? group.tabs.includes(tab) : tab === id;
+      const data = group ? {toolGroup:group.id,toolTarget:id} : {tab:id};
+      if (group?.tabs.length === 1) data.tab = id;
       let pressed = null, pendingTap = null;
       return el('button', {
-        class: `fe-tab${tab === id ? ' on' : ''}`, type: 'button', role: 'tab', 'aria-selected': String(tab === id), dataset: { tab: id },
+        class: `fe-tab${group ? ' fe-tool-group' : ''}${chosen ? ' on' : ''}`, type:'button', role:'tab', 'aria-selected':String(chosen), dataset:data,
+        ...(group ? {'aria-expanded':String(chosen && !!panel.closest('.cv-page-workspace:not(.folded)'))} : {}),
         onPointerdown: e => { if (e.pointerType === 'touch' && e.isPrimary) pressed = {id:e.pointerId,x:e.clientX,y:e.clientY}; },
         onPointercancel: () => { pressed = null; pendingTap = null; },
         onPointerup: e => {
@@ -3622,7 +3638,7 @@ export function createEditor({
           // that as handled too, so a denied close is not requested twice.
           const heard = event => {
             const target = event.target.closest?.('.fe-tab');
-            if (!event.isTrusted || !target || target.dataset.tab !== id || !panel.contains(target)) return;
+            if (!event.isTrusted || !target || (group ? target.dataset.toolGroup !== group.id : target.dataset.tab !== id) || !panel.contains(target)) return;
             // Rendering may retarget a late native click to the new tab button.
             // Suppress only the gesture we replayed; a new touch has a new ID.
             if (replayed && event.pointerId === start.id) { event.preventDefault(); event.stopImmediatePropagation(); }
@@ -3638,10 +3654,25 @@ export function createEditor({
         onClick: e => {
           pendingTap = null;
           stopPreview(); tab = id; armed = null; armedFile = null; renderPanel();
+          if(group)panel.querySelector('[data-tool-group="'+group.id+'"]')?.focus({preventScroll:true});
+          else if(e.detail===0)panel.querySelector('.fe-subtools .on')?.focus({preventScroll:true});
         },
-      }, icon(pic, 'fe-tab-icon'), el('span', { text: name }));
+      }, icon(pic, 'fe-tab-icon'), el('span', { text: name }),group ? el('small',{'aria-hidden':'true',text:'⌄'}) : null);
     };
-    const tabs = el('div', { class: `fe-tabs${tabsHere().length > 7 ? ' many' : ''}`, role: 'tablist', 'aria-label': '넣을 것 고르기' }, ...tabsHere().map(tabButton));
+    const available = tabsHere();
+    const group = TOOL_GROUPS.find(row => row.tabs.includes(tab)) || TOOL_GROUPS[0];
+    lastTool.set(group.id, tab);
+    const groupButton = row => {
+      const target = lastTool.get(row.id) || row.tabs[0];
+      return tabButton([target,row.icon,row.name],row);
+    };
+    const tabs = inspector
+      ? el('div',{class:'fe-tabs fe-tool-groups',role:'tablist','aria-label':'상단 도구'},...TOOL_GROUPS.map(groupButton))
+      : el('div',{class:'fe-tabs',role:'tablist','aria-label':'넣을 것 고르기'},...available.map(row=>tabButton(row)));
+    const subtools = inspector && group.tabs.length > 1
+      ? el('div',{class:'fe-subtools',role:'tablist','aria-label':group.name+' 도구'},
+          ...group.tabs.map(id=>available.find(row=>row[0]===id)).filter(Boolean).map(row=>tabButton(row)))
+      : null;
     // 칸의 머리말(이름 + 한 줄 설명)은 짧게, 그 아래에 바로 고를 것이 나온다.
     if (!tabsHere().some((t) => t[0] === tab)) tab = 'text';
     const [, , title, desc] = tabsHere().find((t) => t[0] === tab);
@@ -3650,7 +3681,7 @@ export function createEditor({
       el('div', { class: 'fe-panel-head' },
         onToolClose ? el('button', { class: 'fe-panel-close', type: 'button', 'aria-label': '도구 칸 닫기', onClick: onToolClose }, icon('close')) : null,
         el('b', { class: 'fe-panel-title', text: title }), inspector ? null : el('span', { class: 'fe-panel-desc', text: desc })),
-      ...tabBody().filter(Boolean));
+      subtools, ...tabBody().filter(Boolean));
     panel.replaceChildren(tabs, body, fileInput, videoInput, replaceInput);
     tabs.scrollLeft = priorTabsLeft;
     shownTab = tab;
@@ -3801,6 +3832,7 @@ export function createEditor({
   }
   /** 이 장을 발표할 때처럼 틀어 본다: 전환 효과 → 요소들 → "누를 때" 나오는 것은 조금씩 쉬었다가 차례로. */
   function previewPage({ transition = true } = {}) {
+    onToolClose?.();
     endEdit();
     stopDrag();
     stopPreview();
@@ -3934,7 +3966,7 @@ export function createEditor({
       const graphics = motionPart('effectPicker', JSON.stringify([sel,it?.id,it?.t,it?.lock,it?.effect,it?.text,
         it?.kind,it?.title,it?.unit,it?.labels,it?.series,it?.vals]), () => [
         it && !it.lock && effectable(it)
-          ? effectPicker(it, effect => { stopPreview(); change({ effect }); },settings().aspect)
+          ? effectPicker(it, effect => { stopPreview(); change({ effect }); onToolClose?.(); },settings().aspect)
           : el('p', { class:'fe-note', text:'글·그림·도형을 하나 고르면 HTML 그래픽 효과를 붙일 수 있어요.' }),
       ]);
       const mine = it && !it.lock ? motionPart('mine', [sel, itemLabel(it), it.an || '', !!it.aw, it.em || '', it.lp || '', it.ex || '', it.sp || '', it.dl || 0, here.pa || ''].join('|'), () => {

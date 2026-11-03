@@ -1,3 +1,4 @@
+import {openTool} from './open-tool.mjs';
 // 내 그림 목록(브라우저): 한 PPT 를 나눠 담은 파트들은 한 칸(PPT · 모두 몇 장 · 파트 몇 개)으로 묶이고, 펼치면 파트 칸이 보인다.
 // 거르기(전체 · PPT · 직접 만든 것) · 이름 찾기 · 늘어놓는 차례(최근 고친 · 만든 · 이름)를 고르면 목록이 바뀌고, 고른 것은 기억한다.
 // 발표: 아래 막대와 화살표는 마우스를 가만히 두면 사라지고 움직이면 나온다. MINICAN_PLAYWRIGHT_PATH 가 없으면 건너뛴다.
@@ -147,7 +148,7 @@ test('motion "same on every slide" reaches the other parts of a whole PPT', opti
   await page.locator('.cv-deck .cv-item-open').click();
   await page.locator('.cv-canvas .fe-stage').waitFor();
   await page.waitForFunction(() => document.querySelectorAll('[data-material-page]').length === 7);
-  await page.locator('.fe-tab[data-tab="motion"]').click();
+  await openTool(page,'motion');
   await page.locator('[data-group="tr"] [data-motion="zoomblur"]').click();
   const all = page.locator('.fe-motion-all');
   await all.click();

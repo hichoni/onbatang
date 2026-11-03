@@ -101,7 +101,8 @@ export function mountMotionStudy(host,asset,options={},onClose,onCuesChange) {
     const start=pristine || progress>=1 ? 0 : progress;
     pristine=false;
     // Slow this view to teaching pace while preserving the original cue timings.
-    stop=runEffectFrames(frames,start,Math.max(frames.duration,4000*paceFactor(options.pace)),display,pause);
+    const duration=asset.id==='beatintro'?frames.duration:Math.max(frames.duration,4000*paceFactor(options.pace));
+    stop=runEffectFrames(frames,start,duration,display,pause);
     display(start);label();
   };
   range.oninput=()=>seek(Number(range.value)/100);

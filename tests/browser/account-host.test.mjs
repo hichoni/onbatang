@@ -36,8 +36,8 @@ test('account lists open inside home/editor, preserve saves and leave for an alr
  await page.getByRole('button',{name:'내 그림으로 돌아가기',exact:true}).click();await page.locator('.cv-item .cv-thumb').first().click();
  await page.locator('.cv-name').fill('저장 후 수업 목록');if(await page.locator('.cv-document-menu').count())await page.getByLabel('문서 메뉴',{exact:true}).click();await page.locator('[data-account-action]').click();await page.getByText('내부 수업 목록',{exact:true}).waitFor();
  assert.equal(await page.evaluate(()=>window.calls.at(-1).persisted.name),'저장 후 수업 목록');
- await page.evaluate(()=>window.allowClose=false);await page.locator('.fe-tab[data-tab=bg]').click();assert.equal(await page.getByText('내부 수업 목록',{exact:true}).count(),1);
- await page.evaluate(()=>window.allowClose=true);await page.locator('.fe-tab[data-tab=bg]').click();await page.locator('[data-inline-import]').waitFor({state:'detached'});assert.equal(await page.locator('.cv-name').inputValue(),'저장 후 수업 목록');
+ await page.evaluate(()=>window.allowClose=false);await page.locator('[data-tool-group=design]').click();assert.equal(await page.getByText('내부 수업 목록',{exact:true}).count(),1);
+ await page.evaluate(()=>window.allowClose=true);await page.locator('[data-tool-group=design]').click();await page.locator('[data-inline-import]').waitFor({state:'detached'});assert.equal(await page.locator('.cv-name').inputValue(),'저장 후 수업 목록');
  if(await page.locator('.cv-document-menu').count())await page.getByLabel('문서 메뉴',{exact:true}).click();await page.locator('[data-account-action]').click();await page.getByRole('button',{name:'결과 편집본 열기',exact:true}).click();await page.locator('[data-inline-import]').waitFor({state:'detached'});
  assert.match(await page.locator('.cv-canvas').innerText(),/학생 답 보존/);assert.equal(page.url(),url);assert.deepEqual(external,[]);
 });
