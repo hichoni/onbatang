@@ -12,6 +12,8 @@
   main{max-width:920px;margin:auto;padding:clamp(24px,5vw,64px) 20px}
   header{border-top:2px solid #9de0cc;padding-top:20px}
   #try-motion{display:inline-flex;align-items:center;min-height:44px;margin-top:8px;color:#a0e9d1;font-weight:700;text-underline-offset:4px}
+  .cinema-links{display:flex;flex-wrap:wrap;gap:3px 18px;margin-top:12px}.cinema-links a{display:inline-flex;align-items:center;min-height:44px;color:#f6dbb0;text-underline-offset:4px}
+  .settings textarea{max-width:100%;padding:7px 10px;background:#20303c;color:#f5f7f5;border:1px solid #57717b;border-radius:8px;font:inherit}
   small{font-size:.77rem;letter-spacing:.1em;font-weight:750;color:#9de0cc}
   h1{font-size:clamp(2.1rem,6vw,3.7rem);line-height:1.12;letter-spacing:-.06em;margin:16px 0}
   p{line-height:1.65;color:#c6d2d6;margin:0}
@@ -44,7 +46,7 @@
   .photo-feature button,#photo-demo>.demo-close{font:inherit;border:0;background:#a8e8d3;color:#11272a;border-radius:7px;padding:10px 15px;cursor:pointer;min-height:44px}#photo-demo{border:0;border-radius:14px;padding:12px;background:#f5f7f3;width:min(900px,96vw);max-height:92dvh}#photo-demo::backdrop{background:#081018cc}#photo-demo>.demo-close{display:block;margin:0 0 8px auto}#photo-demo header{border:0;padding:0}#photo-demo p{color:inherit}#photo-demo .pixel-setup{background:#fff}
 </style>
 <main>
-  <header><small>온바탕 / 움직임</small><h1>HTML 모션 에셋</h1><p>효과 카드를 눌러 움직임을 재생하거나, 디자인 세트의 다음 장을 열어 전환을 살펴보세요.</p><a id="try-motion" href="#prism-demo">프리즘 리본 한 번 재생</a></header>
+  <header><small>온바탕 / 움직임</small><h1>HTML 모션 에셋</h1><p>효과 카드를 눌러 움직임을 재생하거나, 디자인 세트의 다음 장을 열어 전환을 살펴보세요.</p><nav class="cinema-links" aria-label="시네마 효과 바로가기"></nav><a id="try-motion" href="#prism-demo">프리즘 리본 한 번 재생</a></header>
   <aside id="motion-notice" hidden><p aria-live="polite"></p><button id="motion-switch" type="button" hidden>움직임 켜기</button></aside>
   <article id="motion-study" class="story-shelf" style="padding:clamp(14px,3vw,24px)">
     <small>수업 도구 / 움직임 관찰</small>
@@ -71,7 +73,10 @@
   <dialog id="photo-demo" aria-label="사진 속으로 들어가기 체험"><button type="button" class="demo-close">체험 닫기</button><div id="demo-stage"></div></dialog>
   <h2>질문하고 단계별 공개</h2><section id="questions" aria-label="질문하고 단계별 공개"></section>
   <div class="settings">
-    <label>시연할 제목<input id="title" value="작은 픽셀이 모여 그림이 된다" maxlength="72"></label>
+    <label>시연할 제목 · 줄바꿈으로 구절 구분<textarea id="title" rows="2" maxlength="72">작은 픽셀이 모여 그림이 된다</textarea></label>
+    <label>탐사 항로의 단계<textarea id="route-stages" rows="3" maxlength="72">관찰하기
+가설 세우기
+함께 비교하기</textarea></label>
     <label>박자 오프닝 BPM<input id="intro-tempo" type="number" min="60" max="180" value="100"></label>
     <label>롤링 숫자에 쓸 문장<input id="figure-caption" value="발아율 82.5%" maxlength="72"></label>
     <label>시연할 차트<select id="chart"><option value="pixels">도안별 픽셀 수 · 세로</option><option value="change">모둠별 증감 · 가로</option></select></label>
@@ -127,8 +132,13 @@
   const studyAssets=EFFECT_ASSETS.filter(asset=>!asset.last).sort((a,b)=>Number(!!b.stops)-Number(!!a.stops));
   for(const asset of studyAssets)studyChoice.add(new Option(asset.name,asset.id));
   function cardOptions(asset,step=0){
+    let content=asset.example;
+    if(asset.id==='rollingnumber')content={t:'text',text:document.querySelector('#figure-caption').value};
+    else if(asset.id==='fieldroute')content={t:'text',text:document.querySelector('#route-stages').value};
+    else if(asset.cinematic||asset.id==='kinetic')content={t:'text',text:title.value};
+    else if(asset.id==='bars'&&chart.value==='change')content=changes;
     return {...asset.demo,pace:asset.id==='beatintro'?'normal':pace.value,palette:palette.value,step,bpm:Number(document.querySelector('#intro-tempo').value),
-      content:asset.id==='rollingnumber'?{t:'text',text:document.querySelector('#figure-caption').value}:['kinetic','beatintro','spotlighttitle'].includes(asset.id)?{t:'text',text:title.value}:asset.id==='bars'&&chart.value==='change'?changes:asset.example};
+      content};
   }
   let stopStudy;
   const cueDrafts=new Map();
@@ -148,7 +158,11 @@
     button.dataset.asset=asset.id;
     if(asset.id==='cluecard')button.id='clue-card';
     if(asset.id==='prism')button.id='prism-demo';
-    if(['beatintro','spotlighttitle','rollingnumber'].includes(asset.id))button.id=asset.id;
+    if(asset.cinematic){
+      button.id=asset.id;
+      const shortcut=document.createElement('a');shortcut.href='#'+asset.id;shortcut.textContent=asset.name;
+      document.querySelector('.cinema-links').append(shortcut);
+    }
     art.className='art';
     let step=0,stop=null,played=false;
     const label=()=>{
@@ -185,13 +199,14 @@
     group.append(button,link);
     document.querySelector(asset.example?'#scenes':'#accents').append(group);
   }
-  if(['#clue-card','#beatintro','#spotlighttitle','#rollingnumber'].includes(location.hash))document.getElementById(location.hash.slice(1)).scrollIntoView({block:'center'});
+  const linkedCard=document.getElementById(location.hash.slice(1));
+  if(linkedCard?.matches('[data-asset]'))linkedCard.scrollIntoView({block:'center'});
   document.querySelector('#try-motion').onclick=event=>{
     event.preventDefault();
     const tile=document.getElementById('prism-demo');
     tile.scrollIntoView({block:'center'});
     tile.focus({preventScroll:true});tile.click();
   };
-  document.querySelector('#figure-caption').oninput=document.querySelector('#intro-tempo').onchange=title.oninput=chart.onchange=pace.onchange=palette.onchange=()=>{posters.forEach(draw=>draw());showStudy();};
+  document.querySelector('#route-stages').oninput=document.querySelector('#figure-caption').oninput=document.querySelector('#intro-tempo').onchange=title.oninput=chart.onchange=pace.onchange=palette.onchange=()=>{posters.forEach(draw=>draw());showStudy();};
 </script>
 </html>

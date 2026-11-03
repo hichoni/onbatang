@@ -57,7 +57,9 @@ test('home starts either a blank design or a selected PPT, then text openings su
     const r=newRecord('16:9');r.name='오프닝 검수 사본';r.slides[0].items=[
       {id:'eintrobeat001',t:'text',text:'관찰을 열고\n작은 점을 이어\n그림을 만들어요',x:35,y:56,w:40,size:4,color:'#16352f'},
       {id:'eintrospot001',t:'text',text:'별빛 아래 교실',x:72,y:65,w:28,size:4,color:'#86482a'},
-      {id:'eintronum001',t:'text',text:'발아율 82.5%',x:50,y:86,w:50,size:4,color:'#17372c'}];
+      {id:'eintronum001',t:'text',text:'발아율 80.5%',x:50,y:86,w:50,size:4,color:'#17372c'},
+      {id:'eintroview001',t:'text',text:'아침을 여는 작은 발견',x:28,y:17,w:38,size:4,color:'#16352f'},
+      {id:'eintroroute01',t:'text',text:'흙 관찰\n씨앗 심기\n기록하기',x:75,y:20,w:37,size:3,color:'#86482a'}];
     const saved=await store.putDesign(r),tour=await import(base+'/app/tour.js');
     for(const id of ['home','editor',tour.NEWS_KEY])tour.markTourSeen(id);
     return saved;
@@ -84,7 +86,8 @@ test('home starts either a blank design or a selected PPT, then text openings su
     const store=await import(base+'/app/store.js');store.setStorageName(base?'gailab-minican':'minican');return store.getDesign(id);
   },{base,id:existing.id});
   assert.deepEqual((await readSaved()).slides,existing.slides);
-  for(const [i,id] of ['beatintro','spotlighttitle','rollingnumber'].entries()){
+  const movieScenes=['beatintro','spotlighttitle','rollingnumber','paperhorizon','fieldroute'];
+  for(const [i,id] of movieScenes.entries()){
     await page.locator('.cv-canvas .fi-text').nth(i).click();
     await openTool(page,'motion');await page.getByLabel('움직임 종류').selectOption('그래픽 효과');
     const picker=page.locator('.fe-fx-picker');
@@ -97,7 +100,7 @@ test('home starts either a blank design or a selected PPT, then text openings su
   await page.locator('.cv-back').click();await page.getByRole('button',{name:'오프닝 검수 사본 열기',exact:true}).click();
   assert.equal((await readSaved()).slides[0].items[0].effect.bpm,120);
   async function checkEffects(view){
-    for(const id of ['beatintro','spotlighttitle','rollingnumber']){
+    for(const id of movieScenes){
       await view.locator('[data-effect-trigger='+id+']').click();
       const scene=view.locator('[data-effect-playing='+id+']');
       await scene.waitFor();
@@ -107,9 +110,16 @@ test('home starts either a blank design or a selected PPT, then text openings su
         assert.ok(delays.includes(500)&&delays.includes(1000),'text is paced by the chosen BPM');
       }else if(id==='spotlighttitle'){
         assert.match(await scene.textContent(),/별빛/);assert.equal(await scene.locator('clipPath > rect').count(),1);
-      }else{
-        assert.match(await scene.textContent(),/발아율 82\.5%/);
+      }else if(id==='rollingnumber'){
+        assert.match(await scene.textContent(),/발아율 80\.5%/);
         assert.equal(await scene.locator('clipPath rect').count(),3);
+        assert.ok(await scene.locator('g[clip-path]').nth(1).locator('text').count()>1,'the zero digit has its own moving reel');
+      }else if(id==='paperhorizon'){
+        assert.match(await scene.textContent(),/아침을/);
+        assert.equal(await scene.evaluate(n=>n.getAnimations({subtree:true}).filter(a=>a.effect.getTiming().duration===2170).length),4);
+      }else{
+        assert.match(await scene.textContent(),/흙.*씨앗.*기록하기/s);
+        assert.equal(await scene.locator('path[pathLength="1"]').count(),3);
       }
       await scene.getByRole('button',{name:'강조 화면 닫기'}).click();
     }
@@ -167,6 +177,15 @@ test('mobile gallery paints motion on tap, including a scoped opt-in under reduc
   await page.getByRole('link',{name:'프리즘 리본 관찰대에서 보기'}).tap();
   assert.equal(await page.locator('#study-choice').inputValue(),'prism');
   assert.ok(page.url().endsWith('#motion-study'));
+  await page.locator('#route-stages').fill('살펴보기\n실험하기\n기록하기');
+  await page.getByRole('link',{name:'탐사 항로 관찰대에서 보기'}).tap();
+  assert.equal(await page.locator('#study-choice').inputValue(),'fieldroute');
+  await study.getByRole('button',{name:'가운데',exact:true}).tap();
+  const route=study.locator('.obs-art');
+  assert.match(await route.textContent(),/살펴보기.*실험하기.*기록하기/s);
+  const midway=await route.screenshot();
+  await scrubbing.press('End');
+  assert.ok(!midway.equals(await route.screenshot()),'the course draws through the later checkpoints');
   await expectFrames();
   await page.waitForFunction(()=>document.querySelector('#prism-demo em').textContent==='↻ 다시 재생');
   await page.locator('#palette').selectOption('sunset');

@@ -2,6 +2,7 @@
 // primitives is shared by the picker, the presentation and the offline lesson.
 import { kineticTitle, chartFocus, titleExample, chartExample, sceneContent, beatIntro, spotlightTitle, rollingNumber, introBpm, introExample } from './effect-scenes.js';
 import { REVEALS } from './reveal-scenes.js';
+import { paperHorizon, fieldRoute } from './cinematic-landscapes.js';
 import { CLASSROOM_ACCENTS } from './classroom-accents.js';
 import { OBSERVATION_ACCENTS } from './observation-accents.js';
 import { CLUE_CARD, clueOptions } from './clue-card.js';
@@ -104,9 +105,13 @@ export const EFFECT_PALETTES = Object.freeze({
 export const paceFactor = pace => pace === 'slow' ? 1.55 : pace === 'fast' ? 0.7 : 1;
 export const EFFECT_ASSETS = Object.freeze([
   { id: 'prism', name: '프리즘 리본', hint: '빛 띠가 대각선으로 스쳐 가요', ink: ['#9071ff', '#53e6ff', '#ff86bc'], draw: prism },
-  {id:'beatintro', name:'박자 오프닝', hint:'글의 첫 72자를 세 구절까지 나눠 한 박자씩 올려요. 줄바꿈으로 구절을 정해요.', ink:EFFECT_PALETTES.lagoon, draw:beatIntro, example:introExample},
-  {id:'spotlighttitle', name:'스포트라이트 타이틀', hint:'빛이 왼쪽에서 오른쪽으로 지나며 글의 첫 72자를 밝혀요.', ink:EFFECT_PALETTES.sunset, draw:spotlightTitle, example:titleExample},
-  {id:'rollingnumber', name:'롤링 숫자', hint:'글 속 첫 수치가 자릿수별로 올라와 멈춰요. 부호·소수점·퍼센트를 함께 보여줘요.', requires:'숫자가 있는 글 전용 (최대 8자리)', ink:EFFECT_PALETTES.sunset, draw:rollingNumber, example:{t:'text',text:'발아율 82.5%'}},
+  {id:'beatintro', name:'박자 오프닝', cinematic:true, hint:'박자마다 한 구절이 올라오고 레코드 홈에 빛이 돌아요. 줄바꿈으로 구절을 정해요.', ink:EFFECT_PALETTES.lagoon, draw:beatIntro, example:introExample},
+  {id:'spotlighttitle', name:'스포트라이트 타이틀', cinematic:true, hint:'무대 조명이 제목 위를 지나가며 글과 밑줄을 밝혀요.', ink:EFFECT_PALETTES.sunset, draw:spotlightTitle, example:titleExample},
+  {id:'rollingnumber', name:'롤링 숫자', cinematic:true, hint:'계기판의 자릿수가 따로 굴러 글 속 첫 수치에서 멈춰요. 부호·소수점·퍼센트도 보여줘요.', requires:'숫자가 있는 글 전용 (최대 8자리)', ink:EFFECT_PALETTES.sunset, draw:rollingNumber, example:{t:'text',text:'발아율 82.5%'}},
+  {id:'paperhorizon', name:'종이 지평선', cinematic:true, hint:'해가 오르고 네 겹의 종이 능선이 서로 다른 속도로 움직이며 도입 제목을 열어요.',
+    ink:['#faaf60','#cf8463','#72868a'], draw:paperHorizon, example:{t:'text',text:'아침을 여는 작은 발견'}, stops:[[0,'해 뜨기 전'],[46,'겹쳐지는 능선'],[100,'열린 풍경']]},
+  {id:'fieldroute', name:'탐사 항로', cinematic:true, hint:'수업 순서를 줄바꿈으로 적어요. 최대 세 지점까지 지도 위 길과 단계 이름이 차례로 나타나요.',
+    ink:EFFECT_PALETTES.lagoon, draw:fieldRoute, example:{t:'text',text:'관찰하기\n가설 세우기\n함께 비교하기'}},
   { id: 'orbit', name: '포커스 링', hint: '세 겹의 렌즈가 한 곳에 초점을 맞춰요', ink: ['#ffac45', '#fcea97', '#ff685a'], draw: orbit },
   { id: 'signal', name: '회로 신호', hint: '선을 따라 빛이 차례로 도착해요', ink: ['#35e3b8', '#73bdff', '#ab9bff'], draw: signal },
   { id: 'confetti', name: '별빛 파티클', hint: '별과 색종이가 피어올라 흩어져요', ink: ['#ffd44f', '#ff6197', '#54d9db'], draw: confetti },
@@ -142,9 +147,11 @@ function drawArt(id, animate, {pace,palette,content,step=0,photo,playOnce=false,
   if (!asset) return null;
   const art = svg('svg', { viewBox: asset.example?'0 0 720 360':'-100 -70 200 140', 'aria-hidden': 'true', focusable: 'false' });
   art.style.cssText = 'width:100%;height:100%;display:block;overflow:visible;pointer-events:none';
+  const frame=asset.cinematic?svg('svg',{width:720,height:360,overflow:'hidden'}):art;
+  if(frame!==art)art.append(frame);
   if (container) container.replaceChildren(art);
   const running = animate && (playOnce || !reducedMotion(container));
-  function part(tag, attrs, frames, delay = 0, duration = 1050, parent = art) {
+  function part(tag, attrs, frames, delay = 0, duration = 1050, parent = frame) {
     const node=svg(tag,attrs);
     // A clipPath needs a direct graphics child. Animate its shape in place.
     const target=parent.localName==='clipPath'?node:svg('g',{});
