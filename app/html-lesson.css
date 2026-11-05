@@ -14,7 +14,7 @@ body{margin:0;background:#f0f4ef;color:#273f3a;font-family:system-ui,-apple-syst
 .lesson-show .lesson-activity{width:100vw;height:calc(100dvh - 70px);overflow:auto;background:#f1f7f3;cursor:auto;display:flex;align-items:safe center;justify-content:center}
 .lesson-show:has(.lesson-activity) .lesson-stage{width:100vw}
 .lesson-show-bar{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);z-index:10;display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:999px;background:rgba(20,24,34,.72);color:#fff;transition:opacity .35s;cursor:default}
-@media(hover:hover){.lesson-show[data-calm]{cursor:none}.lesson-show[data-calm] .lesson-show-bar:not(:focus-within){opacity:0}}
+@media(hover:hover){.lesson-show[data-still]{cursor:none}.lesson-show[data-calm] .lesson-show-bar:not(:focus-within){opacity:0}}
 .lesson-show-count{min-width:4.2em;text-align:center;font-weight:800;font-variant-numeric:tabular-nums}
 .lesson-effects-frame { position:relative; container-type:inline-size; margin:auto; width:min(100%,calc((100dvh - 240px) * var(--lesson-ratio))); aspect-ratio:var(--lesson-ratio); overflow:hidden; border-radius:12px; }
 .lesson-effects-frame .lesson-slide { width:100%; height:100%; min-height:0; max-height:none; }

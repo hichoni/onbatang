@@ -431,20 +431,27 @@ export function createShowTools(root, opts) {
   }
 
   // ---------- 발표 막대 숨기기 ----------
-  // 파워포인트 · 구글 슬라이드처럼: 아래 막대와 마우스 화살표는 마우스를 움직일 때만 나타나고, 잠시 가만히 두면 사라진다(root 의 data-calm).
-  // 막대 위에 마우스가 있거나 막대 단추에 초점이 있으면 그대로 둔다. 펜 · 레이저로 그리는 동안에는 아래쪽으로 가져갈 때만 막대가 나온다.
+  // 발표 막대(아래)와 웹 장의 단추(위)는 평소에 감춘다: 마우스를 화면 아래·위 끝(EDGE 픽셀 안)으로 가져가거나 막대 위에 올리면 나오고,
+  // 끝을 떠나 잠시 지나면 다시 사라진다(root 의 data-calm). M 글쇠로 늘 보이게 고정 · 풀기(data-pinned).
+  // 마우스 화살표는 따로: 움직이면 보이고 가만히 두면 사라진다(data-still). 펜 · 레이저로 그리는 동안에는 아래 끝에서만 막대가 나온다.
   // 프레젠터(리모컨) 글쇠로는 나타나지 않는다. 모양은 쓰는 쪽 CSS 가 정한다(마우스가 있는 화면에서만 감춘다).
-  let calmTimer = 0;
+  const EDGE = 110;
+  let calmTimer = 0, stillTimer = 0, pinned = false;
   const calmBar = () => root.querySelector('.cv-show-bar, .lesson-show-bar');
-  const calm = () => { const bar = calmBar(); if (bar?.matches(':hover') || bar?.matches(':focus-within')) { wake(); return; } root.dataset.calm = ''; };
-  function wake() { delete root.dataset.calm; clearTimeout(calmTimer); calmTimer = setTimeout(calm, 2500); }
+  const onBar = (node) => !!node?.closest?.('.cv-show-bar, .lesson-show-bar, .cv-web-pill');
+  const calm = () => { if (pinned) return; const bar = calmBar(); if (bar?.matches(':hover') || bar?.matches(':focus-within')) { wake(); return; } root.dataset.calm = ''; };
+  function wake() { delete root.dataset.calm; clearTimeout(calmTimer); if (!pinned) calmTimer = setTimeout(calm, 2500); }
+  function stir() { delete root.dataset.still; clearTimeout(stillTimer); stillTimer = setTimeout(() => { root.dataset.still = ''; }, 2500); }
+  function pinBar() { pinned = !pinned; if (pinned) { root.dataset.pinned = ''; wake(); } else { delete root.dataset.pinned; calm(); } }
   const onMove = (e) => {
     if (e.pointerType === 'touch') return;
-    if (tool && !e.target?.closest?.('.cv-show-bar, .lesson-show-bar') && e.clientY < (doc.defaultView.innerHeight || 0) - 140) return;
-    wake();
+    stir();
+    const h = doc.defaultView.innerHeight || 0, bottom = e.clientY > h - EDGE, top = e.clientY < EDGE;
+    if (onBar(e.target) || bottom || (top && !tool)) wake();
   };
   root.addEventListener('pointermove', onMove);
-  wake();
+  root.dataset.calm = '';
+  stir();
 
   // ---------- 손가락으로 넘기기 ----------
   root.addEventListener('pointerdown', (e) => { swipe = e.pointerType === 'touch' && !tool && !panel ? [e.clientX, e.clientY] : null; });
@@ -483,6 +490,7 @@ export function createShowTools(root, opts) {
       case 'goto': opts.go(pageIndex(action.page, opts.total())); return true;
       case 'black': case 'white': setCurtain(action.type); return true;
       case 'overview': case 'help': togglePanel(action.type); return true;
+      case 'menu': pinBar(); return true;
       case 'compare': compareSlides(); return true;
       case 'pen': case 'laser': setTool(action.type); return true;
       case 'erase': erase(); return true;
@@ -597,7 +605,7 @@ export function createShowTools(root, opts) {
       releaseMotion();
       comparison?.close();
       clearTimeout(digitTimer);
-      clearTimeout(calmTimer); root.removeEventListener('pointermove', onMove); delete root.dataset.calm;
+      clearTimeout(calmTimer); clearTimeout(stillTimer); root.removeEventListener('pointermove', onMove); delete root.dataset.calm; delete root.dataset.still; delete root.dataset.pinned;
       stopCamera();
       autoOn = false; clearTimeout(autoTimer);
       toggleRehearse(true);

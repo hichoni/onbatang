@@ -2,12 +2,13 @@
 // 글자 글쇠는 자리(e.code)로 견준다: 한글 입력 상태에서도 듣게.
 //   다음: → ↓ PageDown Space Enter N   앞: ← ↑ PageUp Backspace
 //   처음·끝: Home End   번호 + Enter: 그 쪽으로   B 검은 화면 · W 흰 화면(PowerPoint 처럼 . , 도)
-//   G 전체 보기   P 펜   L 레이저   E 그린 것 지우기   S 발표자 화면   F 전체 화면   K 영상 멈추기·틀기   C 카메라 창   A 자동 넘기기   R 리허설   ? H 도움말   Esc 끝내기
+//   M 발표 막대 보이기·감추기   G 전체 보기   P 펜   L 레이저   E 그린 것 지우기   S 발표자 화면   F 전체 화면   K 영상 멈추기·틀기   C 카메라 창   A 자동 넘기기   R 리허설   ? H 도움말   Esc 끝내기
 export const SHOW_KEYS = Object.freeze([
   ['→ · Space · PageDown', '다음'],
   ['← · PageUp', '앞'],
   ['Home · End', '처음 · 마지막 쪽'],
   ['번호 + Enter', '그 쪽으로 가기'],
+  ['M', '발표 막대 보이기 · 감추기(평소에는 화면 위·아래 끝으로 마우스를 가져가면 나와요)'],
   ['G', '전체 보기'],
   ['D', '두 장 비교 · PageUp / PageDown으로 비교 위치 이동'],
   ['B · W', '검은 화면 · 흰 화면'],
@@ -20,14 +21,14 @@ export const SHOW_KEYS = Object.freeze([
   ['R', '리허설: 장마다 걸린 시간 재기 · 그만 재기'],
   ['Esc', '도구 끄기 · 발표 끝내기'],
 ]);
-const LETTERS = { KeyB: 'black', Period: 'black', KeyW: 'white', Comma: 'white', KeyG: 'overview', KeyD: 'compare', KeyP: 'pen', KeyL: 'laser', KeyE: 'erase', KeyS: 'presenter', KeyF: 'fullscreen', KeyK: 'video', KeyC: 'camera', KeyA: 'auto', KeyR: 'rehearse', KeyH: 'help', Slash: 'help' };
+const LETTERS = { KeyB: 'black', Period: 'black', KeyW: 'white', Comma: 'white', KeyG: 'overview', KeyD: 'compare', KeyP: 'pen', KeyL: 'laser', KeyE: 'erase', KeyS: 'presenter', KeyF: 'fullscreen', KeyK: 'video', KeyC: 'camera', KeyA: 'auto', KeyR: 'rehearse', KeyH: 'help', Slash: 'help', KeyM: 'menu' };
 const NEXT = ['ArrowRight', 'ArrowDown', 'PageDown', ' ', 'Enter'];
 const PREV = ['ArrowLeft', 'ArrowUp', 'PageUp', 'Backspace'];
 const digitOf = (e) => /^Digit[0-9]$/.test(e.code) ? e.code.slice(5) : /^Numpad[0-9]$/.test(e.code) ? e.code.slice(6) : /^[0-9]$/.test(e.key) ? e.key : '';
 
 /**
  * 글쇠 하나를 발표의 할 일로 바꾼다. state 는 치고 있는 번호({ digits })를 들고 다니는 상자(이 함수가 고친다).
- * 돌려주는 것: { type } — next · prev · first · last · goto(page: 1부터) · digits(value) · black · white · overview · pen · laser · erase · presenter · fullscreen · video · camera · auto · rehearse · help · close
+ * 돌려주는 것: { type } — next · prev · first · last · goto(page: 1부터) · digits(value) · black · white · overview · pen · laser · erase · presenter · fullscreen · video · camera · auto · rehearse · help · menu · close
  * 발표와 상관없는 글쇠(Ctrl·Alt·Cmd 를 함께 누른 것 포함)는 null.
  */
 export function showAction(e, state = {}) {

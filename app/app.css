@@ -484,9 +484,9 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"], body.mc-app :is(#app,.cv-a
   position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 999px;
   background: rgba(20, 24, 34, .72); color: #fff; transition: opacity .35s; cursor: default; z-index: 10;
 }
-/* 마우스를 가만히 두면 막대와 화살표가 사라진다(show-tools.js 의 data-calm). 손가락으로 쓰는 화면은 늘 보인다. */
+/* 발표 막대는 화면 아래·위 끝으로 마우스를 가져갈 때만(data-calm 이 없을 때) 보인다. 화살표는 가만히 두면 사라진다(data-still). 손가락으로 쓰는 화면은 늘 보인다. */
 @media (hover: hover) {
-  .cv-show[data-calm] { cursor: none; }
+  .cv-show[data-still] { cursor: none; }
   .cv-show[data-calm] .cv-show-bar:not(:focus-within) { opacity: 0; }
 }
 .cv-show-count { min-width: 4.2em; text-align: center; font-weight: 800; font-variant-numeric: tabular-nums; }
