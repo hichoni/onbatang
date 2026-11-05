@@ -1,7 +1,7 @@
 import {openTool} from './open-tool.mjs';
 // 내 그림 목록(브라우저): 한 PPT 를 나눠 담은 파트들은 한 칸(PPT · 모두 몇 장 · 파트 몇 개)으로 묶이고, 펼치면 파트 칸이 보인다.
 // 거르기(전체 · PPT · 직접 만든 것) · 이름 찾기 · 늘어놓는 차례(최근 고친 · 만든 · 이름)를 고르면 목록이 바뀌고, 고른 것은 기억한다.
-// 발표: 아래 막대와 화살표는 마우스를 가만히 두면 사라지고 움직이면 나온다. MINICAN_PLAYWRIGHT_PATH 가 없으면 건너뛴다.
+// 발표: 아래 막대는 평소에 숨고 화면 아래·위 끝으로 마우스를 가져가거나 M 을 누르면 나온다. 화살표는 가만히 두면 사라진다. MINICAN_PLAYWRIGHT_PATH 가 없으면 건너뛴다.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
@@ -37,7 +37,7 @@ async function setup(t, html = fixture) {
   await new Promise(done => server.listen(0, '127.0.0.1', done));
   t.after(() => new Promise(done => server.close(done)));
   const {chromium} = await import(pathToFileURL(process.env.MINICAN_PLAYWRIGHT_PATH).href);
-  const browser = await chromium.launch({channel: process.env.MINICAN_BROWSER || 'msedge', headless: true});
+  const browser = await chromium.launch(process.env.MINICAN_CHROMIUM ? {executablePath: process.env.MINICAN_CHROMIUM, headless: true} : {channel: process.env.MINICAN_BROWSER || 'msedge', headless: true});
   t.after(() => browser.close());
   const origin = `http://127.0.0.1:${server.address().port}`;
   const context = await browser.newContext({viewport: {width: 1280, height: 800}});
@@ -93,30 +93,47 @@ test('the parts of one PPT are one card; filter, search and sort change the list
   assert.deepEqual(errors, []);
 });
 
-test('the show bar and pointer fade after the mouse rests and come back when it moves', options, async t => {
+test('the show bar stays hidden until the mouse reaches the bottom or top edge, and M pins it', options, async t => {
   const {page, errors} = await setup(t);
   await page.locator('.cv-list > .cv-item', {hasText: '가을 소풍'}).locator('.cv-item-open').click();
   await page.locator('.cv-canvas .fe-stage').waitFor();
   await page.locator('.cv-show-btn').click();
   await page.locator('.cv-show').waitFor();
+  const calm = () => page.evaluate(() => document.querySelector('.cv-show').hasAttribute('data-calm'));
   const opacity = () => page.evaluate(() => getComputedStyle(document.querySelector('.cv-show-bar')).opacity);
+  const h = await page.evaluate(() => innerHeight);
+  // 처음과 가운데에서 움직일 때는 막대가 나오지 않고, 화살표만 보인다
+  assert.ok(await calm(), 'hidden when the show starts');
   await page.mouse.move(640, 300);
   await page.waitForTimeout(400);
-  assert.equal(await opacity(), '1', 'shown while the mouse moves');
-  await page.waitForFunction(() => document.querySelector('.cv-show')?.hasAttribute('data-calm'), null, {timeout: 6000});
-  await page.waitForTimeout(500);
-  assert.equal(await opacity(), '0', 'hidden after the mouse rests');
-  assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.cv-show')).cursor), 'none');
-  // 리모컨 글쇠로 넘겨도 다시 나오지 않는다
-  await page.keyboard.press('ArrowRight');
-  assert.ok(await page.evaluate(() => document.querySelector('.cv-show').hasAttribute('data-calm')));
-  await page.mouse.move(600, 320);
+  assert.ok(await calm(), 'moving in the middle does not show the bar');
+  assert.equal(await opacity(), '0');
+  assert.notEqual(await page.evaluate(() => getComputedStyle(document.querySelector('.cv-show')).cursor), 'none');
+  await page.waitForFunction(() => document.querySelector('.cv-show')?.hasAttribute('data-still'), null, {timeout: 6000});
+  assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.cv-show')).cursor), 'none', 'pointer hides after resting');
+  // 아래 끝으로 가져가면 나오고, 떠나서 가만히 두면 사라진다
+  await page.mouse.move(640, h - 30);
   await page.waitForFunction(() => !document.querySelector('.cv-show').hasAttribute('data-calm'));
+  await page.mouse.move(640, 300);
+  await page.waitForFunction(() => document.querySelector('.cv-show')?.hasAttribute('data-calm'), null, {timeout: 6000});
+  // 리모컨 글쇠로 넘겨도 나오지 않는다
+  await page.keyboard.press('ArrowRight');
+  assert.ok(await calm());
   // 막대 위에 마우스가 있으면 사라지지 않는다
+  await page.mouse.move(640, h - 30);
+  await page.waitForFunction(() => !document.querySelector('.cv-show').hasAttribute('data-calm'));
   const box = await page.locator('.cv-show-bar').boundingBox();
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.waitForTimeout(3200);
-  assert.equal(await page.evaluate(() => document.querySelector('.cv-show').hasAttribute('data-calm')), false);
+  assert.equal(await calm(), false);
+  // M: 늘 보이게 고정 · 다시 누르면 풀기
+  await page.mouse.move(640, 300);
+  await page.keyboard.press('KeyM');
+  await page.waitForTimeout(3200);
+  assert.equal(await calm(), false, 'M pins the bar');
+  await page.keyboard.press('KeyM');
+  await page.waitForTimeout(300);
+  assert.ok(await calm(), 'M again hides it');
   assert.deepEqual(errors, []);
 });
 
