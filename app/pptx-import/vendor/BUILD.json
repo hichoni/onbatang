@@ -37,7 +37,7 @@
     "src/dom.js": "381c1e39c6b79f846820e6dd8a9e214e0afda803c65fbb6c5272cd36326ac5b6",
     "src/effect-assets.js": "b28e8d38a5f9099e2c96a91b82bfe9932827afbcef1449447819521f1c6e9d28",
     "src/effect-scenes.js": "76f21f554798156965a8e795a2c4251c9ed0b4b811ad96a5ae3c08b2c548080a",
-    "src/gai-app.js": "b475f79811d851731cc5b65ab312b0b4b64274e7661b6a5b79e71b6e5d072073",
+    "src/gai-app.js": "026b8757632fde11e375791a95ce06852f414ef482b00c4283ab91218e6d2ca6",
     "src/links.js": "b1900f5a82be0132590e8abb5d0eebe974e5873a524b5264f8f413272d94a70b",
     "src/live.js": "8751bcb9e360138d5b257811b0f7afa09916eb58d664be8b48498eb3cc1d7cd9",
     "src/math.js": "dd8c86de304220b56502f7e8c93a89afcd3114e993d7387b8d1859f989fb81e6",
@@ -107,8 +107,8 @@
       "sha256": "a681e9d183c72b4af4856935893805eb48c08f0f5a3f260203db7444c20fb98a"
     },
     "pptx-worker.js": {
-      "bytes": 274268,
-      "sha256": "1f42776aa7068b268e713b7141a301c0846fbc294a1f39264dd983565402f33b"
+      "bytes": 274322,
+      "sha256": "1dce75ba0d177cd522fb5f2f986e631346e2d5d3b960f024475aa68b0694f975"
     },
     "preview-frame.html": {
       "bytes": 1243897,
