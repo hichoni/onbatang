@@ -1533,3 +1533,6 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero-go { display: flex
 /* 공용 온바탕: 같이 고치기의 다리(GBE-AI Lab)는 보이지 않는 작은 창 */
 .cv-co-relay { position: fixed; left: 0; top: 0; width: 1px; height: 1px; border: 0; opacity: 0; pointer-events: none; }
 @media (max-width: 860px) { .cv-co-btn:not(.on) .cv-lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; } }
+.cv-page-workspace .cv-work-head:has(.cv-slide-app-start){flex-wrap:wrap}
+.cv-page-workspace .cv-slide-app-start{min-height:40px;padding:5px 10px;margin-inline-start:auto;border:1px solid #adc4b3;background:#eef6ec;color:#264b34;font-size:13px}
+@media(max-width:899px){.cv-page-workspace .cv-slide-app-start{min-height:44px;font-size:12px;padding-inline:7px}}

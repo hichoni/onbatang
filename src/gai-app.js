@@ -32,7 +32,13 @@ export function cleanGaiActivity(raw){
  if(typeof raw.document!=='string'||!raw.document.includes(JSON.stringify(GAI_APP_BRIDGE_MARKER))||!raw.document.includes(GAI_APP_CHECKPOINT_MARKER))fail('document',raw);
  const project=cleanGaiJson(raw.project,GAI_APP_LIMITS.documentProject,'project'),state=cleanGaiJson(raw.state,GAI_APP_LIMITS.checkpoint);
  if(new TextEncoder().encode(raw.document).length+bytes(project)>GAI_APP_LIMITS.documentProject)fail('documentProject',raw);
- return {version:1,kind:'gai-app',id:raw.id,title:raw.title,instructions:raw.instructions,document:raw.document,project,state};
+ return {version:1,kind:'gai-app',...(raw.placement==='on-slide'?{placement:'on-slide'}:{}),id:raw.id,title:raw.title,instructions:raw.instructions,document:raw.document,project,state};
+}
+/** Attach to the selected stable page without replacing its artwork or PPT provenance. */
+export function placeGaiOnSlide(record,id,raw){
+ if(!isId(id)||record.slides.filter(page=>page.id===id).length!==1)throw Error('원래 슬라이드를 찾지 못했어요. 다시 선택해주세요.');
+ const activity=cleanGaiActivity({...raw,placement:'on-slide'});
+ return {...record,slides:record.slides.map(page=>page.id===id?{...page,activity}:page)};
 }
 export function newGaiActivity(options){return cleanGaiActivity({version:1,kind:'gai-app',id:newId('a'),instructions:'',state:{},...options});}
 export function cleanGaiPatch(raw){
