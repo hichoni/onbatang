@@ -21,7 +21,7 @@ import {htmlFlowPages} from './html-lesson-flow.js';
 import {designToHtmlFlow} from '../src/export.js';
 import {activityDefinitionHash} from './lesson-results.js';
 import {openLessonResults} from './lesson-results-ui.js';
-import {cleanGaiActivity,gaiAppCover,gaiAppResult} from '../src/gai-app.js';
+import {cleanGaiActivity,gaiAppCover,gaiAppResult,placeGaiOnSlide} from '../src/gai-app.js';
 import {mountGaiApp} from './gai-app.js';
 import {createShowTools} from './show-tools.js';
 import {startVoice,canRecordVoice,voiceSlides} from './voice-record.js';
@@ -90,7 +90,7 @@ let bridge = null;
 let accountHome = null;
 let cloudAction = null;   // 호스트의 "내 클라우드"(계정에 백업한 자료). 첫 화면에 따로 둔다.
 let materialNavigation = null;
-let appMaker = null;
+let appMaker = null, slideStudio = null;
 // 들여쓰기(embed.html): 다른 앱이 부른 온바탕. { done(id), close() } — 위 막대가 "닫기" · "다 했어요"가 되고, 첫 화면 · 모양 바꾸기 · 발표 · 내려받기 · 영상 · 카메라가 없다.
 let embedMode = null;
 let activityAuthoring = false; // Host opt-in; playback/result saving never depends on this.
@@ -953,7 +953,7 @@ function editorShell(O, bar) {
     el('div', { class: 'cv-work-head' },
       el('button', { class: 'btn cv-pages-toggle', type: 'button', 'aria-expanded': 'false' }, ...face('layers', '장 목록')),
       O.editor.historyTools,
-      el('span', { class: 'cv-canvas-label', text: '편집 캔버스' }),
+      slideStudio?el('button',{class:'btn cv-slide-app-start',type:'button',dataset:{studioCurrent:''},title:'선택한 장으로 스튜디오 수업 앱 만들기',onClick:()=>configureSlideStudio(O)},'이 장으로 앱 만들기'):el('span', { class: 'cv-canvas-label', text: '편집 캔버스' }),
       el('button', { class: 'btn cv-properties-toggle', type: 'button', 'aria-expanded': 'false' }, ...face('pencil', '속성'))),
     canvasBox,
     O.editor.notes);
@@ -1055,6 +1055,7 @@ function renderStrip(O) {
       // 퀴즈 장(모든 곳): 직접 만들거나, 가이X 를 이어 준 곳에서는 가이X 에게 부탁한다
       el('button',{class:'btn cv-activity-add',type:'button',dataset:{addQuiz:''},title:'지금 장 다음에 퀴즈 장을 넣어요(발표에서 시간을 재고 정답 · 순위를 보여 줘요)',onClick:()=>configureQuiz(O)},'퀴즈 넣기'),
       activityAuthoring&&el('button',{class:'btn cv-activity-add',type:'button',dataset:{addActivity:''},title:'미리 준비된 픽셀아트 활동을 새 슬라이드로 넣어요',onClick:()=>configureActivity(O)},'픽셀아트 활동 넣기'),
+      slideStudio&&el('button',{class:'btn cv-activity-add',type:'button',dataset:{slideStudio:''},onClick:()=>configureSlideStudio(O)},'이 장으로 스튜디오 앱 만들기'),
       activityAuthoring&&appMaker&&el('button',{class:'btn cv-activity-add',type:'button',dataset:{addGaiApp:''},onClick:()=>configureGaiActivity(O)},gaiOwl(),'가이X로 앱 만들기'),
       // 가이X 에게 개요를 부탁해 꾸민 장 여러 장을 만든다(개요로 장 만들기 창이 부탁 칸부터 열린다)
       activityAuthoring&&appMaker&&el('button',{class:'btn cv-activity-add',type:'button',dataset:{addGaiSlides:''},onClick:()=>openOutline(O)},gaiOwl(),'가이X로 장 만들기'),
@@ -1772,6 +1773,7 @@ async function applyMotionAll(O, motion) {
 // Activities are local, typed page data. Both hosts use the same runtime and
 // pin a new material revision before acknowledging a result. No app URL opens.
 function updateActivityTools(O){
+  const current=O.shell?.querySelector('[data-studio-current]');if(current)current.textContent=O.editor.getDesign().activity?.placement==='on-slide'?'이 장의 앱 바꾸기':'이 장으로 앱 만들기';
   const edit=O.strip.querySelector('[data-edit-activity]'),activity=O.editor.getDesign().activity;if(edit)edit.hidden=!activity||activity.kind!=='quiz'&&(!activityAuthoring||activity.kind==='gai-app'&&!appMaker);
 }
 function lessonPages(O){
@@ -1939,6 +1941,38 @@ async function configureQuiz(O,editing=false){
   host.querySelector('textarea,input')?.focus({preventScroll:true});
 }
 
+async function configureSlideStudio(O){
+  if(!slideStudio||O.closed||O.leaving||O.inlineImport||O.activityBusy||videoBusy(O)||looseBlock(O))return;
+  O.activityBusy=true;
+  try{
+    if(O.materialLoadingPromise)await O.materialLoadingPromise;
+    if(O.materialLoadError||O.recoveryRequired)throw Error('전체 자료를 다시 연 뒤 선택해주세요.');
+    const expected=await persistEditorAction(O),page=structuredClone(O.editor.getDesign()),id=page.id;
+    if(page.source?.kind==='result')throw Error('학생 결과 대신 수업에 사용할 원본 장을 선택해주세요.');
+    const entries=lessonPages(O),index=entries.findIndex(v=>v.record.id===expected.id&&v.page.id===id);
+    if(index<0||!expected.slides.some(s=>s.id===id))throw Error('원본 장을 찾지 못했어요. 자료를 다시 열어주세요.');
+    const label=page.source?.pageNumber?'PPT '+page.source.pageNumber+'쪽':(index+1)+'쪽';
+    const aspect=aspectOf(expected),order=entries.map(v=>v.page.id);
+    const inserted=await slideStudio({label,slide:page,preview:()=>slideView(page,aspect,360),
+      renderImage:async()=>{
+        for(const width of [900,640,400]){
+          const {blob}=await designToBlob(page,{width,aspect,type:'image/jpeg',quality:.8});
+          if(blob.size>300*1024)continue;
+          const url=await new Promise((ok,fail)=>{const reader=new FileReader();reader.onload=()=>ok(reader.result);reader.onerror=fail;reader.readAsDataURL(blob);});
+          return {name:label+'.jpg',mimeType:'image/jpeg',data:url.split(',')[1]};
+        }
+        throw Error('이 장의 화면이 너무 커요. 화면 참고를 끄고 글로 요청해주세요.');
+      },
+      onInsert:async raw=>{
+        if(S.open!==O||O.closed||O.dirty||O.record.id!==expected.id||O.editor.getDesign().id!==id||O.record.revision!==expected.revision)throw Error('선택한 장이 바뀌었어요. 원본을 다시 확인해주세요.');
+        const document=placeGaiOnSlide(expected,id,raw);
+        await commitActivityDocument(O,document,order,id,expected);
+      }});
+    if(inserted){setStatus(O,label+'에 앱을 넣었어요 · 발표에서 실행할 수 있어요');toast(label+'에 앱을 넣었어요. 발표에서 실행해 보세요.');}
+    if(O.recoveryRequired)await closeDesign(O);
+  }catch(error){toast(error.message||'슬라이드를 준비하지 못했어요. 저장 상태를 확인해주세요.');}
+  finally{O.activityBusy=false;}
+}
 async function configureGaiActivity(O,editing=false){
   if(!activityAuthoring||!appMaker||O.closed||O.leaving||O.inlineImport||O.activityBusy||videoBusy(O))return;
   if(O.materialLoadingPromise)await O.materialLoadingPromise;
@@ -1975,7 +2009,7 @@ async function configureGaiActivity(O,editing=false){
         const makePage=row=>({...gaiAppCover(value,aspectOf(row)),id,source:editing?selected.source:{kind:'local'},origin:editing?selected.origin:{documentId:origin.record.id,pageId:anchor,revision:origin.record.revision},activity:value});
         const updated=row=>{
           const slides=[...row.slides],page=makePage(row),local=slides.findIndex(p=>p.id===anchor);
-          if(editing){if(local<0)throw Error('수정할 앱을 다시 선택해주세요.');slides[local]=page;}
+          if(editing){if(local<0)throw Error('수정할 앱을 다시 선택해주세요.');slides[local]=selected.activity?.placement==='on-slide'?{...slides[local],activity:{...value,placement:'on-slide'}}:page;}
           else slides.splice(local<0?slides.length:local+1,0,page);
           return {...row,slides};
         };
@@ -3315,7 +3349,7 @@ async function openHomeWorkspace(action,file){
    const record=await getDesign(id);
    if(!record||session.disposed)throw Error('DOCUMENT_NOT_FOUND');
    await dispose();
-   try{await openSavedDesign(id,options);}
+   try{await openSavedDesign(id,options);if(slideStudio&&record.source?.kind==='pptx'&&matchMedia('(max-width:899px)').matches)S.open.workspace.showCanvas();}
    catch(error){if(!S.open)await refresh();throw error;}
  };
  back.onclick=async()=>{if(session.controller?.requestClose)await session.controller.requestClose({reason:'return'});else await close();};
@@ -3438,6 +3472,7 @@ async function openInlineImport(O, context, action=importAction) {
       upsert(ready); openDesign(ready, false);
       if (Number.isSafeInteger(slideIndex) && slideIndex > 0 && slideIndex < S.open.slides.length) goSlide(S.open, slideIndex);
       if (typeof tab === 'string') S.open.editor.openTab(tab);
+      if(slideStudio&&ready.source?.kind==='pptx'&&matchMedia('(max-width:899px)').matches)S.open.workspace.showCanvas();
     } catch (error) {
       session.closing = false;
       if (!O.closed) back.disabled = false;
@@ -4514,7 +4549,7 @@ function readOpen() {
  * - copyLink: {url?,key?}; 공용 온바탕이 켠다. 주소의 ?copy=코드를 열면 그 자료를 이 기기에 사본으로 받아 바로 연다(app/copy-link.js).
  * - shareAction: {label,title?,open({designId,flush(),goTo(slideIndex,{upload})}),saved?(record)}; 편집기 위 막대의 공유 단추(GBE-AI Lab의 보기 전용 링크). saved 는 이 기기에 저장할 때마다 불린다(링크에 반영은 호스트가 모아서). 기본값은 숨김.
  */
-export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, accountAction: accountLibrary = null, cloudAction: cloudLibrary = null, shareAction: sharing = null, copyAction: copying = null, copyLink: copyIntake = null, accountBridge: bridging = null, showRemote: remoting = null, phoneRemote: phoning = null, coEdit: coing = null, coRelay: relaying = null, showAudience: audiencing = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false, resume = false, embed = null, syncDelay = null } = {}) {
+export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, accountAction: accountLibrary = null, cloudAction: cloudLibrary = null, shareAction: sharing = null, copyAction: copying = null, copyLink: copyIntake = null, accountBridge: bridging = null, showRemote: remoting = null, phoneRemote: phoning = null, coEdit: coing = null, coRelay: relaying = null, showAudience: audiencing = null, materialNavigation: navigation = null, appMaker: maker = null, slideStudio: studioHost = null, activityAuthoring: authoring = false, resume = false, embed = null, syncDelay = null } = {}) {
   if (app) throw new Error('minican already started');
   if (!root) throw new Error('minican root');
   app = root;
@@ -4540,6 +4575,7 @@ export function startMinican({ root = document.getElementById('app'), fonts = []
   else if (relaying && typeof relaying === 'object' && !embed) { const opts = typeof relaying.url === 'string' ? { url: relaying.url } : {}; coEdit = { open: async (code) => (await import('./co-relay.js')).openCoRelay(code, opts) }; }
   if (bridging && typeof bridging === 'object' && !embed) accountBridge = { ...(typeof bridging.url === 'string' ? { url: bridging.url } : {}) };
   activityAuthoring=authoring===true;
+  if(activityAuthoring&&typeof studioHost==='function')slideStudio=studioHost;
   resumeOpen=resume===true;
   if (embed && typeof embed.done === 'function' && (embed.close == null || typeof embed.close === 'function')) {
     const label = (v) => (typeof v === 'string' && v.trim() ? Array.from(v.trim()).slice(0, 16).join('') : '');
