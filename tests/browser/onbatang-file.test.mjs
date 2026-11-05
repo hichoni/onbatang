@@ -79,7 +79,8 @@ test('온바탕 파일: every part, page, field, background video and page order
   const b = await context.newPage(); b.on('pageerror', e => errors.push(e.message));
   await b.goto(origin + '/b.html');
   await b.waitForFunction(() => window.ready);
-  const pick = async () => { const [chooser] = await Promise.all([b.waitForEvent('filechooser'), b.locator('[data-onbatang-file-open]').click()]); await chooser.setFiles(file); };
+  const pick = async () => { if (!await b.locator('[data-onbatang-file-open]').isVisible()) await b.locator('[data-home-menu=import] > summary').click();
+  const [chooser] = await Promise.all([b.waitForEvent('filechooser'), b.locator('[data-onbatang-file-open]').click()]); await chooser.setFiles(file); };
   await pick();
   await b.waitForFunction(() => document.querySelector('input.cv-name')?.value === '발명 수업 · 1');
   await b.waitForFunction(() => document.querySelectorAll('[data-material-page]').length === 3);
@@ -151,6 +152,7 @@ test('온바탕 파일: every part, page, field, background video and page order
   // 온바탕 파일이 아닌 것은 열지 않고 까닭을 알린다
   await b.locator('.cv-back').click();
   await b.locator('.cv-home-title').waitFor();
+  if (!await b.locator('[data-onbatang-file-open]').isVisible()) await b.locator('[data-home-menu=import] > summary').click();
   const [chooser] = await Promise.all([b.waitForEvent('filechooser'), b.locator('[data-onbatang-file-open]').click()]);
   await chooser.setFiles({name: '그림.png', mimeType: 'image/png', buffer: Buffer.from('not a zip')});
   await b.waitForFunction(() => /온바탕 파일\(\.onbatang\)이 아니에요/.test(document.getElementById('toast')?.textContent || ''));

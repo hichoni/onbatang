@@ -64,7 +64,8 @@ test('home → GBE-AI Lab 계정에 올리기, then an empty computer takes it f
     return {context, page};
   }
   async function link({context, page}) {
-    await page.locator('[data-account-bridge]').click();
+    await page.locator('[data-home-menu=more] > summary').click();
+ await page.locator('[data-account-bridge]').click();
     const [popup] = await Promise.all([context.waitForEvent('page'), page.getByRole('button', {name: 'GBE-AI Lab 계정 연결', exact: true}).click()]);
     await popup.getByRole('button', {name: '허락하고 온바탕에 연결'}).click();
     await page.getByText('GBE-AI Lab 계정에 연결했어요.', {exact: true}).waitFor();
@@ -76,7 +77,7 @@ test('home → GBE-AI Lab 계정에 올리기, then an empty computer takes it f
   if (!await home.page.locator('.fe-textadd.title').isVisible()) await openTool(home.page,'text');
   await home.page.locator('.fe-textadd.title').click();
   await home.page.locator('.cv-back').click();
-  await home.page.locator('[data-account-bridge]').waitFor();
+  await home.page.locator('.cv-mine').waitFor();
   const homePopup = await link(home);
   await home.page.getByRole('button', {name: '고른 1개 계정에 올리기', exact: true}).click();
   await home.page.getByText(/1개를 GBE-AI Lab 계정에 올렸어요/).waitFor();
