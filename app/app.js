@@ -90,7 +90,7 @@ let bridge = null;
 let accountHome = null;
 let cloudAction = null;   // 호스트의 "내 클라우드"(계정에 백업한 자료). 첫 화면에 따로 둔다.
 let materialNavigation = null;
-let appMaker = null, slideStudio = null;
+let appMaker = null, slideStudio = null, presentationRoom = null;
 // 들여쓰기(embed.html): 다른 앱이 부른 온바탕. { done(id), close() } — 위 막대가 "닫기" · "다 했어요"가 되고, 첫 화면 · 모양 바꾸기 · 발표 · 내려받기 · 영상 · 카메라가 없다.
 let embedMode = null;
 let activityAuthoring = false; // Host opt-in; playback/result saving never depends on this.
@@ -2048,7 +2048,7 @@ async function present(O) {
   if(!entries.length){toast('모든 장을 숨겼어요. 발표할 장의 숨기기를 풀어주세요.',4000);return;}
   const aspect = aspectOf(O.record),working=new Map(),savedResults=new Map();
   let i=Math.max(0,entries.findIndex(v=>everyPage.findIndex(w=>w.page.id===v.page.id)>=here)),savingActivity=false,closed=false;
-  let pixel=null;
+  let pixel=null, roomOpen=false;
   let tools = null;          // 발표 도구(검은 화면 · 펜 · 레이저 · 전체 보기 · 발표자 화면 …, show-tools.js)
   let parts = null;          // 지금 장의 요소 움직임(조종기)
   let turning = null;        // 틀고 있는 전환 효과
@@ -2088,7 +2088,7 @@ async function present(O) {
   const tellRemote = () => { if (!remote || closed) return; warmRemotePreviews(); try { remote.update?.(remoteState()); } catch (error) { console.warn(error); } };
   stage.addEventListener('onbatang-cinema-change',()=>queueMicrotask(tellRemote));
   const remoteCommand = (cmd) => {
-    if (closed || !cmd || typeof cmd !== 'object') return;
+    if (closed || roomOpen || !cmd || typeof cmd !== 'object') return;
     // 넘기기는 글쇠와 같은 길로(검은 화면이면 먼저 걷고, 펜 · 전체 보기 칸도 글쇠처럼 다룬다).
     if (cmd.action === 'next') { if (!tools?.handle({ key: 'ArrowRight', code: 'ArrowRight' })) go(1); }
     else if (cmd.action === 'prev') { if (!tools?.handle({ key: 'ArrowLeft', code: 'ArrowLeft' })) go(-1); }
@@ -2344,6 +2344,19 @@ async function present(O) {
           entries=showable();slides=entries.map(v=>cleanDesign(v.page,{keepSpaces:true}));i=slides.findIndex(p=>p.id===result.id);draw(1);
         }finally{savingActivity=false;}
       }});
+      if (gai && presentationRoom) {
+        const openRoom = el('button', {type:'button', class:'gai-app-save cv-app-room', text:'학생 수업방 열기'});
+        openRoom.onclick = async event => {
+          event.stopPropagation();
+          if (roomOpen) return;
+          roomOpen = true;
+          try {
+            await presentationRoom({root:overlay, documentId:entries[i].record.id, pageId:design.id, activity});
+          } catch (error) { toast(error.message || '수업방을 열지 못했어요.'); }
+          finally { roomOpen = false; if (openRoom.isConnected) openRoom.focus({preventScroll:true}); }
+        };
+        host.querySelector('.gai-app-runtime header').append(openRoom);
+      }
       ease(host,[{opacity:0,transform:'scale(.965)'},{opacity:1,transform:'scale(1)'}],260);return;
     }
     if (design.web) mountWeb(design.web);
@@ -2372,7 +2385,7 @@ async function present(O) {
     parts = playDesign(view, design, { delay: turn.ms, still: dir < 0 });
   };
   const go = (step) => {
-    if(savingActivity)return;
+    if(savingActivity || roomOpen)return;
     if(stepOpenQuestion(stage,step))return;
     if (step > 0 && pixel?.step?.()) return;   // 퀴즈 장: 시작 → 정답 공개 → 순위
     if (step < 0 && pixel?.back?.()) return;
@@ -2402,7 +2415,7 @@ async function present(O) {
   };
   // 번호·처음·끝·전체 보기로 그 쪽에 바로 간다(앞으로 가면 그 장의 전환으로, 뒤로 가면 거꾸로).
   const jump = (to) => {
-    if (savingActivity) return;
+    if (savingActivity || roomOpen) return;
     if (leavingLooks) { clearTimeout(leavingLooks); leavingLooks = 0; }
     to = Math.max(0, Math.min(slides.length - 1, to));
     if (to === i) return;
@@ -2413,6 +2426,7 @@ async function present(O) {
   // 앱 안을 누른 뒤에도 프레젠터(리모컨)의 넘기기 단추와 Esc 는 발표가 듣는다(앱이 그 글쇠를 쓰지 않았을 때 앱이 알려 준다).
   const appKey = (key) => { if (['PageDown', 'PageUp', 'Escape'].includes(key)) tools?.handle({ key, code: key }); };
   const onKey = (e) => {
+    if(roomOpen)return;
     if(e.target?.closest?.('.ob-compare, .ob-study, .ob-cinema-steps'))return;
     if(e.target?.closest?.('[data-question-panel]') && ['Escape','ArrowLeft','ArrowRight','PageUp','PageDown'].includes(e.key))return;
     // 앱·그림판 안에서 치는 글쇠는 앱의 것이다. 프레젠터의 넘기기(PageDown · PageUp)와 Esc 만 발표가 듣는다.
@@ -2444,7 +2458,7 @@ async function present(O) {
     if (!tools?.presenting() && !tools?.camera() && !starting && !voice) close();
   };
   function close() {
-    if(savingActivity)return;
+    if(savingActivity || roomOpen)return;
     closed=true;clearTimeout(leavingLooks);leavingLooks=0;pixel?.destroy();pixel=null;dropWeb();
     try { remote?.close?.(); } catch (error) { console.warn(error); } remote = null;
     try { audience?.close?.(); } catch (error) { console.warn(error); } audience = null; quizListeners.clear();
@@ -4576,6 +4590,7 @@ export function startMinican({ root = document.getElementById('app'), fonts = []
   if (bridging && typeof bridging === 'object' && !embed) accountBridge = { ...(typeof bridging.url === 'string' ? { url: bridging.url } : {}) };
   activityAuthoring=authoring===true;
   if(activityAuthoring&&typeof studioHost==='function')slideStudio=studioHost;
+  presentationRoom = typeof maker?.openRoom === 'function' ? maker.openRoom : null;
   resumeOpen=resume===true;
   if (embed && typeof embed.done === 'function' && (embed.close == null || typeof embed.close === 'function')) {
     const label = (v) => (typeof v === 'string' && v.trim() ? Array.from(v.trim()).slice(0, 16).join('') : '');
