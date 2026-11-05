@@ -135,7 +135,38 @@ export function createGuestLinks({ url = GAILAB.url, key = GAILAB.key, fetch: ge
     remove: (link) => rpc('onbatang_guest_copy_remove', { p_code: link.code, p_token: link.token }),
   };
 }
-// 이 브라우저가 만든 7일 링크(자료 이름표 → { code, token, expiresAt, title }, 보기 링크는 '자료 이름표:view'). 기간이 지난 것은 읽을 때 버린다.
+// 링크에 올린 자료의 지문: 고친 때(updatedAt) · 올려 두기만 한 사진(uploads)은 빼고 내용만 본다.
+// 링크를 만든 뒤 자료가 바뀌었는지(온바탕 파일로 새로 바꿔 넣은 때 포함) 링크 창이 알려 주는 데 쓴다.
+export function linkSig(records) {
+  const text = JSON.stringify((Array.isArray(records) ? records : []).map((record) => { const { uploads, updatedAt, ...rest } = record || {}; return rest; }));
+  let a = 0x811c9dc5, b = 0x9747b28c ^ text.length;
+  for (let i = 0; i < text.length; i++) { const c = text.charCodeAt(i); a = Math.imul(a ^ c, 16777619); b = Math.imul(b ^ c, 0x5bd1e995); b ^= b >>> 15; }
+  return `${(a >>> 0).toString(16).padStart(8, '0')}${(b >>> 0).toString(16).padStart(8, '0')}${text.length.toString(36)}`;
+}
+/**
+ * 링크를 올린 뒤 자료가 바뀌었나. sig: 이 브라우저가 올릴 때 적어 둔 지문(있으면 그것과 견준다).
+ * 없으면(다른 기기에서 올렸거나 예전 링크) 자료를 마지막으로 고친 때가 올린 때(sentAt, ms)보다 뒤인지 본다.
+ */
+export function linkChanged(records, { sig = '', sentAt = 0 } = {}) {
+  if (sig) return linkSig(records) !== sig;
+  const edited = Math.max(0, ...(Array.isArray(records) ? records : []).map((record) => Number(record?.updatedAt) || 0));
+  return sentAt > 0 && edited > sentAt + 1000;
+}
+// 회원 링크(GBE-AI Lab)의 지문은 서버가 아니라 이 브라우저에 둔다: 코드 → { sig, at(서버가 적은 올린 때) }. 100개까지.
+const SIG_KEY = 'onbatang.link-sigs';
+export function keepLinkSig(code, sig, at) {
+  try {
+    const all = JSON.parse(localStorage.getItem(SIG_KEY) || '{}');
+    delete all[code]; all[code] = { sig, at };
+    const keys = Object.keys(all);
+    for (const key of keys.slice(0, Math.max(0, keys.length - 100))) delete all[key];
+    localStorage.setItem(SIG_KEY, JSON.stringify(all));
+  } catch { /* 적지 못하면 고친 때로 견준다 */ }
+}
+export function linkSigOf(code) {
+  try { const one = JSON.parse(localStorage.getItem(SIG_KEY) || '{}')[code]; return one && typeof one.sig === 'string' ? one : null; } catch { return null; }
+}
+// 이 브라우저가 만든 7일 링크(자료 이름표 → { code, token, expiresAt, title, sig(올린 자료의 지문), sentAt(올린 때) }, 보기 링크는 '자료 이름표:view'). 기간이 지난 것은 읽을 때 버린다.
 const GUEST_KEY = 'onbatang.guest-links';
 const guestKey = (designId, mode) => (mode === 'view' ? `${designId}:view` : designId);
 export function guestLink(designId, mode = 'edit', now = Date.now()) {
@@ -148,7 +179,7 @@ export function keepGuestLink(designId, link, mode = 'edit', now = Date.now()) {
   try {
     const all = JSON.parse(localStorage.getItem(GUEST_KEY) || '{}'), key = guestKey(designId, mode);
     for (const [id, value] of Object.entries(all)) if (!(Date.parse(value?.expiresAt) > now)) delete all[id];
-    if (link) all[key] = { code: link.code, token: link.token, expiresAt: link.expiresAt, title: link.title }; else delete all[key];
+    if (link) all[key] = { code: link.code, token: link.token, expiresAt: link.expiresAt, title: link.title, ...(link.sig ? { sig: link.sig } : {}), ...(link.sentAt ? { sentAt: link.sentAt } : {}) }; else delete all[key];
     localStorage.setItem(GUEST_KEY, JSON.stringify(all));
   } catch { /* 기억하지 못하면 다음에는 새 링크를 만든다(지난 링크는 7일 뒤 저절로 지워진다) */ }
 }

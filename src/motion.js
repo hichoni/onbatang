@@ -817,11 +817,53 @@ export const calm = reducedMotion;
  * 요소 하나를 그 효과로 나타나게 한다. node 는 그 요소를 그린 것(render.js 의 itemView), item 은 그 요소의 값.
  * delay 동안에는 처음 모습(아직 안 나온 모습)으로 기다린다. 틀지 못했으면 null, 틀었으면 Animation.
  */
+// 시작 모습 미리 적기: WebKit(아이폰 · 아이패드의 사파리, 카카오톡 안 브라우저)은 막 붙인 요소에 건 움직임을 화면에 한 박자 늦게 얹어,
+// 그사이 요소의 제 모습(아직 나오지 말아야 할 것까지)이 한순간 보였다가 움직이기 시작한다. 첫 키프레임을 요소에 미리 적어 두면
+// 그 한순간에도 시작 모습이 보인다. 움직이는 동안에는 움직임이 덮으므로 보이는 것은 같고, 기다림이 끝나 움직임이 화면을 맡은 뒤(또는 끝나거나 걷히면) 원래대로 돌린다.
+const PRIME_SKIP = new Set(['offset', 'easing', 'composite']);
+// 한 요소의 같은 속성에 여러 움직임이 함께 적을 수 있다(이어 움직이기의 나타나기 + 그 요소의 나타나기). 속성마다 원래 값을 처음 한 번만 기억하고, 그 속성을 적은 움직임이 모두 돌려줄 때 되돌린다.
+const primes = new WeakMap();
+export function primedAnimate(node, keyframes, opts) {
+  const a = node.animate(keyframes, opts);
+  const first = Array.isArray(keyframes) ? keyframes[0] : null;
+  if (!first || !node.style || !(opts?.fill === 'backwards' || opts?.fill === 'both')) return a;
+  const props = [];
+  for (const [key, value] of Object.entries(first)) {
+    if (PRIME_SKIP.has(key) || value == null) continue;
+    const prop = key.startsWith('--') ? key : key.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
+    if (node.style.getPropertyPriority(prop) !== 'important') props.push([prop, String(value)]);
+  }
+  if (!props.length) return a;
+  let held = primes.get(node);
+  if (!held) primes.set(node, held = new Map());
+  for (const [prop, value] of props) {
+    const one = held.get(prop) || { orig: node.style.getPropertyValue(prop), count: 0 };
+    one.count++; held.set(prop, one);
+    node.style.setProperty(prop, value);
+  }
+  let done = false, timer = 0;
+  const restore = () => {
+    if (done) return;
+    done = true; clearTimeout(timer);
+    for (const [prop] of props) {
+      const one = held.get(prop);
+      if (!one || --one.count > 0) continue;
+      held.delete(prop);
+      if (one.orig) node.style.setProperty(prop, one.orig); else node.style.removeProperty(prop);
+    }
+    if (!held.size && primes.get(node) === held) primes.delete(node);
+  };
+  const ms = Math.max(0, Number(opts.duration) || 0);
+  timer = setTimeout(restore, Math.max(0, Number(opts.delay) || 0) + Math.min(80, ms / 2));
+  a.finished.then(restore, restore);
+  return a;
+}
+
 export function playEnter(node, item, id, { delay = 0, scale = 1, mirror = false } = {}) {
   // 타자 치듯: 글자가 실제로 놓인 자리를 재어 그 자리까지 연다.
   const k = enterKeyframes(item, id, { scale, mirror, stops: id === 'type' && !calm(node) ? measureType(node) : null });
   if (!k || !node || typeof node.animate !== 'function' || calm(node)) return null;
-  return node.animate(k.keyframes, { duration: k.ms, delay, easing: k.easing, fill: 'backwards' });
+  return primedAnimate(node, k.keyframes, { duration: k.ms, delay, easing: k.easing, fill: 'backwards' });
 }
 
 /**
@@ -976,7 +1018,7 @@ export function playTransition(old, next, id, dir = 1, { from = null, to = null,
   if (!f || !next || typeof next.animate !== 'function' || calm(next)) return { ms: 0, finish() {}, done: Promise.resolve() };
   const opts = { duration: f.ms, easing: f.easing, fill: 'both' };
   const drop = lift([next, f.old ? old : null]);
-  const anims = [next.animate(f.next, opts)];
+  const anims = [primedAnimate(next, f.next, opts)];
   if (old && f.old) anims.push(old.animate(f.old, opts));
   // 끝나면(또는 바로 끝내면) 움직임을 걷어 낸다: 들어온 장은 아무것도 걸리지 않은 제 모습으로 남는다.
   // (끝난 모습으로 붙들어 두면 글자가 흐릿하게 그려지고, 다시 끝내라고 하면 걷어 낸 것이 되살아난다. 그래서 한 번만 걷는다.)
@@ -1061,7 +1103,7 @@ function playMorph(old, next, from, to, travel) {
   back.setAttribute('aria-hidden', 'true');
   next.prepend(back);
   next.classList.add('fe-morphing');
-  anims.push(back.animate([{ opacity: 0 }, { opacity: 1 }], opts));
+  anims.push(primedAnimate(back, [{ opacity: 0 }, { opacity: 1 }], opts));
   const moved = new Set(pairs.map(([, j]) => j));
   const gone = new Set(pairs.map(([i]) => i));
   const frames = pairs.map(([i, j]) => morphFrames(was[i], now[j], from.items[i], to.items[j]));
@@ -1072,19 +1114,19 @@ function playMorph(old, next, from, to, travel) {
       // 글이나 그림이 달라졌으면: 앞 것도 새 자리로 함께 옮겨 가며 사라지고, 새것은 앞 자리에서 나타나며 온다(서로 겹쳐 녹듯이).
       const back = morphFrames(now[j], was[i], to.items[j], from.items[i]).reverse();
       anims.push(was[i].animate([{ ...back[0], opacity: getComputedStyle(was[i]).opacity }, { ...back[1], opacity: 0 }], opts));
-      anims.push(now[j].animate([{ ...frames[k][0], opacity: 0 }, frames[k][1]], opts));
+      anims.push(primedAnimate(now[j], [{ ...frames[k][0], opacity: 0 }, frames[k][1]], opts));
       lift([was[i]]);
       return;
     }
     was[i].style.visibility = 'hidden';
     hidden.push(was[i]);
-    anims.push(now[j].animate(frames[k], opts));
+    anims.push(primedAnimate(now[j], frames[k], opts));
   });
   was.forEach((n, i) => { if (!gone.has(i)) anims.push(n.animate([{ opacity: getComputedStyle(n).opacity }, { opacity: 0, offset: 0.5 }, { opacity: 0 }], opts)); });
   // 이 장에만 있는 것(영상 장면 판 · 안내 글 포함)은 앞 장의 것이 거의 사라진 뒤에 나타난다.
   [...next.children].forEach((n, k) => {
     if (n === back || (n.classList.contains('fi') && moved.has(now.indexOf(n)))) return;
-    anims.push(n.animate([{ opacity: 0 }, { opacity: 0, offset: 0.35 }, { opacity: getComputedStyle(n).opacity }], opts));
+    anims.push(primedAnimate(n, [{ opacity: 0 }, { opacity: 0, offset: 0.35 }, { opacity: getComputedStyle(n).opacity }], opts));
   });
   let over = false;
   const end = () => {
