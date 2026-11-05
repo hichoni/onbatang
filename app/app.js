@@ -3230,6 +3230,8 @@ async function openGuestLink(O) {
     return out;
   };
   const refreshed = new Set();   // 이 창을 연 뒤 서버에 있는지 확인한 링크의 종류
+  // 링크를 올린 뒤 자료가 바뀌었나(종류마다 · null: 아직 견주지 않음). 바뀌었으면 다시 올리기를 앞세운다.
+  const changed = { view: null, edit: null };
   const forget = (kind) => { kit.keepGuestLink(owner, null, kind); saved[kind] = null; };
   const busy = async (job) => {
     box.inert = true; message.textContent = '';
@@ -3241,7 +3243,8 @@ async function openGuestLink(O) {
     const made = await links.publish({ title, records: list, link: saved[kind], mode: kind,
       onProgress: (p) => { message.textContent = p.phase === 'card' ? '미리보기 그림을 만들고 있어요…' : `자료를 올리고 있어요 · 파트 ${p.completed + 1} / ${p.total}`; },
       card: () => cards.linkCard(list, { render: designToCanvas }) });
-    saved[kind] = { code: made.code, token: made.token, expiresAt: made.expiresAt, title: made.title, takes: made.takes, videos: made.videos };
+    saved[kind] = { code: made.code, token: made.token, expiresAt: made.expiresAt, title: made.title, takes: made.takes, videos: made.videos, sig: kit.linkSig(list), sentAt: Date.now() };
+    changed[kind] = false;
     kit.keepGuestLink(owner, saved[kind], kind);
     refreshed.add(kind);           // 방금 만든 · 올린 링크는 다시 확인하지 않는다
   };
@@ -3266,18 +3269,24 @@ async function openGuestLink(O) {
           el('button', { class: 'btn btn-ghost', type: 'button', onClick: closeModal }, '닫기')));
       return;
     }
-    const url = kit.linkUrl(link.code, mode);
-    const copy = el('button', { class: 'btn btn-primary', type: 'button', dataset: { guestCopy: '' }, onClick: async () => {
+    const url = kit.linkUrl(link.code, mode), stale = changed[mode] === true;
+    if (changed[mode] === null) {
+      const kind = mode;
+      changed[kind] = false;
+      records().then((list) => { changed[kind] = kit.linkChanged(list, { sig: link.sig, sentAt: link.sentAt || Date.parse(link.expiresAt) - kit.GUEST_DAYS * 864e5 }); if (changed[kind] && mode === kind) paint(); }).catch((error) => console.warn(error));
+    }
+    const copy = el('button', { class: `btn${stale ? '' : ' btn-primary'}`, type: 'button', dataset: { guestCopy: '' }, onClick: async () => {
       try { await navigator.clipboard.writeText(url); copy.textContent = '복사했어요'; } catch { prompt('링크', url); }
       clearTimeout(timer); timer = setTimeout(() => { if (copy.isConnected) copy.textContent = '링크 복사'; }, 2000);
     } }, '링크 복사');
     body.replaceChildren(
       el('div', { class: 'cv-guest-link' }, el('code', { dataset: { guestUrl: '' }, text: url }), copy, el('a', { class: 'btn', href: url, target: '_blank', rel: 'noopener' }, '열어 보기 ↗')),
       el('p', { class: 'cv-guest-note', dataset: { guestUntil: '' } }, el('b', { text: `${until(link.expiresAt)}까지 열려요.` }), ` 그 뒤에는 링크와 자료가 서버에서 지워져요.${Number.isFinite(link.takes) ? ` · ${mode === 'view' ? '본' : '받은'} 횟수 ${link.takes}` : ''}`),
+      stale ? el('p', { class: 'cv-guest-note warn', dataset: { guestStale: '' }, role: 'alert', text: `링크를 올린 뒤 자료가 바뀌었어요. 받는 사람은 아직 예전 내용을 ${mode === 'view' ? '봐요' : '받아요'}. "지금 자료로 다시 올리기"를 눌러 주세요.` }) : null,
       link.videos ? el('p', { class: 'cv-guest-note warn', text: `바탕 영상 ${link.videos}개는 링크에 실리지 않았어요. 영상까지 보내려면 "온바탕 파일"을 써 주세요.` }) : null,
       el('p', { class: 'cv-guest-note', text: mode === 'view' ? '자료를 고친 뒤 다시 올리면 그다음에 여는 사람부터 새 모습으로 봐요(기간은 늘지 않아요).' : '자료를 고친 뒤 다시 올리면 그다음에 여는 사람부터 새 자료를 받아요(기간은 늘지 않아요).' }),
       el('div', { class: 'cv-file-choices' },
-        el('button', { class: 'btn', type: 'button', dataset: { guestResend: '' }, onClick: () => busy(async () => { await send(link.title || name()); paint(); message.textContent = '지금 자료로 다시 올렸어요.'; }) }, '지금 자료로 다시 올리기'),
+        el('button', { class: `btn${stale ? ' btn-primary' : ''}`, type: 'button', dataset: { guestResend: '' }, onClick: () => busy(async () => { await send(link.title || name()); paint(); message.textContent = '지금 자료로 다시 올렸어요.'; }) }, '지금 자료로 다시 올리기'),
         el('button', { class: 'btn btn-ghost', type: 'button', dataset: { guestRemove: '' }, onClick: () => {
           if (!confirm(`${label}를 지울까요? 받은 사람이 더는 열 수 없어요.${mode === 'edit' ? ' 이미 받은 사람의 사본은 그대로예요.' : ''}`)) return;
           busy(async () => { await links.remove(link); forget(mode); paint(); message.textContent = '링크를 지웠어요.'; });
