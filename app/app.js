@@ -260,13 +260,6 @@ function upsert(record) {
 }
 
 // ---------- 첫 화면: 소개 + 새로 만들기(빈 그림 · 템플릿) 띠 · 내 그림 ----------
-// 대문의 "만들 수 있는 것": [작은 그림, 이름, 색]
-const FEATS = [
-  ['copy', '카드', 'mint'],
-  ['image', '포스터', 'sky'],
-  ['screen', '발표 자료', 'lilac'],
-  ['template', '다양한 틀', 'sun'],
-];
 // 첫 화면의 "템플릿으로 시작하기"는 두 칸이다: 주제 테마(표지 9종, 발표 화면 모양) · 기본 짜임(6종).
 const STARTS = [['theme', '주제 테마'], ['basic', '기본 짜임'], ['occasion', '행사·연수'], ['collection', '디자인 세트']];
 let startTab = 'theme';
@@ -501,29 +494,34 @@ function render() {
       event.target.value = '';
       if (file) void openHomeWorkspace(importAction, file);
     }}) : null;
-  const pptStart = pptFile && el('button', {type:'button',class:'btn cv-cta cv-ppt-start',disabled:loading||full,
+  const pptStart = pptFile && el('button', {type:'button',class:'btn cv-ppt-start',disabled:loading||full,
     onClick:()=>pptFile.click()},ic('upload'),'PPT 가져오기');
-  const hero = el('section', { class: 'cv-hero', 'aria-labelledby': 'onba-title' }, el('div', { class: 'cv-hero-in' },
-    el('div', { class: 'cv-hero-text' },
-      el('div', { class: 'cv-home-heading' }, title),
-      el('p', { class: 'cv-hero-kicker' }, '생각을 펼치는', el('br'), el('span', { class: 'cv-kick-color', text: '따뜻한 디자인 공간.' })),
-      el('p', { class: 'cv-hero-lead' }, '글·도형·사진으로 나답게 만들어요.', el('br'), '작은 카드부터 포스터, 발표 자료까지.'),
-      el('ul', { class: 'cv-feats', 'aria-label': '만들 수 있는 것' }, ...FEATS.map(([pic, text, tone]) => el('li', { class: `cv-feat ${tone}` },
-        el('span', { class: 'cv-feat-icon', 'aria-hidden': 'true' }, ic(pic)), el('span', { text })))),
-      el('div', { class: 'cv-start-paths','aria-label':'자료 시작',role:'group'},start,pptStart,pptFile),
-      el('div', { class: 'cv-hero-go' }, tourButton('home'), newsButton(),
+  // Keep the active group open if the library redraws while loading local or cloud data.
+  const homeMenu = (id, label, ...actions) => el('details', {
+    class: 'cv-home-menu', name: 'home-actions', dataset: { homeMenu: id },
+    open: !!app.querySelector(`[data-home-menu="${id}"][open]`),
+    onKeydown: event => {
+      if (event.key !== 'Escape') return;
+      event.currentTarget.open = false;
+      event.currentTarget.querySelector('summary').focus();
+    },
+  }, el('summary', { text: label }), el('div', { class: 'cv-home-menu-items' }, ...actions));
+  const imports = homeMenu('import', '파일 가져오기', pptStart, pptFile,
         importAction && !importAction.hideHome ? el('button', { class: 'btn cv-import-btn', type: 'button', disabled: loading, onClick: async (event) => {
           const button = event.currentTarget; button.disabled = true;
           try { await importAction.open(); } catch (error) { console.warn(error); toast('가져오기 화면을 열지 못했어요. 다시 시도해주세요.'); }
           finally { button.disabled = false; }
-        } }, importAction.label) : null,
+        } }, importAction.label) : null, ...fileOpenButton(loading), ...pdfOpenButton(loading));
+  const tools = homeMenu('more', '더보기', tourButton('home'), newsButton(),
         cloudAction ? el('button',{class:'btn cv-cloud-btn',type:'button',disabled:loading,dataset:{cloudAction:''},title:cloudAction.title||'',onClick:()=>openHomeWorkspace(cloudAction)},...face('cloud',cloudAction.label)) : null,
         accountAction ? el('button',{class:'btn cv-account-btn',type:'button',disabled:loading,dataset:{accountAction:''},onClick:()=>openHomeWorkspace(accountAction)},accountAction.label) : null,
-        ...fileOpenButton(loading),
-        ...pdfOpenButton(loading),
-        accountBridge && !sync ? el('button', { class: 'btn cv-bridge-btn', type: 'button', disabled: loading, dataset: { accountBridge: '' }, title: '집에서 만든 그림을 학교에서: GBE-AI Lab 선생님 계정에 올리고 가져와요', onClick: () => openBridgeFromHome() }, ...face('cloud', 'GBE-AI Lab 계정으로 이어 쓰기')) : null,
-        full ? el('p', { class: 'cv-hero-full', text: `그림은 ${MAX_DESIGNS}개까지 저장돼요(PPT 하나는 파트가 여럿이어도 1개). 안 쓰는 그림을 지워 주세요.` }) : null),
-      el('p', { class: 'cv-hero-tag', text: `작은 생각도 멋진 작품이 되도록 · ${sync ? '내 계정에 자동 저장' : '이 기기에 자동 저장'}` })),
+        accountBridge && !sync ? el('button', { class: 'btn cv-bridge-btn', type: 'button', disabled: loading, dataset: { accountBridge: '' }, title: '집에서 만든 그림을 학교에서: GBE-AI Lab 선생님 계정에 올리고 가져와요', onClick: () => openBridgeFromHome() }, ...face('cloud', 'GBE-AI Lab 계정으로 이어 쓰기')) : null);
+  const hero = el('section', { class: 'cv-hero', 'aria-labelledby': 'onba-title' }, el('div', { class: 'cv-hero-in' },
+    el('div', { class: 'cv-hero-text' },
+      el('div', { class: 'cv-home-heading' }, title),
+      el('p', { class: 'cv-hero-lead', text: '카드와 포스터, 수업 발표 자료를 만들어요.' }),
+      el('div', { class: 'cv-start-paths', role: 'group', 'aria-label': '자료 시작' }, start, imports, tools),
+      full ? el('p', { class: 'cv-hero-full', text: `그림은 ${MAX_DESIGNS}개까지 저장돼요(PPT 하나는 파트가 여럿이어도 1개). 안 쓰는 그림을 지워 주세요.` }) : null),
     heroShowcase()));
 
   // 템플릿은 소개 카드 아래의 같은 본문 폭에서 골라 바로 시작한다.
@@ -566,7 +564,7 @@ function render() {
     mine.append(el('div', { class: 'cv-state cv-empty', role: 'status' },
       el('span', { class: 'cv-state-icon', 'aria-hidden': 'true' }, el('i'), el('i'), el('i')),
       el('b', { text: sync ? (S.account === 'syncing' ? '계정의 그림을 맞추는 중이에요…' : '저장된 그림이 없어요') : '이 기기에 저장된 그림이 없어요' }),
-      el('span', { class: 'muted', text: '새 그림을 만들면 여기에 저절로 저장돼요. 위의 틀로 시작해도 좋아요.' }),
+      el('span', { class: 'muted', text: '새 그림을 만들면 여기에 저절로 저장돼요. 아래에서 틀을 골라 시작할 수도 있어요.' }),
       newBtn('btn-primary cv-empty-btn')));
   } else {
     const grid = el('div', { class: 'cv-list' });
@@ -587,7 +585,7 @@ function render() {
       catch { toast('원본을 읽지 못했어요. 다시 시도해 주세요.'); }
     } }, '원본 내려받기')));
 
-  app.replaceChildren(hero, el('div', { class: 'cv-home' }, templates, mine,
+  app.replaceChildren(hero, el('div', { class: 'cv-home' }, mine, templates,
     el('p', { class: 'cv-note', text: `${sync ? `그림은 이 기기에 먼저 저장한 뒤 내 계정에도 저장돼요. ${videoMB() ? `바탕 영상도 한 개 ${videoMB()}MB까지 올라가요(더 큰 영상은 이 기기에만 있어요).` : '바탕에 깐 영상만 이 기기에 남아요.'}` : '그림은 이 기기(이 브라우저)에만 저장돼요(서버로 올라가지 않아요). 다른 기기에서는 보이지 않으니, 다 만든 그림은 내려받아 두세요.'} 그림의 모양(정사각형·세로·가로·길게)은 꾸미는 화면에서 언제든 바꿀 수 있어요.` }),
     // 지금 쓰는 온바탕의 버전: 맨 아래에 작고 옅게(새 배포가 들어왔는지 알 수 있게).
     el('p', { class: 'cv-version', dataset: { onbatangVersion: ONBATANG_VERSION }, text: `온바탕 v${ONBATANG_VERSION}` })));

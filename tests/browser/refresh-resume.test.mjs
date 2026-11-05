@@ -120,7 +120,8 @@ test('the home screen has a "새 기능" button that explains each new feature i
   const {page, origin} = await setup(t);
   await page.goto(origin + '/app/');
   await splashGone(page);
-  const btn = page.locator('[data-whats-new]');
+  await page.locator('[data-home-menu=more] > summary').click();
+ const btn = page.locator('[data-whats-new]');
   assert.match(await btn.getAttribute('class'), /\bunseen\b/);
   await btn.click();
   const box = page.locator('.cv-news-box');

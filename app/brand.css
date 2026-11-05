@@ -37,6 +37,29 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-starts-head h2,body.mc-
  body.mc-app :is(#app,.cv-app-root)[data-view="home"] .btn.cv-cta{white-space:normal;text-align:left}
 }
 
+/* The opening screen shares the available width with saved work. */
+body.mc-app :is(#app,.cv-app-root)[data-view="home"]{width:calc(100% - 32px);max-width:1600px;margin:12px auto 0}
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero-in{grid-template-columns:minmax(0,1.2fr) minmax(220px,.8fr);gap:16px;padding:clamp(16px,2.3vw,32px)}
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-home-title .onba-logo{width:clamp(152px,17vw,248px)}
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-demo{min-height:0;width:min(100%,320px);aspect-ratio:1.95;justify-self:center}
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-start-paths{display:flex;align-items:flex-start;flex-wrap:wrap;gap:6px 10px;margin-top:12px}
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .btn.cv-cta{min-height:44px;padding:8px 20px;font-size:1rem}
+.cv-home-menu{min-width:0;max-width:100%}
+.cv-home-menu>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px;box-sizing:border-box;padding:8px 14px;border:1px solid #aabbb3;background:white;border-radius:22px;list-style:none;cursor:pointer;color:#23463e;font-weight:650}
+.cv-home-menu>summary::-webkit-details-marker{display:none}
+.cv-home-menu>summary::after{content:"";width:7px;height:7px;border:solid currentColor;border-width:0 1.5px 1.5px 0;transform:rotate(45deg);margin-top:-3px}
+.cv-home-menu[open]>summary::after{transform:rotate(225deg);margin-top:3px}
+.cv-home-menu>summary:focus-visible{outline:3px solid #286f62;outline-offset:2px}
+.cv-home-menu-items{display:grid;gap:4px;margin-top:6px}
+.cv-home-menu-items .btn{min-height:44px;justify-content:flex-start}
+@media(max-width:700px){
+ body.mc-app :is(#app,.cv-app-root)[data-view="home"]{width:calc(100% - 16px);margin-top:8px}
+ body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero-in{grid-template-columns:minmax(0,1fr);padding:16px}
+ body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-demo{display:none}
+ body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-start-paths{gap:6px}
+ .cv-home-menu>summary{padding-inline:10px}
+}
+
 /* ---------- 온바탕의 꾸미는 화면: 종이 바탕 ----------
    도구 줄은 밝은 종이색에 둥근 아이콘 칸(고른 것은 초록으로 채운다), 작업대는 따뜻한 종이에 옅은 점 무늬,
    위 막대와 장 띠도 종이색으로. 같은 화면 짜임이라도 온바탕만의 색과 결로 보이게 한다. */

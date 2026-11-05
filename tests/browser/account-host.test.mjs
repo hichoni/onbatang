@@ -23,14 +23,15 @@ async function setup(t,publicOnly=false){
 }
 test('public standalone has no account list without the explicit host action',options,async t=>{const {page,external}=await setup(t,true);assert.equal(await page.locator('[data-account-action]').count(),0);assert.equal(await page.locator('[data-cloud-action]').count(),0);assert.deepEqual(external,[]);});
 test('내 클라우드 has its own home button and opens in the same full screen, apart from the lesson list',options,async t=>{
- const {page,external}=await setup(t);const cloud=page.locator('[data-cloud-action]');await cloud.waitFor();assert.match(await cloud.innerText(),/내 클라우드/);
+ const {page,external}=await setup(t);await page.locator('[data-home-menu=more] > summary').click();
+ const cloud=page.locator('[data-cloud-action]');await cloud.waitFor();assert.match(await cloud.innerText(),/내 클라우드/);
  await page.evaluate(()=>window.releasePull());await cloud.click();await page.getByText('내 클라우드 목록',{exact:true}).waitFor();
  assert.equal(await page.getByRole('heading',{name:'내 클라우드 검수',exact:true}).count(),1);assert.equal(await page.getByText('내부 수업 목록',{exact:true}).count(),0);
  assert.equal(await page.evaluate(()=>[window.cloudCalls,window.calls.length]).then(v=>v.join()),'1,0');
- await page.getByRole('button',{name:'내 그림으로 돌아가기',exact:true}).click();await page.locator('[data-cloud-action]').waitFor();assert.deepEqual(external,[]);
+ await page.getByRole('button',{name:'내 그림으로 돌아가기',exact:true}).click();await page.locator('[data-home-menu=more] > summary').waitFor();assert.deepEqual(external,[]);
 });
 test('account lists open inside home/editor, preserve saves and leave for an already persisted result',options,async t=>{
- const {page,external}=await setup(t),url=page.url();if(await page.locator('.cv-document-menu').count())await page.getByLabel('문서 메뉴',{exact:true}).click();await page.locator('[data-account-action]').click();await page.getByText('내부 수업 목록',{exact:true}).waitFor();
+ const {page,external}=await setup(t),url=page.url();await page.locator('[data-home-menu=more] > summary').click();if(await page.locator('.cv-document-menu').count())await page.getByLabel('문서 메뉴',{exact:true}).click();await page.locator('[data-account-action]').click();await page.getByText('내부 수업 목록',{exact:true}).waitFor();
  await page.evaluate(()=>window.releasePull());await page.getByText('내부 수업 목록',{exact:true}).waitFor();
  assert.deepEqual(await page.evaluate(()=>window.calls.map(c=>({from:c.from,drawings:c.drawings}))),[{from:'home',drawings:1}]);assert.equal(page.url(),url);
  await page.getByRole('button',{name:'내 그림으로 돌아가기',exact:true}).click();await page.locator('.cv-item .cv-thumb').first().click();

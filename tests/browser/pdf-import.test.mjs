@@ -31,6 +31,7 @@ test('PDF import: every page becomes a locked page picture with its text in the 
  const pdf=await maker.pdf({preferCSSPageSize:true,printBackground:true});await maker.close();
  const page=await context.newPage();page.setDefaultTimeout(30000);page.on('pageerror',e=>errors.push(e.message));
  await page.goto(origin+'/app/');
+ await page.locator('[data-home-menu=import] > summary').click();
  await page.locator('[data-pdf-open]').waitFor();
  await page.setInputFiles('[data-pdf-input]',{name:'과학 안내문.pdf',mimeType:'application/pdf',buffer:pdf});
  const box=page.locator('#cv-pdf-title');await box.waitFor();
