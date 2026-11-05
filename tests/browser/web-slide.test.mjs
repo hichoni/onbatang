@@ -33,7 +33,7 @@ async function setup(t, html = fixture) {
   await new Promise(done => server.listen(0, '127.0.0.1', done));
   t.after(() => new Promise(done => server.close(done)));
   const {chromium} = await import(pathToFileURL(process.env.MINICAN_PLAYWRIGHT_PATH).href);
-  const browser = await chromium.launch({channel: process.env.MINICAN_BROWSER || 'msedge', headless: true});
+  const browser = await chromium.launch(process.env.MINICAN_CHROMIUM ? {executablePath: process.env.MINICAN_CHROMIUM, headless: true} : {channel: process.env.MINICAN_BROWSER || 'msedge', headless: true});
   t.after(() => browser.close());
   const origin = `http://127.0.0.1:${server.address().port}`;
   const context = await browser.newContext({viewport: {width: 1280, height: 800}});
@@ -148,7 +148,8 @@ test('browse the site, finish browsing, then the slide moves on as usual; the ph
   await page.locator('.cv-show-btn').click();
   const web = page.locator('[data-show-web]'), site = page.frameLocator('[data-show-web] iframe');
   await site.locator('#b').waitFor();
-  assert.equal(await page.locator('[data-web-use]').innerText(), '사이트 둘러보기');
+  assert.equal(await page.locator('[data-web-use]').getAttribute('aria-checked'), 'false');
+  assert.match(await page.locator('[data-web-use]').innerText(), /OFF/);
   // 1) 둘러보기 → 사이트를 누르고 글을 친다(글쇠는 사이트로) → 둘러보기 끝내기 → → 로 다음 장
   await useSite(page);
   await site.locator('#b').click();

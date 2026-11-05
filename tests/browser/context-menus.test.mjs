@@ -37,7 +37,7 @@ async function setup(t) {
   await new Promise(done => server.listen(0, '127.0.0.1', done));
   t.after(() => new Promise(done => server.close(done)));
   const {chromium} = await import(pathToFileURL(process.env.MINICAN_PLAYWRIGHT_PATH).href);
-  const browser = await chromium.launch({channel: process.env.MINICAN_BROWSER || 'msedge', headless: true});
+  const browser = await chromium.launch(process.env.MINICAN_CHROMIUM ? {executablePath: process.env.MINICAN_CHROMIUM, headless: true} : {channel: process.env.MINICAN_BROWSER || 'msedge', headless: true});
   t.after(() => browser.close());
   const origin = `http://127.0.0.1:${server.address().port}`, external = [];
   const context = await browser.newContext({reducedMotion: 'reduce', viewport: {width: 1280, height: 800}});
@@ -145,7 +145,7 @@ test('element menu: style copy and paste, centre on page, crop entry and photo r
   const [px, py] = await center(photo);
   await rightClick(page, px, py);
   const photoMenu = await menuItems(page);
-  for (const name of ['자르기', '사진 바꾸기', '바탕으로 깔기', '스타일 복사']) assert.ok(photoMenu.includes(name), name);
+  for (const name of ['자르기', '사진 바꾸기', '클립보드 그림으로 바꾸기', '바탕으로 깔기', '스타일 복사']) assert.ok(photoMenu.includes(name), name);
   const png = Buffer.from(await page.evaluate(() => { const c = document.createElement('canvas'); c.width = 20; c.height = 40; const x = c.getContext('2d'); x.fillStyle = '#e03131'; x.fillRect(0, 0, 20, 40); return c.toDataURL('image/png').slice(22); }), 'base64');
   const chooser = page.waitForEvent('filechooser');
   await choose(page, '사진 바꾸기');
@@ -154,6 +154,15 @@ test('element menu: style copy and paste, centre on page, crop entry and photo r
   // A tall picture in a wide frame is cropped to fill it, not stretched.
   assert.equal(await page.locator('.cv-canvas .fe-card .fi-image.fi-cropped').count(), 1);
   // The frame keeps its exact place, size and rotation (only the picture inside changed).
+  assert.deepEqual(await frame(), before);
+  // Replace from the clipboard: a copied picture (e.g. a screen capture) fills the same frame.
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  const fileSrc = await srcOf();
+  await page.evaluate(async () => { const c = document.createElement('canvas'); c.width = 40; c.height = 20; const x = c.getContext('2d'); x.fillStyle = '#1971c2'; x.fillRect(0, 0, 40, 20);
+    const blob = await new Promise(r => c.toBlob(r, 'image/png')); await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]); });
+  await rightClick(page, px, py);
+  await choose(page, '클립보드 그림으로 바꾸기');
+  await page.waitForFunction(old => { const n = document.querySelector('.cv-canvas .fe-card .fi-image'); return n && (n.tagName === 'IMG' ? n : n.querySelector('img'))?.getAttribute('src') !== old; }, fileSrc);
   assert.deepEqual(await frame(), before);
   assert.deepEqual(external, []);
 });

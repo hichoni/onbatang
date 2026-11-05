@@ -508,7 +508,20 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"], body.mc-app :is(#app,.cv-a
 .cv-show-web[data-mode="view"] .fe-web-frame { pointer-events: none; }
 .cv-show-web[data-mode="use"] { cursor: auto; }
 .cv-show-web[data-mode="use"]::after { content: ''; position: absolute; inset: 0; border: 4px solid #4c6ef5; pointer-events: none; }
-.cv-web-pill { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 2; display: flex; align-items: center; gap: 6px; padding: 6px; border-radius: 999px; background: rgba(20, 24, 34, .8); color: #fff; cursor: default; transition: opacity .35s; }
+.cv-web-pill { position: absolute; top: 14px; right: 14px; z-index: 2; display: flex; align-items: center; gap: 4px; padding: 4px; border-radius: 14px; background: rgba(20, 24, 34, .66); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); color: #fff; cursor: default; transition: opacity .35s; box-shadow: 0 6px 18px rgba(0, 0, 0, .18); }
+/* 웹 장 단추: 아이콘 · 둘러보기 스위치(꺼짐: 회색 OFF · 켜짐: 파랑 ON, 손잡이가 오른쪽으로) */
+.cv-web-icon { display: grid; place-items: center; width: 34px; height: 34px; border: 0; border-radius: 10px; background: transparent; color: #fff; cursor: pointer; }
+.cv-web-icon:hover, .cv-web-icon:focus-visible { background: rgba(255, 255, 255, .18); }
+.cv-web-icon .cv-ic, .cv-web-toggle .cv-ic { width: 18px; height: 18px; }
+.cv-web-toggle { display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 10px; border: 0; border-radius: 10px; background: rgba(255, 255, 255, .12); color: #fff; font: 800 12px/1 system-ui, sans-serif; letter-spacing: .04em; cursor: pointer; transition: background .2s; }
+.cv-web-toggle:hover { background: rgba(255, 255, 255, .22); }
+.cv-web-switch { position: relative; flex: none; width: 30px; height: 18px; border-radius: 999px; background: rgba(255, 255, 255, .32); transition: background .2s; }
+.cv-web-switch i { position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .2s; }
+.cv-web-state { min-width: 2.4em; text-align: left; }
+.cv-web-toggle.on { background: #4c6ef5; }
+.cv-web-toggle.on:hover { background: #5c7cfa; }
+.cv-web-toggle.on .cv-web-switch { background: rgba(255, 255, 255, .5); }
+.cv-web-toggle.on .cv-web-switch i { transform: translateX(12px); }
 .cv-web-pill:empty { display: none; }
 @media (hover: hover) { .cv-show[data-calm] .cv-show-web[data-mode="view"] .cv-web-pill:not(:focus-within) { opacity: 0; } }
 .cv-web-status { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 1; display: grid; justify-items: center; gap: 10px; max-width: min(560px, 90vw); padding: 18px 22px; border-radius: 16px; background: rgba(20, 24, 34, .82); color: #fff; text-align: center; line-height: 1.5; }

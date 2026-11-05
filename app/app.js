@@ -2231,12 +2231,18 @@ async function present(O) {
   };
   const webKey = (label, title, onClick, data) => el('button', { class: 'cv-show-key', type: 'button', title, 'aria-label': title, dataset: data, onClick: (e) => { e.stopPropagation(); onClick(); } }, label);
   const openSite = (url) => { try { window.open(url, '_blank', 'noopener'); } catch (error) { console.warn(error); } };
+  // 웹 장의 단추 묶음(오른쪽 위 모서리): 둘러보기 켜기 · 끄기 스위치(ON/OFF가 색과 글로 보인다) · 새 창. 켠 동안에는 ◀ ▶ 도.
+  // 사이트 한가운데를 가리지 않게 작은 아이콘으로 모서리에 두고, 보기 상태에서는 발표 막대처럼 화면 끝으로 마우스를 가져갈 때만 보인다.
+  const webIcon = (name, title, onClick, data) => el('button', { class: 'cv-web-icon', type: 'button', title, 'aria-label': title, dataset: data, onClick: (e) => { e.stopPropagation(); onClick(); } }, ic(name));
   const paintWebPill = () => {
     if (!web) return;
-    const open = webKey([ic('screen'), el('span', { class: 'cv-show-word', text: '새 창' })], '이 사이트를 새 창으로 열기', () => openSite(web.url), { webOpen: '' });
-    web.pill.replaceChildren(...(web.mode === 'use'
-      ? [webKey(ic('left'), '앞 장', () => go(-1), { webPrev: '' }), webKey('둘러보기 끝내기', '사이트 둘러보기를 끝내고 발표로 돌아가기 (Esc)', () => webMode('view'), { webView: '' }), webKey(ic('right'), '다음 장', () => go(1), { webNext: '' }), open]
-      : [webKey([ic('move'), el('span', { text: '사이트 둘러보기' })], '이 사이트를 직접 누르고 써요 (끝내면 다시 넘길 수 있어요)', () => webMode('use'), { webUse: '' }), open]));
+    const on = web.mode === 'use';
+    const toggle = el('button', { class: `cv-web-toggle${on ? ' on' : ''}`, type: 'button', role: 'switch', 'aria-checked': String(on), 'aria-label': '사이트 둘러보기',
+      title: on ? '사이트 둘러보기 끄기 · 발표로 돌아가기 (Esc)' : '사이트 둘러보기 켜기 · 사이트를 직접 누르고 써요', dataset: on ? { webView: '' } : { webUse: '' },
+      onClick: (e) => { e.stopPropagation(); webMode(on ? 'view' : 'use'); } },
+    ic('cursor'), el('span', { class: 'cv-web-switch', 'aria-hidden': 'true' }, el('i')), el('b', { class: 'cv-web-state', 'aria-hidden': 'true', text: on ? 'ON' : 'OFF' }));
+    web.pill.replaceChildren(...(on ? [webIcon('left', '앞 장', () => go(-1), { webPrev: '' }), webIcon('right', '다음 장', () => go(1), { webNext: '' })] : []),
+      toggle, webIcon('external', '이 사이트를 새 창으로 열기', () => openSite(web.url), { webOpen: '' }));
   };
   // 사이트 위에 마우스가 있는 동안에는 이 화면(발표)에 마우스 알림이 오지 않는다: 알림이 오면 마우스가 사이트 밖(위 · 아래 막대 등)에 있는 것이다.
   // 장 전체 사이트 · 웹사이트 상자 · 유튜브 모두: 글쇠를 가져간 사이트 밖으로 마우스가 나오면 발표가 돌려받는다.
@@ -2256,7 +2262,7 @@ async function present(O) {
       status.append(el('span', { text: `${webHost(url)} 여는 중…` }));
       frame.addEventListener('load', () => { if (web?.frame === frame) { clearTimeout(web.slow); status.hidden = true; } });
       // 오래 걸리면(또는 사이트가 막아 둔 곳이면) 새 창으로 여는 길을 알려 준다.
-      web.slow = setTimeout(() => { if (web?.frame === frame && !status.hidden) status.replaceChildren(el('span', { text: '사이트가 열리지 않으면 위의 "새 창"으로 열어요.' })); }, 10000);
+      web.slow = setTimeout(() => { if (web?.frame === frame && !status.hidden) status.replaceChildren(el('span', { text: '사이트가 열리지 않으면 오른쪽 위의 새 창 단추로 열어요.' })); }, 10000);
       // 사이트 밖으로 마우스가 나오면 글쇠를 발표로 돌려받는다(사이트 안의 글쇠는 발표가 들을 수 없다).
       frame.addEventListener('mouseleave', takeKeys);
       paintWebPill();

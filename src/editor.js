@@ -1680,6 +1680,7 @@ export function createEditor({
         it.t === 'image' ? [
           row('crop', '자르기', '', openCrop),
           row('swap', '사진 바꾸기', '', replacePhoto, { disabled: busy }),
+          row('paste', '클립보드 그림으로 바꾸기', '', replaceFromClipboard, { disabled: busy || !navigator.clipboard?.read }),
           row('cover', '바탕으로 깔기', '', toBackground),
           row('pencil', it.alt ? '그림 설명 고치기' : '그림 설명 적기', '', () => { if (pop !== 'alt') toggle('alt'); }),
         ] : [],
@@ -1865,8 +1866,28 @@ export function createEditor({
   async function onReplacePicked() {
     const file = replaceInput.files?.[0];
     replaceInput.value = '';
-    const key = replaceFor, target = card;
+    const key = replaceFor;
     replaceFor = null;
+    await replaceWith(file, key);
+  }
+  // 클립보드 그림으로 바꾸기: 컴퓨터 클립보드(다른 곳에서 복사한 그림 · 화면 캡처)의 그림으로 같은 틀을 채운다. 브라우저가 한 번 물어볼 수 있다.
+  async function replaceFromClipboard() {
+    const it = cur();
+    if (!it || it.t !== 'image' || it.lock || busy) return;
+    const key = it.id || sel;
+    let file = null;
+    try {
+      for (const entry of await navigator.clipboard.read()) {
+        const type = entry.types.find((t) => t.startsWith('image/'));
+        if (type) { file = new File([await entry.getType(type)], 'clip.' + type.split('/')[1], { type }); break; }
+      }
+    } catch (error) { console.warn(error); }
+    if (!file) { notify('클립보드에 그림이 없어요. 바꿀 그림을 복사(또는 화면 캡처)한 뒤 다시 해 봐요.', 4000); return; }
+    await replaceWith(file, key);
+  }
+  // 고른 사진 틀(key: 이름표, 없으면 번호)을 그림 파일로 바꾼다. 파일에서 고른 것 · 클립보드의 것이 함께 쓴다.
+  async function replaceWith(file, key) {
+    const target = card;
     if (!file || !card || busy) return;
     busy = true;
     try {
