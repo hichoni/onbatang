@@ -38,7 +38,7 @@ import {createGaiMaker,gaiLessonContext} from './gai-maker.js';
 import {
   createEditor, designView, designToBlob, designToCanvas, configure, settings, reshapeItems, layoutList, layoutItems, icon, cleanDesign, hasMotion, playDesign, playTransition,
   COMBOS, TRANSITIONS, designsToVideo, canMakeVideo, canFilmScenes, filmPlan, readCheck, READ, liveBackdrops, leaveLooks, morphs, MAX_FILM_SECONDS, videoSize, STAYS, DEFAULT_STAY, scenePlayer, dropScene, sceneUrl, sceneBlob, youTubePlayers,
-  fontFamilyOf, fontList, textLimit, planMotion, registerFonts,
+  fontList, textLimit, planMotion, registerFonts,
 } from '../src/index.js';
 import { ONBATANG_FONTS } from './fonts.js';
 import { listFileFonts, putFileFont, fontEntry, readFontAsset } from './file-fonts.js';
@@ -260,13 +260,6 @@ function upsert(record) {
 }
 
 // ---------- 첫 화면: 소개 + 새로 만들기(빈 그림 · 템플릿) 띠 · 내 그림 ----------
-// 대문의 "만들 수 있는 것": [작은 그림, 이름, 색]
-const FEATS = [
-  ['copy', '카드', 'mint'],
-  ['image', '포스터', 'sky'],
-  ['screen', '발표 자료', 'lilac'],
-  ['template', '다양한 틀', 'sun'],
-];
 // 첫 화면의 "템플릿으로 시작하기"는 두 칸이다: 주제 테마(표지 9종, 발표 화면 모양) · 기본 짜임(6종).
 const STARTS = [['theme', '주제 테마'], ['basic', '기본 짜임'], ['occasion', '행사·연수'], ['collection', '디자인 세트']];
 let startTab = 'theme';
@@ -361,7 +354,6 @@ async function startCollection(id) {
 
 // 대문 오른쪽의 그림: 꾸미는 화면을 본뜬 창(가운데는 주제 테마의 표지, 오른쪽은 다른 표지들)과 둘레에 떠 있는 카드들.
 // 장식이라 화면 읽기 프로그램에는 감춘다. 그림 묶음(art.js)의 그림은 불러온 뒤에 채운다.
-const HAND = /손글씨|손 글씨|편안한/;
 // ---------- 사용법 안내(tour.js) ----------
 // 첫 화면: "사용법 보기" 단추(처음 온 기기에서는 살짝 반짝인다). 꾸미는 화면: 위 막대의 ? 단추.
 // 처음 온 기기: 안내를 본 적이 없고, 이 기기에 만든 그림도 없다(mine: 지금 여는 그림 · 같은 PPT 의 파트들은 세지 않는다).
@@ -425,44 +417,27 @@ function editorTour(O, { news = false } = {}) {
 function heroShowcase() {
   const covers = layoutList().filter((l) => l.cover);
   if (!covers.length) return null;
-  const [main, ...more] = covers;
-  const art = (name, cls) => el('span', { class: `cv-demo-art ${cls}`,
-    html: `<svg viewBox="${HERO_VIEW}" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false">${HERO_ART[name]}</svg>` });
-  const hand = fontList().find((f) => HAND.test(`${f.name} ${f.desc || ''}`));
-  const handFont = hand ? `"${fontFamilyOf(hand.id)}", cursive` : '';
-  const note = (cls, lines) => {
-    const node = el('p', { class: `cv-demo-note ${cls}` }, ...lines.flatMap((t, i) => (i ? [el('br'), ...[t].flat()] : [t].flat())));
-    if (handFont) node.style.fontFamily = handFont;
-    return node;
-  };
-  const cursor = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3v16l4.5-4.2 2.9 6.4 2.8-1.3-2.9-6.2H18z" fill="#141933" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/></svg>';
-  const win = el('div', { class: 'cv-demo-win' },
-    el('div', { class: 'cv-demo-top' },
-      el('b', { class: 'cv-demo-brand' }, onbatangLogo()),
-      el('span', { class: 'cv-demo-undo' }, ic('undo'), ic('redo')),
-      el('span', { class: 'cv-demo-down' }, ic('download'), '내려받기')),
-    el('div', { class: 'cv-demo-body' },
-      el('ul', { class: 'cv-demo-rail' }, ...[['template', '틀'], ['text', '글'], ['shapes', '꾸미기'], ['upload', '내 자료'], ['motion', '움직임']]
-        .map(([pic, text]) => el('li', {}, ic(pic), el('span', { text })))),
-      el('div', { class: 'cv-demo-canvas' }, el('span', { class: 'cv-demo-card' }, layoutThumb(main)),
-        el('span', { class: 'cv-demo-pick' }, el('i'), el('i'), el('i'), el('i')), el('span', { class: 'cv-demo-cursor', html: cursor })),
-      el('div', { class: 'cv-demo-side' }, ...more.slice(0, 3).map((l) => el('span', { class: 'cv-demo-thumb' }, layoutThumb(l))))));
-  return el('div', { class: 'cv-demo', 'aria-hidden': 'true' },
-    el('span', { class: 'cv-demo-blob one' }), el('span', { class: 'cv-demo-blob two' }),
-    win,
-    el('span', { class: 'cv-demo-float cv-demo-photo' }, el('i')),
-    el('span', { class: 'cv-demo-float cv-demo-t', text: 'T' }),
-    el('span', { class: 'cv-demo-float cv-demo-shapes' }, el('i'), el('i'), el('i')),
-    el('span', { class: 'cv-demo-float cv-demo-chart' }, el('i'), el('i'), el('i'), el('i')),
-    art('smiling-face-with-smiling-eyes', 'cv-demo-smile'),
-    art('sparkles', 'cv-demo-spark'),
-    art('seedling', 'cv-demo-plant'),
-    note('cv-demo-say', ['아이디어를', '멋진 결과물로!']),
-    note('cv-demo-card-note', ['만드는 즐거움이', ['더 넓은 가능성으로 ', el('span', { class: 'cv-demo-heart', text: '♡' })]]));
+  const sheets = covers.slice(0, 2).reverse().map(layout =>
+    el('div', { class: 'cv-cover-sheet' }, layoutThumb(layout)));
+  return el('div', { class: 'cv-cover-stack', 'aria-hidden': 'true' }, ...sheets,
+    el('span', { class: 'cv-cover-sticker', html: `<svg viewBox="${HERO_VIEW}" aria-hidden="true">${HERO_ART.seedling}</svg>` }));
 }
 
 // 처음 불러온 그림들은 살짝 떠오르며 나타난다(그 뒤에 다시 그릴 때는 움직이지 않는다).
 let wasLoading = true;
+function positionHomeMenu(menu) {
+  if (!menu?.open) return;
+  const panel = menu.querySelector('.cv-home-menu-items');
+  const anchor = panel.offsetParent;
+  if (!anchor) return;
+  const bounds = anchor.getBoundingClientRect();
+  const below = Math.max(0, document.documentElement.clientHeight - bounds.bottom - 12);
+  const above = Math.max(0, bounds.top - 12);
+  const upwards = below < panel.scrollHeight + 2 && above > below;
+  menu.toggleAttribute('data-opens-up', upwards);
+  panel.style.setProperty('--home-menu-space', (upwards ? above : below) + 'px');
+}
+
 function render() {
   if (S.open || accountHome) return;
   const oldRail = app.querySelector('.cv-start-list');
@@ -501,29 +476,43 @@ function render() {
       event.target.value = '';
       if (file) void openHomeWorkspace(importAction, file);
     }}) : null;
-  const pptStart = pptFile && el('button', {type:'button',class:'btn cv-cta cv-ppt-start',disabled:loading||full,
+  const pptStart = pptFile && el('button', {type:'button',class:'btn cv-ppt-start',disabled:loading||full,
     onClick:()=>pptFile.click()},ic('upload'),'PPT 가져오기');
-  const hero = el('section', { class: 'cv-hero', 'aria-labelledby': 'onba-title' }, el('div', { class: 'cv-hero-in' },
-    el('div', { class: 'cv-hero-text' },
-      el('div', { class: 'cv-home-heading' }, title),
-      el('p', { class: 'cv-hero-kicker' }, '생각을 펼치는', el('br'), el('span', { class: 'cv-kick-color', text: '따뜻한 디자인 공간.' })),
-      el('p', { class: 'cv-hero-lead' }, '글·도형·사진으로 나답게 만들어요.', el('br'), '작은 카드부터 포스터, 발표 자료까지.'),
-      el('ul', { class: 'cv-feats', 'aria-label': '만들 수 있는 것' }, ...FEATS.map(([pic, text, tone]) => el('li', { class: `cv-feat ${tone}` },
-        el('span', { class: 'cv-feat-icon', 'aria-hidden': 'true' }, ic(pic)), el('span', { text })))),
-      el('div', { class: 'cv-start-paths','aria-label':'자료 시작',role:'group'},start,pptStart,pptFile),
-      el('div', { class: 'cv-hero-go' }, tourButton('home'), newsButton(),
+  // Keep the active group open if the library redraws while loading local or cloud data.
+  const homeMenu = (id, label, ...actions) => el('details', {
+    class: 'cv-home-menu', name: 'home-actions', dataset: { homeMenu: id },
+    open: !!app.querySelector(`[data-home-menu="${id}"][open]`),
+    onToggle: event => positionHomeMenu(event.currentTarget),
+    onKeydown: event => {
+      if (event.key !== 'Escape') return;
+      event.currentTarget.open = false;
+      event.currentTarget.querySelector('summary').focus();
+    },
+  }, el('summary', { 'aria-label': label, title: label },
+    el('span', { class: 'cv-home-menu-label', text: label })),
+    el('div', { class: 'cv-home-menu-items', onClick: event => {
+      const action = event.target.closest('button');
+      if (!action || action.disabled) return;
+      const menu = event.currentTarget.parentElement;
+      menu.open = false;
+      if (menu.contains(document.activeElement)) menu.querySelector('summary').focus({preventScroll:true});
+    } }, ...actions));
+  const imports = homeMenu('import', '파일 가져오기', pptStart, pptFile,
         importAction && !importAction.hideHome ? el('button', { class: 'btn cv-import-btn', type: 'button', disabled: loading, onClick: async (event) => {
           const button = event.currentTarget; button.disabled = true;
           try { await importAction.open(); } catch (error) { console.warn(error); toast('가져오기 화면을 열지 못했어요. 다시 시도해주세요.'); }
           finally { button.disabled = false; }
-        } }, importAction.label) : null,
+        } }, importAction.label) : null, ...fileOpenButton(loading), ...pdfOpenButton(loading));
+  const tools = homeMenu('more', '더보기', tourButton('home'), newsButton(),
         cloudAction ? el('button',{class:'btn cv-cloud-btn',type:'button',disabled:loading,dataset:{cloudAction:''},title:cloudAction.title||'',onClick:()=>openHomeWorkspace(cloudAction)},...face('cloud',cloudAction.label)) : null,
         accountAction ? el('button',{class:'btn cv-account-btn',type:'button',disabled:loading,dataset:{accountAction:''},onClick:()=>openHomeWorkspace(accountAction)},accountAction.label) : null,
-        ...fileOpenButton(loading),
-        ...pdfOpenButton(loading),
-        accountBridge && !sync ? el('button', { class: 'btn cv-bridge-btn', type: 'button', disabled: loading, dataset: { accountBridge: '' }, title: '집에서 만든 그림을 학교에서: GBE-AI Lab 선생님 계정에 올리고 가져와요', onClick: () => openBridgeFromHome() }, ...face('cloud', 'GBE-AI Lab 계정으로 이어 쓰기')) : null,
-        full ? el('p', { class: 'cv-hero-full', text: `그림은 ${MAX_DESIGNS}개까지 저장돼요(PPT 하나는 파트가 여럿이어도 1개). 안 쓰는 그림을 지워 주세요.` }) : null),
-      el('p', { class: 'cv-hero-tag', text: `작은 생각도 멋진 작품이 되도록 · ${sync ? '내 계정에 자동 저장' : '이 기기에 자동 저장'}` })),
+        accountBridge && !sync ? el('button', { class: 'btn cv-bridge-btn', type: 'button', disabled: loading, dataset: { accountBridge: '' }, title: '집에서 만든 그림을 학교에서: GBE-AI Lab 선생님 계정에 올리고 가져와요', onClick: () => openBridgeFromHome() }, ...face('cloud', 'GBE-AI Lab 계정으로 이어 쓰기')) : null);
+  const hero = el('section', { class: 'cv-hero', 'aria-labelledby': 'onba-title' }, el('div', { class: 'cv-hero-in' },
+    el('div', { class: 'cv-hero-text' },
+      el('div', { class: 'cv-home-heading' }, title),
+      el('p', { class: 'cv-hero-lead', text: '카드와 포스터, 수업 발표 자료를 만들어요.' }),
+      el('div', { class: 'cv-start-paths', role: 'group', 'aria-label': '자료 시작' }, start, imports, tools),
+      full ? el('p', { class: 'cv-hero-full', text: `그림은 ${MAX_DESIGNS}개까지 저장돼요(PPT 하나는 파트가 여럿이어도 1개). 안 쓰는 그림을 지워 주세요.` }) : null),
     heroShowcase()));
 
   // 템플릿은 소개 카드 아래의 같은 본문 폭에서 골라 바로 시작한다.
@@ -566,7 +555,7 @@ function render() {
     mine.append(el('div', { class: 'cv-state cv-empty', role: 'status' },
       el('span', { class: 'cv-state-icon', 'aria-hidden': 'true' }, el('i'), el('i'), el('i')),
       el('b', { text: sync ? (S.account === 'syncing' ? '계정의 그림을 맞추는 중이에요…' : '저장된 그림이 없어요') : '이 기기에 저장된 그림이 없어요' }),
-      el('span', { class: 'muted', text: '새 그림을 만들면 여기에 저절로 저장돼요. 위의 틀로 시작해도 좋아요.' }),
+      el('span', { class: 'muted', text: '새 그림을 만들면 여기에 저절로 저장돼요. 아래에서 틀을 골라 시작할 수도 있어요.' }),
       newBtn('btn-primary cv-empty-btn')));
   } else {
     const grid = el('div', { class: 'cv-list' });
@@ -587,7 +576,7 @@ function render() {
       catch { toast('원본을 읽지 못했어요. 다시 시도해 주세요.'); }
     } }, '원본 내려받기')));
 
-  app.replaceChildren(hero, el('div', { class: 'cv-home' }, templates, mine,
+  app.replaceChildren(hero, el('div', { class: 'cv-home' }, mine, templates,
     el('p', { class: 'cv-note', text: `${sync ? `그림은 이 기기에 먼저 저장한 뒤 내 계정에도 저장돼요. ${videoMB() ? `바탕 영상도 한 개 ${videoMB()}MB까지 올라가요(더 큰 영상은 이 기기에만 있어요).` : '바탕에 깐 영상만 이 기기에 남아요.'}` : '그림은 이 기기(이 브라우저)에만 저장돼요(서버로 올라가지 않아요). 다른 기기에서는 보이지 않으니, 다 만든 그림은 내려받아 두세요.'} 그림의 모양(정사각형·세로·가로·길게)은 꾸미는 화면에서 언제든 바꿀 수 있어요.` }),
     // 지금 쓰는 온바탕의 버전: 맨 아래에 작고 옅게(새 배포가 들어왔는지 알 수 있게).
     el('p', { class: 'cv-version', dataset: { onbatangVersion: ONBATANG_VERSION }, text: `온바탕 v${ONBATANG_VERSION}` })));
@@ -4590,6 +4579,21 @@ export function startMinican({ root = document.getElementById('app'), fonts = []
   colorPalettes=createLocalPalettes(storage);
   useFonts(fonts, titleFont);
   setupApp();
+  const dismissHomeMenu = event => {
+    const menu = app.querySelector('.cv-home-menu[open]');
+    if (menu && !menu.contains(event.target)) menu.open = false;
+  };
+  const fitHomeMenu = () => {
+    if (app.dataset.view === 'home') positionHomeMenu(app.querySelector('.cv-home-menu[open]'));
+  };
+  window.addEventListener('resize', fitHomeMenu);
+  window.addEventListener('scroll', fitHomeMenu, {passive:true});
+  document.addEventListener('pointerdown', dismissHomeMenu, true);
+  document.addEventListener('focusin', dismissHomeMenu);
+  window.addEventListener('blur', () => {
+    const menu = app.querySelector('.cv-home-menu[open]');
+    if (menu) menu.open = false;
+  });
   window.addEventListener('pagehide', flush);
   // 창을 닫으면 같이 고치기도 끝낸다(들어온 사람은 다시 열면 이어 들어온다). 창이 앞으로 돌아오면 다시 알린다(뒤에 숨은 동안 신호가 뜸했다).
   window.addEventListener('pagehide', () => S.open?.co?.close());

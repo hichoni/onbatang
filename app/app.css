@@ -1248,6 +1248,19 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero-go { display: flex
 .cv-page-workspace .fe-subtools .fe-tab{min-height:32px;padding:4px 10px;border:1px solid var(--cv-line);border-radius:999px}
 .cv-page-workspace .fe-subtools .fe-tab.on{border-color:var(--primary)}
 .fe-fx-settings label[hidden]{display:none}
+/* Keep home actions anchored above the saved drawings when either disclosure opens. */
+body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero{overflow:visible;z-index:1}
+.cv-home-menu{position:relative;min-width:0}
+.cv-home-menu>summary{box-sizing:border-box;cursor:pointer;list-style:none}
+.cv-home-menu>summary::-webkit-details-marker{display:none}
+.cv-home-menu-items{position:absolute;z-index:3;inset:calc(100% + 5px) auto auto 0;box-sizing:border-box;width:max-content;min-width:12rem;max-width:min(19rem,calc(100vw - 28px));max-height:min(var(--home-menu-space,50vh),22rem);overflow:auto;overscroll-behavior:contain;display:grid;background:white}
+.cv-home-menu[data-opens-up]>.cv-home-menu-items{top:auto;bottom:calc(100% + 5px)}
+@media(max-width:700px){
+ .cv-start-paths{position:relative}
+ .cv-home-menu{position:static}
+ .cv-home-menu-items{max-width:100%;min-width:min(12rem,100%)}
+ .cv-home-menu[data-home-menu=more]>.cv-home-menu-items{left:auto;right:0}
+}
 .cv-start-paths{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0 10px}
 .cv-start-paths .btn.cv-ppt-start{border:1px solid #286f62;background:#fffdf8;color:#215f52}
 .cv-start-paths .btn{min-height:46px}

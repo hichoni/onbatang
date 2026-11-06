@@ -85,8 +85,10 @@ test('home starts either a blank design or a selected PPT, then text openings su
   await create.click();await page.locator('.cv-canvas .fe-stage').waitFor();
   assert.deepEqual(await page.locator('.fe-tool-groups .fe-tab>span:not(.fe-ic)').allTextContents(),['추가','자료','디자인']);
   await page.locator('.cv-back').click();
+  await page.locator('[data-home-menu=import] > summary').click();
   let pending=page.waitForEvent('filechooser');await importPpt.click();await(await pending).setFiles([]);
   assert.ok(await create.isVisible(),'cancelling selection stays home');
+  await page.locator('[data-home-menu=import] > summary').click();
   pending=page.waitForEvent('filechooser');await importPpt.click();
   const fixture=fileURLToPath(new URL('../../tools/fixtures/pptx/self-authored-4x3.pptx',import.meta.url));
   await(await pending).setFiles(fixture);await page.locator('[data-page-number="2"]').waitFor();
