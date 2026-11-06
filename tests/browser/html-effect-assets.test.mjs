@@ -88,6 +88,7 @@ test('home starts either a blank design or a selected PPT, then text openings su
   await page.locator('[data-home-menu=import] > summary').click();
   let pending=page.waitForEvent('filechooser');await importPpt.click();await(await pending).setFiles([]);
   assert.ok(await create.isVisible(),'cancelling selection stays home');
+  await page.locator('[data-home-menu=import] > summary').click();
   pending=page.waitForEvent('filechooser');await importPpt.click();
   const fixture=fileURLToPath(new URL('../../tools/fixtures/pptx/self-authored-4x3.pptx',import.meta.url));
   await(await pending).setFiles(fixture);await page.locator('[data-page-number="2"]').waitFor();
