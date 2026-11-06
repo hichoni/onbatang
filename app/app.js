@@ -1,5 +1,5 @@
 // 미니캔 앱: 내 그림들 → 새 그림 → 꾸미기(그림의 모양은 꾸미는 화면에서 언제든 바꾼다) → 그림·영상 파일로 내려받기.
-// 편집기는 모듈(src/)의 것을 쓴다. 그림은 기기에 저장하며, 선택적 계정/가이X 연결은 호스트가 제공한다.
+// 편집기는 모듈(src/)의 것을 쓴다. 그림은 기기에 저장하며, 선택적 계정/AI-G 연결은 호스트가 제공한다.
 // 들여 쓰는 곳은 startMinican({ fonts, titleFont, storage, onView, brand, sync })로 시작한다(index.html 이 그 예다).
 // 화면의 짜임: 첫 화면(소개·새로 만들기 + 템플릿 + 내 그림), 편집 화면(상단 문서·도구, 왼쪽 장 목록, 가운데 캔버스, 오른쪽 선택 속성).
 //             편집 화면은 창을 채우고, 좁은 화면에서는 장 목록·속성·삽입 칸을 필요할 때 연다(app.css).
@@ -1041,12 +1041,12 @@ function renderStrip(O) {
       tool('right', '뒤로', '이 장을 뒤로 옮기기', () => moveStripSelection(O,1), O.materialDeck?materialPages(O).findIndex(v=>v.record.id===O.record.id&&v.index===O.at)===materialPages(O).length-1:O.at===n-1),
       tool('copy', '복제', '이 장을 복제하기', () => changeSlides(O, copySlide), full),
       del,
-      // 퀴즈 장(모든 곳): 직접 만들거나, 가이X 를 이어 준 곳에서는 가이X 에게 부탁한다
+      // 퀴즈 장(모든 곳): 직접 만들거나, AI-G 를 이어 준 곳에서는 AI-G 에게 부탁한다
       el('button',{class:'btn cv-activity-add',type:'button',dataset:{addQuiz:''},title:'지금 장 다음에 퀴즈 장을 넣어요(발표에서 시간을 재고 정답 · 순위를 보여 줘요)',onClick:()=>configureQuiz(O)},'퀴즈 넣기'),
       activityAuthoring&&el('button',{class:'btn cv-activity-add',type:'button',dataset:{addActivity:''},title:'미리 준비된 픽셀아트 활동을 새 슬라이드로 넣어요',onClick:()=>configureActivity(O)},'픽셀아트 활동 넣기'),
-      activityAuthoring&&appMaker&&el('button',{class:'btn cv-activity-add',type:'button',dataset:{addGaiApp:''},onClick:()=>configureGaiActivity(O)},gaiOwl(),'가이X로 앱 만들기'),
-      // 가이X 에게 개요를 부탁해 꾸민 장 여러 장을 만든다(개요로 장 만들기 창이 부탁 칸부터 열린다)
-      activityAuthoring&&appMaker&&el('button',{class:'btn cv-activity-add',type:'button',dataset:{addGaiSlides:''},onClick:()=>openOutline(O)},gaiOwl(),'가이X로 장 만들기'),
+      activityAuthoring&&appMaker&&el('button',{class:'btn cv-activity-add',type:'button',dataset:{addGaiApp:''},onClick:()=>configureGaiActivity(O)},gaiOwl(),'AI-G로 앱 만들기'),
+      // AI-G 에게 개요를 부탁해 꾸민 장 여러 장을 만든다(개요로 장 만들기 창이 부탁 칸부터 열린다)
+      activityAuthoring&&appMaker&&el('button',{class:'btn cv-activity-add',type:'button',dataset:{addGaiSlides:''},onClick:()=>openOutline(O)},gaiOwl(),'AI-G로 장 만들기'),
       el('button',{class:'btn cv-activity-add',type:'button',dataset:{importLessonResults:''},onClick:()=>importLessonResults(O)},'HTML 수업 결과 가져오기'),
       el('button',{class:'btn cv-activity-edit',type:'button',dataset:{editActivity:''},onClick:()=>configureActivity(O,true)},'활동 설정')));
   updateActivityTools(O);
@@ -1435,13 +1435,13 @@ function openOutline(O) {
   } }, '장 만들기');
   const sample = el('button', { class: 'btn chip', type: 'button', dataset: { outlineSample: '' }, onClick: () => { input.value = OUTLINE_SAMPLE; update(); input.focus(); } }, '예시 넣어 보기');
   input.addEventListener('input', () => update(false));
-  // 가이X 에게 개요 부탁하기(GBE-AI Lab처럼 가이X 를 이어 준 곳에서만): 주제 · 장 수를 보내면 개요 글이 칸에 들어온다. 장은 확인 · 고친 뒤 직접 만든다.
+  // AI-G 에게 개요 부탁하기(GBE-AI Lab처럼 AI-G 를 이어 준 곳에서만): 주제 · 장 수를 보내면 개요 글이 칸에 들어온다. 장은 확인 · 고친 뒤 직접 만든다.
   let asking = null, before = null;
   const ai = appMaker && activityAuthoring ? (() => {
-    const topic = el('textarea', { class: 'cv-outline-topic', rows: '2', maxlength: '600', 'aria-label': '가이X에게 부탁할 주제', placeholder: '예) 초등 4학년 과학 — 식물의 한살이를 처음 배우는 시간. 씨앗 관찰부터 열매까지.' });
+    const topic = el('textarea', { class: 'cv-outline-topic', rows: '2', maxlength: '600', 'aria-label': 'AI-G에게 부탁할 주제', placeholder: '예) 초등 4학년 과학 — 식물의 한살이를 처음 배우는 시간. 씨앗 관찰부터 열매까지.' });
     const count = el('select', { class: 'cv-outline-count', 'aria-label': '만들 장 수' }, ...[4, 5, 6, 8, 10].map((n) => el('option', { value: String(n), text: `${n}장`, ...(n === 6 ? { selected: true } : {}) })));
-    const say = el('p', { class: 'cv-down-note', role: 'status', 'aria-live': 'polite', text: '주제와 대상을 적으면 가이X가 개요를 써 줘요. 써 준 개요는 아래 칸에서 고친 뒤 장으로 만들어요.' });
-    const label = el('span', { text: '가이X에게 부탁하기' });
+    const say = el('p', { class: 'cv-down-note', role: 'status', 'aria-live': 'polite', text: '주제와 대상을 적으면 AI-G가 개요를 써 줘요. 써 준 개요는 아래 칸에서 고친 뒤 장으로 만들어요.' });
+    const label = el('span', { text: 'AI-G에게 부탁하기' });
     // 지금 그림의 글을 참고로 보내기: 글이 있을 때만 보이고 처음엔 켜 둔다. 무엇을 보내는지 펼쳐 볼 수 있다.
     const reference = () => drawingText(O.slides, { title: O.record.name, at: O.at });
     const hasText = !!reference();
@@ -1458,11 +1458,11 @@ function openOutline(O) {
       // 연결 창은 누른 그 순간에 열어야 막히지 않는다: 기다리기 전에 connect 를 부른다.
       let task; try { task = appMaker.connect(); } catch (error) { task = Promise.reject(error); }
       const controller = asking = new AbortController();
-      label.textContent = '그만두기'; topic.disabled = count.disabled = share.disabled = true; say.textContent = '가이X 연결을 확인하고 있어요…';
+      label.textContent = '그만두기'; topic.disabled = count.disabled = share.disabled = true; say.textContent = 'AI-G 연결을 확인하고 있어요…';
       try {
         await task;
         if (controller.signal.aborted) throw new DOMException('', 'AbortError');
-        say.textContent = '가이X가 개요를 쓰고 있어요… 30초쯤 걸릴 수 있어요.';
+        say.textContent = 'AI-G가 개요를 쓰고 있어요… 30초쯤 걸릴 수 있어요.';
         const context = share.checked ? reference() : '';
         const answer = await appMaker.generate({ kind: 'outline', prompt: want, slides: Number(count.value), ...(context ? { context } : {}) }, { signal: controller.signal });
         const text = answer?.kind === 'outline' ? outlineFromAnswer(answer.outline) : '';
@@ -1470,16 +1470,16 @@ function openOutline(O) {
         if (input.value.trim()) { before = input.value; undo.hidden = false; }
         input.value = text;
         update();
-        say.textContent = '가이X가 쓴 개요예요. 아래 칸에서 고친 뒤 "장 만들기"를 눌러요.';
+        say.textContent = 'AI-G가 쓴 개요예요. 아래 칸에서 고친 뒤 "장 만들기"를 눌러요.';
       } catch (error) {
-        say.textContent = error?.name === 'AbortError' ? '부탁을 그만뒀어요.' : String(error?.message || '가이X가 개요를 쓰지 못했어요. 다시 부탁해 주세요.').slice(0, 300);
+        say.textContent = error?.name === 'AbortError' ? '부탁을 그만뒀어요.' : String(error?.message || 'AI-G가 개요를 쓰지 못했어요. 다시 부탁해 주세요.').slice(0, 300);
       } finally {
         if (asking === controller) asking = null;
-        label.textContent = '가이X에게 부탁하기'; topic.disabled = count.disabled = share.disabled = false;
+        label.textContent = 'AI-G에게 부탁하기'; topic.disabled = count.disabled = share.disabled = false;
       }
     } }, gaiOwl(), label);
     input.rows = 6; input.classList.add('short');                  // 부탁하는 칸이 있으면 개요 칸을 줄여 만들기 단추까지 한 화면에 들게
-    return el('div', { class: 'cv-outline-ai' }, el('b', { text: '가이X에게 개요 부탁하기' }), topic, refRow, el('div', { class: 'cv-find-opts' }, count, go, undo), say);
+    return el('div', { class: 'cv-outline-ai' }, el('b', { text: 'AI-G에게 개요 부탁하기' }), topic, refRow, el('div', { class: 'cv-find-opts' }, count, go, undo), say);
   })() : null;
   input.addEventListener('keydown', (e) => {
     // Tab 으로 들여 쓰기(Shift+Tab 은 내어 쓰기). 개요는 들여 쓰기로 내용을 나누므로 칸 밖으로 나가지 않게 한다.
@@ -1871,7 +1871,7 @@ async function configureActivity(O,editing=false,photoStart=null){
   host.querySelector(photoStart?'.ps-picker':'input')?.focus({preventScroll:true});
 }
 
-// 퀴즈 장 넣기 · 고치기(모든 곳). 새로 넣을 때는 지금 장 다음에 하나 또는 여러 장(가이X 가 만든 문제)을 넣는다.
+// 퀴즈 장 넣기 · 고치기(모든 곳). 새로 넣을 때는 지금 장 다음에 하나 또는 여러 장(AI-G 가 만든 문제)을 넣는다.
 async function configureQuiz(O,editing=false){
   if(O.closed||O.leaving||O.inlineImport||O.activityBusy||videoBusy(O))return;
   if(O.materialLoadingPromise)await O.materialLoadingPromise;
@@ -1884,12 +1884,12 @@ async function configureQuiz(O,editing=false){
   const host=el('section',{class:'cv-activity-config','aria-label':editing?'퀴즈 고치기':'퀴즈 넣기'});
   const cancel=()=>{host.remove();if(O.activityConfig===host)O.activityConfig=null;};
   const reference=()=>drawingText(O.slides,{title:O.record.name,at:O.at});
-  // 가이X 에게 부탁하기: 연결 창은 누른 그 순간에 열어야 막히지 않는다(generate 의 첫 줄이 connect 를 부른다).
+  // AI-G 에게 부탁하기: 연결 창은 누른 그 순간에 열어야 막히지 않는다(generate 의 첫 줄이 connect 를 부른다).
   const ai=appMaker&&!editing?{title:O.record.name||'',hasText:!!reference(),generate:async({topic,count,seconds,share,signal,onStatus})=>{
     const task=appMaker.connect();
     await task;
     if(signal?.aborted)throw new DOMException('','AbortError');
-    onStatus?.('가이X가 문제를 만들고 있어요… 30초쯤 걸릴 수 있어요.');
+    onStatus?.('AI-G가 문제를 만들고 있어요… 30초쯤 걸릴 수 있어요.');
     const context=share?reference():'';
     const prompt=(topic||'').trim().length>=3?topic.trim():`${O.record.name||'지금 그림'} 내용 확인 퀴즈`;
     const answer=await appMaker.generate({kind:'quiz',prompt,count,...(context?{context}:{})},{signal});
@@ -1938,7 +1938,7 @@ async function configureGaiActivity(O,editing=false){
   clearTimeout(O.thumbTimer);O.activityConfig?.remove();
   const selected=O.editor.getDesign(),activity=editing?selected.activity:undefined;
   if(editing&&activity?.kind!=='gai-app')return;
-  const host=el('section',{class:'cv-activity-config','aria-label':'가이X 앱 만들기'});
+  const host=el('section',{class:'cv-activity-config','aria-label':'AI-G 앱 만들기'});
   const cancel=()=>{host.remove();if(O.activityConfig===host)O.activityConfig=null;};
   const maker=createGaiMaker({provider:appMaker,activity,
     context:gaiLessonContext(lessonPages(O),selected.id,O.materialDeck?.title||O.record.name),
@@ -1971,7 +1971,7 @@ async function configureGaiActivity(O,editing=false){
         if(!editing){
           const candidates=O.materialDeck?[record,...O.materialDeck.documents.filter(row=>row.id!==record.id).map(row=>row.id===O.record.id?{...O.record,slides:currentSlides(O)}:row)]:[record];
           record=candidates.find(row=>row.slides.length<=MAX_SLIDES-2&&new TextEncoder().encode(JSON.stringify(updated(row))).length<460000);
-          if(!record)throw Error('이 자료에 앱과 결과를 넣을 공간이 부족해요. 대화는 남아 있어요. 가이X에게 더 작은 앱으로 줄여 달라고 요청해주세요.');
+          if(!record)throw Error('이 자료에 앱과 결과를 넣을 공간이 부족해요. 대화는 남아 있어요. AI-G에게 더 작은 앱으로 줄여 달라고 요청해주세요.');
         }
         const document=updated(record);
         if(new TextEncoder().encode(JSON.stringify(document)).length>500000)throw Error('앱이 너무 커서 저장하지 않았어요. 더 작은 앱으로 줄여 달라고 요청해주세요.');
