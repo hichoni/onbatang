@@ -2353,6 +2353,7 @@ async function present(O) {
     }
     parts = playDesign(view, design, { delay: turn.ms, still: dir < 0 });
   };
+  let wheeling = false;   // 휠로 넘기는 중(마지막 장에서 휠을 더 굴려도 발표를 끝내지 않는다)
   const go = (step) => {
     if(savingActivity)return;
     if(stepOpenQuestion(stage,step))return;
@@ -2371,7 +2372,7 @@ async function present(O) {
     }
     const to = i + step;
     if (to < 0) return;
-    if (to >= slides.length) { close(); return; }      // 마지막 장에서 더 넘기면 끝난다
+    if (to >= slides.length) { if (!wheeling) close(); return; }      // 마지막 장에서 더 넘기면 끝난다(휠로는 끝내지 않는다: 굴리다 실수로 끝나지 않게)
     // 글자 효과의 사라지는 움직임: 다음 장으로 넘기기 전에 효과 글이 한 번 사라진다(이어 움직이기 전환이면 건너뛴다).
     // 사라지는 동안 또 넘기면 기다리지 않고 바로 넘어간다.
     if (leavingLooks) { clearTimeout(leavingLooks); leavingLooks = 0; }
@@ -2486,6 +2487,36 @@ async function present(O) {
   document.body.classList.add('modal-open');
   draw();
   document.addEventListener('keydown', onKey, true);
+  // 마우스 휠: 아래로 굴리면 다음, 위로 굴리면 앞(PowerPoint 처럼). 화살표 글쇠와 같은 길(전체 보기 · 비교 · 펜도 같다)로 넘긴다.
+  // 마우스는 한 칸에 한 차례. 트랙패드처럼 잘게 잇따르는 신호는 모아서 한 차례로 치고, 손을 뗀 뒤(잠깐 조용해진 뒤)에 다음 차례를 받는다.
+  // 스크롤할 수 있는 칸(전체 보기 목록 · 노트 등) 안에서는 그 칸이 굴러가고, 앱 · 둘러보는 사이트 안에서는 휠이 그것의 것이다.
+  let wheelSum = 0, wheelLock = 0, wheelQuiet = 0;
+  overlay.addEventListener('wheel', (e) => {
+    if (e.ctrlKey || closed) return;                                   // Ctrl+휠은 확대
+    const path = e.composedPath();
+    if (path.some((n) => n.classList?.contains('cv-show-activity') || n.classList?.contains('ob-compare') || n.dataset?.questionPanel !== undefined)) return;
+    for (const n of path) {
+      if (n === overlay) break;
+      if (n instanceof Element && n.scrollHeight > n.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(n).overflowY)) return;
+    }
+    e.preventDefault();
+    const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
+    const dy = (Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX) * unit;
+    clearTimeout(wheelQuiet);
+    wheelQuiet = setTimeout(() => { wheelLock = 0; wheelSum = 0; }, 200);
+    const now = performance.now();
+    // 넘긴 뒤에는 조용해질 때까지 기다린다. 다만 마우스 휠의 또렷한 한 칸(큰 값)은 0.35초가 지나면 다음 차례로 받는다.
+    if (wheelLock && !(Math.abs(dy) >= 50 && now - wheelLock > 350)) return;
+    if (Math.sign(dy) !== Math.sign(wheelSum)) wheelSum = 0;
+    wheelSum += dy;
+    if (Math.abs(wheelSum) < 30) return;
+    const forward = wheelSum > 0;
+    wheelSum = 0; wheelLock = now;
+    const key = forward ? 'ArrowRight' : 'ArrowLeft';
+    wheeling = true;
+    try { tools?.handle({ key, code: key, target: overlay, shiftKey: false, ctrlKey: false, metaKey: false, altKey: false }); }
+    finally { wheeling = false; }
+  }, { passive: false });
   overlay.focus({ preventScroll: true });
   // 화면 가득 채워 본다(막힌 곳에서는 창 안에서 보여 준다).
   document.addEventListener('fullscreenchange', onFull);
