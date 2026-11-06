@@ -873,6 +873,10 @@
 .fe-web-now { display: grid; gap: 4px; margin-top: 10px; padding: 10px 12px; border: 1px solid var(--fe-line); border-radius: 10px; background: #f7f9ff; }
 .fe-web-now > b { font-size: 1rem; overflow-wrap: anywhere; }
 .fe-web-now > .fe-note { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fe-web-keep { display: flex; align-items: flex-start; gap: 8px; margin: 6px 0 2px; cursor: pointer; }
+.fe-web-keep input { margin-top: 3px; width: 16px; height: 16px; flex: none; }
+.fe-web-keep span { display: grid; gap: 2px; }
+.fe-web-keep small { line-height: 1.45; }
 .fe-web-now .fe-row { flex-wrap: wrap; margin-top: 4px; }
 .fe-web-now a.fe-btn { text-decoration: none; }
 /* 웹사이트 상자(render.js 의 itemView 'web'): 꾸미기 판에는 표지, 발표에는 그 안에 실제 사이트(.live) */

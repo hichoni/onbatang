@@ -2209,7 +2209,15 @@ async function present(O) {
   // 둘러보기 중에도 위의 ◀ ▶ 와 휴대폰 리모컨으로 넘긴다. 마우스가 사이트 밖으로 나오면 글쇠를 발표로 돌려받아 → · 프레젠터가 다시 듣는다.
   // 사이트가 다른 화면 안에 넣는 것을 막아 두었으면(잘 알려진 곳) 사이트 대신 "새 창으로 열기"를 크게 보인다.
   let web = null;
-  const dropWeb = () => { clearTimeout(web?.slow); web?.host.remove(); web = null; };
+  // 넘겨도 켜 두기(design.web.keep): 장을 떠나도 사이트를 버리지 않고 숨겨 둔다(그 자리 그대로: 옮기면 브라우저가 새로 연다).
+  // 돌아오면 숨긴 것을 다시 보인다. 안의 일(스튜디오의 앱 만들기 등)은 숨긴 동안에도 이어진다. 발표를 끝내면 모두 닫는다.
+  const keptWeb = new Map(), KEEP_WEB_MAX = 6;
+  const dropWeb = () => {
+    if (web?.keep) { web.host.dataset.away = ''; web.host.inert = true; if (web.mode === 'use') { web.mode = 'view'; web.host.dataset.mode = 'view'; } }
+    else { clearTimeout(web?.slow); web?.host.remove(); }
+    web = null;
+  };
+  const closeKeptWeb = () => { for (const w of keptWeb.values()) { clearTimeout(w.slow); w.host.remove(); } keptWeb.clear(); };
   const webMode = (mode) => {
     if (!web?.frame) return;
     web.mode = mode;
@@ -2236,22 +2244,35 @@ async function present(O) {
   // 사이트 위에 마우스가 있는 동안에는 이 화면(발표)에 마우스 알림이 오지 않는다: 알림이 오면 마우스가 사이트 밖(위 · 아래 막대 등)에 있는 것이다.
   // 장 전체 사이트 · 웹사이트 상자 · 유튜브 모두: 글쇠를 가져간 사이트 밖으로 마우스가 나오면 발표가 돌려받는다.
   const takeKeys = () => { const at = document.activeElement; if (at?.tagName === 'IFRAME' && overlay.contains(at)) overlay.focus({ preventScroll: true }); };
-  const mountWeb = (site) => {
-    const url = site.url, blocked = blockedSite(url);
+  const mountWeb = (site, slideId = '') => {
+    const url = site.url, blocked = blockedSite(url), key = `${slideId} ${url}`;
+    const kept = !blocked && site.keep === true ? keptWeb.get(key) : null;
+    if (kept) {
+      web = kept;
+      delete web.host.dataset.away; web.host.inert = false;
+      paintWebPill();
+      return;
+    }
     const pill = el('div', { class: 'cv-web-pill', role: 'group', 'aria-label': '웹사이트' });
     const status = el('div', { class: 'cv-web-status', role: 'status' });
     const frame = blocked ? null : webFrame(site);
     const host = el('section', { class: 'cv-show-web', dataset: { mode: 'view', showWeb: '' } }, ...(frame ? [frame] : []), status, pill);
-    web = { url, host, frame, pill, mode: 'view', slow: 0 };
+    web = { url, host, frame, pill, mode: 'view', slow: 0, keep: !blocked && site.keep === true };
+    if (web.keep) {
+      // 너무 많이 켜 두지 않는다: 가장 오래된 것부터 닫는다.
+      if (keptWeb.size >= KEEP_WEB_MAX) { const [oldKey, old] = keptWeb.entries().next().value; clearTimeout(old.slow); old.host.remove(); keptWeb.delete(oldKey); }
+      keptWeb.set(key, web);
+    }
     if (blocked) {
       host.dataset.blocked = '';
       status.append(el('b', { text: `${blocked}은(는) 다른 화면 안에 넣는 것을 막아 두었어요` }), el('span', { text: '새 창으로 열어 보여 주고, 이 창으로 돌아와 이어서 발표해요.' }),
         webKey([ic('screen'), el('span', { text: `${webHost(url)} 새 창으로 열기` })], '이 사이트를 새 창으로 열기', () => openSite(url), { webOpen: '' }));
     } else {
       status.append(el('span', { text: `${webHost(url)} 여는 중…` }));
-      frame.addEventListener('load', () => { if (web?.frame === frame) { clearTimeout(web.slow); status.hidden = true; } });
+      const me = web;   // 켜 둔 사이트는 숨긴 동안에 다 열릴 수 있다: 지금 보이는 것이 아니라 이 사이트를 본다
+      frame.addEventListener('load', () => { clearTimeout(me.slow); status.hidden = true; });
       // 오래 걸리면(또는 사이트가 막아 둔 곳이면) 새 창으로 여는 길을 알려 준다.
-      web.slow = setTimeout(() => { if (web?.frame === frame && !status.hidden) status.replaceChildren(el('span', { text: '사이트가 열리지 않으면 오른쪽 위의 새 창 단추로 열어요.' })); }, 10000);
+      web.slow = setTimeout(() => { if (!status.hidden) status.replaceChildren(el('span', { text: '사이트가 열리지 않으면 오른쪽 위의 새 창 단추로 열어요.' })); }, 10000);
       // 사이트 밖으로 마우스가 나오면 글쇠를 발표로 돌려받는다(사이트 안의 글쇠는 발표가 들을 수 없다).
       frame.addEventListener('mouseleave', takeKeys);
       paintWebPill();
@@ -2307,7 +2328,7 @@ async function present(O) {
       }});
       ease(host,[{opacity:0,transform:'scale(.965)'},{opacity:1,transform:'scale(1)'}],260);return;
     }
-    if (design.web) mountWeb(design.web);
+    if (design.web) mountWeb(design.web, design.id);
     liveWebBoxes(view);                       // 장 안의 웹사이트 상자: 그 자리에 실제 사이트(바로 누르고 쓴다. 상자 밖을 누르면 다음 장)
     liveBackdrops(view);                      // 움직이는 바탕: 장이 열린 때부터 코드가 순간마다 그린다(장을 떼면 저절로 멈춘다)
     if (!dir || !old) {
@@ -2406,7 +2427,7 @@ async function present(O) {
   };
   function close() {
     if(savingActivity)return;
-    closed=true;clearTimeout(leavingLooks);leavingLooks=0;pixel?.destroy();pixel=null;dropWeb();
+    closed=true;clearTimeout(leavingLooks);leavingLooks=0;pixel?.destroy();pixel=null;dropWeb();closeKeptWeb();
     try { remote?.close?.(); } catch (error) { console.warn(error); } remote = null;
     try { audience?.close?.(); } catch (error) { console.warn(error); } audience = null; quizListeners.clear();
     tools?.destroy();tools=null;

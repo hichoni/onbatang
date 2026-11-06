@@ -4372,6 +4372,9 @@ export function createEditor({
           el('b', { text: webHost(card.web.url) }),
           el('span', { class: 'fe-note', text: card.web.url }),
           blocked ? el('p', { class: 'fe-note warn', text: `${blocked}은(는) 다른 화면 안에 넣는 것을 막아 두었어요. 발표할 때는 "새 창으로 열기" 단추로 열려요.` }) : null,
+          blocked ? null : el('label', { class: 'fe-web-keep' },
+            el('input', { type: 'checkbox', checked: card.web.keep === true, dataset: { webKeep: '' }, onChange: (e) => setWebKeep(e.target.checked) }),
+            el('span', {}, el('b', { text: '넘겨도 켜 두기' }), el('small', { class: 'fe-note', text: '발표 중 다른 장으로 넘겨도 사이트를 끄지 않아요. 돌아오면 새로 열리지 않고 하던 그대로예요(예: 스튜디오에서 앱 만들기를 걸어 두고 다른 장 이야기하기).' }))),
           el('div', { class: 'fe-row' },
             el('a', { class: 'fe-btn', href: card.web.url, target: '_blank', rel: 'noopener noreferrer' }, icon('screen'), '새 창으로 미리 보기'),
             el('button', { class: 'fe-btn danger', type: 'button', dataset: { webRemove: '' }, onClick: removeWebsite }, icon('trash'), '웹사이트 빼기'))),
@@ -4382,6 +4385,15 @@ export function createEditor({
         el('p', { class: 'fe-note', text: '안 되는 곳: 네이버 · 구글 검색 · 인스타그램처럼 다른 화면 안에 넣는 것을 막아 둔 사이트, 로그인해야 보이는 화면. 그런 곳은 발표에서 "새 창으로 열기"로 열어요. 유튜브는 "영상" 칸에서 넣어요.' })),
     ];
   }
+  function setWebKeep(on) {
+    if (!card?.web || (card.web.keep === true) === on) return;
+    remember();
+    const { keep, ...rest } = card.web;
+    card.web = on ? { ...rest, keep: true } : rest;
+    renderPanel();
+    onChange();
+    notify(on ? '발표 중 다른 장으로 넘겨도 이 사이트를 켜 둬요.' : '다른 장으로 넘기면 이 사이트를 닫아요(돌아오면 새로 열려요).', 3500);
+  }
   function setWebsite(raw) {
     if (!card) return;
     if (isYouTubePage(embedOf(raw) || raw)) { if (addYouTube(raw)) notify('유튜브는 영상으로 넣었어요. 발표할 때 스페이스 바로 틀어요.', 4500); return; }
@@ -4391,7 +4403,7 @@ export function createEditor({
     endEdit();
     stopDrag();
     remember();
-    card.web = { url };
+    card.web = { url, ...(card.web?.keep === true ? { keep: true } : {}) };
     renderStage();
     renderBar();
     renderPanel();

@@ -25,7 +25,7 @@
     "app/pptx-import/preview-punctuation.js": "8ff4f855942dde60b6302e775e5a06b58b411e34b015c129088157533934c90e",
     "app/pptx-import/worker.js": "e4ea8c3a9237c1e1b2fc8dc93f57389cbb2f7966134252b8078ab44ef01dc14c",
     "app/zip.js": "c7c09e5385bab4e403509ab734acb182d15ff017c469e731b05a5d1f3eead18e",
-    "package-lock.json": "b0d5bfaf66cb23feb6dd29a5eccf0216a3c9279e07122dd6d16f3af945e05d36",
+    "package-lock.json": "fe7f445de15ad0717a03560cf57120c889b1c6e3d3f7df434a8ae6c9b39e9234",
     "src/activity.js": "7e6ff97046d62a8b63f6dd4a85ba2cc0760fc74605e9ae308eaa73d4b25ae29f",
     "src/chart.js": "ec041e78d1221d41f66e304ecdff4173ec0f23d4394632a409dc2dc7d83eb407",
     "src/cinema-layout.js": "8515317fdbfc512977a4975ea6b31ab49943498e39ab7be272ec52c096cebdeb",
@@ -50,7 +50,7 @@
     "src/reveal-scenes.js": "161cee6f5b634a51e88d40f87012c15eb3942c6b1f63eae000282991b4755665",
     "src/runs.js": "22b07d3ed775fe24dfd20f1678ce369e45fc6e36792daa6e7d4b997474d6a65f",
     "src/slide-flow.js": "2fccfa9c7be98bda6dfd8608cafa9b2b84006e41be55263638f59a0e2ceb72be",
-    "src/web.js": "498fed652433abb37a5cf9ceb780f8e21e962a8afecbae0fcb7a98cee889ad25",
+    "src/web.js": "04faf0454c1360b49e0d9d5e7e28418ef22169ba45d57900fad72f2bccb3d710",
     "tools/build-pptx-import.mjs": "54e7e3e87ecf933018338d5d77ecb8eec7318ce8fd95ff1c0c3096ecadcb0b5b"
   },
   "files": {
@@ -107,8 +107,8 @@
       "sha256": "a681e9d183c72b4af4856935893805eb48c08f0f5a3f260203db7444c20fb98a"
     },
     "pptx-worker.js": {
-      "bytes": 274268,
-      "sha256": "1f42776aa7068b268e713b7141a301c0846fbc294a1f39264dd983565402f33b"
+      "bytes": 274300,
+      "sha256": "1e19328665aa95b9d21e492209aeec8c6ba783dfcc6ffdbe7566e7ee95540126"
     },
     "preview-frame.html": {
       "bytes": 1243897,
