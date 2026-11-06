@@ -1,4 +1,6 @@
 /* 발표처럼 트는 재생기(app/player.js): 장들을 한 칸에 겹쳐 두고(전환 효과가 두 장을 함께 그린다) 화면에 맞춘다. */
+/* 장 글의 기본 글꼴(src/editor.css 의 .fe-card 가 'Onbatang UI'로 쓴다): 공유 · 보기 링크처럼 편집기 밖에서 장을 틀 때도 편집기와 같은 글꼴로 줄이 바뀌게 여기서 알린다. */
+@font-face { font-family: 'Onbatang UI'; src: url('./brand/noto-sans-kr.woff2') format('woff2'); font-weight: 100 900; font-style: normal; font-display: swap; }
 .ob-player { display: grid; position: relative; overflow: hidden; width: min(100%, calc(var(--ob-player-height, 100dvh) * var(--ob-player-ratio, 1))); }
 .ob-player > .fe-card { grid-area: 1 / 1; width: 100%; }
 /* 웹사이트 장: 장 위의 실제 사이트는 누르고 쓸 수 있다 */

@@ -33,7 +33,8 @@
   --fe-danger-soft: #fff0f0;
   --fe-card-radius: 5%;         /* 카드 모서리 */
   --fe-pop-width: min(100%, 520px);   /* 넓은 화면에서 도구 막대 아래에 뜨는 칸의 너비 */
-  /* --fe-font: 기본 글꼴(없으면 프로젝트의 글꼴을 그대로 따른다) */
+  /* --fe-font: 장 글의 기본 글꼴(없으면 'Onbatang UI' = Noto Sans KR. 글꼴 파일은 화면이 알린다: app/brand.css · app/player.css)
+     --fe-letter: 장 글의 기본 자간(없으면 -0.025em, 편집기와 같다) */
 }
 .fe-card, .fe-card *, .fe-stage, .fe-stage *, .fe-tools, .fe-tools *, .fe-panel, .fe-panel *, .fe-menu, .fe-menu * { box-sizing: border-box; }
 .fe-stage [hidden], .fe-tools [hidden], .fe-panel [hidden] { display: none !important; }
@@ -64,6 +65,9 @@
   container-type: inline-size; position: relative; width: 100%; aspect-ratio: var(--fe-ratio, 1); overflow: hidden; overflow: clip;
   border-radius: var(--fe-card-radius, 5%); background: var(--fe-bg, #fffdf5); color: var(--fe-ink, #1d2433);
   text-align: left; line-height: 1.3; word-break: keep-all; overflow-wrap: anywhere;
+  /* 글꼴 · 자간을 바깥 화면에서 물려받지 않는다: 편집기에서 한 줄이던 글이 공유 링크에서 두 줄로 넘치지 않게 */
+  font-family: var(--fe-font, 'Onbatang UI', system-ui, -apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif);
+  letter-spacing: var(--fe-letter, -.025em);
 }
 /* Keep the punctuation visible while its advance hangs outside the line box.
    This is used only for slide text with hanging punctuation enabled. */
