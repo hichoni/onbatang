@@ -40,8 +40,8 @@ test('pages become locked full-page pictures; other page shapes fit inside; text
   assert.deepEqual(record.uploads, [URL1], 'the page picture is listed once among the uploads');
 });
 
-test('more than 20 pages become numbered parts that home shows as one PDF entry', () => {
-  const pages = Array.from({ length: 45 }, (_, i) => page(i + 1));
+test('more pages than one drawing holds (MAX_SLIDES) become numbered parts that home shows as one PDF entry', () => {
+  const pages = Array.from({ length: MAX_SLIDES * 2 + 5 }, (_, i) => page(i + 1));
   const records = pdfRecords({ filename: '2학기 과학 실험 안내문 최종본(수정).pdf', pages, now: 5000 });
   assert.deepEqual(records.map((r) => r.slides.length), [MAX_SLIDES, MAX_SLIDES, 5]);
   assert.deepEqual(records.map((r) => r.name), ['2학기 과학 실험 안내문 최종본(수정) · 1', '2학기 과학 실험 안내문 최종본(수정) · 2', '2학기 과학 실험 안내문 최종본(수정) · 3']);
@@ -50,7 +50,7 @@ test('more than 20 pages become numbered parts that home shows as one PDF entry'
   assert.equal(new Set(records.map((r) => r.source.sourceDocumentId)).size, 1);
   const entries = homeEntries(records);
   assert.equal(entries.length, 1);
-  assert.equal(entries[0].pages, 45);
+  assert.equal(entries[0].pages, MAX_SLIDES * 2 + 5);
   assert.equal(entries[0].ppt, true);
   assert.equal(arrangeEntries(entries, { kind: 'ppt' }).length, 1, 'the "PPT · PDF" filter keeps it');
   assert.deepEqual(HOME_KINDS.find(([id]) => id === 'ppt'), ['ppt', 'PPT · PDF']);

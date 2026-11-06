@@ -1,6 +1,6 @@
 // PDF 가져오기: PDF 의 쪽마다 그 쪽 그림 한 장(잠근 사진)으로 장을 만든다. 쪽의 글은 고르면 발표자 노트에 넣는다.
 // PDF 는 브라우저 안에서 pdf.js(app/pdf/vendor, tools/build-pdf-import.mjs)로 열고 그린다. 서버로 보내지 않는다. pdf.js 는 처음 쓸 때만 받는다.
-// 장은 한 그림에 20장(MAX_SLIDES)까지라 더 많으면 "이름 · 1", "이름 · 2" 파트로 나눈다(내 그림에서 한 칸으로 묶인다: designs.js homeEntries).
+// 장은 한 그림에 40장(MAX_SLIDES)까지라 더 많으면 "이름 · 1", "이름 · 2" 파트로 나눈다(내 그림에서 한 칸으로 묶인다: designs.js homeEntries).
 import { migrateRecord, newDesignId, MAX_SLIDES, MAX_NAME } from './designs.js';
 import { newId, NOTES_LIMIT } from '../src/document.js';
 

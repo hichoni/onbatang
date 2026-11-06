@@ -81,9 +81,9 @@ test('unsupported schemas, invalid metadata, duplicate IDs and dangling assets r
   assert.equal(clean.secret, undefined); assert.equal(clean.source.extra, undefined); assert.equal(clean.slides[0].items[0].callback, undefined);
 });
 
-test('21 pages, long source text, excess editable objects fail explicitly with original available', () => {
+test('41 pages, long source text, excess editable objects fail explicitly with original available', () => {
   for (const [change, code] of [
-    [r => r.slides = Array.from({length:21}, () => ({items:[]})), 'PAGE_LIMIT'],
+    [r => r.slides = Array.from({length:41}, () => ({items:[]})), 'PAGE_LIMIT'],
     [r => r.slides[0].items[0].text = '가'.repeat(4097), 'TEXT_LIMIT'],
     [r => r.slides[0].items = Array.from({length:41}, () => ({t:'text',text:'가'})), 'ITEM_LIMIT'],
   ]) {

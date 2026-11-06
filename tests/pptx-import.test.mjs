@@ -41,14 +41,14 @@ test('self-authored PPTX bytes convert to stable editable identities, text, dime
  assert.deepEqual(texts(reversed.document),texts(first.document).toReversed());assert.deepEqual(bytes,before);
 });
 
-test('inspection preserves long authored text and all 21 original pages without silently truncating editable document limits',async()=>{
+test('inspection preserves long authored text and all 41 original pages without silently truncating editable document limits',async()=>{
  const longBytes=await readFile(fixture('self-authored-long-text.pptx')),long=await convertPptx(fileOf(longBytes));
  const expected=JSON.parse(await readFile(fixture('self-authored-long-text.expected.json'),'utf8'));
  assert.deepEqual(texts(long.document),texts(expected.document));assert.ok(texts(long.document)[0][0].length>120);
- const many=fileOf(await readFile(fixture('self-authored-21-pages.pptx'))),inspection=await inspectPptx(many);
- assert.equal(inspection.pageCount,21);assert.equal(inspection.pages.length,21);
+ const many=fileOf(await readFile(fixture('self-authored-41-pages.pptx'))),inspection=await inspectPptx(many);
+ assert.equal(inspection.pageCount,41);assert.equal(inspection.pages.length,41);
  await assert.rejects(convertPptx(many),{code:'PAGE_LIMIT'});
- const tail=await convertPptx(many,{selectedPages:[21]});assert.deepEqual(tail.report.selectedPages,[21]);assert.equal(tail.document.slides[0].source.pageNumber,21);
+ const tail=await convertPptx(many,{selectedPages:[41]});assert.deepEqual(tail.report.selectedPages,[41]);assert.equal(tail.document.slides[0].source.pageNumber,41);
 });
 
 test('ZIP traversal, active content, encrypted package markers and external XML entities are rejected before a document can be stored',async()=>{

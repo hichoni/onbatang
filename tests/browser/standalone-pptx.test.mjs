@@ -43,7 +43,7 @@ test('touch tabs open a palette from the horizontal tool rail',options,async t=>
  const {page,entry}=await setup(t,{viewport:{width:390,height:844},touch:true});await page.goto(entry);await page.locator('.cv-hero .cv-new-btn').tap();await openTool(page,'bg','tap');await page.locator('.cv-side .fe-palettes').waitFor({timeout:3000});
 });
 test('touch tabs open a palette after PPT import',options,async t=>{
- const {page,entry}=await setup(t,{viewport:{width:390,height:844},touch:true});await enterImport(page,entry);await inspectFile(page,'self-authored-21-pages.pptx',21);await page.locator('[data-import-save]').tap();await page.locator('[data-inline-import]').waitFor({state:'detached'});await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);await openTool(page,'bg','tap');await page.locator('.cv-side .fe-palettes').waitFor({timeout:3000});
+ const {page,entry}=await setup(t,{viewport:{width:390,height:844},touch:true});await enterImport(page,entry);await inspectFile(page,'self-authored-41-pages.pptx',41);await page.locator('[data-import-save]').tap();await page.locator('[data-inline-import]').waitFor({state:'detached'});await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===41);await openTool(page,'bg','tap');await page.locator('.cv-side .fe-palettes').waitFor({timeout:3000});
 });
 
 test('a delayed native touch click cannot fold a replayed tool, while a second touch can fold it',options,async t=>{
@@ -85,7 +85,7 @@ test('touch tool swipes do not select a tab, and rotating or leaving import reta
 for(const [label,width,height] of [['small-phone',320,568],['phone',390,844],['phone-landscape',844,390],['tablet',768,1024],['tablet-landscape',1024,768],['between-layouts',880,640]]){
  test(`touch PPT workflow: ${label} ${width}x${height}`,options,async t=>{
   const {page,context,entry,base,checkIsolation}=await setup(t,{viewport:{width,height},touch:true});
-  await enterImport(page,entry);await inspectFile(page,'self-authored-21-pages.pptx',21);
+  await enterImport(page,entry);await inspectFile(page,'self-authored-41-pages.pptx',41);
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
   await page.locator('[data-large-preview]').scrollIntoViewIfNeeded();
   const preview=await page.locator('[data-large-preview]').boundingBox();assert.ok(preview.width>=Math.min(320,width*.5)&&preview.height>=130,'a real preview has usable room');
@@ -94,10 +94,10 @@ for(const [label,width,height] of [['small-phone',320,568],['phone',390,844],['p
   await fontSelect.selectOption('gowun-dodum');await page.waitForFunction(()=>document.querySelector('[data-font-apply]')?.disabled===false);
   const apply=await fonts.locator('[data-font-apply]').boundingBox();assert.ok(apply.y>=0&&apply.y+apply.height<=height,'font actions stay inside the viewport');
   await fonts.locator('[data-font-apply]').tap();await page.locator('[data-import-save]').tap();await page.locator('[data-inline-import]').waitFor({state:'detached'});
-  await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);
+  await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===41);
   const original=await readLibrary(page,base);
-  await page.locator('[data-material-page="20"]').tap();await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='21 / 21쪽 · 전체 PPT');
-  await page.locator('[data-material-page="0"]').tap();await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='1 / 21쪽 · 전체 PPT');
+  await page.locator('[data-material-page="40"]').tap();await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='41 / 41쪽 · 전체 PPT');
+  await page.locator('[data-material-page="0"]').tap();await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='1 / 41쪽 · 전체 PPT');
   const grip=page.locator('[data-material-page="0"] .cv-slide-grip');await grip.scrollIntoViewIfNeeded();
   const start=await grip.boundingBox(),end=await page.locator('[data-material-page="1"]').boundingBox();assert.ok(start.width>=44&&start.height>=44);
   const cdp=await context.newCDPSession(page);const point={x:start.x+start.width/2,y:start.y+start.height/2,id:1,radiusX:1,radiusY:1,force:1};
@@ -115,12 +115,12 @@ for(const [label,width,height] of [['small-phone',320,568],['phone',390,844],['p
   const color=await page.locator('.cv-side').getByLabel('배경 색 직접 고르기').inputValue();await palette.getByRole('button',{name:'현재 색 담기',exact:true}).tap();
   assert.ok((await palette.locator('.fe-palette-color').first().boundingBox()).height>=44);assert.ok((await palette.locator('.fe-palette-remove').first().boundingBox()).height>=44);
   const name=await page.locator('.cv-name').inputValue();await page.locator('.cv-back').tap();await page.locator('.cv-home-title').waitFor();await page.reload();await openListed(page,name,'tap');
-  await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);assert.match(await page.locator('[data-material-page="0"]').getAttribute('aria-label'),/원본 2쪽/);
+  await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===41);assert.match(await page.locator('[data-material-page="0"]').getAttribute('aria-label'),/원본 2쪽/);
   if(!await page.locator('.fe-tab[data-tab=bg][aria-selected=true]').count()||await page.locator('.cv-app.folded').count())await openTool(page,'bg','tap');assert.equal(await page.locator('.cv-side').getByLabel('팔레트 이름').inputValue(),'터치 수업 색');assert.equal(await page.locator('.cv-side .fe-palette-colors').first().getByRole('button',{name:color+' 적용',exact:true}).count(),1);
   for(const mode of ['editable','image']){
    await page.locator('.cv-down-btn').tap();const down=page.getByRole('dialog',{name:'내려받기',exact:true});await down.locator('[data-type=pptx]').tap();await down.locator('[data-scope=all]').tap();await down.locator(`[data-pptx=${mode}]`).tap();
    const box=await down.locator('[data-pptx-save]').boundingBox();assert.ok(box.y>=0&&box.y+box.height<=height,'download action stays visible, including landscape');
-   const output=await downloadBy(page,()=>down.locator('[data-pptx-save]').tap()),files=unzipSync(output.bytes);assert.equal(slideFiles(files).length,21);if(mode==='editable')assert.match(xml(files,'ppt/slides/slide1.xml'),/직접 만든 2쪽/);
+   const output=await downloadBy(page,()=>down.locator('[data-pptx-save]').tap()),files=unzipSync(output.bytes);assert.equal(slideFiles(files).length,41);if(mode==='editable')assert.match(xml(files,'ppt/slides/slide1.xml'),/직접 만든 2쪽/);
    await page.locator('.cv-pptx-export').getByRole('button',{name:'닫기',exact:true}).tap();
   }
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);assert.deepEqual((await readLibrary(page,base)).graphs,reordered.graphs);await checkIsolation();
@@ -128,18 +128,18 @@ for(const [label,width,height] of [['small-phone',320,568],['phone',390,844],['p
 }
 
 test('local slide navigation suppresses brief loading notices but explains a genuinely slow save',options,async t=>{
- const {page,entry}=await setup(t);await enterImport(page,entry);await inspectFile(page,'self-authored-21-pages.pptx',21);
- await page.locator('[data-import-save]').click();await page.locator('[data-inline-import]').waitFor({state:'detached'});await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);
+ const {page,entry}=await setup(t);await enterImport(page,entry);await inspectFile(page,'self-authored-41-pages.pptx',41);
+ await page.locator('[data-import-save]').click();await page.locator('[data-inline-import]').waitFor({state:'detached'});await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===41);
  await page.locator('[data-delayed-loading]').waitFor({state:'detached'});
  await page.evaluate(()=>{window.noticeCount=0;new MutationObserver(rows=>{for(const row of rows)for(const n of row.addedNodes)if(n.nodeType===1&&n.matches('[data-delayed-loading]'))window.noticeCount++;}).observe(document.querySelector('.cv-canvas'),{childList:true});const original=IDBDatabase.prototype.transaction;let held=false;window.restoreNoticeTransaction=()=>IDBDatabase.prototype.transaction=original;IDBDatabase.prototype.transaction=function(stores,mode,...args){const tx=original.call(this,stores,mode,...args);if(!held&&this.name==='minican'&&mode==='readonly'&&[stores].flat().includes('designs')){held=true;Object.defineProperty(tx,'oncomplete',{set(fn){tx.addEventListener('complete',event=>setTimeout(()=>fn.call(tx,event),1200));}});}return tx;};});
- const before=await page.locator('.cv-strip').boundingBox();await page.locator('[data-material-page="20"]').click();
- await page.locator('[data-delayed-loading]').waitFor();assert.match(await page.locator('[data-delayed-loading]').innerText(),/21쪽을 여는 중/);
+ const before=await page.locator('.cv-strip').boundingBox();await page.locator('[data-material-page="40"]').click();
+ await page.locator('[data-delayed-loading]').waitFor();assert.match(await page.locator('[data-delayed-loading]').innerText(),/41쪽을 여는 중/);
  assert.equal(await page.locator('[data-delayed-loading] progress:not([hidden])').count(),0);
  assert.deepEqual(await page.locator('.cv-strip').boundingBox(),before,'slow notice never changes the strip layout');
- await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='21 / 21쪽 · 전체 PPT');await page.locator('[data-delayed-loading]').waitFor({state:'detached'});
+ await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='41 / 41쪽 · 전체 PPT');await page.locator('[data-delayed-loading]').waitFor({state:'detached'});
  assert.equal(await page.evaluate(()=>window.noticeCount),1);await page.evaluate(()=>{window.restoreNoticeTransaction();window.noticeCount=0;});
  let fast=0;
- for(const index of [0,20,0]){const start=await page.evaluate(()=>performance.now()),seen=await page.evaluate(()=>window.noticeCount);await page.locator(`[data-material-page="${index}"]`).click();await page.waitForFunction(i=>document.querySelector(`[data-material-page="${i}"]`)?.getAttribute('aria-pressed')==='true',index);if(await page.evaluate(()=>performance.now())-start<390){fast++;assert.equal(await page.evaluate(()=>window.noticeCount),seen,'fast navigation adds no transient live notice');}}
+ for(const index of [0,40,0]){const start=await page.evaluate(()=>performance.now()),seen=await page.evaluate(()=>window.noticeCount);await page.locator(`[data-material-page="${index}"]`).click();await page.waitForFunction(i=>document.querySelector(`[data-material-page="${i}"]`)?.getAttribute('aria-pressed')==='true',index);if(await page.evaluate(()=>performance.now())-start<390){fast++;assert.equal(await page.evaluate(()=>window.noticeCount),seen,'fast navigation adds no transient live notice');}}
  assert.ok(fast>0);await page.evaluate(()=>new Promise(r=>setTimeout(r,500)));assert.equal(await page.locator('[data-delayed-loading]').count(),0,'finished operations cannot produce a late notice');
 });
 
@@ -155,67 +155,67 @@ test('a deferred notice remains readable without blocking input and disposal can
 });
 
 test('slide selection keeps shell, rail, thumbnails and viewport steady within and across PPT parts',options,async t=>{
- const {page,entry,base,checkIsolation}=await setup(t);await enterImport(page,entry);await inspectFile(page,'self-authored-21-pages.pptx',21);
- await page.locator('[data-import-save]').click();await page.locator('[data-inline-import]').waitFor({state:'detached'});await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);
+ const {page,entry,base,checkIsolation}=await setup(t);await enterImport(page,entry);await inspectFile(page,'self-authored-41-pages.pptx',41);
+ await page.locator('[data-import-save]').click();await page.locator('[data-inline-import]').waitFor({state:'detached'});await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===41);
  await page.emulateMedia({reducedMotion:'no-preference'});
  const original=await readLibrary(page,base);
  await page.evaluate(()=>{window.stableNodes=['.cv-app','.cv-strip','.cv-slide-list','.fe-stage','[data-material-page="0"]'].map(s=>document.querySelector(s));window.stabilitySamples=[];window.trackStability=true;const sample=()=>{if(!window.trackStability)return;const strip=document.querySelector('.cv-strip'),list=document.querySelector('.cv-slide-list');window.stabilitySamples.push({top:strip.getBoundingClientRect().top,height:strip.getBoundingClientRect().height,left:list.scrollLeft,scrollY});requestAnimationFrame(sample);};sample();});
  for(const index of [1,0,2,1]){const before=await page.locator('.cv-slide-list').evaluate(n=>n.scrollLeft);await page.locator(`[data-material-page="${index}"]`).click();await page.waitForFunction(i=>document.querySelector(`[data-material-page="${i}"]`)?.getAttribute('aria-pressed')==='true',index);assert.equal(await page.locator('.cv-slide-list').evaluate(n=>n.scrollLeft),before,'visible selection does not center the rail');}
  assert.equal(await page.evaluate(()=>window.stabilitySamples.every(s=>Math.abs(s.top-window.stabilitySamples[0].top)<1&&Math.abs(s.height-window.stabilitySamples[0].height)<1)),true,'selection and loading never resize the strip');
  await page.locator('.cv-name').fill('흔들림 검사 첫 파트');
- await page.locator('[data-material-page="20"]').scrollIntoViewIfNeeded();const left=await page.locator('.cv-slide-list').evaluate(n=>n.scrollLeft);
- await page.locator('[data-material-page="20"]').click();await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='21 / 21쪽 · 전체 PPT');
+ await page.locator('[data-material-page="40"]').scrollIntoViewIfNeeded();const left=await page.locator('.cv-slide-list').evaluate(n=>n.scrollLeft);
+ await page.locator('[data-material-page="40"]').click();await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='41 / 41쪽 · 전체 PPT');
  assert.equal(await page.evaluate(()=>['.cv-app','.cv-strip','.cv-slide-list','.fe-stage','[data-material-page="0"]'].every((s,i)=>document.querySelector(s)===window.stableNodes[i])),true,'part navigation retains every stable DOM node');
  assert.ok(Math.abs(await page.locator('.cv-slide-list').evaluate(n=>n.scrollLeft)-left)<1);
  assert.equal(await page.locator('.cv-canvas .fe-card').evaluate(n=>n.getAnimations().filter(a=>a.playState==='running').length),0,'editing selection has no entrance animation');
  await page.locator('.cv-name').fill('흔들림 검사 마지막 파트');
  await page.setViewportSize({width:390,height:844});await page.locator('.cv-strip').scrollIntoViewIfNeeded();await page.locator('.cv-slide-list').evaluate(n=>n.scrollLeft=0);
- const y=await page.evaluate(()=>scrollY);await page.locator('[data-material-page="0"]').click();await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='1 / 21쪽 · 전체 PPT');
+ const y=await page.evaluate(()=>scrollY);await page.locator('[data-material-page="0"]').click();await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='1 / 41쪽 · 전체 PPT');
  assert.ok(Math.abs(await page.evaluate(()=>scrollY)-y)<1,'part navigation preserves mobile page scroll');assert.equal(await page.locator('.cv-name').inputValue(),'흔들림 검사 첫 파트');
- await page.evaluate(()=>window.trackStability=false);await page.locator('.cv-back').click();await page.locator('.cv-home-title').waitFor();await page.reload();await page.getByRole('button',{name:'흔들림 검사 마지막 파트 열기',exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);
+ await page.evaluate(()=>window.trackStability=false);await page.locator('.cv-back').click();await page.locator('.cv-home-title').waitFor();await page.reload();await page.getByRole('button',{name:'흔들림 검사 마지막 파트 열기',exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===41);
  assert.equal(await page.locator('.cv-name').inputValue(),'흔들림 검사 마지막 파트');const after=await readLibrary(page,base);assert.deepEqual(after.originals,original.originals);assert.deepEqual(after.sources,original.sources);await checkIsolation();
 });
 
 test('large horizontal filmstrip reorders across parts, preserves fixed originals and exports in saved order',options,async t=>{
- const {page,entry,base,checkIsolation}=await setup(t);await enterImport(page,entry);await inspectFile(page,'self-authored-21-pages.pptx',21);
- await page.locator('[data-import-save]').click();await page.locator('[data-inline-import]').waitFor({state:'detached'});await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);
+ const {page,entry,base,checkIsolation}=await setup(t);await enterImport(page,entry);await inspectFile(page,'self-authored-41-pages.pptx',41);
+ await page.locator('[data-import-save]').click();await page.locator('[data-inline-import]').waitFor({state:'detached'});await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===41);
  const before=await readLibrary(page,base),oldIds=before.graphs[0].pages.map(row=>row.page.id);
  assert.equal(await page.locator('.cv-slide-view').first().evaluate(node=>node.clientHeight),64);
  await page.locator('.cv-tray-menu>summary').click();await page.getByLabel('슬라이드 목록 창 높이').fill('180');assert.equal(Math.round((await page.locator('.cv-strip').boundingBox()).height),180);await page.locator('.cv-tray-menu>summary').click();
  await page.locator('.cv-slide-list').hover();await page.mouse.wheel(0,600);assert.ok(await page.locator('.cv-slide-list').evaluate(node=>node.scrollLeft)>0);
- const last=page.locator('[data-material-page="20"]');await last.focus();await page.keyboard.press('Alt+ArrowLeft');
+ const last=page.locator('[data-material-page="40"]');await last.focus();await page.keyboard.press('Alt+ArrowLeft');
  await page.waitForFunction(()=>!document.querySelector('#app').inert);
- await page.waitForFunction(()=>document.querySelector('[data-material-page="19"]')?.getAttribute('aria-label')?.includes('원본 21쪽'));
- const saved=await readLibrary(page,base);assert.deepEqual(saved.graphs[0].pages.map(row=>row.page.id),[...oldIds.slice(0,19),oldIds[20],oldIds[19]]);
+ await page.waitForFunction(()=>document.querySelector('[data-material-page="39"]')?.getAttribute('aria-label')?.includes('원본 41쪽'));
+ const saved=await readLibrary(page,base);assert.deepEqual(saved.graphs[0].pages.map(row=>row.page.id),[...oldIds.slice(0,39),oldIds[40],oldIds[39]]);
  assert.deepEqual(saved.originals,before.originals);assert.deepEqual(saved.sources,before.sources);
  await page.locator('[data-material-page="0"]').dragTo(page.locator('[data-material-page="2"]'),{targetPosition:{x:150,y:30}});
  await page.waitForFunction(()=>document.querySelector('[data-material-page="0"]')?.getAttribute('aria-label')?.includes('원본 2쪽'));
  const ordered=await readLibrary(page,base),name=await page.locator('.cv-name').inputValue();
- await reloadToList(page);await openListed(page,name);await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);
+ await reloadToList(page);await openListed(page,name);await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===41);
  assert.equal(Math.round((await page.locator('.cv-strip').boundingBox()).height),180);
- assert.match(await page.locator('[data-material-page="19"]').getAttribute('aria-label'),/원본 21쪽/);
+ assert.match(await page.locator('[data-material-page="39"]').getAttribute('aria-label'),/원본 41쪽/);
  await page.locator('.cv-down-btn').click();const dialog=page.getByRole('dialog',{name:'내려받기',exact:true});await dialog.locator('[data-type=pptx]').click();await dialog.locator('[data-scope=all]').click();await dialog.locator('[data-pptx=editable]').click();
  const output=await downloadBy(page,()=>dialog.locator('[data-pptx-save]').click()),files=unzipSync(output.bytes);assert.match(xml(files,'ppt/slides/slide1.xml'),/직접 만든 2쪽/);
- assert.match(xml(files,'ppt/slides/slide20.xml'),/직접 만든 21쪽/);assert.deepEqual((await readLibrary(page,base)).graphs,ordered.graphs);
+ assert.match(xml(files,'ppt/slides/slide40.xml'),/직접 만든 41쪽/);assert.deepEqual((await readLibrary(page,base)).graphs,ordered.graphs);
  await checkIsolation();
 });
 
 test('short Chromebook workspace folds/resizes its tray and keeps whole-PPT navigation and originals',options,async t=>{
  const {page,entry,base,checkIsolation}=await setup(t,{viewport:{width:1366,height:650}});
- await enterImport(page,entry);await inspectFile(page,'self-authored-21-pages.pptx',21);await page.locator('[data-import-save]').click();await page.locator('[data-inline-import]').waitFor({state:'detached'});
- await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);
+ await enterImport(page,entry);await inspectFile(page,'self-authored-41-pages.pptx',41);await page.locator('[data-import-save]').click();await page.locator('[data-inline-import]').waitFor({state:'detached'});
+ await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===41);
  const original=await readLibrary(page,base),ids=original.graphs[0].pages.map(v=>v.page.id),tray=page.locator('.cv-strip'),stage=page.locator('.cv-canvas .fe-stage'),grip=page.getByRole('separator',{name:'슬라이드 목록 높이 조절'});
  assert.equal(await page.getByRole('button',{name:'슬라이드 목록 펼치기'}).getAttribute('aria-expanded'),'false');
  assert.ok((await tray.boundingBox()).height<=60,'collapsed tray is a single compact row');
  const large=await stage.boundingBox();assert.ok(large.height>=330,'canvas retains useful height on a 650px viewport');
- for(let i=1;i<=20;i++){await page.getByRole('button',{name:'다음 슬라이드',exact:true}).click();await page.waitForFunction(n=>document.querySelector('[data-material-count]')?.textContent===`${n} / 21쪽 · 전체 PPT`,i+1);}
+ for(let i=1;i<=40;i++){await page.getByRole('button',{name:'다음 슬라이드',exact:true}).click();await page.waitForFunction(n=>document.querySelector('[data-material-count]')?.textContent===`${n} / 41쪽 · 전체 PPT`,i+1);}
  await page.getByRole('button',{name:'슬라이드 목록 펼치기'}).click();const small=await stage.boundingBox();assert.ok(large.height>small.height+60,'folding returns real pixels to the canvas');assert.ok((await tray.boundingBox()).height<=128,'default strip is a compact thumbnail row');
- const railBox=await page.locator('.cv-slide-list').boundingBox(),selectedBox=await page.locator('[data-material-page="20"]').boundingBox();assert.ok(selectedBox.x>=railBox.x&&selectedBox.x+selectedBox.width<=railBox.x+railBox.width,'reopening reveals the page selected while collapsed');
+ const railBox=await page.locator('.cv-slide-list').boundingBox(),selectedBox=await page.locator('[data-material-page="40"]').boundingBox();assert.ok(selectedBox.x>=railBox.x&&selectedBox.x+selectedBox.width<=railBox.x+railBox.width,'reopening reveals the page selected while collapsed');
  assert.ok((await tray.boundingBox()).height<=650*.42+1);
- await page.locator('[data-material-page="19"]').click();await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='20 / 21쪽 · 전체 PPT');
- await page.getByRole('button',{name:'슬라이드 목록 접기'}).click();await page.getByRole('button',{name:'다음 슬라이드',exact:true}).click();await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='21 / 21쪽 · 전체 PPT');
+ await page.locator('[data-material-page="39"]').click();await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='40 / 41쪽 · 전체 PPT');
+ await page.getByRole('button',{name:'슬라이드 목록 접기'}).click();await page.getByRole('button',{name:'다음 슬라이드',exact:true}).click();await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='41 / 41쪽 · 전체 PPT');
  assert.equal(await page.getByRole('button',{name:'다음 슬라이드',exact:true}).isEnabled(),false);
- await page.getByRole('button',{name:'이전 슬라이드',exact:true}).click();await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='20 / 21쪽 · 전체 PPT');
+ await page.getByRole('button',{name:'이전 슬라이드',exact:true}).click();await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='40 / 41쪽 · 전체 PPT');
  await grip.press('ArrowUp');assert.ok(Number(await grip.getAttribute('aria-valuenow'))>=88);await grip.press('End');assert.equal(await grip.getAttribute('aria-valuenow'),await grip.getAttribute('aria-valuemax'));
  const down=Number(await grip.getAttribute('aria-valuenow'))-40;
  let box=await grip.boundingBox();await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2,box.y+box.height/2+down,{steps:8});await page.mouse.up();
@@ -223,7 +223,7 @@ test('short Chromebook workspace folds/resizes its tray and keeps whole-PPT navi
  box=await grip.boundingBox();await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2,box.y+box.height/2-110,{steps:8});await page.mouse.up();
  assert.ok(Number(await grip.getAttribute('aria-valuenow'))>=104,'dragging up restores and resizes the tray');
  const after=await readLibrary(page,base);assert.deepEqual(after.originals,original.originals);assert.deepEqual(after.sources,original.sources);assert.deepEqual(after.graphs[0].pages.map(v=>v.page.id),ids);
- await grip.press('Home');const name=await page.locator('.cv-name').inputValue();await reloadToList(page);await openListed(page,name);await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);
+ await grip.press('Home');const name=await page.locator('.cv-name').inputValue();await reloadToList(page);await openListed(page,name);await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===41);
  assert.equal(await page.getByRole('button',{name:'슬라이드 목록 펼치기'}).getAttribute('aria-expanded'),'false','device preference survives full reload');
  await mkdir(resolve(root,'work'),{recursive:true});await page.screenshot({path:resolve(root,'work/slide-tray-chromebook-collapsed.png'),fullPage:true});
  await page.getByRole('button',{name:'슬라이드 목록 펼치기'}).click();await page.screenshot({path:resolve(root,'work/slide-tray-chromebook-expanded.png'),fullPage:true});await checkIsolation();
@@ -312,8 +312,8 @@ test('while PPT pictures are prepared on the page step, only the large preview s
  await enterImport(page,entry);
  let release;const gate=new Promise(resolve=>{release=resolve;});
  await page.route('**/vendor/preview-frame.html',async route=>{await gate;await route.continue();});
- await page.locator('[data-inline-import]').getByLabel('PPTX 파일 선택',{exact:true}).setInputFiles(fixture('self-authored-21-pages.pptx'));
- await page.waitForFunction(()=>document.querySelectorAll('[data-page-select]').length===21,null,{timeout:120000});
+ await page.locator('[data-inline-import]').getByLabel('PPTX 파일 선택',{exact:true}).setInputFiles(fixture('self-authored-41-pages.pptx'));
+ await page.waitForFunction(()=>document.querySelectorAll('[data-page-select]').length===41,null,{timeout:120000});
  const slim=page.locator('[data-import-loading]:not([hidden]) .oi-busy-slim');await slim.waitFor();
  assert.match(await slim.innerText(),/PPT 화면을 준비하고 있어요/);
  assert.equal(await page.locator('[data-import-loading] [data-onbatang-loading]').count(),0,'no second big loader above the pages');
@@ -330,7 +330,7 @@ test('symbol assembly loading and whole editor rail preserve every split page, f
  let release;const gate=new Promise(resolve=>{release=resolve;});
  await page.route('**/pptx-worker.js',async route=>{await gate;await route.continue();});
  await page.emulateMedia({reducedMotion:'no-preference'});
- await page.locator('[data-inline-import]').getByLabel('PPTX 파일 선택',{exact:true}).setInputFiles(fixture('self-authored-21-pages.pptx'));
+ await page.locator('[data-inline-import]').getByLabel('PPTX 파일 선택',{exact:true}).setInputFiles(fixture('self-authored-41-pages.pptx'));
  await page.locator('[data-import-loading]:not([hidden]) [data-onbatang-loading]').waitFor();
  assert.equal(await page.locator('[data-import-loading] svg path').count(),3);
  assert.equal(await page.locator('[data-import-loading] progress:not([hidden])').count(),0,'inspection has no invented percentage');
@@ -343,39 +343,39 @@ test('symbol assembly loading and whole editor rail preserve every split page, f
  await page.emulateMedia({reducedMotion:'reduce'});
  assert.equal(await page.locator('[data-import-loading] svg path').first().evaluate(node=>getComputedStyle(node).animationName),'none');
  release();await page.setViewportSize({width:1440,height:1000});
- await page.waitForFunction(()=>document.querySelectorAll('[data-page-select]').length===21&&document.querySelector('[data-import-save]')?.disabled===false,null,{timeout:120000});
+ await page.waitForFunction(()=>document.querySelectorAll('[data-page-select]').length===41&&document.querySelector('[data-import-save]')?.disabled===false,null,{timeout:120000});
  await page.locator('[data-import-save]').click();await page.locator('[data-inline-import]').waitFor({state:'detached',timeout:120000});
- await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);
+ await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===41);
  const original=await readLibrary(page,base);
  assert.equal(original.graphs[0].documents.length,2);
- assert.equal(await page.locator('[data-material-count]').innerText(),'1 / 21쪽 · 전체 PPT');
+ assert.equal(await page.locator('[data-material-count]').innerText(),'1 / 41쪽 · 전체 PPT');
  await page.locator('.cv-name').fill('전체 슬라이드 첫 파트 편집');
  await page.evaluate(()=>{const put=IDBObjectStore.prototype.put;window.restoreDeckPut=()=>IDBObjectStore.prototype.put=put;IDBObjectStore.prototype.put=function(...args){if(this.transaction.db.name==='minican'&&this.name==='designs')throw new DOMException('Synthetic save failure','QuotaExceededError');return put.apply(this,args);};});
- await page.locator('[data-material-page="20"]').click();await page.locator('.cv-alert:not([hidden])').waitFor();
- assert.equal(await page.locator('[data-material-count]').innerText(),'1 / 21쪽 · 전체 PPT');
+ await page.locator('[data-material-page="40"]').click();await page.locator('.cv-alert:not([hidden])').waitFor();
+ assert.equal(await page.locator('[data-material-count]').innerText(),'1 / 41쪽 · 전체 PPT');
  assert.equal(await page.locator('.cv-name').inputValue(),'전체 슬라이드 첫 파트 편집');
  await page.evaluate(()=>window.restoreDeckPut());
- await page.locator('[data-material-page="20"]').click();
- await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='21 / 21쪽 · 전체 PPT');
- assert.match(await page.locator('.cv-canvas').innerText(),/직접 만든 21쪽:/);
+ await page.locator('[data-material-page="40"]').click();
+ await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='41 / 41쪽 · 전체 PPT');
+ assert.match(await page.locator('.cv-canvas').innerText(),/직접 만든 41쪽:/);
  await page.locator('.cv-name').fill('전체 슬라이드 마지막 파트 편집');
  await page.locator('[data-material-page="0"]').click();
- await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='1 / 21쪽 · 전체 PPT');
+ await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='1 / 41쪽 · 전체 PPT');
  assert.equal(await page.locator('.cv-name').inputValue(),'전체 슬라이드 첫 파트 편집');
  await page.screenshot({path:resolve(folder,'whole-deck-editor.png')});
  for(const mode of ['editable','image']){
   await page.locator('.cv-down-btn').click();const dialog=page.getByRole('dialog',{name:'내려받기',exact:true});
   await dialog.locator('[data-type=pptx]').click();
-  assert.match(await dialog.locator('[data-scope=all]').innerText(),/21장/);
+  assert.match(await dialog.locator('[data-scope=all]').innerText(),/41장/);
   await dialog.locator('[data-scope=all]').click();await dialog.locator(`[data-pptx=${mode}]`).click();
   const result=await downloadBy(page,()=>dialog.locator('[data-pptx-save]').click());
-  assert.equal(slideFiles(unzipSync(result.bytes)).length,21);
+  assert.equal(slideFiles(unzipSync(result.bytes)).length,41);
   await page.locator('.cv-pptx-export').getByRole('button',{name:'닫기',exact:true}).click();
  }
  await reloadToList(page);await page.getByRole('button',{name:'전체 슬라이드 첫 파트 편집 열기',exact:true}).click();
- await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===21);
- await page.locator('[data-material-page="20"]').click();
- await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='21 / 21쪽 · 전체 PPT');
+ await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===41);
+ await page.locator('[data-material-page="40"]').click();
+ await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='41 / 41쪽 · 전체 PPT');
  assert.equal(await page.locator('.cv-name').inputValue(),'전체 슬라이드 마지막 파트 편집');
  assert.deepEqual(await readLibrary(page,base),original,'navigation and exports do not rewrite original or fixed material revisions');
  await checkIsolation();
@@ -493,16 +493,16 @@ async function exportAll(page,mode){
  await dialog.waitFor({state:'detached'});return {...result,files:unzipSync(result.bytes)};
 }
 
-test('standalone UI keeps all 21 pages across automatic parts, real editing, immutable reopen and both whole-deck PPTX exports',options,async t=>{
- const {page,entry,base,checkIsolation}=await setup(t),bytes=await readFile(fixture('self-authored-21-pages.pptx'));
- await enterImport(page,entry);await inspectFile(page,'self-authored-21-pages.pptx',21);await saveImport(page);
+test('standalone UI keeps all 41 pages across automatic parts, real editing, immutable reopen and both whole-deck PPTX exports',options,async t=>{
+ const {page,entry,base,checkIsolation}=await setup(t),bytes=await readFile(fixture('self-authored-41-pages.pptx'));
+ await enterImport(page,entry);await inspectFile(page,'self-authored-41-pages.pptx',41);await saveImport(page);
  const original=await readLibrary(page,base);assert.equal(original.graphs.length,1);
- const graph=original.graphs[0];assert.deepEqual(graph.documents.map(row=>row.payload.slides.length),[20,1]);
- assert.deepEqual(graph.pages.map(row=>row.pageNumber),Array.from({length:21},(_,i)=>i+1));
+ const graph=original.graphs[0];assert.deepEqual(graph.documents.map(row=>row.payload.slides.length),[40,1]);
+ assert.deepEqual(graph.pages.map(row=>row.pageNumber),Array.from({length:41},(_,i)=>i+1));
  assert.deepEqual(graph.documents.map(row=>row.revision),[0,0]);assert.equal(graph.materialRef.revision,0);
  assert.deepEqual(original.sources,[{bytes:bytes.length,sha256:sha256(bytes)}]);
- assert.equal(await page.locator('[data-pptx-page]').count(),21);
- for(let index=0;index<21;index++){
+ assert.equal(await page.locator('[data-pptx-page]').count(),41);
+ for(let index=0;index<41;index++){
   await page.locator(`[data-pptx-page="${index}"]`).click();
   await page.locator(`[data-pptx-page="${index}"][aria-current=true]`).waitFor();
   assert.match(await page.locator('.op-sheet').innerText(),new RegExp(`직접 만든 ${index+1}쪽:`),'each part remains in original sequence in the actual viewer');
@@ -525,13 +525,13 @@ test('standalone UI keeps all 21 pages across automatic parts, real editing, imm
  await enterImport(page,entry);await page.getByRole('button',{name:'이미 가져온 자료 보기',exact:true}).click();
  await page.locator('[data-pptx-material]').waitFor();assert.equal(await page.locator('[data-pptx-material]').count(),1,'the library shows a single material, not two disconnected parts');
  await page.locator('[data-pptx-material]').getByRole('button',{name:'자료 열기',exact:true}).click();
- await page.locator('[data-pptx-page="20"]').waitFor();
+ await page.locator('[data-pptx-page="40"]').waitFor();
  const reopened=await readLibrary(page,base);assert.deepEqual(reopened,edited,'a fresh page reopens the exact pinned material and source');
  const source=await downloadBy(page,()=>page.locator('[data-pptx-original]').click());assert.deepEqual(source.bytes,bytes,'original download is byte-for-byte unchanged');
  for(const mode of ['editable','image']){
-  const output=await exportAll(page,mode);assert.equal(slideFiles(output.files).length,21);
+  const output=await exportAll(page,mode);assert.equal(slideFiles(output.files).length,41);
   assert.match(output.name,mode==='image'?/이미지\.pptx$/:/편집\.pptx$/);
-  for(let number=1;number<=21;number++){
+  for(let number=1;number<=41;number++){
    const slide=xml(output.files,`ppt/slides/slide${number}.xml`);
    if(mode==='editable'){assert.match(slide,new RegExp(`직접 만든 ${number}쪽:`));assert.match(slide,/<p:txBody>/);}
    else{assert.match(slide,/<p:pic>/);assert.doesNotMatch(slide,/<p:txBody>/);}
@@ -541,7 +541,7 @@ test('standalone UI keeps all 21 pages across automatic parts, real editing, imm
  assert.deepEqual(await readLibrary(page,base),edited,'downloads never create another material revision or change original bytes');
  await page.locator('.op-history summary').click();await page.locator('[data-pptx-original-material]').click();
  await page.waitForFunction(()=>document.querySelector('.op-history')?.textContent.includes('자료 저장본 0'));
- assert.equal(await page.locator('[data-pptx-page]').count(),21);
+ assert.equal(await page.locator('[data-pptx-page]').count(),41);
  assert.doesNotMatch(await page.locator('.op-sheet').innerText(),/편집한 본문/,'historical view never overlays a newer shared editor draft');
  assert.equal(await page.locator('[data-pptx-edit]').count(),0);assert.equal(await page.locator('[data-pptx-save]').count(),0,'the immutable historical viewer has no edit or save action');
  const historical=await exportAll(page,'editable');assert.doesNotMatch(xml(historical.files,'ppt/slides/slide1.xml'),/편집한 본문/);
@@ -549,7 +549,7 @@ test('standalone UI keeps all 21 pages across automatic parts, real editing, imm
  await page.locator('[data-pptx-latest]').click();
  await page.waitForFunction(()=>document.querySelector('.op-history')?.textContent.includes('자료 저장본 1'));
  assert.match(await page.locator('.op-sheet').innerText(),/편집한 본문/);
- // A real editor aspect change affects only its 20-page part. The whole-deck
+ // A real editor aspect change affects only its 40-page part. The whole-deck
  // exporter must explain the mixed-size limitation instead of stretching it.
  await page.locator('[data-pptx-edit]').click();await page.locator('[data-inline-import]').waitFor({state:'detached'});await page.locator('.cv-name').waitFor();
  await page.getByLabel('문서 메뉴',{exact:true}).click();await page.locator('.cv-shape[data-ratio="16:9"]').click();await page.locator('[data-fit=fit]').click();
@@ -600,7 +600,7 @@ test('standalone import under a subpath uses local preview/font assets and keeps
 
 test('a material transaction quota failure keeps its saved parts and retries the same batch without duplicate document heads or destructive reinitialization',options,async t=>{
  const {page,entry,base,checkIsolation}=await setup(t);
- await enterImport(page,entry);await inspectFile(page,'self-authored-21-pages.pptx',21);
+ await enterImport(page,entry);await inspectFile(page,'self-authored-41-pages.pptx',41);
  await page.evaluate(()=>{
   const add=IDBObjectStore.prototype.add;
   window.standaloneQuotaProbe={failures:0,materialAttempts:0,documentAdds:0};
@@ -635,7 +635,7 @@ test('a material transaction quota failure keeps its saved parts and retries the
  assert.equal(await page.locator('[data-import-result=complete]').count(),0,'saving all parts is not falsely reported as a completed material');
  assert.equal(await page.locator('[data-result-document]').count(),2,'the recovery screen retains both already saved parts');
  const shown=await page.locator('[data-result-document] .oi-help').allTextContents();
- assert.deepEqual(shown.flatMap(text=>text.match(/^원본 ([\d, ]+)쪽/)[1].split(',').map(Number)),Array.from({length:21},(_,i)=>i+1),'the recovery screen still identifies all 21 saved source pages');
+ assert.deepEqual(shown.flatMap(text=>text.match(/^원본 ([\d, ]+)쪽/)[1].split(',').map(Number)),Array.from({length:41},(_,i)=>i+1),'the recovery screen still identifies all 41 saved source pages');
  const failed=await durable();assert.deepEqual(failed.counts,{heads:2,revisions:2,assets:1,materials:0,materialRevisions:0},'the failed material transaction is atomic while earlier document commits survive');
  assert.deepEqual(failed.materials,[]);assert.deepEqual(failed.heads.map(row=>row.revision),[0,0]);
  const batchIds=failed.heads.map(row=>row.sidecar.importReport.importBatch.id);assert.equal(new Set(batchIds).size,1);
@@ -649,10 +649,10 @@ test('a material transaction quota failure keeps its saved parts and retries the
  const recovered=await durable();assert.deepEqual(recovered.counts,{heads:2,revisions:2,assets:1,materials:1,materialRevisions:1});
  assert.deepEqual(recovered.heads,failed.heads,'retry reuses the exact saved documents instead of writing new IDs or revisions');
  assert.equal(recovered.materials[0].manifest.batchId,batchIds[0],'retry finalizes the original batch');
- assert.deepEqual(recovered.materials[0].pages.map(row=>row.pageNumber),Array.from({length:21},(_,i)=>i+1));
+ assert.deepEqual(recovered.materials[0].pages.map(row=>row.pageNumber),Array.from({length:41},(_,i)=>i+1));
  assert.deepEqual(await page.evaluate(()=>window.standaloneQuotaProbe),{failures:1,materialAttempts:2,documentAdds:2});
  await page.evaluate(()=>{window.restoreStandaloneQuotaProbe();delete window.restoreStandaloneQuotaProbe;delete window.standaloneQuotaProbe;});
- await showSavedMaterial(page);await page.locator('[data-pptx-page="20"]').waitFor();
+ await showSavedMaterial(page);await page.locator('[data-pptx-page="40"]').waitFor();
  await enterImport(page,entry);await page.getByRole('button',{name:'이미 가져온 자료 보기',exact:true}).click();await page.locator('[data-pptx-material]').waitFor();
  assert.equal(await page.locator('[data-pptx-material]').count(),1);assert.deepEqual(await durable(),recovered,'recovered material and its original receipts survive a full page reload');
  await checkIsolation();
@@ -660,7 +660,7 @@ test('a material transaction quota failure keeps its saved parts and retries the
 
 test('My materials imports preserve edited text, restore the same page on cancel, and block navigation until the real editor transaction succeeds',options,async t=>{
  const {page,entry,base,checkIsolation}=await setup(t);
- await enterImport(page,entry);await inspectFile(page,'self-authored-21-pages.pptx',21);await saveImport(page);
+ await enterImport(page,entry);await inspectFile(page,'self-authored-41-pages.pptx',41);await saveImport(page);
  const original=await readLibrary(page,base),oldGraph=original.graphs[0],oldId=oldGraph.documents[0].id;
  const readDraft=id=>page.evaluate(async({base,id})=>(await import(base+'/app/store.js')).getDesign(id),{base,id});
  await page.locator('[data-pptx-page="1"]').click();await page.locator('[data-pptx-page="1"][aria-current=true]').waitFor();
@@ -714,7 +714,7 @@ test('My materials imports preserve edited text, restore the same page on cancel
  await page.locator('.cv-back').click();await page.locator('.cv-home-title').waitFor();await showSavedMaterial(page);await page.locator('[data-pptx-save]').waitFor({state:'attached'});
  assert.equal(await page.locator('[data-pptx-save]').isVisible(),true,'the saved material remains accessible inside My materials after returning to My drawings');
  await page.locator('[data-pptx-page="1"]').click();await page.locator('[data-pptx-page="1"][aria-current=true]').waitFor();
- assert.equal(await page.locator('[data-pptx-page]').count(),21);
+ assert.equal(await page.locator('[data-pptx-page]').count(),41);
  assert.match(await page.locator('.op-sheet').innerText(),/업로드 전 편집/);
  await page.locator('[data-pptx-save]').click();
  await page.waitForFunction(()=>document.querySelector('[data-pptx-status]')?.textContent.includes('편집본을 저장했어요'));
