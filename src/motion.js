@@ -841,10 +841,10 @@ export function primedAnimate(node, keyframes, opts) {
     one.count++; held.set(prop, one);
     node.style.setProperty(prop, value);
   }
-  let done = false, timer = 0;
+  let done = false;
   const restore = () => {
     if (done) return;
-    done = true; clearTimeout(timer);
+    done = true;
     for (const [prop] of props) {
       const one = held.get(prop);
       if (!one || --one.count > 0) continue;
@@ -853,8 +853,8 @@ export function primedAnimate(node, keyframes, opts) {
     }
     if (!held.size && primes.get(node) === held) primes.delete(node);
   };
-  const ms = Math.max(0, Number(opts.duration) || 0);
-  timer = setTimeout(restore, Math.max(0, Number(opts.delay) || 0) + Math.min(80, ms / 2));
+  // 움직임이 끝나거나 걷힐 때까지 둔다(그동안에는 움직임이 덮어 보이지 않는다). 시간을 정해 먼저 걷으면, 느린 휴대폰에서 움직임이
+  // 그 시간 안에 얹히지 못했을 때 제 모습이 한순간 드러난다. finished 는 화면을 그리기 전에 풀리므로 끝에서도 깜빡이지 않는다.
   a.finished.then(restore, restore);
   return a;
 }
