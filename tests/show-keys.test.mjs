@@ -69,7 +69,7 @@ test('HTML lessons carry bounded speaker notes only when the page has them', () 
   assert.deepEqual(cleanHtmlLesson(JSON.parse(JSON.stringify(lesson))), lesson);
 });
 
-test('가이X context includes the teacher notes of chosen slides, bounded and only when present', () => {
+test('AI-G context includes the teacher notes of chosen slides, bounded and only when present', () => {
   const page = (id, text, notes) => ({page: {id, items: [{t: 'text', text}], ...(notes ? {notes} : {})}});
   const entries = [page('p1', '도입', '질문: 무엇이 보이나요?'), page('p2', '전개', '가'.repeat(5000)), page('p3', '정리')];
   const chosen = JSON.parse(gaiLessonContext(entries, 'p2', '수업', {referenceIds: ['p1', 'p2', 'p3']}));

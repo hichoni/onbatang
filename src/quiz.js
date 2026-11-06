@@ -164,7 +164,7 @@ export function quizResultPage(quiz, answers, aspect = 16 / 9, { ranking = [], a
 }
 
 /**
- * 가이X 가 써 준 답 → 문제 목록. ```quiz 블록(없으면 답 전체)에서 "Q:" 로 시작하는 문제마다
+ * AI-G 가 써 준 답 → 문제 목록. ```quiz 블록(없으면 답 전체)에서 "Q:" 로 시작하는 문제마다
  * "- 보기" 줄 2~4개(정답 끝에 " *"), 있으면 "해설:" 한 줄. 모양이 틀린 문제는 버린다. 10문제까지.
  */
 export function quizzesFromAnswer(answer, { seconds = 20 } = {}) {

@@ -1,4 +1,4 @@
-// 퀴즈 장의 화면: 편집기의 "퀴즈 넣기"(직접 · 가이X 에게 부탁) 칸과 발표 화면의 퀴즈(시작 → 시간 재기 → 정답 공개 → 순위).
+// 퀴즈 장의 화면: 편집기의 "퀴즈 넣기"(직접 · AI-G 에게 부탁) 칸과 발표 화면의 퀴즈(시작 → 시간 재기 → 정답 공개 → 순위).
 // 발표 화면은 휴대폰 없이도 돈다(선생님이 시작하고 정답을 연다). GBE-AI Lab 발표에서는 live 로 학생 휴대폰의 답을 받아 점수를 낸다.
 //   live: { connected(), connect(), send(state|null), listen(fn) → 끊기 } (app.js 가 호스트의 "질문 · 반응" 통로에 잇는다)
 //   state(학생 휴대폰으로 가는 것): { id, question, choices, seconds, phase: 'ready'|'open'|'shown'|'ranking', endsAt?, answer?, results?, top? }
@@ -11,7 +11,7 @@ const secondsLabel = (s) => (s ? `${s}초` : '시간 제한 없음');
 
 /**
  * 퀴즈 넣기 · 고치기 칸. onApply(quizzes[]) 가 지금 장 다음에 넣는다(고칠 때는 하나).
- * ai: { generate({ topic, count, seconds, share }) → quizzes[], title, hasText } — 가이X 를 이어 준 곳에서만.
+ * ai: { generate({ topic, count, seconds, share }) → quizzes[], title, hasText } — AI-G 를 이어 준 곳에서만.
  */
 export function createQuizSetup({ activity: raw, onApply, onCancel, ai = null } = {}) {
   const editing = !!raw;
@@ -60,25 +60,25 @@ export function createQuizSetup({ activity: raw, onApply, onCancel, ai = null } 
       el('button', { type: 'button', class: 'btn', text: '취소', dataset: { quizKeep: '' }, onclick: () => { if (!busy) onCancel?.(); } }),
       el('button', { type: 'submit', class: 'btn btn-primary', text: editing ? '퀴즈 고치기' : '퀴즈 장 넣기', dataset: { quizApply: '' } })));
 
-  // 가이X 에게 부탁하기: 주제 · 문제 수 · (지금 그림의 글 참고) → 미리 보고 고른 문제만 넣는다
+  // AI-G 에게 부탁하기: 주제 · 문제 수 · (지금 그림의 글 참고) → 미리 보고 고른 문제만 넣는다
   let asking = null;
   const aiBox = ai && !editing ? (() => {
     const topic = el('input', { type: 'text', maxlength: 300, value: ai.title || '', placeholder: '예) 4학년 과학 · 식물의 한살이', 'aria-label': '퀴즈 주제', dataset: { quizTopic: '' } });
     const count = el('select', { 'aria-label': '문제 수', dataset: { quizCount: '' } }, [3, 5, 8, 10].map((n) => el('option', { value: String(n), text: `${n}문제`, ...(n === 5 ? { selected: true } : {}) })));
     const share = el('input', { type: 'checkbox', checked: !!ai.hasText, dataset: { quizShare: '' } });
-    const say = el('p', { class: 'quiz-setup-status', role: 'status', 'aria-live': 'polite', text: ai.hasText ? '지금 그림의 내용으로 문제를 만들어 줘요. 만든 문제는 넣기 전에 골라요.' : '주제를 적으면 가이X가 문제를 만들어 줘요. 만든 문제는 넣기 전에 골라요.' });
+    const say = el('p', { class: 'quiz-setup-status', role: 'status', 'aria-live': 'polite', text: ai.hasText ? '지금 그림의 내용으로 문제를 만들어 줘요. 만든 문제는 넣기 전에 골라요.' : '주제를 적으면 AI-G가 문제를 만들어 줘요. 만든 문제는 넣기 전에 골라요.' });
     const picks = el('ol', { class: 'quiz-setup-picks', hidden: true });
     const put = el('button', { type: 'button', class: 'btn btn-primary', hidden: true, dataset: { quizPut: '' } });
     let made = [];
     const paintPut = () => { const n = picks.querySelectorAll('input:checked').length; put.textContent = `고른 ${n}문제 넣기`; put.disabled = !n || busy; };
     put.addEventListener('click', () => { const chosen = made.filter((_, k) => picks.children[k]?.querySelector('input')?.checked); if (chosen.length) apply(chosen.map((q) => cleanQuizActivity({ ...q, seconds: Number(seconds.value) }))); });
-    const label = el('span', { text: '가이X에게 부탁하기' });
+    const label = el('span', { text: 'AI-G에게 부탁하기' });
     const go = el('button', { type: 'button', class: 'btn btn-primary', dataset: { quizAsk: '', quizKeep: '' }, onclick: async () => {
       if (asking) { asking.abort(); return; }
       const want = topic.value.trim();
       if (!share.checked && want.length < 3) { say.textContent = '주제를 3자 넘게 적어 주세요.'; topic.focus(); return; }
       const controller = asking = new AbortController();
-      label.textContent = '그만두기'; topic.disabled = count.disabled = share.disabled = true; say.textContent = '가이X 연결을 확인하고 있어요…';
+      label.textContent = '그만두기'; topic.disabled = count.disabled = share.disabled = true; say.textContent = 'AI-G 연결을 확인하고 있어요…';
       try {
         made = await ai.generate({ topic: want, count: Number(count.value), seconds: Number(seconds.value), share: share.checked, signal: controller.signal, onStatus: (text) => { say.textContent = text; } });
         if (!made.length) throw Error('문제 모양의 답을 받지 못했어요. 주제를 조금 더 자세히 적어 다시 부탁해 주세요.');
@@ -87,16 +87,16 @@ export function createQuizSetup({ activity: raw, onApply, onCancel, ai = null } 
           el('ul', {}, q.choices.map((c, i) => el('li', { class: i === q.answer ? 'quiz-setup-right-choice' : '', text: `${QUIZ_CHOICES[i].mark} ${c}${i === q.answer ? ' (정답)' : ''}` }))),
           q.explain ? el('p', { class: 'quiz-setup-explain', text: `해설: ${q.explain}` }) : null)));
         picks.hidden = put.hidden = false; paintPut();
-        say.textContent = `가이X가 ${made.length}문제를 만들었어요. 넣을 문제만 골라요(넣은 뒤에도 장마다 고칠 수 있어요).`;
+        say.textContent = `AI-G가 ${made.length}문제를 만들었어요. 넣을 문제만 골라요(넣은 뒤에도 장마다 고칠 수 있어요).`;
       } catch (error) {
-        say.textContent = error?.name === 'AbortError' ? '부탁을 그만뒀어요.' : String(error?.message || '가이X가 문제를 만들지 못했어요. 다시 부탁해 주세요.').slice(0, 300);
+        say.textContent = error?.name === 'AbortError' ? '부탁을 그만뒀어요.' : String(error?.message || 'AI-G가 문제를 만들지 못했어요. 다시 부탁해 주세요.').slice(0, 300);
       } finally {
         if (asking === controller) asking = null;
-        label.textContent = '가이X에게 부탁하기'; topic.disabled = count.disabled = share.disabled = false;
+        label.textContent = 'AI-G에게 부탁하기'; topic.disabled = count.disabled = share.disabled = false;
       }
     } }, label);
-    return el('section', { class: 'quiz-setup-ai', 'aria-label': '가이X에게 퀴즈 부탁하기' },
-      el('h3', { text: '가이X에게 부탁하기' }), el('label', { class: 'quiz-setup-field' }, '주제', topic),
+    return el('section', { class: 'quiz-setup-ai', 'aria-label': 'AI-G에게 퀴즈 부탁하기' },
+      el('h3', { text: 'AI-G에게 부탁하기' }), el('label', { class: 'quiz-setup-field' }, '주제', topic),
       ai.hasText ? el('label', { class: 'quiz-setup-check' }, share, ' 지금 그림의 글로 문제 만들기') : null,
       el('div', { class: 'quiz-setup-row' }, count, go), say, picks, put);
   })() : null;
@@ -239,5 +239,5 @@ export function mountQuiz(root, { activity: raw, board = null, live = null, aspe
   };
 }
 
-/** 가이X 답(글) → 퀴즈 목록(app.js 가 appMaker.generate 의 답을 넘긴다). */
+/** AI-G 답(글) → 퀴즈 목록(app.js 가 appMaker.generate 의 답을 넘긴다). */
 export { quizzesFromAnswer };

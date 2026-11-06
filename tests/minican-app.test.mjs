@@ -139,7 +139,7 @@ test('WebM 길이 적어 넣기: 모양이 다르면 그대로 돌려준다', ()
   assert.equal(fixWebmDuration(junk, 2), junk);
 });
 
-test('편집기 자체에는 인증·서버 API가 없고 GBE-AI Lab 연결 주소는 명시적인 팝업(가이X · 계정 이어 쓰기)과 복사 링크 받기에만 있다', () => {
+test('편집기 자체에는 인증·서버 API가 없고 GBE-AI Lab 연결 주소는 명시적인 팝업(AI-G · 계정 이어 쓰기)과 복사 링크 받기에만 있다', () => {
   const files = readdirSync(APP).filter((f) => /\.(js|css|html)$/.test(f));
   assert.ok(files.includes('app.js') && files.includes('app.css') && files.includes('index.html'));
   for (const f of files) {

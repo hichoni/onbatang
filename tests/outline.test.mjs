@@ -55,7 +55,7 @@ test('outline slides lay a title, a short bar and stacked body lines in the slid
   for (const s of full.slides) for (const it of s.items) assert.ok(it.y < 95, `${it.text} at ${it.y}`);
 });
 
-test('an outline written by 가이X is taken from its code block, without numbering or bold marks', async () => {
+test('an outline written by AI-G is taken from its code block, without numbering or bold marks', async () => {
   const {outlineFromAnswer} = await import('../app/outline.js');
   const answer = '좋아요! 개요를 써 볼게요.\n\n```outline\n1. **식물의 한살이**\n  - 씨앗이 **싹** 터요\n> 씨앗을 보여 주기\n2장: 잎과 줄기\n  - 햇빛\n슬라이드 3) 정리\n```\n더 필요하면 말해 주세요.';
   const text = outlineFromAnswer(answer);
@@ -116,7 +116,7 @@ test('with a heavy title typeface, outline titles use it without extra bold and 
   } finally { setTitleFont(''); configure({fonts: []}); }
 });
 
-test('the drawing words for 가이X: slides in order, words top to bottom, line labels and notes, the current slide marked, trimmed far slides first', async () => {
+test('the drawing words for AI-G: slides in order, words top to bottom, line labels and notes, the current slide marked, trimmed far slides first', async () => {
   const {drawingText} = await import('../app/outline.js');
   assert.equal(drawingText([{items: []}, {items: [{t: 'shape'}]}]), '', 'no words, nothing to send');
   const slides = [
