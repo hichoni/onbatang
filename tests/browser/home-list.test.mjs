@@ -52,6 +52,41 @@ async function setup(t, html = fixture) {
 }
 const names = (page) => page.locator('.cv-list > .cv-item .cv-item-name').allTextContents();
 
+test('opening home actions leaves the saved card and both triggers in place', options, async t => {
+  const {page} = await setup(t);
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await page.addStyleTag({url:'/app/brand.css'});
+  await page.evaluate(() => document.fonts.ready);
+  const triggers = page.locator('.cv-home-menu > summary');
+  const mine = page.locator('.cv-mine .cv-thumb').first();
+  for (const width of [1366, 768, 390, 320]) {
+    await page.setViewportSize({width, height:844});
+    await page.evaluate(() => window.scrollTo(0, 0));
+    const card = await mine.boundingBox();
+    const buttons = await Promise.all([triggers.nth(0).boundingBox(), triggers.nth(1).boundingBox()]);
+    for (let i = 0; i < 2; i++) {
+      await triggers.nth(i).click();
+      const panel = page.locator('.cv-home-menu[open] .cv-home-menu-items');
+      const rect = await panel.boundingBox();
+      assert.ok(rect && rect.x >= 0 && rect.x + rect.width <= width && rect.y + rect.height <= 844);
+      assert.deepEqual(await mine.boundingBox(), card);
+      assert.deepEqual(await Promise.all([triggers.nth(0).boundingBox(), triggers.nth(1).boundingBox()]), buttons);
+      const first = panel.getByRole('button').first();
+      assert.ok(await first.evaluate(el => {
+        const r = el.getBoundingClientRect();
+        return el.contains(document.elementFromPoint(r.x+r.width/2, r.y+r.height/2));
+      }), 'the action is above the library and can be tapped');
+    }
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('.cv-home-menu[open]').count(), 0);
+    assert.ok(await triggers.nth(1).evaluate(el => el === document.activeElement));
+    await triggers.nth(0).click();
+    await page.locator('#onba-title').click();
+    assert.equal(await page.locator('.cv-home-menu[open]').count(), 0);
+  }
+});
+
 test('the parts of one PPT are one card; filter, search and sort change the list and are remembered', options, async t => {
   const {page, errors, origin} = await setup(t);
   assert.match(await page.locator('.cv-mine h2').textContent(), /내 그림 3개/);
