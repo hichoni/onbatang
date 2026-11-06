@@ -11,7 +11,7 @@ const root = resolve(fileURLToPath(new URL('../../', import.meta.url)));
 const options = {skip: !process.env.MINICAN_PLAYWRIGHT_PATH, timeout: 120000};
 const page = (head, bodyAttrs) => `<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/src/editor.css">${head}<body ${bodyAttrs}><div id="host" style="width:1280px"></div><script type="module">
 import {designView} from '/src/render.js';
-const design={bg:'#152040',items:[{id:'e1',t:'text',text:'함께 만들고 나누기',x:62,y:50,w:21,size:2.5},{id:'e2',t:'text',text:'쉽고 정확한 업무',x:20,y:50,w:21,size:2.5}]};
+const design={bg:'#152040',items:[{id:'e1',t:'text',text:'함께 만들고 나누기',x:62,y:50,w:21,size:2.5},{id:'e2',t:'text',text:'쉽고 정확한 업무',x:20,y:50,w:21,size:2.5},{id:'e3',t:'text',text:'원본 글꼴 없음',x:50,y:80,w:30,size:2.5,typeface:'Calibri',source:{kind:'pptx'}}]};
 const card=designView(design);card.style.setProperty('--fe-ratio','1.7778');document.getElementById('host').append(card);
 await document.fonts.ready;await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
 window.measure=[...card.querySelectorAll('.fi-text')].map(n=>{const r=document.createRange();r.selectNodeContents(n);const rects=[...r.getClientRects()].filter(q=>q.width>1);return {lines:new Set(rects.map(q=>Math.round(q.top))).size,width:Math.round(Math.max(...rects.map(q=>q.right))-Math.min(...rects.map(q=>q.left))),family:getComputedStyle(n).fontFamily,spacing:getComputedStyle(n).letterSpacing};});
@@ -40,9 +40,11 @@ test('a slide card keeps its own default font and letter spacing on any host pag
   const origin = `http://127.0.0.1:${server.address().port}`;
   const measure = async (path) => { const p = await browser.newPage(); await p.goto(origin + path); await p.waitForFunction(() => window.measure); const m = await p.evaluate(() => window.measure); await p.close(); return m; };
   const editor = await measure('/editor-like.html'), share = await measure('/share-like.html');
-  for (const m of [...editor, ...share]) {
+  for (const m of [...editor.slice(0, 2), ...share.slice(0, 2)]) {
     assert.match(m.family, /^"?Onbatang UI"?/, 'the card brings its own font');
     assert.equal(m.lines, 1, 'one line, as in the editor');
   }
   assert.deepEqual(share.map(m => [m.width, m.spacing]), editor.map(m => [m.width, m.spacing]), 'same width and spacing on both pages');
+  // PPT 원본 글꼴이 보는 기기에 없으면 장의 기본 글꼴로 떨어진다(브라우저의 아무 글꼴이 아니라).
+  for (const m of [editor[2], share[2]]) assert.match(m.family, /Calibri"?, "?Onbatang UI/, m.family);
 });

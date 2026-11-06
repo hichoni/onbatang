@@ -13,6 +13,8 @@ import { webHost, blockedSite } from './web.js';
 import { fitWebFrame } from './web-fit.js';
 import { chartView } from './chart.js';
 import { mathView } from './math.js';
+// 장의 기본 글꼴(src/editor.css 의 .fe-card 와 같다): 고른 글꼴이 없거나 아직 받는 중일 때 이것으로 보인다.
+const CARD_FONT = "var(--fe-font, 'Onbatang UI', system-ui, -apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif)";
 
 // 유튜브 영상의 재생 단추(유튜브의 빨간 단추 모양)
 const YT_PLAY = '<svg viewBox="0 0 68 48" aria-hidden="true" focusable="false"><path d="M66.5 7.7A8.5 8.5 0 0 0 60.5 1.7C55.2.3 34 .3 34 .3s-21.2 0-26.5 1.4A8.5 8.5 0 0 0 1.5 7.7C.1 13 .1 24 .1 24s0 11 1.4 16.3a8.5 8.5 0 0 0 6 6C12.8 47.7 34 47.7 34 47.7s21.2 0 26.5-1.4a8.5 8.5 0 0 0 6-6C67.9 35 67.9 24 67.9 24s0-11-1.4-16.3z" fill="#f03"/><path d="M45 24 27 14v20z" fill="#fff"/></svg>';
@@ -28,9 +30,9 @@ export function itemView(item) {
       class: `fi fi-text al-${item.align}${item.bold ? ' bold' : ''}${item.italic ? ' italic' : ''}${item.under ? ' under' : ''}${item.bgc ? ' boxed' : ''}`,
       text: item.text,
     });
-    // 글꼴 파일을 받기 전이나 그 글꼴에 없는 글자는 기본 글꼴로 보인다.
+    // 글꼴 파일을 받기 전이나 그 글꼴에 없는 글자, 보는 기기에 없는 원본 글꼴(PPT 의 맑은 고딕 · Calibri 등)은 장의 기본 글꼴로 보인다.
     const family = item.typeface || fontFamilyOf(item.font);
-    if (family) node.style.fontFamily = `"${family}", var(--fe-font, sans-serif)`;
+    if (family) node.style.fontFamily = `"${family}", ${CARD_FONT}`;
     node.style.color = item.color;
     if (item.bgc) node.style.background = item.bgc;
     node.style.textShadow = textShadow(item);
@@ -43,7 +45,7 @@ export function itemView(item) {
     node = el('div', { class: `fi fi-link${item.dash ? ' dash' : ''}`, html: linkSvg(item) });
     // 선 위 글의 글꼴: SVG 글자가 이 요소의 글꼴을 물려받는다.
     const family = item.label && item.labelFont ? fontFamilyOf(item.labelFont) : '';
-    if (family) node.style.fontFamily = `"${family}", var(--fe-font, sans-serif)`;
+    if (family) node.style.fontFamily = `"${family}", ${CARD_FONT}`;
   } else if (item.t === 'emoji') {
     node = el('div', { class: 'fi fi-emoji', text: item.ch });
   } else if (item.t === 'shape') {
