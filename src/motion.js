@@ -1011,9 +1011,10 @@ export function playDesign(card, design, { delay = 0, still = false } = {}) {
  * 전환 효과를 튼다: next(들어오는 장)가 old(나가는 장) 위로 들어온다. 두 장은 같은 자리에 겹쳐 놓여 있어야 한다.
  * 돌려주는 것: { ms(걸리는 시간. 틀지 않았으면 0), finish(): 바로 끝낸다(여러 번 불러도 된다), done: 끝나면 풀리는 약속 }
  * 끝난 뒤에는 두 장 모두 움직임이 걸리지 않은 제 모습이다(나가는 장을 떼는 일은 부른 쪽이 한다).
+ * enters: 참이면 부른 쪽이 곧이어 들어오는 장의 나타나기(playDesign)를 튼다. 이어 움직이기는 그 요소들을 따로 페이드하지 않는다.
  */
-export function playTransition(old, next, id, dir = 1, { from = null, to = null, manual = false } = {}) {
-  if (morphs(id) && old && next && from && to && typeof next.animate === 'function' && (manual || !calm(next))) return playMorph(old, next, from, to, (dir<0?from:to).travel);
+export function playTransition(old, next, id, dir = 1, { from = null, to = null, manual = false, enters = false } = {}) {
+  if (morphs(id) && old && next && from && to && typeof next.animate === 'function' && (manual || !calm(next))) return playMorph(old, next, from, to, (dir<0?from:to).travel, enters);
   const f = transitionFrames(id, dir, { w: next?.getBoundingClientRect?.().width || 1000 });
   if (!f || !next || typeof next.animate !== 'function' || calm(next)) return { ms: 0, finish() {}, done: Promise.resolve() };
   const opts = { duration: f.ms, easing: f.easing, fill: 'both' };
@@ -1086,7 +1087,7 @@ const lift = (nodes) => { for (const n of nodes) if (n?.style) n.style.willChang
  * 옮겨 온 요소에는 data-moved 를 달아 playDesign 이 다시 나타나게 하지 않는다.
  * 돌려주는 것은 playTransition 과 같다(+ moved: 옮겨 온 요소의 수).
  */
-function playMorph(old, next, from, to, travel) {
+function playMorph(old, next, from, to, travel, enters = false) {
   const custom=cleanTravel(travel);
   const def = custom?{...TRANSITION_DEFS.move,ms:custom.ms,ease:travelEase(custom)}:TRANSITION_DEFS.move;
   const nodesOf = (card) => [...card.children].filter((n) => n.classList.contains('fi'));
@@ -1124,8 +1125,13 @@ function playMorph(old, next, from, to, travel) {
   });
   was.forEach((n, i) => { if (!gone.has(i)) anims.push(n.animate([{ opacity: getComputedStyle(n).opacity }, { opacity: 0, offset: 0.5 }, { opacity: 0 }], opts)); });
   // 이 장에만 있는 것(영상 장면 판 · 안내 글 포함)은 앞 장의 것이 거의 사라진 뒤에 나타난다.
+  // 단, 뒤이어 제 나타나기(playDesign)가 맡을 요소(enters)는 여기서 움직이지 않는다. 한 요소의 투명도에 움직임 둘이 함께 걸리면
+  // WebKit(아이폰의 사파리 · 카카오톡)은 기다리는 나타나기보다 이 페이드를 그려, 다음 장 요소가 다 보였다가 사라진 뒤 다시 나타난다.
+  // 그 요소는 나타나기의 시작 모습(기다리는 동안)이 숨겨 두므로 다른 브라우저에서 보이는 것은 같다.
+  const entering = enters ? new Set(planMotion(to).auto.map((a) => a.i)) : null;
   [...next.children].forEach((n, k) => {
     if (n === back || (n.classList.contains('fi') && moved.has(now.indexOf(n)))) return;
+    if (entering && n.classList.contains('fi') && entering.has(now.indexOf(n))) return;
     anims.push(primedAnimate(n, [{ opacity: 0 }, { opacity: 0, offset: 0.35 }, { opacity: getComputedStyle(n).opacity }], opts));
   });
   let over = false;

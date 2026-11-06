@@ -76,7 +76,7 @@ export function mountPlayer(stage, { slides = [], aspect = 16 / 9, onChange = ()
       startMedia(card, design, 250);
     } else {
       // 다음 장으로: 그 장의 전환 효과. 앞 장으로: 방금 보던 장이 들어올 때의 전환을 거꾸로(발표 화면과 같다).
-      const turn = playTransition(old, card, dir > 0 ? design.tr : pages[at + 1]?.tr, dir, { from: shown.get(old), to: design });
+      const turn = playTransition(old, card, dir > 0 ? design.tr : pages[at + 1]?.tr, dir, { from: shown.get(old), to: design, enters: dir > 0 });
       startMedia(card, design, turn.ms);
       if (turn.ms) { turning = turn; leaving = old; turn.done.then(() => { if (turning === turn) settle(); }); }
       else drop(old);
