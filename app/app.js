@@ -2341,7 +2341,7 @@ async function present(O) {
     stage.append(view);
     // 다음 장으로: 그 장의 전환 효과. 앞 장으로: 방금 보던 장이 들어올 때의 전환을 거꾸로.
     // 이어 움직이기는 두 장의 같은 요소를 짝지어야 하므로 두 장의 디자인을 함께 넘긴다.
-    const turn = playTransition(old, view, dir > 0 ? design.tr : slides[i + 1]?.tr, dir, { from: shownDesigns.get(old), to: design });
+    const turn = playTransition(old, view, dir > 0 ? design.tr : slides[i + 1]?.tr, dir, { from: shownDesigns.get(old), to: design, enters: dir > 0 });
     startFilm(view, design, turn.ms);
     if (turn.ms) {
       turning = turn;

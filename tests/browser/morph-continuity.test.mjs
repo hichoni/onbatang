@@ -32,3 +32,26 @@ test('idle and morph have one continuous rendered pose at take-off, mid-flight a
  assert.equal(landed.cards,1);assert.ok(Math.abs(landed.w-960*.28)<1.1);assert.ok(Math.abs(landed.x-frames.at(-1).x)<2,'no landing position jump');assert.ok(Math.abs(landed.w-frames.at(-1).w)<2,'no landing scale jump');
 });
 
+// WebKit (iPhone Safari, KakaoTalk) drew the morph's own fade instead of a waiting entrance on the same
+// element, so slide 2 showed in full, vanished, then entered. Only the entrance may own that opacity.
+const spoilerHtml=`<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/src/editor.css"><link rel="stylesheet" href="/app/player.css"><style>body{margin:30px}#stage{width:960px}</style><div id="stage"></div><script type="module">
+import{mountPlayer}from'/app/player.js';import{cleanDesign}from'/src/model.js';
+const title={id:'espoil01',t:'text',text:'TEAM NODE',x:50,y:20,w:80,size:4,color:'#18224a'};
+window.player=mountPlayer(document.querySelector('#stage'),{slides:[cleanDesign({id:'pspoil01',items:[title]}),cleanDesign({id:'pspoil02',tr:'move',items:[{...title,id:'espoil02',origin:{elementId:title.id},y:10},{id:'espoil03',t:'text',text:'later',x:50,y:60,w:40,size:3,an:'rise',dl:0.4},{id:'espoil04',t:'text',text:'plain',x:50,y:80,w:40,size:3,an:'none'}]})],aspect:16/9});window.ready=true;</script>`;
+test('a morph leaves a waiting entrance alone; the next slide is never shown before it enters',
+ {skip:!process.env.MINICAN_PLAYWRIGHT_PATH,timeout:60000},async t=>{
+ const server=createServer(async(req,res)=>{try{const p=new URL(req.url,'http://localhost').pathname;if(p==='/fixture.html'){res.setHeader('Content-Type','text/html;charset=utf-8');return res.end(spoilerHtml);}const f=resolve(root,'.'+decodeURIComponent(p));if(!f.startsWith(root+sep))throw Error();res.setHeader('Content-Type',({'.js':'text/javascript','.css':'text/css'})[extname(f)]||'application/octet-stream');res.end(await readFile(f));}catch{res.writeHead(404);res.end();}});
+ await new Promise(done=>server.listen(0,'127.0.0.1',done));t.after(()=>new Promise(done=>server.close(done)));
+ const{chromium}=await import(pathToFileURL(process.env.MINICAN_PLAYWRIGHT_PATH).href),browser=await chromium.launch({channel:process.env.MINICAN_BROWSER||'msedge',headless:true});t.after(()=>browser.close());
+ const page=await browser.newPage({viewport:{width:1040,height:660},reducedMotion:'no-preference'});await page.goto(`http://127.0.0.1:${server.address().port}/fixture.html`);await page.waitForFunction(()=>window.ready);
+ const seen=await page.evaluate(()=>{window.player.next();const card=document.querySelector('#stage>.fe-card:last-child'),[,later,plain]=[...card.querySelectorAll(':scope>.fi')];
+  const owners=n=>n.getAnimations().filter(a=>a.effect.getKeyframes().some(k=>'opacity' in k)).length;
+  const tracks=document.querySelector('#stage').getAnimations({subtree:true});const out={owners:owners(later),plainOwners:owners(plain),inline:later.style.opacity,frames:[]};
+  for(const ms of[0,300,600,900]){for(const a of tracks){a.pause();a.currentTime=ms;}out.frames.push(Number(getComputedStyle(later).opacity));}
+  return out;});
+ assert.equal(seen.owners,1,'only the entrance animates the waiting element\'s opacity');
+ assert.equal(seen.inline,'0','the waiting element starts hidden even before any animation is drawn');
+ assert.equal(seen.plainOwners,1,'an element without its own entrance still fades in with the morph');
+ assert.deepEqual(seen.frames,[0,0,0,0],'hidden for the whole morph');
+});
+
