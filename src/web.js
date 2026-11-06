@@ -30,9 +30,10 @@ export function cleanWebUrl(raw) {
 }
 
 /** 디자인의 웹사이트 장: { web: { url } } 또는 빈 객체. */
+// keep: 발표 중 다른 장으로 넘겨도 사이트를 끄지 않고 켜 둔다(돌아오면 하던 그대로). 켠 때에만 적는다.
 export function designWeb(design) {
   const url = cleanWebUrl(design?.web?.url);
-  return url ? { web: { url } } : {};
+  return url ? { web: { url, ...(design.web.keep === true ? { keep: true } : {}) } } : {};
 }
 
 /**

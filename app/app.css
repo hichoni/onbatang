@@ -504,6 +504,8 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"], body.mc-app :is(#app,.cv-a
 
 /* ---- 발표의 웹사이트 장(app.js 의 mountWeb): 장 위에 실제 사이트. 보기(view)에서는 눌러도 사이트가 아니라 발표가 받는다 ---- */
 .cv-show-web { position: absolute; inset: 0; z-index: 4; background: #fff; }
+/* 넘겨도 켜 두기: 다른 장에 있는 동안 숨겨 둔다(그 자리에 그대로 있어 사이트는 계속 돈다) */
+.cv-show-web[data-away] { visibility: hidden; pointer-events: none; }
 .cv-show-web .fe-web-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #fff; }
 .cv-show-web[data-mode="view"] .fe-web-frame { pointer-events: none; }
 .cv-show-web[data-mode="use"] { cursor: auto; }
