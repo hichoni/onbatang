@@ -4,8 +4,8 @@
 //   처음·끝: Home End   번호 + Enter: 그 쪽으로   B 검은 화면 · W 흰 화면(PowerPoint 처럼 . , 도)
 //   M 발표 막대 보이기·감추기   G 전체 보기   P 펜   L 레이저   E 그린 것 지우기   S 발표자 화면   F 전체 화면   K 영상 멈추기·틀기   C 카메라 창   A 자동 넘기기   R 리허설   ? H 도움말   Esc 끝내기
 export const SHOW_KEYS = Object.freeze([
-  ['→ · Space · PageDown', '다음'],
-  ['← · PageUp', '앞'],
+  ['→ · Space · PageDown · 휠 아래로', '다음'],
+  ['← · PageUp · 휠 위로', '앞(마지막 장에서 휠을 더 굴려도 발표는 끝나지 않아요)'],
   ['Home · End', '처음 · 마지막 쪽'],
   ['번호 + Enter', '그 쪽으로 가기'],
   ['M', '발표 막대 보이기 · 감추기(평소에는 화면 위·아래 끝으로 마우스를 가져가면 나와요)'],
