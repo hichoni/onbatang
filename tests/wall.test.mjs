@@ -35,13 +35,13 @@ test('wall slides survive the record sanitizers, and copies keep the same wall b
   const copied = copyRecord(record).slides[0].activity, duplicated = copySlide(record.slides, 0)[0][1].activity;
   assert.notEqual(copied.id, original.id); assert.equal(copied.wall, original.wall);
   assert.notEqual(duplicated.id, original.id); assert.equal(duplicated.code, original.code);
-  assert.equal(materialPageDescription(record.slides[0]), '담벼락');
+  assert.equal(materialPageDescription(record.slides[0]), '한바탕');
 });
 
 test('the cover is ordinary elements that show the join address and the big code on wide and tall slides', () => {
   for (const aspect of [16 / 9, 9 / 16]) {
     const cover = wallCover(base(), aspect), texts = cover.items.filter(i => i.t === 'text').map(i => i.text);
-    assert.ok(texts.includes('담벼락')); assert.ok(texts.includes(WALL.title)); assert.ok(texts.includes('415 468'));
+    assert.ok(texts.includes('한바탕')); assert.ok(texts.includes(WALL.title)); assert.ok(texts.includes('415 468'));
     assert.ok(texts.some(t => t.includes(WALL_ADDRESS)), 'laptops type the address and the code instead of scanning a QR');
     for (const item of cover.items) {
       assert.ok(cleanDesign({ items: [item] }).items.length, 'every cover item is an ordinary element');

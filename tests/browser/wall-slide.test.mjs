@@ -1,4 +1,4 @@
-// 담벼락 장(브라우저): 호스트가 wallAction 을 주면 "···"의 "담벼락 넣기"로 만들어 넣고(표지에 주소 · 코드), 발표에서는 호스트의 mount 가
+// 한바탕 장(브라우저): 호스트가 wallAction 을 주면 "···"의 "한바탕 넣기"로 만들어 넣고(표지에 주소 · 코드), 발표에서는 호스트의 mount 가
 // 그 자리에 판을 그린다(판 단추를 눌러도 ← · → 는 장 넘기기, 장을 떠나면 destroy). 호스트가 없으면 넣기 단추가 없고 발표는 표지만 보인다.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -9,7 +9,7 @@ import {resolve,extname,sep} from 'node:path';
 
 const root=resolve(fileURLToPath(new URL('../../',import.meta.url)));
 const options={skip:!process.env.MINICAN_PLAYWRIGHT_PATH,timeout:120000};
-const WALL={id:'0f8b5a3e-9c1d-4e2f-8a7b-6c5d4e3f2a1b',title:'지난주 담벼락',code:'415468'};
+const WALL={id:'0f8b5a3e-9c1d-4e2f-8a7b-6c5d4e3f2a1b',title:'지난주 한바탕',code:'415468'};
 const html=`<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/src/editor.css"><link rel="stylesheet" href="/app/app.css"><body class="mc-app"><main id="app"></main><script type="module">
 import {startMinican,openSavedDesign} from '/app/app.js';import {newRecord} from '/app/designs.js';import {putDesign,setStorageName} from '/app/store.js';
 import {newWallActivity,wallCover} from '/src/wall.js';
@@ -56,8 +56,8 @@ test('with a host: insert a wall from the tray, its cover shows the code, the sh
  await page.locator('[data-add-wall]').click();
  const setup=page.locator('.wall-setup');await setup.waitFor();
  await setup.locator('[data-wall-pick]').waitFor();
- assert.match(await setup.locator('[data-wall-pick]').innerText(),/지난주 담벼락[\s\S]*코드 415 468[\s\S]*확인 대기 1/);
- await setup.getByLabel('담벼락 제목').fill('  오늘 만든 것 나누기 ');
+ assert.match(await setup.locator('[data-wall-pick]').innerText(),/지난주 한바탕[\s\S]*코드 415 468[\s\S]*확인 대기 1/);
+ await setup.getByLabel('한바탕 제목').fill('  오늘 만든 것 나누기 ');
  await setup.locator('[data-wall-approval]').uncheck();
  await setup.locator('[data-wall-create]').click();
  await setup.waitFor({state:'detached'});
@@ -75,7 +75,7 @@ test('with a host: insert a wall from the tray, its cover shows the code, the sh
  await page.keyboard.press('ArrowRight');
  await page.waitForFunction(()=>document.querySelector('.cv-show-count')?.textContent==='3 / 3');
  assert.equal(await page.evaluate(()=>window.calls.destroyed),1,'leaving the slide destroys the board');
- await page.keyboard.press('ArrowRight');   // 지난주 담벼락(3장)
+ await page.keyboard.press('ArrowRight');   // 지난주 한바탕(3장)
  await page.waitForFunction(()=>window.calls.mount.length===2);
  assert.equal(await page.evaluate(()=>window.calls.mount[1].code),'415468');
  await page.keyboard.press('Escape');

@@ -50,7 +50,7 @@
     "src/reveal-scenes.js": "161cee6f5b634a51e88d40f87012c15eb3942c6b1f63eae000282991b4755665",
     "src/runs.js": "22b07d3ed775fe24dfd20f1678ce369e45fc6e36792daa6e7d4b997474d6a65f",
     "src/slide-flow.js": "2fccfa9c7be98bda6dfd8608cafa9b2b84006e41be55263638f59a0e2ceb72be",
-    "src/wall.js": "9175e9ae4719c5c038926abf02f3382fd71de8cb0edcdf4d95584fb143ef761f",
+    "src/wall.js": "68c5ae1f94e698f7052bcfc2b67ec89794efaeb8655f4aa8c1ceda0218ab1098",
     "src/web.js": "04faf0454c1360b49e0d9d5e7e28418ef22169ba45d57900fad72f2bccb3d710",
     "tools/build-pptx-import.mjs": "54e7e3e87ecf933018338d5d77ecb8eec7318ce8fd95ff1c0c3096ecadcb0b5b"
   },

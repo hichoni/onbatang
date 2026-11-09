@@ -86,7 +86,7 @@ let copyAction = null;             // 내보내기의 "링크 공유": 받은 �
 let copyLink = null;               // 공용 온바탕: 복사 링크(?copy=코드)를 받는 곳(app/copy-link.js). 없으면 링크를 열지 않는다.
 let showRemote = null;             // 발표의 휴대폰 리모컨(호스트가 연결 · QR 을 맡는다). 없으면 단추도 없다.
 let showAudience = null;           // 발표의 실시간 질문 · 반응(호스트가 연결 · QR · 질문 판을 맡는다). 없으면 단추도 없다.
-let wallAction = null;             // 담벼락 장(호스트가 담벼락 만들기 · 목록 · 발표의 실시간 판을 맡는다, app/wall.js). 없으면 넣기 단추가 없고 발표는 표지만 보인다.
+let wallAction = null;             // 한바탕 장(호스트가 한바탕 만들기 · 목록 · 발표의 실시간 판을 맡는다, app/wall.js). 없으면 넣기 단추가 없고 발표는 표지만 보인다.
 let coEdit = null;                 // 같이 고치기의 통로 { open(code) → { send, on, close, qr? }, link?(code) }(app/co-edit.js). 없으면 단추도 없다.
 let accountBridge = null;          // 공용 온바탕: GBE-AI Lab 계정으로 이어 쓰기(연결 창 주소 등). 계정 저장(sync)이 있으면 쓰지 않는다.
 let bridge = null;
@@ -1046,8 +1046,8 @@ function renderStrip(O) {
       del,
       // 퀴즈 장(모든 곳): 직접 만들거나, AI-G 를 이어 준 곳에서는 AI-G 에게 부탁한다
       el('button',{class:'btn cv-activity-add',type:'button',dataset:{addQuiz:''},title:'지금 장 다음에 퀴즈 장을 넣어요(발표에서 시간을 재고 정답 · 순위를 보여 줘요)',onClick:()=>configureQuiz(O)},'퀴즈 넣기'),
-      // 담벼락 장: 참여자가 주소 + 숫자 코드로 들어와 붙인 글 · 링크 · 사진이 발표 화면에 실시간으로 쌓인다(호스트가 판 · 서버를 맡을 때만)
-      activityAuthoring&&wallAction&&el('button',{class:'btn cv-activity-add',type:'button',dataset:{addWall:''},title:'지금 장 다음에 담벼락 장을 넣어요(참여자가 주소 · 코드로 들어와 글 · 링크 · 사진을 붙여요)',onClick:()=>configureWall(O)},'담벼락 넣기'),
+      // 한바탕 장: 참여자가 주소 + 숫자 코드로 들어와 붙인 글 · 링크 · 사진이 발표 화면에 실시간으로 쌓인다(호스트가 판 · 서버를 맡을 때만)
+      activityAuthoring&&wallAction&&el('button',{class:'btn cv-activity-add',type:'button',dataset:{addWall:''},title:'지금 장 다음에 한바탕 장을 넣어요(참여자가 주소 · 코드로 들어와 글 · 링크 · 사진을 붙여요)',onClick:()=>configureWall(O)},'한바탕 넣기'),
       activityAuthoring&&el('button',{class:'btn cv-activity-add',type:'button',dataset:{addActivity:''},title:'미리 준비된 픽셀아트 활동을 새 슬라이드로 넣어요',onClick:()=>configureActivity(O)},'픽셀아트 활동 넣기'),
       activityAuthoring&&appMaker&&el('button',{class:'btn cv-activity-add',type:'button',dataset:{addGaiApp:''},onClick:()=>configureGaiActivity(O)},gaiOwl(),'AI-G로 앱 만들기'),
       // AI-G 에게 개요를 부탁해 꾸민 장 여러 장을 만든다(개요로 장 만들기 창이 부탁 칸부터 열린다)
@@ -1290,7 +1290,7 @@ function slideMenuGroups(O, { strip = false } = {}) {
       { icon: 'template', label: '틀 고르기', run: () => O.editor.openTab('layout') },
     ],
     [{ icon: 'pencil', label: '발표자 노트 적기', run: openNotes }, ...(O.editor.getDesign().activity?.kind === 'quiz' ? [{ icon: 'check', label: '퀴즈 고치기', run: () => configureQuiz(O, true) }] : []),
-      ...(O.editor.getDesign().activity?.kind === 'wall' && activityAuthoring && wallAction ? [{ icon: 'check', label: '담벼락 바꾸기', run: () => configureWall(O, true) }] : [])],
+      ...(O.editor.getDesign().activity?.kind === 'wall' && activityAuthoring && wallAction ? [{ icon: 'check', label: '한바탕 바꾸기', run: () => configureWall(O, true) }] : [])],
     strip ? [] : [
       { icon: 'swap', label: '찾아 바꾸기', run: () => openFindReplace(O) },
       { icon: 'check', label: '단축키 보기', hint: '?', run: () => openShortcuts() },
@@ -1300,7 +1300,7 @@ function slideMenuGroups(O, { strip = false } = {}) {
       { icon: 'plus', label: '새 장 더하기', run: press(add), disabled: off(add) },
       { icon: 'text', label: '개요로 장 만들기', run: () => openOutline(O), disabled: off(add) },
       { icon: 'check', label: '퀴즈 넣기', run: () => configureQuiz(O), disabled: off(add) },
-      ...(activityAuthoring && wallAction ? [{ icon: 'check', label: '담벼락 넣기', run: () => configureWall(O), disabled: off(add) }] : []),
+      ...(activityAuthoring && wallAction ? [{ icon: 'check', label: '한바탕 넣기', run: () => configureWall(O), disabled: off(add) }] : []),
       { icon: 'duplicate', label: '이 장 복제', run: press(dup), disabled: off(dup) },
       { icon: 'left', label: '앞으로 옮기기', hint: strip ? 'Alt+←' : '', run: press(left), disabled: off(left) },
       { icon: 'right', label: '뒤로 옮기기', hint: strip ? 'Alt+→' : '', run: press(right), disabled: off(right) },
@@ -1936,8 +1936,8 @@ async function configureQuiz(O,editing=false){
   host.querySelector('textarea,input')?.focus({preventScroll:true});
 }
 
-// 담벼락 장: 호스트(wallAction)가 새로 만들거나 고른 담벼락을 지금 장 다음에 넣는다(바꿀 때는 그 장의 담벼락만 바꾼다).
-// 장에는 담벼락 id · 제목 · 코드만 들어가고, 표지는 참여 주소와 코드를 크게 보여 준다(src/wall.js).
+// 한바탕 장: 호스트(wallAction)가 새로 만들거나 고른 한바탕을 지금 장 다음에 넣는다(바꿀 때는 그 장의 한바탕만 바꾼다).
+// 장에는 한바탕 id · 제목 · 코드만 들어가고, 표지는 참여 주소와 코드를 크게 보여 준다(src/wall.js).
 async function configureWall(O,editing=false){
   if(!activityAuthoring||!wallAction||O.closed||O.leaving||O.inlineImport||O.activityBusy||videoBusy(O))return;
   if(O.materialLoadingPromise)await O.materialLoadingPromise;
@@ -1947,7 +1947,7 @@ async function configureWall(O,editing=false){
   O.activityConfig?.remove();
   const selected=O.editor.getDesign(),activity=editing?selected.activity:undefined;
   if(editing&&activity?.kind!=='wall')return;
-  const host=el('section',{class:'cv-activity-config','aria-label':editing?'담벼락 바꾸기':'담벼락 넣기'});
+  const host=el('section',{class:'cv-activity-config','aria-label':editing?'한바탕 바꾸기':'한바탕 넣기'});
   const cancel=()=>{host.remove();if(O.activityConfig===host)O.activityConfig=null;};
   host.append(createWallSetup({wallAction,activity,defaultTitle:O.record.name||'',onCancel:cancel,onApply:async wall=>{
     if(O.closed||O.activityBusy)throw Error('현재 작업을 마친 뒤 다시 시도해주세요.');
@@ -1960,7 +1960,7 @@ async function configureWall(O,editing=false){
       if(!editing){
         const candidates=O.materialDeck?[record,...O.materialDeck.documents.filter(row=>row.id!==record.id)]:[record];
         record=candidates.find(row=>row.slides.length<MAX_SLIDES&&new TextEncoder().encode(JSON.stringify(row)).length<500000);
-        if(!record)throw Error(`담벼락 장을 넣을 자리가 없어요. 한 그림은 ${MAX_SLIDES}장까지예요. 새 그림에 넣어 주세요.`);
+        if(!record)throw Error(`한바탕 장을 넣을 자리가 없어요. 한 그림은 ${MAX_SLIDES}장까지예요. 새 그림에 넣어 주세요.`);
       }
       const page={...wallCover(wall,aspectOf(record)),id:editing?selected.id:newId('p'),source:editing?selected.source:{kind:'local'},
         origin:editing?selected.origin:{documentId:O.record.id,pageId:selected.id,revision:O.record.revision},activity:wall};
@@ -2343,11 +2343,11 @@ async function present(O) {
     count.textContent = `${i + 1} / ${slides.length}`;
     tellRemote();
     tellAudience();
-    // 담벼락 장은 호스트가 판을 그릴 때만 활동 자리로 연다. 아니면(공용 온바탕) 표지(참여 주소 · 코드)를 보통 장처럼 보여 준다.
+    // 한바탕 장은 호스트가 판을 그릴 때만 활동 자리로 연다. 아니면(공용 온바탕) 표지(참여 주소 · 코드)를 보통 장처럼 보여 준다.
     if(design.activity&&(design.activity.kind!=='wall'||wallAction)){
       for(const n of [...stage.children])drop(n);film?.pause();for(const p of tube)p.pause();film=null;tube=[];markFilm();parts=null;
       const host=el('section',{class:'cv-show-activity',dataset:{pixelApp:''}});stage.append(host);
-      // 담벼락: 판은 호스트가 그린다. 판 안의 단추를 눌러도 발표의 넘기기 글쇠는 그대로 듣는다(data-wall).
+      // 한바탕: 판은 호스트가 그린다. 판 안의 단추를 눌러도 발표의 넘기기 글쇠는 그대로 듣는다(data-wall).
       if(design.activity.kind==='wall'){
         host.dataset.wall='';
         pixel=mountWall(host,{activity:design.activity,wallAction});
@@ -4614,7 +4614,7 @@ function readOpen() {
  * - showAudience: {open({state(),root,savePoll(result)})→{update(state),show?(),close()}}; 발표 막대의 "질문 · 반응"(state: {at,total,title}). 기본값은 숨김.
  *   savePoll({question,options,counts}): 투표 결과 장(app/poll-result.js)을 지금 장 다음에 저장하고 그 장으로 간다 → {at,total}.
  * - wallAction: {create({title,approval})→{id,title,code}, list()→[{id,title,code,open,posts,pending}], mount(root,{id,title,code})→{destroy()}};
- *   담벼락 장(app/wall.js). activityAuthoring 과 함께 있을 때 "담벼락 넣기"가 보이고, 발표에서는 mount 가 그 자리에 실시간 판을 그린다. 없으면 표지(주소 · 코드)만.
+ *   한바탕 장(app/wall.js). activityAuthoring 과 함께 있을 때 "한바탕 넣기"가 보이고, 발표에서는 mount 가 그 자리에 실시간 판을 그린다. 없으면 표지(주소 · 코드)만.
  * - phoneRemote: {url?}; 공용 온바탕이 켠다. showRemote 가 없으면 GBE-AI Lab의 리모컨 판(onbatang-remote-relay.html)을 발표 화면에 작은 창으로 띄워 휴대폰으로 넘긴다(app/phone-remote.js).
  * - showRemote: {open({state(),command(cmd),root})→{update(state),show?(),close()}}; 발표 막대의 "휴대폰 리모컨". cmd: {action:'next'|'prev'|'go'(at)|'black'|'state'}. 기본값은 숨김.
  * - coEdit: {open(code)→{send(message),on(fn)→끊기,close(),qr?(url)→svg},link?(code)}; 편집기 위 막대의 "같이 고치기"(실시간으로 여럿이 고친다. app/co-edit.js).
