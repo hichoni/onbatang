@@ -82,8 +82,8 @@ const config = {
 
 /**
  * 프로젝트에 맞게 한 번 정해 둔다(화면을 그리기 전에). 준 것만 바뀐다.
- * - fonts: [{ id, name, desc?, url?, family?, special? }] 기본 글꼴 뒤에 붙는다. url 이 있으면 fonts.js 가 그 파일을 글꼴로 알린다.
- *          family 는 화면에 쓸 글꼴 이름(없으면 'mc-' + id).
+ * - fonts: [{ id, name, desc?, url?, family?, special?, noFakeBold? }] 기본 글꼴 뒤에 붙는다. url 이 있으면 fonts.js 가 그 파일을 글꼴로 알린다.
+ *          family 는 화면에 쓸 글꼴 이름(없으면 'mc-' + id). noFakeBold: 이미 아주 굵은 한 굵기 글꼴이라 '굵게'를 켜도 덧그리지 않는다.
  * - fontAliases: { 옛 id: 새 id } 예전에 저장된 글꼴 이름을 이어 줄 때.
  * - cleanImage(img): 그림 정보 { url, path? } 를 살펴 믿을 수 있으면 { url, path? } 를, 아니면 null 을 돌려주는 함수.
  * - backgrounds: [{ id, name, bg, ink, accent? }] 배경 색 목록.

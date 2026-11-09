@@ -10,6 +10,7 @@ import { sceneContent } from './effect-scenes.js';
 import { designView, itemView, paintCard } from './render.js';
 import { sceneView, scenesReady } from './scene.js';
 import { cleanDesign, settings, fontList, fontFamilyOf } from './model.js';
+import { fontFaceWeight } from './fonts.js';
 import { loadArt } from './art.js';
 
 const toDataUrl = (blob) => new Promise((resolve, reject) => {
@@ -49,7 +50,7 @@ async function fontRules(design) {
   const rules = await Promise.all(fontList().filter((f) => used.has(f.id) && f.url).map(async (f) => {
     const data = await fontData(new URL(f.url, document.baseURI).href);
     if (!data) missing.push(f.name || f.id);
-    return data ? `@font-face { font-family: "${fontFamilyOf(f.id)}"; src: url("${data}"); }` : '';
+    return data ? `@font-face { font-family: "${fontFamilyOf(f.id)}"; src: url("${data}");${fontFaceWeight(f)} }` : '';
   }));
   return { css: rules.join('\n'), missing };
 }
