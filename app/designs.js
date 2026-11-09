@@ -30,11 +30,13 @@ export const RATIOS = [
 ];
 export const DEFAULT_RATIO = '16:9';
 export const MAX_DESIGNS = 60;        // 둘 수 있는 그림 수(내 그림의 칸 수: 한 PPT 를 나눠 담은 파트들은 한 칸으로 센다, homeEntries)
-export const MAX_SLIDES = 40;         // 그림 한 편의 슬라이드 수(src/document.js DOCUMENT_LIMITS.pages 와 같다)
+export const MAX_SLIDES = 100;        // 그림 한 편의 슬라이드 수(src/document.js DOCUMENT_LIMITS.pages 와 같다)
 export const MAX_NAME = 30;
 export const MAX_CARD_PHOTOS = 10;    // 슬라이드 한 장에 놓을 수 있는 사진 수
 export const MAX_UPLOADS = 20;        // 그림 한 편에 올려 둘 수 있는 파일 수(더 올리려면 안 쓰는 것을 지운다)
-const MAX_LIBRARY = 60;               // 목록의 한도(예전 그림은 슬라이드마다 다른 사진을 써서 20개를 넘을 수 있다)
+// 목록의 한도(예전 그림은 슬라이드마다 다른 사진을 써서 20개를 넘을 수 있다). 장마다 다른 사진 한 장(PDF 의 쪽 그림 등)과 올려 둔 파일이 다 들어가게
+// 장 수 + 올려 둘 수 있는 파일 수로 둔다(40장일 때 60, 100장이면 120).
+const MAX_LIBRARY = MAX_SLIDES + MAX_UPLOADS;
 
 /** 내려받는 그림의 크기. edge 는 긴 쪽의 길이(px). */
 export const EXPORT_SIZES = [

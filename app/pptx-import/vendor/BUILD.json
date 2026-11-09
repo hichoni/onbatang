@@ -16,7 +16,7 @@
   },
   "previewScriptSha256": "CxniqZwjYsO/QbCuMDojvI1zrz++0iuiCbcDE2aeeqY=",
   "sources": {
-    "app/designs.js": "2abe74db369ea3c2eb3377a449f40a305ee16f74a9794dcf4ed1e07d751c3940",
+    "app/designs.js": "7626738d6110a85dd072ba6cc2fc46cb4b6c62420ffcbe06ba5aaa712feda9a3",
     "app/import-document.js": "c44c87c8bc22e18725e705a8887c79c14bd14bada41084ce33e71d6badd128e6",
     "app/pptx-import/bullets.js": "7f19b7f374bf31645195ad97c24569e1840c6517af46cd8782d245f70a32634b",
     "app/pptx-import/converter.js": "f0598476f6b45527c1b5f16fa64d92d482fdc7a09168eef87b30ba1f275a5ef4",
@@ -33,7 +33,7 @@
     "src/classroom-accents.js": "41b27fa7ca336ef4c700c00c606b0bc9983d352299ce62362305c1212ffb9aa8",
     "src/clue-card.js": "b298780516482ead7cc49da2293dba41882cb9ee62be7fd8a174fb4a5e95d824",
     "src/crop.js": "ec9159574565f560476ede8f5292609ab74eae42d130fe0bf59a1ad8844ac1fb",
-    "src/document.js": "8668422a2b5115079d88404b2e18dd5f73f4fa82641dcbc0df3484e0c74b9fdd",
+    "src/document.js": "95e624c49525341c4e20a26f8b757fd3478f663ced2933e56ac11658a8a9517c",
     "src/dom.js": "381c1e39c6b79f846820e6dd8a9e214e0afda803c65fbb6c5272cd36326ac5b6",
     "src/effect-assets.js": "b28e8d38a5f9099e2c96a91b82bfe9932827afbcef1449447819521f1c6e9d28",
     "src/effect-scenes.js": "76f21f554798156965a8e795a2c4251c9ed0b4b811ad96a5ae3c08b2c548080a",
@@ -108,8 +108,8 @@
       "sha256": "a681e9d183c72b4af4856935893805eb48c08f0f5a3f260203db7444c20fb98a"
     },
     "pptx-worker.js": {
-      "bytes": 275015,
-      "sha256": "379600573d2e5696eed68d69c9dad69ee0d73ea73fa3ca5c428f8c811ced69a2"
+      "bytes": 275026,
+      "sha256": "98c05946f98d6e5b1b4fb3e1749e81bfb70cfe9cd82534b66205dbe9fdb28e79"
     },
     "preview-frame.html": {
       "bytes": 1243897,

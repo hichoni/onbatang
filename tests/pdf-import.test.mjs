@@ -40,6 +40,14 @@ test('pages become locked full-page pictures; other page shapes fit inside; text
   assert.deepEqual(record.uploads, [URL1], 'the page picture is listed once among the uploads');
 });
 
+test('a full drawing of PDF pages, each its own picture, stays one drawing with every picture listed', () => {
+  const pages = Array.from({ length: PDF_LIMITS.pages }, (_, i) => page(i + 1, { url: `data:image/webp;base64,${String(i).padStart(4, '0')}${'B'.repeat(4000)}` }));
+  const records = pdfRecords({ filename: '백 쪽 자료.pdf', pages, now: 5000 });
+  assert.equal(records.length, Math.ceil(PDF_LIMITS.pages / MAX_SLIDES));
+  assert.equal(records[0].slides.length, Math.min(PDF_LIMITS.pages, MAX_SLIDES));
+  assert.equal(records[0].uploads.length, records[0].slides.length, 'one distinct page picture per slide, none dropped');
+});
+
 test('more pages than one drawing holds (MAX_SLIDES) become numbered parts that home shows as one PDF entry', () => {
   const pages = Array.from({ length: MAX_SLIDES * 2 + 5 }, (_, i) => page(i + 1));
   const records = pdfRecords({ filename: '2학기 과학 실험 안내문 최종본(수정).pdf', pages, now: 5000 });

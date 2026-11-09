@@ -7,8 +7,8 @@ import {fileURLToPath,pathToFileURL} from 'node:url';
 import {resolve,extname,sep} from 'node:path';
 
 const root=resolve(fileURLToPath(new URL('../../',import.meta.url)));
-const sourcePath=process.env.MINICAN_GAI_PPTX||resolve(root,'tools/fixtures/pptx/self-authored-41-pages.pptx');
-const sourcePages=Number(process.env.MINICAN_GAI_PAGE_COUNT||41);
+const sourcePath=process.env.MINICAN_GAI_PPTX||resolve(root,'tools/fixtures/pptx/self-authored-101-pages.pptx');
+const sourcePages=Number(process.env.MINICAN_GAI_PAGE_COUNT||101);
 const options={skip:!process.env.MINICAN_PLAYWRIGHT_PATH,timeout:240000};
 const sha=value=>createHash('sha256').update(value).digest('hex');
 
@@ -102,15 +102,15 @@ test('a button pixel app saves PNG plus answer into the next PPT page and reopen
  assert.deepEqual(await readLibrary(page),saved);assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
 });
 
-test('a visited part keeps its persisted draft basis when another full part sends an app there', {...options,skip:options.skip||sourcePages!==41},async t=>{
+test('a visited part keeps its persisted draft basis when another full part sends an app there', {...options,skip:options.skip||sourcePages!==101},async t=>{
  const {page,entry}=await setup(t,{width:1440,height:1000});await importDeck(page,entry);
- const before=await readLibrary(page),first=page.locator('[data-material-page="0"]'),last=page.locator('[data-material-page="40"]');
+ const before=await readLibrary(page),first=page.locator('[data-material-page="0"]'),last=page.locator('[data-material-page="100"]');
  const firstPart=await first.getAttribute('data-document-id'),lastPart=await last.getAttribute('data-document-id');
- assert.notEqual(firstPart,lastPart,'the 41-page fixture spans two immutable parts');
+ assert.notEqual(firstPart,lastPart,'the 101-page fixture spans two immutable parts');
  // Merely visiting a PPT normalizes the editor view. It must not replace the
  // stored comparison basis with that unsaved rendering when we leave it.
  await last.click();
- await page.locator('[data-material-page="40"][aria-pressed=true]').waitFor();
+ await page.locator('[data-material-page="100"][aria-pressed=true]').waitFor();
  await first.click();await page.locator('[data-material-page="0"][aria-pressed=true]').waitFor();
  await page.locator('[data-add-gai-app]').click();const maker=page.locator('.gai-maker');
  await maker.getByRole('button',{name:'가이X 연결',exact:true}).click();
@@ -200,22 +200,22 @@ for(const [width,height]of [[1440,1000],[390,844]])test(`Gai conversation create
  if(process.env.MINICAN_GAI_REPORT){const dir=resolve(root,'work',process.env.MINICAN_GAI_REPORT);await mkdir(dir,{recursive:true});await writeFile(resolve(dir,`${width}-report.json`),JSON.stringify({scope:'common local UI with deterministic appMaker provider',viewport:{width,height},source:{pages:sourcePages,bytes:sourceBytes.length,sha256:sha(sourceBytes)},result:{pages:sourcePages+2,revision:graph.materialRef.revision,checkpoint:{count:3}},context:{totalSlides:context.totalSlides,nonemptyTextPages:context.slides.filter(s=>s.text).map(s=>s.position),emptyTextPages:context.slides.filter(s=>!s.text).map(s=>s.position),characters:calls[0].context.length},checks:['create and refine conversation','leave and resume conversation draft','bounded ordered PPT text context','context opt-out','opaque sandbox preview','preview no material mutation','present app inside slide','next-slide result','checkpoint restored twice','original source and revision zero preserved','answer-only edit preserves app'],notRun:['real AI generation','real account authentication','physical device','production deployment'],paidQa:false,browserToolLimitation:'Edge/Playwright OOPIF inspection requires site-isolation process flags disabled; product opaque sandbox and CSP remain enabled'},null,2)+'\n');}
 });
 
-for(const [width,height]of [[1440,1000],[390,844]])test(`chosen PPT references and an independent cross-part app position survive draft and save (${width}px)`,{...options,skip:options.skip||sourcePages!==41},async t=>{
+for(const [width,height]of [[1440,1000],[390,844]])test(`chosen PPT references and an independent cross-part app position survive draft and save (${width}px)`,{...options,skip:options.skip||sourcePages!==101},async t=>{
  const {page,entry,errors,external}=await setup(t,{width,height});await importDeck(page,entry);const original=await readLibrary(page),before=original.graphs[0];
  assert.equal(await page.getByRole('button',{name:'픽셀아트 활동 넣기',exact:true}).count(),1);assert.equal(await page.locator('[data-add-gai-app] img.gai-owl').count(),1);
  await page.locator('[data-add-gai-app]').click();const maker=page.locator('.gai-maker');await maker.getByRole('button',{name:'선택 해제',exact:true}).click();
  for(const n of [2,3,4])await maker.getByRole('checkbox',{name:`${n}쪽 참고`,exact:true}).check();
  await maker.getByRole('checkbox',{name:'5쪽 참고',exact:true}).click();await maker.locator('.gai-maker-status').filter({hasText:'최대 3쪽'}).waitFor();assert.equal(await maker.getByRole('checkbox',{name:'5쪽 참고',exact:true}).isChecked(),false);
- const afterPageId=before.pages[40].page.id;await maker.getByRole('combobox',{name:'앱 넣을 위치',exact:true}).selectOption(afterPageId);
- assert.match(await maker.locator('.gai-maker-current-slide').innerText(),/41쪽/);assert.ok(await maker.locator('.gai-maker-slide-large > *').count());
+ const afterPageId=before.pages[100].page.id;await maker.getByRole('combobox',{name:'앱 넣을 위치',exact:true}).selectOption(afterPageId);
+ assert.match(await maker.locator('.gai-maker-current-slide').innerText(),/101쪽/);assert.ok(await maker.locator('.gai-maker-slide-large > *').count());
  await maker.getByRole('button',{name:'편집으로 돌아가기',exact:true}).click();await page.locator('[data-add-gai-app]').click();await maker.getByRole('button',{name:'보내기',exact:true}).waitFor();
  await page.waitForFunction(()=>document.querySelector('.gai-maker-compose button[type=submit]')?.disabled===false);
  assert.equal(await maker.getByRole('combobox',{name:'앱 넣을 위치',exact:true}).inputValue(),afterPageId);assert.equal(await maker.getByRole('checkbox',{name:'2쪽 참고',exact:true}).isChecked(),true);
  await maker.getByRole('button',{name:'가이X 연결',exact:true}).click();await maker.getByRole('button',{name:'가이X 연결됨',exact:true}).waitFor();
  await maker.getByRole('textbox',{name:'가이X에게 요청',exact:true}).fill('이 수업을 마친 뒤에 실행할 단계를 만들어줘.');await maker.getByRole('button',{name:'보내기',exact:true}).click();await appFrame(maker).getByRole('button',{name:'다음 단계 실행',exact:true}).waitFor();
- const [call]=await page.evaluate(()=>window.gaiFixtureCalls),reference=JSON.parse(call.context);assert.deepEqual(reference.slides.map(v=>v.position),[2,3,4]);assert.equal(reference.insertAfter,41);assert.equal(reference.placement.pageId,afterPageId);assert.deepEqual(call.images.map(v=>v.name),['온바탕 2쪽.jpg','온바탕 3쪽.jpg','온바탕 4쪽.jpg']);assert.ok(call.images.every(v=>v.mimeType==='image/jpeg'&&v.data.length<=409600));
+ const [call]=await page.evaluate(()=>window.gaiFixtureCalls),reference=JSON.parse(call.context);assert.deepEqual(reference.slides.map(v=>v.position),[2,3,4]);assert.equal(reference.insertAfter,101);assert.equal(reference.placement.pageId,afterPageId);assert.deepEqual(call.images.map(v=>v.name),['온바탕 2쪽.jpg','온바탕 3쪽.jpg','온바탕 4쪽.jpg']);assert.ok(call.images.every(v=>v.mimeType==='image/jpeg'&&v.data.length<=409600));
  await page.locator('.cv-activity-config').evaluate(node=>node.scrollTop=0);if(process.env.MINICAN_GAI_REPORT)await page.screenshot({path:resolve(root,'work',process.env.MINICAN_GAI_REPORT,`${width}-chosen-slide-flow.png`),fullPage:false});await maker.getByRole('checkbox',{name:'선택한 슬라이드 화면도 전달',exact:true}).uncheck();await maker.getByRole('textbox',{name:'가이X에게 요청',exact:true}).fill('수업 단계 활동으로 제목을 바꿔줘.');await maker.getByRole('button',{name:'보내기',exact:true}).click();await appFrame(maker).locator('#version').filter({hasText:'수업 단계 활동'}).waitFor();assert.deepEqual(await page.evaluate(()=>window.gaiFixtureCalls.at(-1).images),[]);
  await maker.getByRole('button',{name:'이 앱을 슬라이드에 넣기',exact:true}).click();await maker.waitFor({state:'detached'});await waitPages(page,22);
- const saved=await readLibrary(page),pages=saved.graphs[0].pages;assert.deepEqual(pages.slice(0,41).map(v=>v.page.id),before.pages.map(v=>v.page.id));assert.equal(pages[41].page.origin.pageId,afterPageId);assert.equal(pages[41].page.origin.documentId,before.pages[20].document.id);assert.equal(pages[41].page.activity.title,'수업 단계 활동');assert.deepEqual(saved.originals,original.originals);assert.deepEqual(saved.sources,original.sources);
+ const saved=await readLibrary(page),pages=saved.graphs[0].pages;assert.deepEqual(pages.slice(0,101).map(v=>v.page.id),before.pages.map(v=>v.page.id));assert.equal(pages[101].page.origin.pageId,afterPageId);assert.equal(pages[101].page.origin.documentId,before.pages[100].document.id);assert.equal(pages[101].page.activity.title,'수업 단계 활동');assert.deepEqual(saved.originals,original.originals);assert.deepEqual(saved.sources,original.sources);
  await reopen(page,await page.locator('.cv-name').inputValue(),22);assert.deepEqual(await readLibrary(page),saved);assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
 });

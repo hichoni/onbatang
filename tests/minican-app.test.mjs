@@ -5,9 +5,10 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
-  RATIOS, MAX_SLIDES, ratioOf, cleanRecord, newRecord, newDesignId, isDesignId, nextNumber, sortRecords, isBlank, fileName,
+  RATIOS, MAX_SLIDES, MAX_UPLOADS, ratioOf, cleanRecord, newRecord, newDesignId, isDesignId, nextNumber, sortRecords, isBlank, fileName,
   exportSize, addSlide, copySlide, removeSlide, moveSlide, libraryOf, dropPhoto, slideExtra, deckVideos, unusedVideos, EXPORT_KEY, RATIO_KEY,
 } from '../app/designs.js';
+import { DOCUMENT_LIMITS } from '../src/document.js';
 import { crc32, zipStore } from '../app/zip.js';
 import { SHARED_LAYOUTS, BASIC_GROUP } from '../app/layouts.js';
 import { TITLE_FONT, setTitleFont } from '../app/templates.js';
@@ -37,6 +38,21 @@ test('그림 기록: 이름표·이름·모양을 정리하고, 모양이 아니
   assert.equal(r.ratio, '7:3');
   assert.equal(r.slides.length, 1);
   assert.throws(() => cleanRecord({ id, slides: Array.from({ length: MAX_SLIDES + 5 }, () => ({ items: [] })), updatedAt: 1 }), { code: 'PAGE_LIMIT' });
+});
+
+test('그림 한 편은 100장까지: 편집기 한도와 문서 한도가 같다', () => {
+  assert.equal(MAX_SLIDES, 100);
+  assert.equal(DOCUMENT_LIMITS.pages, MAX_SLIDES);
+  const id = newDesignId(1700000000000, 0.5);
+  assert.equal(cleanRecord({ id, slides: Array.from({ length: MAX_SLIDES }, () => ({ items: [] })), updatedAt: 1 }).slides.length, MAX_SLIDES);
+  assert.throws(() => cleanRecord({ id, slides: Array.from({ length: MAX_SLIDES + 1 }, () => ({ items: [] })), updatedAt: 1 }), { code: 'PAGE_LIMIT', details: { limit: MAX_SLIDES, actual: MAX_SLIDES + 1 } });
+  // 장마다 다른 사진(PDF 쪽 그림 · 장마다 넣은 사진)을 쓰고, 올린 파일 칸도 가득 찬 100장짜리 그림도 열리고 저장된다.
+  const photo = (k) => `data:image/jpeg;base64,${String(k).padStart(4, '0')}${'Q'.repeat(400)}`;
+  const slides = Array.from({ length: MAX_SLIDES }, (_, i) => ({ items: [{ t: 'image', url: photo(i), x: 50, y: 50, w: 40, h: 40, rot: 0, op: 100, mask: 'none' }] }));
+  const uploads = Array.from({ length: MAX_UPLOADS }, (_, k) => photo(1000 + k));
+  const full = cleanRecord({ id, slides, uploads, updatedAt: 1 });
+  assert.equal(full.uploads.length, MAX_SLIDES + MAX_UPLOADS);
+  assert.deepEqual(libraryOf(uploads, slides), full.uploads);
 });
 
 test('새 그림 · 차례 · 다음 번호 · 빈 그림', () => {

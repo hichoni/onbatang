@@ -982,6 +982,16 @@ function slideView(design, aspect, sceneEdge = 640) {
   view.style.aspectRatio = String(aspect);
   return view;
 }
+// 띠의 작은 그림은 장(디자인 객체)이 그대로면 전에 그린 것을 다시 쓴다. 장은 고칠 때마다 새 객체가 되므로(편집기의 getDesign 도 새 객체)
+// 바뀐 장만 새로 그린다. 장이 100장까지 되면서 장을 옮길 때마다 모든 장을 다시 그리면 화면이 눈에 띄게 멈춘다.
+function stripView(O, design, aspect, used) {
+  const hit = O.stripViews?.get(design);
+  if (hit && hit.aspect === aspect && !used.has(hit.view)) { used.add(hit.view); return hit.view; }
+  const view = slideView(design, aspect);
+  (O.stripViews ||= new WeakMap()).set(design, { aspect, view });
+  used.add(view);
+  return view;
+}
 // 띠의 작은 그림에 붙이는 이름: 몇 번째 장인지 + 영상 장면 · 움직임이 있는지.
 function slideLabel(i, design) {
   const marks = [design.topic ? `주제 ${design.topic}` : '', design.voice ? `녹음 ${voiceClock(design.voice.ms)}` : '', design.dur ? `리허설 ${design.dur}초` : '', design.hidden ? '발표에서 숨김' : '', hasVideo(design) ? '영상 있음' : '', design.web ? '웹사이트' : '', hasMotion(design) ? '움직임 있음' : ''].filter(Boolean);
@@ -1006,6 +1016,7 @@ function renderStrip(O) {
   const full = n >= MAX_SLIDES;
   const left = O.strip.querySelector('.cv-slide-list')?.scrollTop || 0;
   // 움직임(발표할 때)이 있는 장에는 작은 표시가 붙는다
+  const used = new Set();
   const thumbs = O.slides.map((d, i) => {
     const design = i === O.at ? O.editor.getDesign() : d;
     const moves = hasMotion(design);
@@ -1013,7 +1024,7 @@ function renderStrip(O) {
       class: `cv-slide${i === O.at ? ' on' : ''}${moves ? ' moves' : ''}${hasVideo(design) ? ' film' : ''}${design.hidden ? ' skip' : ''}`, type: 'button', 'aria-label': slideLabel(i, design),
       'aria-pressed': String(i === O.at), dataset: { slide: String(i) },
       onClick: () => goSlide(O, i),
-    }, el('span', { class: 'cv-slide-no', text: String(i + 1) }), el('span', { class: 'cv-slide-view', 'aria-hidden': 'true' }, slideView(design, aspect)),
+    }, el('span', { class: 'cv-slide-no', text: String(i + 1) }), el('span', { class: 'cv-slide-view', 'aria-hidden': 'true' }, stripView(O, design, aspect, used)),
     el('span', { class: 'cv-slide-vd', 'aria-hidden': 'true' }, ic('video')),
     el('span', { class: 'cv-slide-fx', 'aria-hidden': 'true' }, ic('motion')),
     el('span', { class: 'cv-slide-skip', 'aria-hidden': 'true', text: '숨김' }),
@@ -3967,7 +3978,8 @@ function askDownload(O, btn) {
             chip('고른 시간 그대로', !pick.readFit, () => set({ readFit: false }), { readFit: 'off' })),
           el('p', { class: 'cv-down-note', text: `한글은 1초에 ${READ.cjk}자, 영문 · 숫자는 ${READ.other}자로 세고 ${READ.pad}초를 더해요. 영상에서만 늘리고 편집 자료는 그대로예요.` })));
       } else if (film.entries.length) rows.push(el('p', { class: 'cv-down-note', dataset: { readShort: '0' }, text: '모든 쪽의 글을 머무는 시간 안에 읽을 수 있어요.' }));
-      if (long) rows.push(el('p', { class: 'cv-down-note warn', role: 'status', text: `영상은 ${MAX_FILM_SECONDS / 60}분까지 만들 수 있어요. 바탕에 깐 영상의 쓸 구간을 줄이거나, 장을 나눠 따로 만들어요.` }));
+      // 100장까지 되면서 모든 쪽을 담으면 이 한도를 넘기 쉽다: 지금 길이와 함께 "범위 정하기"로 나눠 만드는 길을 먼저 알려 준다.
+      if (long) rows.push(el('p', { class: 'cv-down-note warn', role: 'status', dataset: { filmLong: '' }, text: `영상은 ${MAX_FILM_SECONDS / 60}분까지 만들 수 있어요(지금 약 ${Math.ceil(ms / 60000)}분). "범위 정하기"로 쪽을 나눠 따로 만들어요.${pick.readFit && film.check.short.length ? ' 읽기 시간을 "고른 시간 그대로"로 하거나' : ''} 머무는 시간 · 바탕에 깐 영상의 쓸 구간을 줄여도 돼요.` }));
       // 바탕에 깐 영상이 어떻게 담기는지 미리 알려 준다(멈춘 그림으로 담기거나 빠지는 것이 있을 때는 눈에 띄게).
       const filmed = film.entries.map((v) => filmScenes.get(v.page.id));
       const note = sceneNote(filmed, true);
@@ -4205,7 +4217,7 @@ function askPdf(kit, name, count) {
     range.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
     openModal(el('section', { class: 'cv-find-box', 'aria-labelledby': 'cv-pdf-title', onKeydown: escCloses },
       el('h2', { id: 'cv-pdf-title', text: 'PDF 가져오기' }),
-      el('p', { class: 'cv-down-note', text: `"${name}" · ${count}쪽. 쪽마다 그 쪽 그림이 깔린 장을 만들어요. 그림은 잠가 두어 위에 글 · 도형 · 펜을 얹어도 밀리지 않아요. ${count > MAX_SLIDES ? `20쪽이 넘으면 파트로 나눠 내 그림에서 한 칸으로 묶어요.` : ''}` }),
+      el('p', { class: 'cv-down-note', text: `"${name}" · ${count}쪽. 쪽마다 그 쪽 그림이 깔린 장을 만들어요. 그림은 잠가 두어 위에 글 · 도형 · 펜을 얹어도 밀리지 않아요. ${Math.min(count, kit.PDF_LIMITS.pages) > MAX_SLIDES ? `${MAX_SLIDES}쪽이 넘으면 파트로 나눠 내 그림에서 한 칸으로 묶어요.` : ''}` }),
       el('label', { class: 'cv-find-row' }, el('span', { text: '가져올 쪽' }), range),
       many ? el('p', { class: 'cv-down-note', text: `한 번에 ${kit.PDF_LIMITS.pages}쪽까지 가져와요. 나머지는 다시 가져오며 "${kit.PDF_LIMITS.pages + 1}-${count}" 처럼 적어요.` }) : null,
       el('div', { class: 'cv-find-opts' }, el('label', {}, notes, ' 쪽의 글을 발표자 노트에 넣기(찾기 · 옮겨 쓰기용)')),
