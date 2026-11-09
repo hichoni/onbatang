@@ -16,6 +16,8 @@ import {mountPixelArt,createPixelArtSetup,pixelArtImage} from './pixel-art.js';
 import {photoStudySetup,studyBitmap} from './photo-study.js';
 import {quizCover,createQuizBoard,quizzesFromAnswer} from '../src/quiz.js';
 import {createQuizSetup,mountQuiz} from './quiz.js';
+import {wallCover} from '../src/wall.js';
+import {createWallSetup,mountWall} from './wall.js';
 import {createHtmlLesson} from './html-lesson.js';
 import {htmlFlowPages} from './html-lesson-flow.js';
 import {designToHtmlFlow} from '../src/export.js';
@@ -84,6 +86,7 @@ let copyAction = null;             // 내보내기의 "링크 공유": 받은 �
 let copyLink = null;               // 공용 온바탕: 복사 링크(?copy=코드)를 받는 곳(app/copy-link.js). 없으면 링크를 열지 않는다.
 let showRemote = null;             // 발표의 휴대폰 리모컨(호스트가 연결 · QR 을 맡는다). 없으면 단추도 없다.
 let showAudience = null;           // 발표의 실시간 질문 · 반응(호스트가 연결 · QR · 질문 판을 맡는다). 없으면 단추도 없다.
+let wallAction = null;             // 담벼락 장(호스트가 담벼락 만들기 · 목록 · 발표의 실시간 판을 맡는다, app/wall.js). 없으면 넣기 단추가 없고 발표는 표지만 보인다.
 let coEdit = null;                 // 같이 고치기의 통로 { open(code) → { send, on, close, qr? }, link?(code) }(app/co-edit.js). 없으면 단추도 없다.
 let accountBridge = null;          // 공용 온바탕: GBE-AI Lab 계정으로 이어 쓰기(연결 창 주소 등). 계정 저장(sync)이 있으면 쓰지 않는다.
 let bridge = null;
@@ -1043,6 +1046,8 @@ function renderStrip(O) {
       del,
       // 퀴즈 장(모든 곳): 직접 만들거나, AI-G 를 이어 준 곳에서는 AI-G 에게 부탁한다
       el('button',{class:'btn cv-activity-add',type:'button',dataset:{addQuiz:''},title:'지금 장 다음에 퀴즈 장을 넣어요(발표에서 시간을 재고 정답 · 순위를 보여 줘요)',onClick:()=>configureQuiz(O)},'퀴즈 넣기'),
+      // 담벼락 장: 참여자가 주소 + 숫자 코드로 들어와 붙인 글 · 링크 · 사진이 발표 화면에 실시간으로 쌓인다(호스트가 판 · 서버를 맡을 때만)
+      activityAuthoring&&wallAction&&el('button',{class:'btn cv-activity-add',type:'button',dataset:{addWall:''},title:'지금 장 다음에 담벼락 장을 넣어요(참여자가 주소 · 코드로 들어와 글 · 링크 · 사진을 붙여요)',onClick:()=>configureWall(O)},'담벼락 넣기'),
       activityAuthoring&&el('button',{class:'btn cv-activity-add',type:'button',dataset:{addActivity:''},title:'미리 준비된 픽셀아트 활동을 새 슬라이드로 넣어요',onClick:()=>configureActivity(O)},'픽셀아트 활동 넣기'),
       activityAuthoring&&appMaker&&el('button',{class:'btn cv-activity-add',type:'button',dataset:{addGaiApp:''},onClick:()=>configureGaiActivity(O)},gaiOwl(),'AI-G로 앱 만들기'),
       // AI-G 에게 개요를 부탁해 꾸민 장 여러 장을 만든다(개요로 장 만들기 창이 부탁 칸부터 열린다)
@@ -1284,7 +1289,8 @@ function slideMenuGroups(O, { strip = false } = {}) {
       { icon: 'palette', label: '바탕색 바꾸기', run: () => O.editor.openTab('bg') },
       { icon: 'template', label: '틀 고르기', run: () => O.editor.openTab('layout') },
     ],
-    [{ icon: 'pencil', label: '발표자 노트 적기', run: openNotes }, ...(O.editor.getDesign().activity?.kind === 'quiz' ? [{ icon: 'check', label: '퀴즈 고치기', run: () => configureQuiz(O, true) }] : [])],
+    [{ icon: 'pencil', label: '발표자 노트 적기', run: openNotes }, ...(O.editor.getDesign().activity?.kind === 'quiz' ? [{ icon: 'check', label: '퀴즈 고치기', run: () => configureQuiz(O, true) }] : []),
+      ...(O.editor.getDesign().activity?.kind === 'wall' && activityAuthoring && wallAction ? [{ icon: 'check', label: '담벼락 바꾸기', run: () => configureWall(O, true) }] : [])],
     strip ? [] : [
       { icon: 'swap', label: '찾아 바꾸기', run: () => openFindReplace(O) },
       { icon: 'check', label: '단축키 보기', hint: '?', run: () => openShortcuts() },
@@ -1294,6 +1300,7 @@ function slideMenuGroups(O, { strip = false } = {}) {
       { icon: 'plus', label: '새 장 더하기', run: press(add), disabled: off(add) },
       { icon: 'text', label: '개요로 장 만들기', run: () => openOutline(O), disabled: off(add) },
       { icon: 'check', label: '퀴즈 넣기', run: () => configureQuiz(O), disabled: off(add) },
+      ...(activityAuthoring && wallAction ? [{ icon: 'check', label: '담벼락 넣기', run: () => configureWall(O), disabled: off(add) }] : []),
       { icon: 'duplicate', label: '이 장 복제', run: press(dup), disabled: off(dup) },
       { icon: 'left', label: '앞으로 옮기기', hint: strip ? 'Alt+←' : '', run: press(left), disabled: off(left) },
       { icon: 'right', label: '뒤로 옮기기', hint: strip ? 'Alt+→' : '', run: press(right), disabled: off(right) },
@@ -1761,7 +1768,7 @@ async function applyMotionAll(O, motion) {
 // Activities are local, typed page data. Both hosts use the same runtime and
 // pin a new material revision before acknowledging a result. No app URL opens.
 function updateActivityTools(O){
-  const edit=O.strip.querySelector('[data-edit-activity]'),activity=O.editor.getDesign().activity;if(edit)edit.hidden=!activity||activity.kind!=='quiz'&&(!activityAuthoring||activity.kind==='gai-app'&&!appMaker);
+  const edit=O.strip.querySelector('[data-edit-activity]'),activity=O.editor.getDesign().activity;if(edit)edit.hidden=!activity||activity.kind!=='quiz'&&(!activityAuthoring||activity.kind==='gai-app'&&!appMaker||activity.kind==='wall'&&!wallAction);
 }
 function lessonPages(O){
   if(O.materialLoadError)throw Error('PPT 전체 자료를 읽지 못했어요. 내 자료에서 다시 열어주세요.');
@@ -1817,6 +1824,7 @@ async function commitActivityDocument(O,document,pageOrder,selectedPageId,expect
 }
 async function configureActivity(O,editing=false,photoStart=null){
   if(editing&&O.editor.getDesign().activity?.kind==='quiz')return configureQuiz(O,true);
+  if(editing&&O.editor.getDesign().activity?.kind==='wall')return configureWall(O,true);
   if(!activityAuthoring&&!photoStart)return;
   if(editing&&O.editor.getDesign().activity?.kind==='gai-app')return configureGaiActivity(O,true);
   if(O.closed||O.leaving||O.inlineImport||O.activityBusy||videoBusy(O))return;
@@ -1926,6 +1934,44 @@ async function configureQuiz(O,editing=false){
   }}));
   O.workspace.showCanvas();O.activityConfig=host;O.shell.querySelector('.cv-canvas').append(host);
   host.querySelector('textarea,input')?.focus({preventScroll:true});
+}
+
+// 담벼락 장: 호스트(wallAction)가 새로 만들거나 고른 담벼락을 지금 장 다음에 넣는다(바꿀 때는 그 장의 담벼락만 바꾼다).
+// 장에는 담벼락 id · 제목 · 코드만 들어가고, 표지는 참여 주소와 코드를 크게 보여 준다(src/wall.js).
+async function configureWall(O,editing=false){
+  if(!activityAuthoring||!wallAction||O.closed||O.leaving||O.inlineImport||O.activityBusy||videoBusy(O))return;
+  if(O.materialLoadingPromise)await O.materialLoadingPromise;
+  if(O.closed||S.open!==O||O.recoveryRequired)return;
+  if(O.materialLoadError){toast('PPT 전체 자료를 읽지 못했어요. 내 자료에서 다시 열어주세요.');return;}
+  clearTimeout(O.thumbTimer);
+  O.activityConfig?.remove();
+  const selected=O.editor.getDesign(),activity=editing?selected.activity:undefined;
+  if(editing&&activity?.kind!=='wall')return;
+  const host=el('section',{class:'cv-activity-config','aria-label':editing?'담벼락 바꾸기':'담벼락 넣기'});
+  const cancel=()=>{host.remove();if(O.activityConfig===host)O.activityConfig=null;};
+  host.append(createWallSetup({wallAction,activity,defaultTitle:O.record.name||'',onCancel:cancel,onApply:async wall=>{
+    if(O.closed||O.activityBusy)throw Error('현재 작업을 마친 뒤 다시 시도해주세요.');
+    O.activityBusy=true;app.inert=true;
+    try{
+      await persistEditorAction(O);
+      const entries=lessonPages(O),at=entries.findIndex(v=>v.page.id===selected.id);
+      if(at<0)throw Error('선택한 쪽이 바뀌었어요. 다시 선택해주세요.');
+      let record={...O.record,slides:currentSlides(O)};
+      if(!editing){
+        const candidates=O.materialDeck?[record,...O.materialDeck.documents.filter(row=>row.id!==record.id)]:[record];
+        record=candidates.find(row=>row.slides.length<MAX_SLIDES&&new TextEncoder().encode(JSON.stringify(row)).length<500000);
+        if(!record)throw Error(`담벼락 장을 넣을 자리가 없어요. 한 그림은 ${MAX_SLIDES}장까지예요. 새 그림에 넣어 주세요.`);
+      }
+      const page={...wallCover(wall,aspectOf(record)),id:editing?selected.id:newId('p'),source:editing?selected.source:{kind:'local'},
+        origin:editing?selected.origin:{documentId:O.record.id,pageId:selected.id,revision:O.record.revision},activity:wall};
+      const slides=[...record.slides],ids=entries.map(v=>v.page.id);
+      if(editing)slides[slides.findIndex(p=>p.id===selected.id)]=page;
+      else{const local=slides.findIndex(p=>p.id===selected.id);slides.splice(local<0?slides.length:local+1,0,page);ids.splice(at+1,0,page.id);}
+      await commitActivityDocument(O,{...record,slides},ids,page.id,record.id===O.record.id?O.persistedRecord:record);cancel();
+      if(O.recoveryRequired)await closeDesign(O);
+    }finally{O.activityBusy=false;app.inert=false;}
+  }}));
+  O.workspace.showCanvas();O.activityConfig=host;O.shell.querySelector('.cv-canvas').append(host);
 }
 
 async function configureGaiActivity(O,editing=false){
@@ -2297,9 +2343,16 @@ async function present(O) {
     count.textContent = `${i + 1} / ${slides.length}`;
     tellRemote();
     tellAudience();
-    if(design.activity){
+    // 담벼락 장은 호스트가 판을 그릴 때만 활동 자리로 연다. 아니면(공용 온바탕) 표지(참여 주소 · 코드)를 보통 장처럼 보여 준다.
+    if(design.activity&&(design.activity.kind!=='wall'||wallAction)){
       for(const n of [...stage.children])drop(n);film?.pause();for(const p of tube)p.pause();film=null;tube=[];markFilm();parts=null;
       const host=el('section',{class:'cv-show-activity',dataset:{pixelApp:''}});stage.append(host);
+      // 담벼락: 판은 호스트가 그린다. 판 안의 단추를 눌러도 발표의 넘기기 글쇠는 그대로 듣는다(data-wall).
+      if(design.activity.kind==='wall'){
+        host.dataset.wall='';
+        pixel=mountWall(host,{activity:design.activity,wallAction});
+        ease(host,[{opacity:0},{opacity:1}],220);return;
+      }
       // 퀴즈: 발표의 "다음"이 시작 → 정답 공개 → 순위를 먼저 넘긴다(go 가 pixel.step 을 먼저 부른다)
       if(design.activity.kind==='quiz'){
         host.dataset.quiz='';
@@ -2399,7 +2452,7 @@ async function present(O) {
     if(e.target?.closest?.('.ob-compare, .ob-study, .ob-cinema-steps'))return;
     if(e.target?.closest?.('[data-question-panel]') && ['Escape','ArrowLeft','ArrowRight','PageUp','PageDown'].includes(e.key))return;
     // 앱·그림판 안에서 치는 글쇠는 앱의 것이다. 프레젠터의 넘기기(PageDown · PageUp)와 Esc 만 발표가 듣는다.
-    if(e.target?.closest?.('.cv-show-activity:not([data-quiz])')&&!['Escape','PageDown','PageUp'].includes(e.key))return;
+    if(e.target?.closest?.('.cv-show-activity:not([data-quiz]):not([data-wall])')&&!['Escape','PageDown','PageUp'].includes(e.key))return;
     // 발표 위에 호스트가 띄운 칸(GBE-AI Lab 투표 만들기 같은)의 글 칸에서 치는 글쇠는 그 칸의 것이다. 프레젠터의 넘기기와 Esc 만 발표가 듣는다.
     if (!['Escape', 'PageDown', 'PageUp'].includes(e.key) && e.target?.closest?.('input, textarea, select, [contenteditable=""], [contenteditable="true"]')) return;
     // 아래 막대의 단추에 초점이 있을 때 스페이스 · 엔터는 그 단추를 누르는 글쇠다(다음 장으로 넘기지 않는다).
@@ -4560,6 +4613,8 @@ function readOpen() {
  * - cloudAction: {label,editorTitle?,title?,open({from:'home',inline})}; 첫 화면의 "내 클라우드"(계정에 백업한 자료를 열기). accountAction 과 같은 전체 화면 칸에서 열고, 기본값은 숨김.
  * - showAudience: {open({state(),root,savePoll(result)})→{update(state),show?(),close()}}; 발표 막대의 "질문 · 반응"(state: {at,total,title}). 기본값은 숨김.
  *   savePoll({question,options,counts}): 투표 결과 장(app/poll-result.js)을 지금 장 다음에 저장하고 그 장으로 간다 → {at,total}.
+ * - wallAction: {create({title,approval})→{id,title,code}, list()→[{id,title,code,open,posts,pending}], mount(root,{id,title,code})→{destroy()}};
+ *   담벼락 장(app/wall.js). activityAuthoring 과 함께 있을 때 "담벼락 넣기"가 보이고, 발표에서는 mount 가 그 자리에 실시간 판을 그린다. 없으면 표지(주소 · 코드)만.
  * - phoneRemote: {url?}; 공용 온바탕이 켠다. showRemote 가 없으면 GBE-AI Lab의 리모컨 판(onbatang-remote-relay.html)을 발표 화면에 작은 창으로 띄워 휴대폰으로 넘긴다(app/phone-remote.js).
  * - showRemote: {open({state(),command(cmd),root})→{update(state),show?(),close()}}; 발표 막대의 "휴대폰 리모컨". cmd: {action:'next'|'prev'|'go'(at)|'black'|'state'}. 기본값은 숨김.
  * - coEdit: {open(code)→{send(message),on(fn)→끊기,close(),qr?(url)→svg},link?(code)}; 편집기 위 막대의 "같이 고치기"(실시간으로 여럿이 고친다. app/co-edit.js).
@@ -4570,7 +4625,7 @@ function readOpen() {
  * - copyLink: {url?,key?}; 공용 온바탕이 켠다. 주소의 ?copy=코드를 열면 그 자료를 이 기기에 사본으로 받아 바로 연다(app/copy-link.js).
  * - shareAction: {label,title?,open({designId,flush(),goTo(slideIndex,{upload})}),saved?(record)}; 편집기 위 막대의 공유 단추(GBE-AI Lab의 보기 전용 링크). saved 는 이 기기에 저장할 때마다 불린다(링크에 반영은 호스트가 모아서). 기본값은 숨김.
  */
-export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, accountAction: accountLibrary = null, cloudAction: cloudLibrary = null, shareAction: sharing = null, copyAction: copying = null, copyLink: copyIntake = null, accountBridge: bridging = null, showRemote: remoting = null, phoneRemote: phoning = null, coEdit: coing = null, coRelay: relaying = null, showAudience: audiencing = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false, resume = false, embed = null, syncDelay = null } = {}) {
+export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, accountAction: accountLibrary = null, cloudAction: cloudLibrary = null, shareAction: sharing = null, copyAction: copying = null, copyLink: copyIntake = null, accountBridge: bridging = null, showRemote: remoting = null, phoneRemote: phoning = null, coEdit: coing = null, coRelay: relaying = null, showAudience: audiencing = null, wallAction: walling = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false, resume = false, embed = null, syncDelay = null } = {}) {
   if (app) throw new Error('minican already started');
   if (!root) throw new Error('minican root');
   app = root;
@@ -4591,6 +4646,7 @@ export function startMinican({ root = document.getElementById('app'), fonts = []
   // 공용 온바탕: 호스트의 리모컨이 없으면 GBE-AI Lab의 리모컨 판(로그인 없음)을 작은 창으로 띄운다(app/phone-remote.js).
   else if (phoning && typeof phoning === 'object' && !embed) { const opts = typeof phoning.url === 'string' ? { url: phoning.url } : {}; showRemote = { open: async (context) => (await import('./phone-remote.js')).createPhoneRemote(opts).open(context) }; }
   if (audiencing && typeof audiencing.open === 'function') showAudience = audiencing;
+  if (walling && ['create', 'list', 'mount'].every((k) => typeof walling[k] === 'function')) wallAction = walling;
   // 같이 고치기: 호스트의 통로가 없으면 공용 온바탕은 GBE-AI Lab의 다리(로그인 없음)를 쓴다(app/co-relay.js).
   if (coing && typeof coing.open === 'function' && !embed) coEdit = { open: coing.open, ...(typeof coing.link === 'function' ? { link: coing.link } : {}) };
   else if (relaying && typeof relaying === 'object' && !embed) { const opts = typeof relaying.url === 'string' ? { url: relaying.url } : {}; coEdit = { open: async (code) => (await import('./co-relay.js')).openCoRelay(code, opts) }; }

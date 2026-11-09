@@ -183,7 +183,8 @@ export function mountHtmlLesson(raw, host = document.getElementById('onbatang-le
     const picture = el('img', { class: 'lesson-slide', src: page.image, alt: `${current + 1}쪽${page.activity ? ` ${page.activity.title}` : page.result ? ' 활동 결과' : ''}` });
     const frame = page.effects?.length || page.flow ? el('div', { class:'lesson-effects-frame' }, picture) : null;
     scene.append(frame || picture);
-    if (page.activity) scene.append(el('button', { type: 'button', class: 'lesson-start', text: page.activity.kind === 'quiz' ? '퀴즈 풀기' : '활동 시작', onclick: () => {
+    // 담벼락 장은 서버의 실시간 판이라 따로 내려받은 수업에서는 표지(주소 · 코드)만 보인다.
+    if (page.activity && page.activity.kind !== 'wall') scene.append(el('button', { type: 'button', class: 'lesson-start', text: page.activity.kind === 'quiz' ? '퀴즈 풀기' : '활동 시작', onclick: () => {
       executing = true; returnToCover.hidden = showClose.hidden = false;
       ++renderVersion;flow?.finish();flow=null;
       stopEffects?.(); stopEffects = null;
