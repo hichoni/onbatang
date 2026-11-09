@@ -27,6 +27,8 @@ test('math: add from the text tab, preview with MathJax, apply, edit by double c
  await page.goto(origin+'/app/');
  assert.ok(!served.some(p=>p.includes('/mathjax/')),'MathJax is not fetched until the math window opens');
  await page.locator('.cv-hero .cv-new-btn').click();
+ // 도구는 묶음(추가 · 자료 · 디자인)으로 열리고 새 그림은 '디자인'(틀)부터 보인다. '추가'를 열어야 '글' · '꾸미기' 칸이 나온다.
+ await page.locator('[data-tool-group=add]').click();
  await page.getByRole('tab',{name:'글',exact:true}).click();
  await page.locator('[data-add-math]').click();
  const dlg=page.locator('.fe-math-dlg');await dlg.waitFor();

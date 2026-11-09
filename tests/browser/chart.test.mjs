@@ -25,6 +25,8 @@ test('chart: add from the decorate tab, paste a table, apply, reopen by double c
  const page=await context.newPage();page.setDefaultTimeout(20000);page.on('pageerror',e=>errors.push(e.message));
  await page.goto(origin+'/app/');
  await page.locator('.cv-hero .cv-new-btn').click();
+ // 도구는 묶음(추가 · 자료 · 디자인)으로 열리고 새 그림은 '디자인'(틀)부터 보인다. '추가'를 열어야 '글' · '꾸미기' 칸이 나온다.
+ await page.locator('[data-tool-group=add]').click();
  await page.getByRole('tab',{name:'꾸미기',exact:true}).click();
  await page.getByLabel('꾸미기 종류').selectOption('차트');
  await page.locator('[data-add-chart="bar"]').click();
