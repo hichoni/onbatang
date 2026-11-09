@@ -94,7 +94,7 @@ const GUEST_MESSAGES = {
   onbatang_guest_limit: `링크는 하루에 ${GUEST_PER_DAY}개까지 만들 수 있어요. 내일 다시 하거나, 내려받기의 "온바탕 파일"로 보내 주세요.`,
   onbatang_guest_busy: '지금은 7일 링크가 너무 많아 새로 만들 수 없어요. 내려받기의 "온바탕 파일"로 보내 주세요.',
   onbatang_guest_too_large: '사진이 많아 7일 링크로 보내기에 커요(사진 포함 20MB · 파트 하나 5MB까지). 내려받기의 "온바탕 파일"로 보내 주세요.',
-  onbatang_copy_invalid: '자료를 확인해 주세요(파트는 20개, 한 파트는 1~40장, 이름은 60자까지).',
+  onbatang_copy_invalid: '자료를 확인해 주세요(파트는 20개, 한 파트는 1~100장, 이름은 60자까지).',
   onbatang_copy_not_found: '이 링크는 지워졌거나 7일이 지났어요. 새 링크를 만들어 주세요.',
 };
 /** 7일 링크를 만들거나 고칠 때의 알림 글. */
