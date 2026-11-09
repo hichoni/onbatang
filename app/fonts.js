@@ -20,8 +20,13 @@ const FONTS = [
   ['east-sea-dokdo', '동해독도', '거친 붓글씨', 'woff2'],
 ];
 
-/** startMinican({ fonts }) 에 그대로 주는 글꼴 목록: { id, name, desc, url } */
+// 이미 아주 굵은 제목 글꼴(파일이 한 굵기뿐). '굵게'를 켜면 브라우저가 획을 억지로 덧그려(가짜 굵게)
+// '를' · '틀' · '률'처럼 가로획이 촘촘한 글자의 속이 메워져 검은 덩어리가 된다. 이 글꼴들은 '굵게'를 켜도 그대로 그린다.
+const NO_FAKE_BOLD = new Set(['do-hyeon', 'jua', 'bagel-fat-one']);
+
+/** startMinican({ fonts }) 에 그대로 주는 글꼴 목록: { id, name, desc, url, noFakeBold? } */
 const EXPORT_FAMILIES = ['Gowun Batang', 'Gowun Dodum', 'Do Hyeon', 'Jua', 'Bagel Fat One', 'Gugi', 'Dongle', 'Yeon Sung', 'Single Day', 'Poor Story', 'Gamja Flower', 'Hi Melody', 'Nanum Pen Script', 'Nanum Brush Script', 'East Sea Dokdo'];
-export const ONBATANG_FONTS = FONTS.map(([id, name, desc, ext], index) => ({ id, name, desc, exportFamily: EXPORT_FAMILIES[index], url: new URL(`./fonts/${id}.${ext}`, import.meta.url).href }));
+export const ONBATANG_FONTS = FONTS.map(([id, name, desc, ext], index) => ({ id, name, desc, exportFamily: EXPORT_FAMILIES[index], url: new URL(`./fonts/${id}.${ext}`, import.meta.url).href,
+  ...(NO_FAKE_BOLD.has(id) ? { noFakeBold: true } : {}) }));
 /** 큰 제목에 쓰는 글꼴(템플릿) */
 export const ONBATANG_TITLE_FONT = 'do-hyeon';

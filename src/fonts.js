@@ -5,6 +5,12 @@ import { fontFamilyOf } from './model.js';
 const declared = new Set();
 
 /**
+ * @font-face 에 넣을 굵기 칸. noFakeBold 인 글꼴(이미 아주 굵고 파일이 한 굵기뿐)은 이 파일이 모든 굵기(100~900)를 맡는다고 알려,
+ * 글에 '굵게'(font-weight 900)가 켜져도 브라우저가 가짜 굵게로 획을 덧그리지 않게 한다(덧그리면 '를' · '틀'의 속이 메워진다).
+ */
+export const fontFaceWeight = (f) => (f && f.noFakeBold === true ? ' font-weight: 100 900;' : '');
+
+/**
  * 글꼴 파일을 브라우저에 알린다. fonts: configure({ fonts }) 에 준 것 가운데 url 이 있는 것들.
  * 같은 글꼴을 두 번 알려도 한 번만 적는다. format 은 파일 확장자로 짐작한다(ttf · otf · woff · woff2).
  */
@@ -16,7 +22,7 @@ export function registerFonts(fonts) {
     declared.add(family);
     const ext = String(f.url).split(/[?#]/)[0].split('.').pop().toLowerCase();
     const format = { ttf: 'truetype', otf: 'opentype', woff: 'woff', woff2: 'woff2' }[ext];
-    rules.push(`@font-face { font-family: "${family}"; src: url("${String(f.url).replace(/["\\\n]/g, '')}")${format ? ` format("${format}")` : ''}; font-display: swap; }`);
+    rules.push(`@font-face { font-family: "${family}"; src: url("${String(f.url).replace(/["\\\n]/g, '')}")${format ? ` format("${format}")` : ''};${fontFaceWeight(f)} font-display: swap; }`);
   }
   if (!rules.length) return;
   const style = document.createElement('style');
