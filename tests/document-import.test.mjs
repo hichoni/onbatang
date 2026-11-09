@@ -60,17 +60,17 @@ test('missing identities are deterministic across selection and ordering', () =>
   assert.deepEqual(importConvertedDocument(value).record, whole);
 });
 
-test('41 pages fail explicitly; a deliberate subset can include page 41 without silent truncation', () => {
+test('101 pages fail explicitly; a deliberate subset can include page 101 without silent truncation', () => {
   const value = input();
-  value.report.pageCount = 41;
-  value.report.selectedPages = Array.from({ length: 41 }, (_, i) => i + 1);
+  value.report.pageCount = 101;
+  value.report.selectedPages = Array.from({ length: 101 }, (_, i) => i + 1);
   value.document.slides = value.report.selectedPages.map(n => ({ items: [{ t: 'text', text: `직접 작성한 ${n}쪽` }] }));
   rejected(value, 'PAGE_LIMIT');
-  const { record, report } = importConvertedDocument(value, { selectedPages: [41, 2] });
-  assert.deepEqual(record.slides.map(p => p.source.pageNumber), [41, 2]);
-  assert.equal(record.slides[0].items[0].text, '직접 작성한 41쪽');
-  assert.equal(report.pageCount, 41);
-  assert.equal(report.omittedPages.length, 39);
+  const { record, report } = importConvertedDocument(value, { selectedPages: [101, 2] });
+  assert.deepEqual(record.slides.map(p => p.source.pageNumber), [101, 2]);
+  assert.equal(record.slides[0].items[0].text, '직접 작성한 101쪽');
+  assert.equal(report.pageCount, 101);
+  assert.equal(report.omittedPages.length, 99);
 });
 
 test('extracted text beyond the slide bound is rejected intact instead of shortened', () => {

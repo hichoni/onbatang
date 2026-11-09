@@ -18,8 +18,8 @@ const xml=(files,path)=>new TextDecoder().decode(files[path]);
 // The optional teacher file remains outside the repository. Both paths execute
 // the real import worker, editor, IndexedDB revisions and PPTX exporter, with
 // every off-origin request blocked; no hosted QA account or backend is used.
-const sourcePath=process.env.MINICAN_PIXEL_PPTX||resolve(root,'tools/fixtures/pptx/self-authored-41-pages.pptx');
-const pageCount=Number(process.env.MINICAN_PIXEL_PAGE_COUNT||41);
+const sourcePath=process.env.MINICAN_PIXEL_PPTX||resolve(root,'tools/fixtures/pptx/self-authored-101-pages.pptx');
+const pageCount=Number(process.env.MINICAN_PIXEL_PAGE_COUNT||101);
 
 async function setup(t,{viewport={width:1440,height:1000},touch=false,hostRoot}={}){
  const servedRoot=hostRoot?resolve(hostRoot):root;
