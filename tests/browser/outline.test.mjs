@@ -6,6 +6,7 @@ import {createServer} from 'node:http';
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {resolve, extname, sep} from 'node:path';
+import {openTool} from './open-tool.mjs';
 
 const root = resolve(fileURLToPath(new URL('../../', import.meta.url)));
 const options = {skip: !process.env.MINICAN_PLAYWRIGHT_PATH, timeout: 120000};
@@ -87,6 +88,7 @@ test('an outline becomes titled slides after the current one, or fills an empty 
   assert.equal(await tiles(page).nth(1).getAttribute('class').then(c => /\bon\b/.test(c)), true, 'the first new slide is open');
   // On the empty last slide, from the 틀 panel: the sample fills it (and goes on after it).
   await tiles(page).nth(4).click();
+  await openTool(page, 'layout');   // 틀 칸은 '디자인' 묶음 안에 있다
   await page.locator('[data-outline-start]').click();
   await box.locator('[data-outline-sample]').click();
   // "글만": plain text slides on the current background.
@@ -122,7 +124,7 @@ test('where 가이X is joined, the outline dialog asks it for an outline by topi
   await box.locator('.cv-outline-count').selectOption('4');
   await input.fill('내가 먼저 쓴 개요');
   await ask.click();
-  await page.waitForFunction(() => /가이X가 쓴 개요예요/.test(document.querySelector('.cv-outline-ai [role=status]').textContent));
+  await page.waitForFunction(() => /AI-G가 쓴 개요예요/.test(document.querySelector('.cv-outline-ai [role=status]').textContent));
   if (process.env.OUTLINE_SHOT) await page.screenshot({path: `${process.env.OUTLINE_SHOT}-ai.png`});
   // The drawing's own words go along as a reference (on by default), and the teacher can see what is sent.
   assert.deepEqual(await page.evaluate(() => window.asked), [{kind: 'outline', prompt: '초등 3학년 사회 — 우리 동네 시장', slides: 4, context: '그림 이름: 개요 검수\n모두 2장\n1장 (지금 장)\n  - 우리 반 발표\n2장'}]);

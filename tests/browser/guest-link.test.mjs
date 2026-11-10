@@ -11,6 +11,9 @@ import {resolve, extname, sep} from 'node:path';
 
 const root = resolve(fileURLToPath(new URL('../../', import.meta.url)));
 const options = {skip: !process.env.MINICAN_PLAYWRIGHT_PATH, timeout: 180000};
+// 링크가 끝나는 때: 오늘부터 7일 뒤 15:00(한국 시간). 날짜를 박아 두면 그날이 지난 뒤로는 앱이 지난 링크로 보고 버린다.
+const EXPIRES = new Date(Math.floor(Date.now() / 864e5) * 864e5 + 7 * 864e5 + 6 * 36e5).toISOString();
+const UNTIL = (() => { const p = Object.fromEntries(new Intl.DateTimeFormat('ko-KR', {timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', weekday: 'short'}).formatToParts(new Date(EXPIRES)).map(x => [x.type, x.value])); return `${p.month}월 ${p.day}일 (${p.weekday}) 오후 3:00까지 열려요`; })();
 const VIEW = 'abcdef123456', EDIT = 'abcdef654321', TOKENS = {[VIEW]: 'a'.repeat(64), [EDIT]: 'b'.repeat(64)};
 const seen = "try{localStorage.setItem('onbatang-tour-seen-v1:editor','1');localStorage.setItem('onbatang-tour-seen-v1:news-0.45','1');}catch{}";
 const photo = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
@@ -44,7 +47,7 @@ test('7-day links: anyone makes a view link and an edit link, no video, says whe
         if (state.fail) return reply(res, 400, {message: state.fail, code: state.fail === 'PGRST202' ? 'PGRST202' : 'P0001'});
         if (name === 'onbatang_copy_info') return reply(res, 200, state.info);
         const link = state.links[args.p_code], mine = link && !link.removed && args.p_token === TOKENS[args.p_code];
-        const out = (l) => ({code: l.code, title: l.title, version: l.version, takes: l.takes, mode: l.mode, expiresAt: '2026-11-01T06:00:00+00:00'});
+        const out = (l) => ({code: l.code, title: l.title, version: l.version, takes: l.takes, mode: l.mode, expiresAt: EXPIRES});
         if (name === 'onbatang_guest_copy_publish') {
           if (args.p_code) { if (!mine) return reply(res, 400, {message: 'onbatang_copy_not_found'}); link.version++; link.title = args.p_title; return reply(res, 200, out(link)); }
           const mode = args.p_mode === 'view' ? 'view' : 'edit', code = mode === 'view' ? VIEW : EDIT;
@@ -105,7 +108,7 @@ test('7-day links: anyone makes a view link and an edit link, no video, says whe
   await dialog.locator('[data-guest-create]').click();
   await dialog.locator('[data-guest-url]').waitFor();
   assert.equal(await dialog.locator('[data-guest-url]').innerText(), `https://gbe.ai.kr/onbatang-play.html?c=${VIEW}`, 'a view link opens the player');
-  assert.match(await dialog.locator('[data-guest-until]').innerText(), /11월 1일 \(일\) 오후 3:00까지 열려요/);
+  assert.ok((await dialog.locator('[data-guest-until]').innerText()).includes(UNTIL), UNTIL);
   assert.match(await dialog.innerText(), /보기 링크를 만들었어요/);
   assert.match(await dialog.innerText(), /바탕 영상 1개는 링크에 실리지 않았어요/);
   assert.deepEqual(calls.map(c => c[0]), ['onbatang_guest_copy_publish', 'onbatang_guest_copy_put', 'onbatang_guest_copy_card']);

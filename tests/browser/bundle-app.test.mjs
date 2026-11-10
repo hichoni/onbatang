@@ -9,6 +9,7 @@ import {fileURLToPath,pathToFileURL} from 'node:url';
 import {resolve,extname,sep} from 'node:path';
 import {unzipSync} from 'fflate';
 import {bundleApp} from '../../tools/bundle-app.mjs';
+import {openTool} from './open-tool.mjs';
 
 const root=resolve(fileURLToPath(new URL('../../',import.meta.url)));
 const options={skip:!process.env.MINICAN_PLAYWRIGHT_PATH,timeout:300000};
@@ -37,13 +38,11 @@ async function visit(browser,origin){
  seen.firstScripts=scripts.size;
  seen.home=(await page.locator('.cv-hero').innerText()).trim();
  await page.locator('.cv-hero .cv-new-btn').click();
- // 도구는 묶음(추가 · 자료 · 디자인)으로 열리고 새 그림은 '디자인'(틀)부터 보인다. '추가'를 열어야 '글' · '꾸미기' 칸이 나온다.
- await page.locator('[data-tool-group=add]').click();
- await page.getByRole('tab',{name:'꾸미기',exact:true}).click();
+ await openTool(page,'element');
  await page.getByLabel('꾸미기 종류').selectOption('차트');
  await page.locator('[data-add-chart="bar"]').click();
  const chart=page.locator('.fe-chart-dlg');await chart.waitFor();await chart.locator('[data-chart-apply]').click();await chart.waitFor({state:'detached'});
- await page.getByRole('tab',{name:'글',exact:true}).click();
+ await openTool(page,'text');
  await page.locator('[data-add-math]').click();
  const math=page.locator('.fe-math-dlg');await math.waitFor();
  await math.getByText('수식을 적으면 여기에 보여요.').waitFor();

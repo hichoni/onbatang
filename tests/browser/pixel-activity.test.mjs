@@ -1,4 +1,4 @@
-import {openTool} from './open-tool.mjs';
+import {openTool,slideAction,openListed} from './open-tool.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
@@ -224,7 +224,7 @@ async function readLibrary(page){
 
 async function reopen(page,name,count){
  await page.locator('.cv-back').click();await page.locator('.cv-home-title').waitFor();await page.reload();
- await page.getByRole('button',{name:name+' 열기',exact:true}).click();await waitPages(page,count);
+ await openListed(page,name);await waitPages(page,count);
 }
 
 async function exportAll(page,mode){
@@ -283,7 +283,7 @@ test('PPT activity runs in the full material, saves a result immediately after i
  const afterIndex=Math.min(9,pageCount-2),activityIndex=afterIndex+1,resultIndex=afterIndex+2;
  await page.locator(`[data-material-page="${afterIndex}"]`).click();
  await page.locator(`[data-material-page="${afterIndex}"][aria-pressed=true]`).waitFor();
- await page.locator('[data-add-activity]').click();
+ await slideAction(page,'[data-add-activity]');
  const setupForm=page.locator('form.pixel-setup');await setupForm.waitFor();
  await setupForm.getByLabel('활동 이름',{exact:true}).fill('수업 중 픽셀아트');
  await setupForm.getByLabel('활동 안내',{exact:true}).fill('두 가지 색으로 나만의 그림을 만들어요.');
@@ -296,7 +296,7 @@ test('PPT activity runs in the full material, saves a result immediately after i
 
  // Seed an existing activity through an explicit authoring host, then use the
  // real public entry for all participation, result saving and reopening.
- await page.goto(new URL('/app/index.html',entry).href);await page.getByRole('button',{name:name+' 열기',exact:true}).click();await waitPages(page,pageCount+1);
+ await page.goto(new URL('/app/index.html',entry).href);await openListed(page,name);await waitPages(page,pageCount+1);
  assert.equal(await page.locator('[data-add-activity]').count(),0);assert.equal(await page.locator('[data-add-gai-app]').count(),0);
  await page.locator(`[data-material-page="${activityIndex}"]`).click();assert.equal(await page.locator('[data-edit-activity]').isVisible(),false);
 

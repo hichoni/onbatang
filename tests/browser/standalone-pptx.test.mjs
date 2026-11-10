@@ -1,4 +1,4 @@
-import {openTool} from './open-tool.mjs';
+import {openTool,openListed,pickPage} from './open-tool.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
@@ -9,13 +9,6 @@ import {resolve,extname,sep} from 'node:path';
 import {unzipSync} from 'fflate';
 // 공용 첫 쪽은 새로 고치면 꾸미던 그림을 다시 연다(v0.42). 목록에서 다시 여는 것을 보려고 그때는 내 그림으로 나간다.
 const reloadToList=async page=>{await page.reload();await page.waitForFunction(()=>!document.getElementById('onba-splash'));if(await page.evaluate(()=>document.body.classList.contains('cv-editing'))){await page.locator('.cv-back').click();await page.locator('.cv-home-title').waitFor();}};
-// 목록에서 그 이름의 그림을 연다. 한 PPT 의 파트들은 한 칸으로 묶여 있으므로, 칸에 없으면 그 PPT 칸의 "파트 N개"를 펼친 뒤 연다.
-const openListed=async(page,name,how='click')=>{
- await page.locator('.cv-list .cv-item').first().waitFor();
- const direct=page.getByRole('button',{name:name+' 열기',exact:true});
- if(!await direct.count())await page.locator('.cv-deck',{hasText:name.replace(/\s*·\s*\d+$/,'')}).first().locator('.cv-deck-parts')[how]();
- await direct[how]();
-};
 const root=resolve(fileURLToPath(new URL('../../',import.meta.url)));
 const fixture=name=>resolve(root,'tools/fixtures/pptx',name);
 const sha256=bytes=>createHash('sha256').update(bytes).digest('hex');
@@ -96,13 +89,14 @@ for(const [label,width,height] of [['small-phone',320,568],['phone',390,844],['p
   await fonts.locator('[data-font-apply]').tap();await page.locator('[data-import-save]').tap();await page.locator('[data-inline-import]').waitFor({state:'detached'});
   await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===101);
   const original=await readLibrary(page,base);
-  await page.locator('[data-material-page="100"]').tap();await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='101 / 101쪽 · 전체 PPT');
-  await page.locator('[data-material-page="0"]').tap();await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='1 / 101쪽 · 전체 PPT');
-  const grip=page.locator('[data-material-page="0"] .cv-slide-grip');await grip.scrollIntoViewIfNeeded();
+  // 장 목록은 왼쪽 세로 목록이고, 좁은 화면(900px 아래)에서는 '장 목록' 단추 뒤의 서랍이다(장을 고르면 닫힌다).
+  await pickPage(page,'[data-material-page="100"]','tap');await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='101 / 101쪽 · 전체 PPT');
+  await pickPage(page,'[data-material-page="0"]','tap');await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='1 / 101쪽 · 전체 PPT');
+  const grip=page.locator('[data-material-page="0"] .cv-slide-grip');if(!await grip.isVisible())await page.locator('.cv-pages-toggle').tap();await grip.scrollIntoViewIfNeeded();
   const start=await grip.boundingBox(),end=await page.locator('[data-material-page="1"]').boundingBox();assert.ok(start.width>=44&&start.height>=44);
   const cdp=await context.newCDPSession(page);const point={x:start.x+start.width/2,y:start.y+start.height/2,id:1,radiusX:1,radiusY:1,force:1};
   await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point]});
-  for(let i=1;i<=8;i++){await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...point,x:point.x+(end.x+end.width*.85-point.x)*i/8}]});await page.evaluate(()=>new Promise(requestAnimationFrame));}
+  for(let i=1;i<=8;i++){await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...point,y:point.y+(end.y+end.height*.85-point.y)*i/8}]});await page.evaluate(()=>new Promise(requestAnimationFrame));}
   await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
   await cdp.detach();
   await page.waitForFunction(()=>document.querySelector('[data-material-page="0"]')?.getAttribute('aria-label')?.includes('원본 2쪽'));
@@ -159,40 +153,43 @@ test('slide selection keeps shell, rail, thumbnails and viewport steady within a
  await page.locator('[data-import-save]').click();await page.locator('[data-inline-import]').waitFor({state:'detached'});await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===101);
  await page.emulateMedia({reducedMotion:'no-preference'});
  const original=await readLibrary(page,base);
- await page.evaluate(()=>{window.stableNodes=['.cv-app','.cv-strip','.cv-slide-list','.fe-stage','[data-material-page="0"]'].map(s=>document.querySelector(s));window.stabilitySamples=[];window.trackStability=true;const sample=()=>{if(!window.trackStability)return;const strip=document.querySelector('.cv-strip'),list=document.querySelector('.cv-slide-list');window.stabilitySamples.push({top:strip.getBoundingClientRect().top,height:strip.getBoundingClientRect().height,left:list.scrollLeft,scrollY});requestAnimationFrame(sample);};sample();});
- for(const index of [1,0,2,1]){const before=await page.locator('.cv-slide-list').evaluate(n=>n.scrollLeft);await page.locator(`[data-material-page="${index}"]`).click();await page.waitForFunction(i=>document.querySelector(`[data-material-page="${i}"]`)?.getAttribute('aria-pressed')==='true',index);assert.equal(await page.locator('.cv-slide-list').evaluate(n=>n.scrollLeft),before,'visible selection does not center the rail');}
+ await page.evaluate(()=>{window.stableNodes=['.cv-app','.cv-strip','.cv-slide-list','.fe-stage','[data-material-page="0"]'].map(s=>document.querySelector(s));window.stabilitySamples=[];window.trackStability=true;const sample=()=>{if(!window.trackStability)return;const strip=document.querySelector('.cv-strip'),list=document.querySelector('.cv-slide-list');window.stabilitySamples.push({top:strip.getBoundingClientRect().top,height:strip.getBoundingClientRect().height,top:list.scrollTop,scrollY});requestAnimationFrame(sample);};sample();});
+ for(const index of [1,0,2,1]){const before=await page.locator('.cv-slide-list').evaluate(n=>n.scrollTop);await page.locator(`[data-material-page="${index}"]`).click();await page.waitForFunction(i=>document.querySelector(`[data-material-page="${i}"]`)?.getAttribute('aria-pressed')==='true',index);assert.equal(await page.locator('.cv-slide-list').evaluate(n=>n.scrollTop),before,'visible selection does not center the rail');}
  assert.equal(await page.evaluate(()=>window.stabilitySamples.every(s=>Math.abs(s.top-window.stabilitySamples[0].top)<1&&Math.abs(s.height-window.stabilitySamples[0].height)<1)),true,'selection and loading never resize the strip');
  await page.locator('.cv-name').fill('흔들림 검사 첫 파트');
- await page.locator('[data-material-page="100"]').scrollIntoViewIfNeeded();const left=await page.locator('.cv-slide-list').evaluate(n=>n.scrollLeft);
+ await page.locator('[data-material-page="100"]').scrollIntoViewIfNeeded();const top=await page.locator('.cv-slide-list').evaluate(n=>n.scrollTop);
  await page.locator('[data-material-page="100"]').click();await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='101 / 101쪽 · 전체 PPT');
  assert.equal(await page.evaluate(()=>['.cv-app','.cv-strip','.cv-slide-list','.fe-stage','[data-material-page="0"]'].every((s,i)=>document.querySelector(s)===window.stableNodes[i])),true,'part navigation retains every stable DOM node');
- assert.ok(Math.abs(await page.locator('.cv-slide-list').evaluate(n=>n.scrollLeft)-left)<1);
+ assert.ok(Math.abs(await page.locator('.cv-slide-list').evaluate(n=>n.scrollTop)-top)<1);
  assert.equal(await page.locator('.cv-canvas .fe-card').evaluate(n=>n.getAnimations().filter(a=>a.playState==='running').length),0,'editing selection has no entrance animation');
  await page.locator('.cv-name').fill('흔들림 검사 마지막 파트');
- await page.setViewportSize({width:390,height:844});await page.locator('.cv-strip').scrollIntoViewIfNeeded();await page.locator('.cv-slide-list').evaluate(n=>n.scrollLeft=0);
+ // 좁은 화면의 장 목록은 '장 목록' 서랍이다(장을 고르면 닫힌다).
+ await page.setViewportSize({width:390,height:844});const shelf=page.getByRole('button',{name:'도구 칸 닫기',exact:true});if(await shelf.isVisible())await shelf.click();await page.locator('.cv-pages-toggle').click();await page.locator('.cv-slide-list').evaluate(n=>n.scrollTop=0);
  const y=await page.evaluate(()=>scrollY);await page.locator('[data-material-page="0"]').click();await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='1 / 101쪽 · 전체 PPT');
  assert.ok(Math.abs(await page.evaluate(()=>scrollY)-y)<1,'part navigation preserves mobile page scroll');assert.equal(await page.locator('.cv-name').inputValue(),'흔들림 검사 첫 파트');
  await page.evaluate(()=>window.trackStability=false);await page.locator('.cv-back').click();await page.locator('.cv-home-title').waitFor();await page.reload();await page.getByRole('button',{name:'흔들림 검사 마지막 파트 열기',exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===101);
  assert.equal(await page.locator('.cv-name').inputValue(),'흔들림 검사 마지막 파트');const after=await readLibrary(page,base);assert.deepEqual(after.originals,original.originals);assert.deepEqual(after.sources,original.sources);await checkIsolation();
 });
 
-test('large horizontal filmstrip reorders across parts, preserves fixed originals and exports in saved order',options,async t=>{
+test('large page rail reorders across parts, preserves fixed originals and exports in saved order',options,async t=>{
  const {page,entry,base,checkIsolation}=await setup(t);await enterImport(page,entry);await inspectFile(page,'self-authored-101-pages.pptx',101);
  await page.locator('[data-import-save]').click();await page.locator('[data-inline-import]').waitFor({state:'detached'});await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===101);
  const before=await readLibrary(page,base),oldIds=before.graphs[0].pages.map(row=>row.page.id);
- assert.equal(await page.locator('.cv-slide-view').first().evaluate(node=>node.clientHeight),64);
- await page.locator('.cv-tray-menu>summary').click();await page.getByLabel('슬라이드 목록 창 높이').fill('180');assert.equal(Math.round((await page.locator('.cv-strip').boundingBox()).height),180);await page.locator('.cv-tray-menu>summary').click();
- await page.locator('.cv-slide-list').hover();await page.mouse.wheel(0,600);assert.ok(await page.locator('.cv-slide-list').evaluate(node=>node.scrollLeft)>0);
- const last=page.locator('[data-material-page="100"]');await last.focus();await page.keyboard.press('Alt+ArrowLeft');
+ const shelf=page.getByRole('button',{name:'도구 칸 닫기',exact:true});if(await shelf.isVisible())await shelf.click();   // 가져오기를 마친 '내 자료' 칸이 목록을 덮고 있다
+ // 장 목록은 왼쪽 세로 목록이다(2026-11-02). 너비는 ··· 메뉴의 '장 목록 너비'로 정하고, 이 기기에 남는다.
+ const width=async()=>Math.round((await page.locator('.cv-strip').boundingBox()).width);
+ await page.locator('.cv-tray-menu>summary').click();await page.getByLabel('장 목록 너비',{exact:true}).fill('260');assert.equal(await width(),260);await page.locator('.cv-tray-menu>summary').click();
+ await page.locator('.cv-slide-list').hover();await page.mouse.wheel(0,600);await page.waitForFunction(()=>document.querySelector('.cv-slide-list').scrollTop>0);
+ const last=page.locator('[data-material-page="100"]');await last.focus();await page.keyboard.press('Alt+ArrowUp');
  await page.waitForFunction(()=>!document.querySelector('#app').inert);
  await page.waitForFunction(()=>document.querySelector('[data-material-page="99"]')?.getAttribute('aria-label')?.includes('원본 101쪽'));
  const saved=await readLibrary(page,base);assert.deepEqual(saved.graphs[0].pages.map(row=>row.page.id),[...oldIds.slice(0,99),oldIds[100],oldIds[99]]);
  assert.deepEqual(saved.originals,before.originals);assert.deepEqual(saved.sources,before.sources);
- await page.locator('[data-material-page="0"]').dragTo(page.locator('[data-material-page="2"]'),{targetPosition:{x:150,y:30}});
+ await page.locator('[data-material-page="0"]').dragTo(page.locator('[data-material-page="2"]'),{targetPosition:{x:50,y:70}});
  await page.waitForFunction(()=>document.querySelector('[data-material-page="0"]')?.getAttribute('aria-label')?.includes('원본 2쪽'));
  const ordered=await readLibrary(page,base),name=await page.locator('.cv-name').inputValue();
  await reloadToList(page);await openListed(page,name);await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===101);
- assert.equal(Math.round((await page.locator('.cv-strip').boundingBox()).height),180);
+ assert.equal(await width(),260,'the rail width stays on this device');
  assert.match(await page.locator('[data-material-page="99"]').getAttribute('aria-label'),/원본 101쪽/);
  await page.locator('.cv-down-btn').click();const dialog=page.getByRole('dialog',{name:'내려받기',exact:true});await dialog.locator('[data-type=pptx]').click();await dialog.locator('[data-scope=all]').click();await dialog.locator('[data-pptx=editable]').click();
  const output=await downloadBy(page,()=>dialog.locator('[data-pptx-save]').click()),files=unzipSync(output.bytes);assert.match(xml(files,'ppt/slides/slide1.xml'),/직접 만든 2쪽/);
@@ -200,86 +197,78 @@ test('large horizontal filmstrip reorders across parts, preserves fixed original
  await checkIsolation();
 });
 
-test('short Chromebook workspace folds/resizes its tray and keeps whole-PPT navigation and originals',options,async t=>{
+test('short Chromebook workspace folds and resizes its page rail and keeps whole-PPT navigation and originals',options,async t=>{
  const {page,entry,base,checkIsolation}=await setup(t,{viewport:{width:1366,height:650}});
  await enterImport(page,entry);await inspectFile(page,'self-authored-101-pages.pptx',101);await page.locator('[data-import-save]').click();await page.locator('[data-inline-import]').waitFor({state:'detached'});
  await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===101);
- const original=await readLibrary(page,base),ids=original.graphs[0].pages.map(v=>v.page.id),tray=page.locator('.cv-strip'),stage=page.locator('.cv-canvas .fe-stage'),grip=page.getByRole('separator',{name:'슬라이드 목록 높이 조절'});
- assert.equal(await page.getByRole('button',{name:'슬라이드 목록 펼치기'}).getAttribute('aria-expanded'),'false');
- assert.ok((await tray.boundingBox()).height<=60,'collapsed tray is a single compact row');
- const large=await stage.boundingBox();assert.ok(large.height>=330,'canvas retains useful height on a 650px viewport');
- for(let i=1;i<=100;i++){await page.getByRole('button',{name:'다음 슬라이드',exact:true}).click();await page.waitForFunction(n=>document.querySelector('[data-material-count]')?.textContent===`${n} / 101쪽 · 전체 PPT`,i+1);}
- await page.getByRole('button',{name:'슬라이드 목록 펼치기'}).click();const small=await stage.boundingBox();assert.ok(large.height>small.height+60,'folding returns real pixels to the canvas');assert.ok((await tray.boundingBox()).height<=128,'default strip is a compact thumbnail row');
- const railBox=await page.locator('.cv-slide-list').boundingBox(),selectedBox=await page.locator('[data-material-page="100"]').boundingBox();assert.ok(selectedBox.x>=railBox.x&&selectedBox.x+selectedBox.width<=railBox.x+railBox.width,'reopening reveals the page selected while collapsed');
- assert.ok((await tray.boundingBox()).height<=650*.42+1);
- await page.locator('[data-material-page="99"]').click();await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='100 / 101쪽 · 전체 PPT');
- await page.getByRole('button',{name:'슬라이드 목록 접기'}).click();await page.getByRole('button',{name:'다음 슬라이드',exact:true}).click();await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='101 / 101쪽 · 전체 PPT');
+ const original=await readLibrary(page,base),ids=original.graphs[0].pages.map(v=>v.page.id),rail=page.locator('.cv-strip'),stage=page.locator('.cv-canvas'),grip=page.getByRole('separator',{name:'장 목록 너비 조절'});   // 짧은 화면의 장은 높이에 맞으므로 넓어지는 것은 캔버스 칸이다
+ const count=n=>page.waitForFunction(n=>document.querySelector('[data-material-count]')?.textContent===`${n} / 101쪽 · 전체 PPT`,n);
+ const width=async()=>Math.round((await rail.boundingBox()).width),open=await stage.boundingBox();
+ const shelf=page.getByRole('button',{name:'도구 칸 닫기',exact:true});if(await shelf.isVisible())await shelf.click();   // 가져오기를 마친 '내 자료' 칸이 목록을 덮고 있다
+ // 접으면 목록은 좁은 세로 띠가 되고 캔버스가 그만큼 넓어진다. 접힌 채로도 이전 · 다음으로 전체 PPT 를 넘긴다.
+ await page.getByRole('button',{name:'장 목록 접기',exact:true}).click();
+ assert.equal(await page.getByRole('button',{name:'장 목록 펼치기',exact:true}).getAttribute('aria-expanded'),'false');
+ assert.ok(await width()<=60,'a folded rail is a narrow column');assert.ok((await stage.boundingBox()).width>open.width,'folding returns real pixels to the canvas');
+ for(let i=1;i<=100;i++){await page.getByRole('button',{name:'다음 슬라이드',exact:true}).click();await count(i+1);}
+ await page.getByRole('button',{name:'장 목록 펼치기',exact:true}).click();
+ const list=await page.locator('.cv-slide-list').boundingBox(),selected=await page.locator('[data-material-page="100"]').boundingBox();
+ assert.ok(selected.y>=list.y-1&&selected.y+selected.height<=list.y+list.height+1,'reopening reveals the page selected while folded');
+ await page.locator('[data-material-page="99"]').click();await count(100);
+ await page.getByRole('button',{name:'장 목록 접기',exact:true}).click();await page.getByRole('button',{name:'다음 슬라이드',exact:true}).click();await count(101);
  assert.equal(await page.getByRole('button',{name:'다음 슬라이드',exact:true}).isEnabled(),false);
- await page.getByRole('button',{name:'이전 슬라이드',exact:true}).click();await page.waitForFunction(()=>document.querySelector('[data-material-count]')?.textContent==='100 / 101쪽 · 전체 PPT');
- await grip.press('ArrowUp');assert.ok(Number(await grip.getAttribute('aria-valuenow'))>=88);await grip.press('End');assert.equal(await grip.getAttribute('aria-valuenow'),await grip.getAttribute('aria-valuemax'));
- const down=Number(await grip.getAttribute('aria-valuenow'))-40;
- let box=await grip.boundingBox();await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2,box.y+box.height/2+down,{steps:8});await page.mouse.up();
- assert.equal(await grip.getAttribute('aria-valuenow'),'0','dragging down folds the tray');
- box=await grip.boundingBox();await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2,box.y+box.height/2-110,{steps:8});await page.mouse.up();
- assert.ok(Number(await grip.getAttribute('aria-valuenow'))>=104,'dragging up restores and resizes the tray');
+ await page.getByRole('button',{name:'이전 슬라이드',exact:true}).click();await count(100);
+ // 손잡이: 화살표로 넓히고 좁히며, End 는 가장 넓게, Home 은 접기. 끌면 끈 만큼 넓어진다.
+ await page.getByRole('button',{name:'장 목록 펼치기',exact:true}).click();
+ await grip.focus();await page.keyboard.press('ArrowRight');assert.equal(await grip.getAttribute('aria-valuenow'),'212');assert.equal(await width(),212);
+ await page.keyboard.press('End');assert.equal(await grip.getAttribute('aria-valuenow'),await grip.getAttribute('aria-valuemax'));
+ const box=await grip.boundingBox();await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2-60,box.y+box.height/2,{steps:8});await page.mouse.up();
+ assert.equal(await width(),240,'dragging the edge resizes the rail');
  const after=await readLibrary(page,base);assert.deepEqual(after.originals,original.originals);assert.deepEqual(after.sources,original.sources);assert.deepEqual(after.graphs[0].pages.map(v=>v.page.id),ids);
- await grip.press('Home');const name=await page.locator('.cv-name').inputValue();await reloadToList(page);await openListed(page,name);await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===101);
- assert.equal(await page.getByRole('button',{name:'슬라이드 목록 펼치기'}).getAttribute('aria-expanded'),'false','device preference survives full reload');
- await mkdir(resolve(root,'work'),{recursive:true});await page.screenshot({path:resolve(root,'work/slide-tray-chromebook-collapsed.png'),fullPage:true});
- await page.getByRole('button',{name:'슬라이드 목록 펼치기'}).click();await page.screenshot({path:resolve(root,'work/slide-tray-chromebook-expanded.png'),fullPage:true});await checkIsolation();
+ await grip.focus();await page.keyboard.press('Home');assert.equal(await page.getByRole('button',{name:'장 목록 펼치기',exact:true}).getAttribute('aria-expanded'),'false');
+ const name=await page.locator('.cv-name').inputValue();await reloadToList(page);await openListed(page,name);await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===101);
+ assert.equal(await page.getByRole('button',{name:'장 목록 펼치기',exact:true}).getAttribute('aria-expanded'),'false','device preference survives full reload');
+ await mkdir(resolve(root,'work'),{recursive:true});await page.screenshot({path:resolve(root,'work/page-rail-chromebook-folded.png'),fullPage:true});
+ await page.getByRole('button',{name:'장 목록 펼치기',exact:true}).click();assert.equal(await width(),240,'and so does its width');
+ await page.screenshot({path:resolve(root,'work/page-rail-chromebook-open.png'),fullPage:true});await checkIsolation();
 });
 
-test('tray follows a short viewport until manually chosen; compact tools stay reachable',options,async t=>{
- const {page,entry,checkIsolation}=await setup(t,{viewport:{width:1366,height:900}});await page.goto(entry);await page.locator('.cv-hero .cv-new-btn').click();
- assert.equal(await page.getByRole('button',{name:'슬라이드 목록 접기'}).getAttribute('aria-expanded'),'true');
- await page.setViewportSize({width:1024,height:600});await page.getByRole('button',{name:'슬라이드 목록 펼치기'}).waitFor();
- await openTool(page,'text');await page.getByRole('button',{name:'큰 제목',exact:true}).click();const bar=page.locator('.cv-tools .fe-bar');assert.ok((await bar.boundingBox()).height<=64,'short-screen tools use one horizontal row');
- const remove=bar.getByRole('button',{name:'삭제',exact:true});await remove.scrollIntoViewIfNeeded();const rb=await remove.boundingBox(),bb=await bar.boundingBox();assert.ok(rb.x>=bb.x-1&&rb.x+rb.width<=bb.x+bb.width+1,'last tool can scroll into view');
- await page.getByRole('button',{name:'슬라이드 목록 펼치기'}).click();await page.setViewportSize({width:1000,height:560});assert.equal(await page.getByRole('button',{name:'슬라이드 목록 접기'}).getAttribute('aria-expanded'),'true');
- assert.ok((await page.locator('.cv-strip').boundingBox()).height<=560*.42+1);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
- await page.getByRole('button',{name:'슬라이드 목록 접기'}).click();assert.ok((await page.locator('.cv-canvas .fe-stage').boundingBox()).height>300);await checkIsolation({pptx:false});
-});
-
-test('touch tray handle expands/cancels safely and its compact controls fit a phone',options,async t=>{
- const {page,context,entry,checkIsolation}=await setup(t,{viewport:{width:390,height:844},touch:true});await page.goto(entry);await page.locator('.cv-hero .cv-new-btn').tap();
- await page.getByRole('button',{name:'슬라이드 목록 접기'}).tap();assert.equal(await page.locator('.cv-tray-body').isVisible(),false);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
- const grip=page.getByRole('separator',{name:'슬라이드 목록 높이 조절'});await grip.scrollIntoViewIfNeeded();const box=await grip.boundingBox(),cdp=await context.newCDPSession(page),point={x:box.x+box.width/2,y:box.y+box.height/2,id:1,radiusX:1,radiusY:1,force:1};
- await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point]});for(let i=1;i<=8;i++)await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...point,y:point.y-100*i/8}]});await cdp.send('Input.dispatchTouchEvent',{type:'touchCancel',touchPoints:[]});
- assert.equal(await page.locator('.cv-tray-body').isVisible(),false,'cancelled gesture restores the prior panel state');
- await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point]});for(let i=1;i<=8;i++)await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...point,y:point.y-100*i/8}]});await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await cdp.detach();
- assert.equal(await page.locator('.cv-tray-body').isVisible(),true);assert.ok(Number(await grip.getAttribute('aria-valuenow'))>=96);await page.getByRole('button',{name:'슬라이드 목록 접기'}).tap();
- await page.screenshot({path:resolve(root,'work/slide-tray-phone-collapsed.png'),fullPage:true});await checkIsolation({pptx:false});
+test('a touch drag on the page rail edge resizes it on a tablet, and a cancelled drag restores it',options,async t=>{
+ const {page,context,entry,checkIsolation}=await setup(t,{viewport:{width:1024,height:768},touch:true});await page.goto(entry);await page.locator('.cv-hero .cv-new-btn').tap();
+ const grip=page.getByRole('separator',{name:'장 목록 너비 조절'}),width=async()=>Math.round((await page.locator('.cv-strip').boundingBox()).width),before=await width();
+ const box=await grip.boundingBox(),cdp=await context.newCDPSession(page),point={x:box.x+box.width/2,y:box.y+box.height/2,id:1,radiusX:1,radiusY:1,force:1};
+ const drag=async end=>{await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point]});for(let i=1;i<=8;i++)await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...point,x:point.x+60*i/8}]});await cdp.send('Input.dispatchTouchEvent',{type:end,touchPoints:[]});};
+ await drag('touchCancel');assert.equal(await width(),before,'a cancelled gesture restores the prior width');
+ await drag('touchEnd');await cdp.detach();assert.ok(Math.abs(await width()-(before+60))<=2,`the rail follows the finger: ${await width()}`);
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await checkIsolation({pptx:false});
 });
 
 test('compact touch 4:3 thumbnails select their centre without starting a sort',options,async t=>{
  const {page,entry,checkIsolation}=await setup(t,{viewport:{width:390,height:844},touch:true});
  await enterImport(page,entry);await inspectFile(page,'self-authored-4x3.pptx',2);await page.locator('[data-import-save]').tap();await page.locator('[data-inline-import]').waitFor({state:'detached'});await page.waitForFunction(()=>document.querySelectorAll('[data-material-page]').length===2);
  const ids=await page.locator('[data-material-page]').evaluateAll(nodes=>nodes.map(n=>n.dataset.pageId));
- await page.locator('[data-material-page="1"]').tap();await page.locator('[data-material-page="1"][aria-pressed=true]').waitFor({timeout:5000});
- await page.locator('[data-material-page="0"]').tap();await page.locator('[data-material-page="0"][aria-pressed=true]').waitFor({timeout:5000});
- await page.locator('[data-material-page="1"] .cv-slide-grip').tap();await page.locator('[data-material-page="1"][aria-pressed=true]').waitFor({timeout:5000});
+ // 좁은 화면의 장 목록은 서랍이라 장을 고를 때마다 닫힌다: 고른 상태는 화면이 아니라 DOM 에서 본다.
+ await pickPage(page,'[data-material-page="1"]','tap');await page.locator('[data-material-page="1"][aria-pressed=true]').waitFor({state:'attached',timeout:5000});
+ await pickPage(page,'[data-material-page="0"]','tap');await page.locator('[data-material-page="0"][aria-pressed=true]').waitFor({state:'attached',timeout:5000});
+ await pickPage(page,'[data-material-page="1"] .cv-slide-grip','tap');await page.locator('[data-material-page="1"][aria-pressed=true]').waitFor({state:'attached',timeout:5000});
  assert.deepEqual(await page.locator('[data-material-page]').evaluateAll(nodes=>nodes.map(n=>n.dataset.pageId)),ids,'selecting a compact thumbnail never changes the page order');await checkIsolation();
 });
 
-test('tray pixel height persists across documents/reload, clamps temporarily and stays within its device namespace',options,async t=>{
+test('page rail width persists across documents and reload and stays within its device namespace',options,async t=>{
  const {page,context,entry,origin,base,checkIsolation}=await setup(t,{viewport:{width:1366,height:900}});await page.goto(entry);await page.locator('.cv-hero .cv-new-btn').click();
- const tray=page.locator('.cv-strip'),grip=page.getByRole('separator',{name:'슬라이드 목록 높이 조절'});
- assert.ok((await tray.boundingBox()).height<=128,'new default is a thin thumbnail strip');assert.equal(await page.locator('.cv-slide-tools').isVisible(),false,'page tools are tucked into the contextual menu');
+ const rail=page.locator('.cv-strip'),grip=page.getByRole('separator',{name:'장 목록 너비 조절'}),width=async()=>Math.round((await rail.boundingBox()).width);
+ assert.equal(await width(),196,'new default rail width');assert.equal(await page.locator('.cv-slide-tools').isVisible(),false,'page tools are tucked into the contextual menu');
  await openTool(page,'text');await page.locator('.fe-tabbody .fe-textadd').first().click();
- await page.locator('.cv-name').fill('창 높이 유지 확인');await page.locator('.cv-back').click();await page.getByRole('button',{name:'창 높이 유지 확인 열기',exact:true}).click();
- const record=await page.evaluate(async base=>(await (await import(base+'/app/store.js')).listDesigns()).find(r=>r.name==='창 높이 유지 확인'),base);
- const height=async()=>Math.round((await tray.boundingBox()).height);
- async function setHeight(value){await page.locator('.cv-tray-menu>summary').click();await page.getByLabel('슬라이드 목록 창 높이').fill(String(value));await page.locator('.cv-tray-menu>summary').click();}
- await setHeight(197);assert.equal(await height(),197,'height control changes the whole panel in pixels');
- const box=await grip.boundingBox();await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2,box.y+box.height/2-37,{steps:6});await page.mouse.up();assert.equal(await height(),234,'drag distance matches the panel boundary');
- await page.locator('.cv-back').click();await page.getByRole('button',{name:'창 높이 유지 확인 열기',exact:true}).click();assert.equal(await height(),234,'reopening retains exact panel height');
- await reloadToList(page);await page.getByRole('button',{name:'창 높이 유지 확인 열기',exact:true}).click();assert.equal(await height(),234,'full reload retains exact panel height');
+ await page.locator('.cv-name').fill('목록 너비 유지 확인');await page.locator('.cv-back').click();await page.getByRole('button',{name:'목록 너비 유지 확인 열기',exact:true}).click();
+ const record=await page.evaluate(async base=>(await (await import(base+'/app/store.js')).listDesigns()).find(r=>r.name==='목록 너비 유지 확인'),base);
+ async function setWidth(value){const shelf=page.getByRole('button',{name:'도구 칸 닫기',exact:true});if(await shelf.isVisible())await shelf.click();await page.locator('.cv-tray-menu>summary').click();await page.getByLabel('장 목록 너비',{exact:true}).fill(String(value));await page.locator('.cv-tray-menu>summary').click();}
+ await setWidth(240);assert.equal(await width(),240,'the width control changes the rail in pixels');
+ const box=await grip.boundingBox();await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2+37,box.y+box.height/2,{steps:6});await page.mouse.up();assert.equal(await width(),277,'drag distance matches the rail edge');
+ await page.locator('.cv-back').click();await page.getByRole('button',{name:'목록 너비 유지 확인 열기',exact:true}).click();assert.equal(await width(),277,'reopening retains the exact width');
+ await reloadToList(page);await page.getByRole('button',{name:'목록 너비 유지 확인 열기',exact:true}).click();assert.equal(await width(),277,'full reload retains the exact width');
  const saved=await page.evaluate(async({base,id})=>(await import(base+'/app/store.js')).getDesign(id),{base,id:record.id});assert.deepEqual(saved,record,'workspace settings do not write the drawing or undo history');
- await setHeight(430);await page.setViewportSize({width:1000,height:560});await page.waitForFunction(()=>Number(document.querySelector('.cv-tray-grip').getAttribute('aria-valuenow'))<430);assert.ok(await height()<430);
- assert.equal(await page.evaluate(()=>localStorage.getItem('onbatang.filmstrip-tray.v1.minican.height')),'430','viewport clamp never overwrites preferred height');
- await page.setViewportSize({width:1366,height:900});await page.waitForFunction(()=>Math.round(document.querySelector('.cv-strip').getBoundingClientRect().height)===430);
- await setHeight(197);await page.locator('.cv-back').click();await page.locator('.cv-hero .cv-new-btn').click();assert.equal(await height(),197,'a new document on this device uses the same preference');
- const other=await context.newPage(),otherErrors=[];other.on('pageerror',error=>otherErrors.push(error.message));await other.goto(origin+base+'/isolated.html');await other.locator('.cv-hero .cv-new-btn').click();assert.ok(Math.round((await other.locator('.cv-strip').boundingBox()).height)<=128,'another storage/account namespace keeps its own default');assert.deepEqual(otherErrors,[]);await other.close();
+ assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('onbatang.page-rail.v2.minican')).width),277,'kept per device and storage namespace');
+ await setWidth(197);await page.locator('.cv-back').click();await page.locator('.cv-hero .cv-new-btn').click();assert.equal(await width(),197,'a new document on this device uses the same preference');
+ const other=await context.newPage(),otherErrors=[];other.on('pageerror',error=>otherErrors.push(error.message));await other.goto(origin+base+'/isolated.html');await other.locator('.cv-hero .cv-new-btn').click();assert.equal(Math.round((await other.locator('.cv-strip').boundingBox()).width),196,'another storage/account namespace keeps its own default');assert.deepEqual(otherErrors,[]);await other.close();
  await checkIsolation({pptx:false});
 });
 
@@ -733,7 +722,7 @@ test('My materials imports preserve edited text, restore the same page on cancel
  assert.ok(newGraph);assert.equal(newGraph.pages.length,2);assert.equal(imported.graphs.length,2);
  assert.deepEqual(imported.originals.find(graph=>graph.materialRef.id===oldGraph.materialRef.id),original.originals[0]);
  assert.deepEqual(await readDraft(oldId),flushed,'importing another deck does not overwrite the drawing left behind');
- await page.locator('.cv-slide[data-slide="0"]').click();await page.locator('.cv-name').waitFor();
+ await pickPage(page,'.cv-slide[data-slide="0"]');await page.locator('.cv-name').waitFor();
  await page.locator('.cv-name').fill('내 자료에서 가져온 새 PPT');
  const newText=await page.locator('.cv-canvas .fe-card > .fi-text').first().innerText();
  await page.locator('.cv-canvas .fe-card > .fi-text').first().dblclick();

@@ -62,8 +62,9 @@ test('the gray area around the card and slide thumbnails open the slide menu ins
   const around = await menuItems(page);
   for (const name of ['붙여넣기', '실행 취소', '바탕색 바꾸기', '틀 고르기', '발표자 노트 적기', '새 장 더하기', '이 장 복제', '이 장부터 발표', '이 장 지우기']) assert.ok(around.includes(name), name);
   await page.keyboard.press('Escape');
-  // Every other blank spot of the editor screen gives the same slide menu: side panel, tool bar, top bar.
-  for (const selector of ['.cv-side', '.cv-tools', '.cv-bar']) {
+  // Every other blank spot of the editor screen gives the same slide menu: the tool-group row, the properties
+  // panel, the canvas head and the top bar (since 2026-11-02 the old side panel is these rows; .cv-side has no box).
+  for (const selector of ['.fe-tabs', '.cv-tools', '.cv-work-head', '.cv-bar']) {
     const spot = await page.evaluate(sel => {
       const box = document.querySelector(sel).getBoundingClientRect();
       for (let y = box.bottom - 4; y > box.top; y -= 6) for (let x = box.right - 4; x > box.left; x -= 6) {

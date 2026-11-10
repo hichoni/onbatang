@@ -88,7 +88,8 @@ test('이어 움직이기 moves the duplicated element from its old place to its
   // Real values, not a stretched picture: size is animated as width/height and the transform never scales.
   const props = await page.evaluate(() => { const n = [...document.querySelectorAll('.cv-show-stage > .fe-card')].at(-1).querySelector('.fi-shape'); const frames = n.getAnimations().flatMap(a => a.effect.getKeyframes()); return {keys: [...new Set(frames.flatMap(Object.keys))].sort(), transforms: frames.map(f => f.transform).filter(Boolean), will: n.style.willChange}; });
   assert.ok(props.keys.includes('width') && props.keys.includes('height') && props.keys.includes('transform'), props.keys.join());
-  assert.ok(props.transforms.every(t => /scale\(1, 1\)$/.test(t)), props.transforms.join(' | '));
+  // v0.105.0 부터 이어 움직이기는 요소에 그려진 행렬을 그대로 잇는다(쉬는 움직임의 크기 · 기울기를 지킨다). 멈춘 요소는 matrix(1, 0, 0, 1, 0, 0).
+  assert.ok(props.transforms.every(t => /(scale\(1, 1\)|matrix\(1, 0, 0, 1, 0, 0\))$/.test(t)), props.transforms.join(' | '));
   assert.equal(props.will, 'transform, opacity');
   await page.waitForFunction(() => document.querySelectorAll('.cv-show-stage > .fe-card').length === 1);
   const end = await where();

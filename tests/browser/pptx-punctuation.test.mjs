@@ -24,6 +24,8 @@ test('Office punctuation keeps the last stop on the line in DOM and image export
   const model=await import(base+'/src/model.js'),{designView}=await import(base+'/src/render.js'),{createEditor}=await import(base+'/src/editor.js');
   model.configure({aspect:16/9,fonts:[{id:'fixture',name:'검증 글꼴',family:'Arial'}]});
   const text='Classroom punctuation test!',ctx=document.createElement('canvas').getContext('2d');ctx.font='32px Arial';
+  // 장 카드는 자기 자간을 가진다(v0.133.0, 기본 -0.025em). 같은 자간으로 재야 '마지막 문장 부호만 틀을 넘는' 너비가 된다.
+  {const card=designView(model.cleanDesign({bg:'#ffffff',items:[{t:'text',text:'x',x:50,y:50,w:50,size:3.2,font:'fixture'}]}));document.querySelector('#preview').append(card);ctx.letterSpacing=window.cardLetter=getComputedStyle(card.querySelector('.fi-text')).letterSpacing;card.remove();}
   const whole=ctx.measureText(text).width,core=ctx.measureText(text.slice(0,-1)).width,width=(whole+core)/2;
   const source={kind:'pptx',sourceDocumentId:'spunctuation20261018',pageNumber:1,objectId:'2'};
   const ordinary={id:'eordinary20261018',t:'text',text,font:'fixture',x:50,y:60,w:width/10,size:3.2,align:'c',color:'#111111'};
@@ -60,6 +62,7 @@ test('Office punctuation keeps the last stop on the line in DOM and image export
  const decorations=await page.evaluate(async base=>{
   const {cleanDesign}=await import(base+'/src/model.js'),{designSheet}=await import(base+'/src/export.js');
   const width=1000,height=563,text='AB!',ctx=document.createElement('canvas').getContext('2d'),results=[];
+  ctx.letterSpacing=window.cardLetter;   // 내보낸 그림도 장 카드의 자간으로 그린다
   for(const style of [{size:3.2,color:'#111111'},{size:2.4,color:'#2351ab'}]){
   ctx.font=`${style.size*10}px Arial`;
   const authored={...window.punctuationFixture.items[0],...style,text,x:50,y:50,w:6,h:20,valign:'top',align:'l',under:true};
@@ -75,10 +78,12 @@ test('Office punctuation keeps the last stop on the line in DOM and image export
   let changedPixelsAwayFromJoin=0,changedJoinPixels=0,punctuationUnderlinePixels=0,missingPunctuationUnderlinePixels=0;
   for(let offset=0;offset<control.length;offset+=4){
    const x=roi.x+(offset/4)%roi.w;
-   if(control.slice(offset,offset+4).some((value,channel)=>value!==actual[offset+channel])){
+   // Duplicate painting roughly doubles the ink; a few levels of antialiasing noise (letter spacing puts edges mid-pixel) is not that.
+   if(control.slice(offset,offset+4).some((value,channel)=>Math.abs(value-actual[offset+channel])>8)){
     // Separate decoration fragments antialias their shared edge. Only that
     // one column may differ; the glyphs and both underline interiors must match.
-    if(x===Math.floor(coreRight))changedJoinPixels++;else changedPixelsAwayFromJoin++;
+    // With the card's letter spacing the seam can sit mid-pixel, so the antialiasing reaches the next column.
+    if(Math.abs(x+.5-coreRight)<1.5)changedJoinPixels++;else changedPixelsAwayFromJoin++;
    }
    if(x>=Math.ceil(coreRight)&&control[offset+3]>128&&plain[offset+3]===0){
     punctuationUnderlinePixels++;

@@ -5,6 +5,7 @@ import {readFile,mkdir,writeFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {resolve,extname,sep} from 'node:path';
+import {slideAction,openListed,pickPage} from './open-tool.mjs';
 
 const root=resolve(fileURLToPath(new URL('../../',import.meta.url)));
 const sourcePath=process.env.MINICAN_GAI_PPTX||resolve(root,'tools/fixtures/pptx/self-authored-101-pages.pptx');
@@ -80,14 +81,14 @@ async function readLibrary(page){return page.evaluate(async()=>{
  const library=(await import('/app/pptx-import/library.js')).createPptxLibrary({storage:'minican'});
  try{const graphs=await library.listMaterials(),originals=[],sources=[];for(const graph of graphs){originals.push(await library.getMaterial({id:graph.materialRef.id,revision:0}));const blob=await library.repository.readAsset(graph.manifest.sourceAssetId);sources.push({bytes:blob.size,sha256:Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',await blob.arrayBuffer())),n=>n.toString(16).padStart(2,'0')).join('')});}return{graphs,originals,sources};}finally{await library.close();}
 });}
-async function reopen(page,name,count){await page.locator('.cv-back').click();await page.locator('.cv-home-title').waitFor();await page.reload();await page.getByRole('button',{name:name+' 열기',exact:true}).click();await waitPages(page,count);}
+async function reopen(page,name,count){await page.locator('.cv-back').click();await page.locator('.cv-home-title').waitFor();await page.reload();await openListed(page,name);await waitPages(page,count);}
 const appFrame=scope=>scope.frameLocator('.gai-app-frame').frameLocator('[data-gai-app-content]');
 
 test('a button pixel app saves PNG plus answer into the next PPT page and reopens in the public editor',options,async t=>{
  const {page,entry,errors,external}=await setup(t,{width:1440,height:1000,pixel:true});await importDeck(page,entry);
- const original=await readLibrary(page),before=original.graphs[0],after=9;await page.locator(`[data-material-page="${after}"]`).click();
- await page.locator('[data-add-gai-app]').click();const maker=page.locator('.gai-maker');await maker.getByRole('button',{name:'가이X 연결',exact:true}).click();await maker.getByRole('button',{name:'가이X 연결됨',exact:true}).waitFor();
- await maker.getByRole('textbox',{name:'가이X에게 요청',exact:true}).fill('직접 만든 픽셀 그림 검증');await maker.getByRole('button',{name:'보내기',exact:true}).click();await appFrame(maker).locator('#pixel-grid button').first().waitFor();
+ const original=await readLibrary(page),before=original.graphs[0],after=9;await pickPage(page,`[data-material-page="${after}"]`);
+ await slideAction(page,'[data-add-gai-app]');const maker=page.locator('.gai-maker');await maker.getByRole('button',{name:'AI-G 연결',exact:true}).click();await maker.getByRole('button',{name:'AI-G 연결됨',exact:true}).waitFor();
+ await maker.getByRole('textbox',{name:'AI-G에게 요청',exact:true}).fill('직접 만든 픽셀 그림 검증');await maker.getByRole('button',{name:'보내기',exact:true}).click();await appFrame(maker).locator('#pixel-grid button').first().waitFor();
  await maker.getByRole('button',{name:'이 앱을 슬라이드에 넣기',exact:true}).click();await maker.waitFor({state:'detached'});await waitPages(page,sourcePages+1);
  await page.locator('.cv-show-btn').click();const show=page.locator('.cv-show'),runtime=appFrame(show);await runtime.locator('#step').waitFor();for(let i=0;i<4;i++)await runtime.locator('#step').click();
  await show.getByRole('button',{name:'결과를 다음 슬라이드에 저장',exact:true}).click();await page.waitForFunction(n=>document.querySelector('.cv-show-count')?.textContent===`12 / ${n}`,sourcePages+2);
@@ -96,8 +97,8 @@ test('a button pixel app saves PNG plus answer into the next PPT page and reopen
  assert.ok(picture&&answer,'PNG and editable answer share the result slide');assert.match(picture.url,/^data:image\/png;base64,/);assert.ok(picture.url.length<=40000);assert.equal(graph.pages[10].page.activity.state.count,4);
  assert.deepEqual(graph.pages.filter(v=>v.page.source?.kind==='pptx').map(v=>v.page.id),before.pages.map(v=>v.page.id));assert.deepEqual(saved.originals,original.originals);assert.deepEqual(saved.sources,original.sources);
  const name=await page.locator('.cv-name').inputValue();await reopen(page,name,sourcePages+2);assert.deepEqual(await readLibrary(page),saved);
- await page.goto(new URL('/app/index.html',entry).href);await page.getByRole('button',{name:name+' 열기',exact:true}).click();await waitPages(page,sourcePages+2);
- assert.equal(await page.locator('[data-add-gai-app]').count(),0);assert.equal(await page.locator('[data-add-activity]').count(),0);await page.locator('[data-material-page="10"]').click();assert.equal(await page.locator('[data-edit-activity]').isVisible(),false);
+ await page.goto(new URL('/app/index.html',entry).href);await openListed(page,name);await waitPages(page,sourcePages+2);
+ assert.equal(await page.locator('[data-add-gai-app]').count(),0);assert.equal(await page.locator('[data-add-activity]').count(),0);await pickPage(page,'[data-material-page="10"]');assert.equal(await page.locator('[data-edit-activity]').isVisible(),false);
  await page.locator('.cv-show-btn').click();await runtime.locator('#step').waitFor();assert.equal(await runtime.locator('#count').innerText(),'4');await show.getByRole('button',{name:'다음 장',exact:true}).click();assert.match(await show.locator('.cv-show-stage').innerText(),/4개 검정 픽셀/);await show.getByRole('button',{name:'발표 끝내기 (Esc)',exact:true}).click();
  assert.deepEqual(await readLibrary(page),saved);assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
 });
@@ -112,14 +113,14 @@ test('a visited part keeps its persisted draft basis when another full part send
  await last.click();
  await page.locator('[data-material-page="100"][aria-pressed=true]').waitFor();
  await first.click();await page.locator('[data-material-page="0"][aria-pressed=true]').waitFor();
- await page.locator('[data-add-gai-app]').click();const maker=page.locator('.gai-maker');
- await maker.getByRole('button',{name:'가이X 연결',exact:true}).click();
- await maker.getByRole('button',{name:'가이X 연결됨',exact:true}).waitFor();
- await maker.getByRole('textbox',{name:'가이X에게 요청',exact:true}).fill('이 쪽 뒤에 짧은 단계 활동 앱을 만들어줘.');
+ await slideAction(page,'[data-add-gai-app]');const maker=page.locator('.gai-maker');
+ await maker.getByRole('button',{name:'AI-G 연결',exact:true}).click();
+ await maker.getByRole('button',{name:'AI-G 연결됨',exact:true}).waitFor();
+ await maker.getByRole('textbox',{name:'AI-G에게 요청',exact:true}).fill('이 쪽 뒤에 짧은 단계 활동 앱을 만들어줘.');
  await maker.getByRole('button',{name:'보내기',exact:true}).click();await appFrame(maker).getByRole('button',{name:'다음 단계 실행',exact:true}).waitFor();
  await maker.getByRole('button',{name:'이 앱을 슬라이드에 넣기',exact:true}).click();
  try{await maker.waitFor({state:'detached',timeout:8000});}catch(error){throw new Error('cross-part app save: '+await maker.locator('.gai-maker-status').innerText(),{cause:error});}
- await waitPages(page,22);
+ await waitPages(page,sourcePages+1);
  assert.equal(await page.locator('[data-material-page="1"]').getAttribute('data-document-id'),lastPart,'the full first part reserves app/result space in the previously visited part');
  const after=await readLibrary(page);assert.deepEqual(after.originals,before.originals);assert.deepEqual(after.sources,before.sources);
  const originalIds=before.graphs[0].pages.map(row=>row.page.id),pages=after.graphs[0].pages;
@@ -128,7 +129,7 @@ test('a visited part keeps its persisted draft basis when another full part send
  await page.locator('.cv-show-btn').click();const show=page.locator('.cv-show'),runtime=appFrame(show);
  await runtime.getByRole('button',{name:'다음 단계 실행',exact:true}).click();
  await show.getByRole('button',{name:'결과를 다음 슬라이드에 저장',exact:true}).click();
- await page.waitForFunction(()=>document.querySelector('.cv-show-count')?.textContent==='3 / 23');
+ await page.waitForFunction(n=>document.querySelector('.cv-show-count')?.textContent===`3 / ${n}`,sourcePages+2);
  assert.match(await show.locator('.cv-show-stage').innerText(),/1단계 완료/);
 });
 async function capture(page,width,name){if(!process.env.MINICAN_GAI_REPORT)return;const dir=resolve(root,'work',process.env.MINICAN_GAI_REPORT);assert.ok(dir.startsWith(resolve(root,'work')+sep));await mkdir(dir,{recursive:true});await page.screenshot({path:resolve(dir,`${width}-${name}.png`),fullPage:true,animations:'disabled'});}
@@ -137,11 +138,11 @@ for(const [width,height]of [[1440,1000],[390,844]])test(`Gai conversation create
  const sourceBytes=await readFile(sourcePath),{page,entry,errors,external}=await setup(t,{width,height});await importDeck(page,entry);
  await reopen(page,await page.locator('.cv-name').inputValue(),sourcePages);
  const original=await readLibrary(page),originalGraph=original.graphs[0],ids=originalGraph.pages.map(row=>row.page.id),after=Math.min(9,sourcePages-2),activityIndex=after+1,resultIndex=after+2;
- await page.locator(`[data-material-page="${after}"]`).click();await page.locator(`[data-material-page="${after}"][aria-pressed=true]`).waitFor();
- await page.locator('[data-add-gai-app]').click();const maker=page.locator('.gai-maker');await maker.waitFor();
- await maker.getByRole('button',{name:'가이X 연결',exact:true}).click();await maker.getByRole('button',{name:'가이X 연결됨',exact:true}).waitFor();
+ await pickPage(page,`[data-material-page="${after}"]`);await page.locator(`[data-material-page="${after}"][aria-pressed=true]`).waitFor({state:'attached'});
+ await slideAction(page,'[data-add-gai-app]');const maker=page.locator('.gai-maker');await maker.waitFor();
+ await maker.getByRole('button',{name:'AI-G 연결',exact:true}).click();await maker.getByRole('button',{name:'AI-G 연결됨',exact:true}).waitFor();
  assert.equal(await page.evaluate(()=>window.gaiFixtureConnections),1);
- await maker.getByRole('textbox',{name:'가이X에게 요청',exact:true}).fill('이 슬라이드 다음에서 쓸 단계 실행 활동을 만들어줘.');await maker.getByRole('button',{name:'보내기',exact:true}).click();
+ await maker.getByRole('textbox',{name:'AI-G에게 요청',exact:true}).fill('이 슬라이드 다음에서 쓸 단계 실행 활동을 만들어줘.');await maker.getByRole('button',{name:'보내기',exact:true}).click();
  const preview=appFrame(maker);try{await preview.getByRole('button',{name:'다음 단계 실행',exact:true}).waitFor({timeout:10000});}catch(error){await capture(page,width,'preview-failed');throw new Error(JSON.stringify({phase:'first preview',status:await maker.locator('.gai-maker-status').innerText(),errors,frames:page.frames().map(f=>f.url())}),{cause:error});}
  assert.equal(await preview.locator('#version').innerText(),'단계 연습 초안');
  await preview.getByRole('button',{name:'다음 단계 실행',exact:true}).click();assert.equal(await preview.locator('#count').innerText(),'1');
@@ -149,7 +150,7 @@ for(const [width,height]of [[1440,1000],[390,844]])test(`Gai conversation create
  await maker.locator('.gai-maker-status').filter({hasText:'미리보기 결과'}).waitFor();assert.equal(await page.locator('[data-material-page]').count(),sourcePages,'preview execution does not create a lesson slide');
  assert.deepEqual(await readLibrary(page),original,'previewing does not alter the pinned source');
 
- await maker.getByRole('textbox',{name:'가이X에게 요청',exact:true}).fill('제목을 수업 단계 활동으로 바꾸고, 같은 버튼과 진행 기록을 유지해줘.');await maker.getByRole('button',{name:'보내기',exact:true}).click();
+ await maker.getByRole('textbox',{name:'AI-G에게 요청',exact:true}).fill('제목을 수업 단계 활동으로 바꾸고, 같은 버튼과 진행 기록을 유지해줘.');await maker.getByRole('button',{name:'보내기',exact:true}).click();
  await preview.locator('#version').filter({hasText:'수업 단계 활동'}).waitFor();
  const calls=await page.evaluate(()=>window.gaiFixtureCalls);assert.equal(calls.length,2);
  const context=JSON.parse(calls[0].context);assert.equal(context.totalSlides,sourcePages);assert.equal(context.insertAfter,after+1);assert.equal(context.referenceOnly,true);
@@ -159,7 +160,7 @@ for(const [width,height]of [[1440,1000],[390,844]])test(`Gai conversation create
  await capture(page,width,'chat-preview');await maker.locator('.gai-maker-preview').scrollIntoViewIfNeeded();await capture(page,width,'app-preview');
  // Teachers can leave the conversation and resume the local draft without an AI call.
  await maker.getByRole('button',{name:'편집으로 돌아가기',exact:true}).click();await maker.waitFor({state:'detached'});
- await page.locator('[data-add-gai-app]').click();await maker.waitFor();await preview.locator('#version').filter({hasText:'수업 단계 활동'}).waitFor();
+ await slideAction(page,'[data-add-gai-app]');await maker.waitFor();await preview.locator('#version').filter({hasText:'수업 단계 활동'}).waitFor();
  assert.equal(await page.evaluate(()=>window.gaiFixtureCalls.length),2);assert.match(await maker.locator('.gai-maker-log').innerText(),/수업 흐름에 맞춰 수정/);
  await maker.getByRole('button',{name:'이 앱을 슬라이드에 넣기',exact:true}).click();await maker.waitFor({state:'detached'});await waitPages(page,sourcePages+1);
  await page.locator(`[data-material-page="${activityIndex}"][aria-pressed=true]`).waitFor();const activityId=await page.locator(`[data-material-page="${activityIndex}"]`).getAttribute('data-page-id'),name=await page.locator('.cv-name').inputValue();
@@ -180,42 +181,42 @@ for(const [width,height]of [[1440,1000],[390,844]])test(`Gai conversation create
  assert.deepEqual(saved.originals,original.originals);assert.deepEqual(saved.sources,[{bytes:sourceBytes.length,sha256:sha(sourceBytes)}]);
  for(let pass=0;pass<2;pass++){
   await reopen(page,name,sourcePages+2);assert.deepEqual(await readLibrary(page),saved);
-  await page.locator(`[data-material-page="${activityIndex}"]`).click();await page.locator('.cv-show-btn').click();await runtime.getByRole('button',{name:'다음 단계 실행',exact:true}).waitFor();
+  await pickPage(page,`[data-material-page="${activityIndex}"]`);await page.locator('.cv-show-btn').click();await runtime.getByRole('button',{name:'다음 단계 실행',exact:true}).waitFor();
   assert.equal(await runtime.locator('#count').innerText(),'3','saved app checkpoint restores in the sandbox after reload');
   await show.getByRole('button',{name:'다음 장',exact:true}).click();assert.match(await show.locator('.cv-show-stage').innerText(),/3단계 완료/);await show.getByRole('button',{name:'발표 끝내기 (Esc)',exact:true}).click();
  }
  // Editing routes back into the conversation, and an answer-only response may
  // not silently replace or reset the app and its saved classroom checkpoint.
- await page.locator(`[data-material-page="${activityIndex}"]`).click();await page.locator('[data-edit-activity]').click();await maker.waitFor();await preview.getByRole('button',{name:'다음 단계 실행',exact:true}).waitFor();
+ await pickPage(page,`[data-material-page="${activityIndex}"]`);await slideAction(page,'[data-edit-activity]');await maker.waitFor();await preview.getByRole('button',{name:'다음 단계 실행',exact:true}).waitFor();
  assert.equal(await preview.locator('#count').innerText(),'3');await maker.getByLabel('PPT 수업 흐름 함께 전달',{exact:true}).uncheck();
- await maker.getByRole('textbox',{name:'가이X에게 요청',exact:true}).fill('지금 앱이 수업에서 어떻게 쓰이는지 설명만 해줘.');await maker.getByRole('button',{name:'보내기',exact:true}).click();await maker.locator('.gai-maker-log').filter({hasText:'현재 수업 다음에 실행 활동'}).waitFor();
+ await maker.getByRole('textbox',{name:'AI-G에게 요청',exact:true}).fill('지금 앱이 수업에서 어떻게 쓰이는지 설명만 해줘.');await maker.getByRole('button',{name:'보내기',exact:true}).click();await maker.locator('.gai-maker-log').filter({hasText:'현재 수업 다음에 실행 활동'}).waitFor();
  assert.equal(await page.evaluate(()=>window.gaiFixtureCalls.at(-1).context),'');assert.deepEqual(await page.evaluate(()=>window.gaiFixtureCalls.at(-1).images),[]);assert.equal(await preview.locator('#count').innerText(),'3');
  await maker.getByRole('button',{name:'편집으로 돌아가기',exact:true}).click();await maker.waitFor({state:'detached'});assert.deepEqual(await readLibrary(page),saved,'discarding an app conversation does not alter the saved material');
  assert.equal(sha(await readFile(sourcePath)),sha(sourceBytes));assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
  // The public standalone does not offer GaiX creation or editing. Existing apps
  // still execute with their saved checkpoint, without connecting an account.
- await page.goto(new URL('/app/index.html',entry).href);await page.getByRole('button',{name:name+' 열기',exact:true}).click();await waitPages(page,sourcePages+2);
- assert.equal(await page.locator('[data-add-gai-app]').count(),0);assert.equal(await page.locator('[data-add-activity]').count(),0);await page.locator(`[data-material-page="${activityIndex}"]`).click();assert.equal(await page.locator('[data-edit-activity]').isVisible(),false);
+ await page.goto(new URL('/app/index.html',entry).href);await openListed(page,name);await waitPages(page,sourcePages+2);
+ assert.equal(await page.locator('[data-add-gai-app]').count(),0);assert.equal(await page.locator('[data-add-activity]').count(),0);await pickPage(page,`[data-material-page="${activityIndex}"]`);assert.equal(await page.locator('[data-edit-activity]').isVisible(),false);
  await page.locator('.cv-show-btn').click();await runtime.getByRole('button',{name:'다음 단계 실행',exact:true}).waitFor();assert.equal(await runtime.locator('#count').innerText(),'3');await show.getByRole('button',{name:'발표 끝내기 (Esc)',exact:true}).click();assert.deepEqual(await readLibrary(page),saved);
  if(process.env.MINICAN_GAI_REPORT){const dir=resolve(root,'work',process.env.MINICAN_GAI_REPORT);await mkdir(dir,{recursive:true});await writeFile(resolve(dir,`${width}-report.json`),JSON.stringify({scope:'common local UI with deterministic appMaker provider',viewport:{width,height},source:{pages:sourcePages,bytes:sourceBytes.length,sha256:sha(sourceBytes)},result:{pages:sourcePages+2,revision:graph.materialRef.revision,checkpoint:{count:3}},context:{totalSlides:context.totalSlides,nonemptyTextPages:context.slides.filter(s=>s.text).map(s=>s.position),emptyTextPages:context.slides.filter(s=>!s.text).map(s=>s.position),characters:calls[0].context.length},checks:['create and refine conversation','leave and resume conversation draft','bounded ordered PPT text context','context opt-out','opaque sandbox preview','preview no material mutation','present app inside slide','next-slide result','checkpoint restored twice','original source and revision zero preserved','answer-only edit preserves app'],notRun:['real AI generation','real account authentication','physical device','production deployment'],paidQa:false,browserToolLimitation:'Edge/Playwright OOPIF inspection requires site-isolation process flags disabled; product opaque sandbox and CSP remain enabled'},null,2)+'\n');}
 });
 
 for(const [width,height]of [[1440,1000],[390,844]])test(`chosen PPT references and an independent cross-part app position survive draft and save (${width}px)`,{...options,skip:options.skip||sourcePages!==101},async t=>{
  const {page,entry,errors,external}=await setup(t,{width,height});await importDeck(page,entry);const original=await readLibrary(page),before=original.graphs[0];
- assert.equal(await page.getByRole('button',{name:'픽셀아트 활동 넣기',exact:true}).count(),1);assert.equal(await page.locator('[data-add-gai-app] img.gai-owl').count(),1);
- await page.locator('[data-add-gai-app]').click();const maker=page.locator('.gai-maker');await maker.getByRole('button',{name:'선택 해제',exact:true}).click();
+ assert.equal(await page.getByRole('button',{name:'픽셀아트 활동 넣기',exact:true,includeHidden:true}).count(),1);assert.equal(await page.locator('[data-add-gai-app] img.gai-owl').count(),1);
+ await slideAction(page,'[data-add-gai-app]');const maker=page.locator('.gai-maker');await maker.getByRole('button',{name:'선택 해제',exact:true}).click();
  for(const n of [2,3,4])await maker.getByRole('checkbox',{name:`${n}쪽 참고`,exact:true}).check();
  await maker.getByRole('checkbox',{name:'5쪽 참고',exact:true}).click();await maker.locator('.gai-maker-status').filter({hasText:'최대 3쪽'}).waitFor();assert.equal(await maker.getByRole('checkbox',{name:'5쪽 참고',exact:true}).isChecked(),false);
  const afterPageId=before.pages[100].page.id;await maker.getByRole('combobox',{name:'앱 넣을 위치',exact:true}).selectOption(afterPageId);
  assert.match(await maker.locator('.gai-maker-current-slide').innerText(),/101쪽/);assert.ok(await maker.locator('.gai-maker-slide-large > *').count());
- await maker.getByRole('button',{name:'편집으로 돌아가기',exact:true}).click();await page.locator('[data-add-gai-app]').click();await maker.getByRole('button',{name:'보내기',exact:true}).waitFor();
+ await maker.getByRole('button',{name:'편집으로 돌아가기',exact:true}).click();await slideAction(page,'[data-add-gai-app]');await maker.getByRole('button',{name:'보내기',exact:true}).waitFor();
  await page.waitForFunction(()=>document.querySelector('.gai-maker-compose button[type=submit]')?.disabled===false);
  assert.equal(await maker.getByRole('combobox',{name:'앱 넣을 위치',exact:true}).inputValue(),afterPageId);assert.equal(await maker.getByRole('checkbox',{name:'2쪽 참고',exact:true}).isChecked(),true);
- await maker.getByRole('button',{name:'가이X 연결',exact:true}).click();await maker.getByRole('button',{name:'가이X 연결됨',exact:true}).waitFor();
- await maker.getByRole('textbox',{name:'가이X에게 요청',exact:true}).fill('이 수업을 마친 뒤에 실행할 단계를 만들어줘.');await maker.getByRole('button',{name:'보내기',exact:true}).click();await appFrame(maker).getByRole('button',{name:'다음 단계 실행',exact:true}).waitFor();
+ await maker.getByRole('button',{name:'AI-G 연결',exact:true}).click();await maker.getByRole('button',{name:'AI-G 연결됨',exact:true}).waitFor();
+ await maker.getByRole('textbox',{name:'AI-G에게 요청',exact:true}).fill('이 수업을 마친 뒤에 실행할 단계를 만들어줘.');await maker.getByRole('button',{name:'보내기',exact:true}).click();await appFrame(maker).getByRole('button',{name:'다음 단계 실행',exact:true}).waitFor();
  const [call]=await page.evaluate(()=>window.gaiFixtureCalls),reference=JSON.parse(call.context);assert.deepEqual(reference.slides.map(v=>v.position),[2,3,4]);assert.equal(reference.insertAfter,101);assert.equal(reference.placement.pageId,afterPageId);assert.deepEqual(call.images.map(v=>v.name),['온바탕 2쪽.jpg','온바탕 3쪽.jpg','온바탕 4쪽.jpg']);assert.ok(call.images.every(v=>v.mimeType==='image/jpeg'&&v.data.length<=409600));
- await page.locator('.cv-activity-config').evaluate(node=>node.scrollTop=0);if(process.env.MINICAN_GAI_REPORT)await page.screenshot({path:resolve(root,'work',process.env.MINICAN_GAI_REPORT,`${width}-chosen-slide-flow.png`),fullPage:false});await maker.getByRole('checkbox',{name:'선택한 슬라이드 화면도 전달',exact:true}).uncheck();await maker.getByRole('textbox',{name:'가이X에게 요청',exact:true}).fill('수업 단계 활동으로 제목을 바꿔줘.');await maker.getByRole('button',{name:'보내기',exact:true}).click();await appFrame(maker).locator('#version').filter({hasText:'수업 단계 활동'}).waitFor();assert.deepEqual(await page.evaluate(()=>window.gaiFixtureCalls.at(-1).images),[]);
- await maker.getByRole('button',{name:'이 앱을 슬라이드에 넣기',exact:true}).click();await maker.waitFor({state:'detached'});await waitPages(page,22);
+ await page.locator('.cv-activity-config').evaluate(node=>node.scrollTop=0);if(process.env.MINICAN_GAI_REPORT)await page.screenshot({path:resolve(root,'work',process.env.MINICAN_GAI_REPORT,`${width}-chosen-slide-flow.png`),fullPage:false});await maker.getByRole('checkbox',{name:'선택한 슬라이드 화면도 전달',exact:true}).uncheck();await maker.getByRole('textbox',{name:'AI-G에게 요청',exact:true}).fill('수업 단계 활동으로 제목을 바꿔줘.');await maker.getByRole('button',{name:'보내기',exact:true}).click();await appFrame(maker).locator('#version').filter({hasText:'수업 단계 활동'}).waitFor();assert.deepEqual(await page.evaluate(()=>window.gaiFixtureCalls.at(-1).images),[]);
+ await maker.getByRole('button',{name:'이 앱을 슬라이드에 넣기',exact:true}).click();await maker.waitFor({state:'detached'});await waitPages(page,sourcePages+1);
  const saved=await readLibrary(page),pages=saved.graphs[0].pages;assert.deepEqual(pages.slice(0,101).map(v=>v.page.id),before.pages.map(v=>v.page.id));assert.equal(pages[101].page.origin.pageId,afterPageId);assert.equal(pages[101].page.origin.documentId,before.pages[100].document.id);assert.equal(pages[101].page.activity.title,'수업 단계 활동');assert.deepEqual(saved.originals,original.originals);assert.deepEqual(saved.sources,original.sources);
- await reopen(page,await page.locator('.cv-name').inputValue(),22);assert.deepEqual(await readLibrary(page),saved);assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
+ await reopen(page,await page.locator('.cv-name').inputValue(),sourcePages+1);assert.deepEqual(await readLibrary(page),saved);assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
 });

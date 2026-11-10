@@ -6,6 +6,7 @@ import {createServer} from 'node:http';
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {resolve, extname, sep} from 'node:path';
+import {openTool} from './open-tool.mjs';
 
 const root = resolve(fileURLToPath(new URL('../../', import.meta.url)));
 const options = {skip: !process.env.MINICAN_PLAYWRIGHT_PATH, timeout: 180000};
@@ -65,8 +66,10 @@ test('another app opens Onbatang, gets a PNG and the record on 다 했어요, an
   await f.locator('[data-embed-close]').waitFor();
   assert.equal(await f.locator('.cv-name').inputValue(), '두 번째');
   assert.equal(await f.locator('.cv-canvas .fe-card .fi').count(), 0, 'a fresh, empty drawing');
+  // 도구는 묶음으로 열린다: 움직임 칸은 '디자인' 묶음 안에 있고, 글은 '추가' 묶음 안에 있다.
+  await openTool(f, 'layout');
   assert.equal(await f.locator('.fe-tab[data-tab="motion"]').count(), 0, 'simple tools by default');
-  await f.locator('.fe-tab[data-tab="text"]').click();
+  await openTool(f, 'text');
   await f.locator('.fe-textadd.title').click();
   await f.locator('.cv-canvas .fe-card .fi-text').waitFor();
   await f.locator('[data-embed-close]').click();
@@ -75,6 +78,7 @@ test('another app opens Onbatang, gets a PNG and the record on 다 했어요, an
   await page.evaluate(() => window.go({ratio: '1:1', title: '두 번째', tools: 'full'}));
   await f.locator('[data-embed-done]').waitFor();
   assert.equal(await f.locator('.cv-canvas .fe-card .fi-text').count(), 1, 'the closed draft');
+  await openTool(f, 'layout');
   assert.equal(await f.locator('.fe-tab[data-tab="motion"]').count(), 1, 'full tools');
   await f.locator('[data-embed-done]').click();
   const second = await result(page);

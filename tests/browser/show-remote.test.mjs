@@ -24,6 +24,9 @@ await startMinican({storage:'remote-fixture',showAudience:{open:async({state,roo
 await openSavedDesign(record.id);window.recordId=record.id;window.ready=true;
 </script>`;
 
+// 리모컨 상태의 장 차례와 글(그 뒤로 큐 · 미리 보기 · 검은 화면 · 활동 칸이 늘었다).
+const turn = ({at, total, title, page, next, notes}) => ({at, total, title, page, next, notes});
+
 test('a host phone remote and a host audience panel: buttons in the show bar, state on every turn, remote commands, both closed with the show', options, async t => {
   const server = createServer(async (req, res) => {
     try {
@@ -52,13 +55,14 @@ test('a host phone remote and a host audience panel: buttons in the show bar, st
   assert.match(await button.textContent(), /휴대폰 리모컨/);
   await button.click();
   await page.waitForFunction(() => window.opened === 1 && window.updates.length > 0);
-  assert.deepEqual(await page.evaluate(() => window.firstState), {at: 0, total: 3, title: '리모컨 발표', page: '우리 동네', next: '시장 가는 길', notes: '첫 장에서 물어보기'});
+  // 리모컨 상태에는 그 뒤로 큐 · 미리 보기 · 검은 화면 · 활동 칸이 늘었다(리모컨 큐 노트 · 미리 보기). 여기서는 장 차례와 글만 본다.
+  assert.deepEqual(turn(await page.evaluate(() => window.firstState)), {at: 0, total: 3, title: '리모컨 발표', page: '우리 동네', next: '시장 가는 길', notes: '첫 장에서 물어보기'});
   await button.click();
   assert.equal(await page.evaluate(() => window.opened), 1, 'a second press does not open another remote');
   await page.evaluate(() => window.command({action: 'next'}));
   assert.equal(await count.textContent(), '2 / 3');
   await page.waitForFunction(() => window.updates.at(-1).at === 1);
-  assert.deepEqual(await page.evaluate(() => window.updates.at(-1)), {at: 1, total: 3, title: '리모컨 발표', page: '시장 가는 길', next: '', notes: ''});
+  assert.deepEqual(turn(await page.evaluate(() => window.updates.at(-1))), {at: 1, total: 3, title: '리모컨 발표', page: '시장 가는 길', next: '', notes: ''});
   await page.evaluate(() => window.command({action: 'go', at: 2}));
   assert.equal(await count.textContent(), '3 / 3');
   await page.evaluate(() => window.command({action: 'prev'}));
