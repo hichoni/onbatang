@@ -120,7 +120,8 @@ export function freshCopy(file, { now = Date.now(), rand = Math.random } = {}) {
       return { ...slide, id: page, ...(fresh && slide?.source?.sourceDocumentId === old ? { source: { ...slide.source, sourceDocumentId: fresh } } : {}),
         ...(slide.activity ? { activity: { ...slide.activity, id: newId('a') } } : {}) };
     });
-    return { ...input, id, slides, ...(fresh ? { source: { ...input.source, sourceDocumentId: fresh } } : {}) };
+    // 사본은 파일 속 묶음(fileDeck)을 버린다: 이 기기의 원본 묶음에 섞이지 않게. 파일에 묶음(deck)이 있으면 연 쪽(app.js)이 새로 적는다.
+    return { ...input, id, slides, fileDeck: undefined, ...(fresh ? { source: { ...input.source, sourceDocumentId: fresh } } : {}) };
   });
   const deck = file.deck ? { ...file.deck, ...(file.deck.pageOrder ? { pageOrder: file.deck.pageOrder.map((id) => pages.get(id) || id) } : {}) } : null;
   return { ...file, records, deck };

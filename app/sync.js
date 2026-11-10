@@ -16,12 +16,27 @@ export function syncsRecord(sync, record) {
   try { return sync.accepts(record) === true; } catch { return false; }
 }
 
+/** 계정에서 그림을 함께 받는 수. 그림 하나도 사진을 여러 장 함께 받는다(들여 쓰는 곳의 load). */
+export const PULL_AT_ONCE = 4;
+/** items 를 limit 개까지 함께 처리한다. 하나라도 실패하면 새로 시작하지 않고 그 오류로 끝난다(이미 시작한 것은 마친다). */
+export async function eachAtOnce(items, limit, work) {
+  let next = 0, failed = null;
+  const lane = async () => {
+    while (!failed && next < items.length) {
+      const item = items[next++];
+      try { await work(item); } catch (error) { failed ||= { error }; }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, lane));
+  if (failed) throw failed.error;
+}
+
 /**
  * 이 기기와 계정을 맞춘다. 더 늦게 고친 쪽이 이긴다.
  * - 계정에만 있거나 계정 쪽이 더 새것 → 이 기기에 적는다
  * - 이 기기에만 있거나 이 기기 쪽이 더 새것 → 계정에 올린다
  * - 다른 기기에서 지운 그림 → 그 뒤에 이 기기에서 고친 것이 아니면 이 기기에서도 지운다
- * store: { list(), put(record), remove(id) } (이 기기의 저장소). 돌려주는 것: { got, sent, removed } 개수.
+ * store: { list(), put(record), remove(id), got?(그림, 받은 수, 받을 수) } (이 기기의 저장소). 돌려주는 것: { got, sent, removed } 개수.
  */
 export async function mergeAccount(sync, store) {
   const pulled = await sync.pull();
@@ -42,15 +57,17 @@ export async function mergeAccount(sync, store) {
     }
   }
   const there = new Map(remote.map((r) => [r.id, r]));
-  for (const r of remote) {
-    const here = mine.get(r.id);
-    if (!here || r.updatedAt > here.updatedAt) {
-      const full = cleanRecord(sync.load ? await sync.load(r) : r);
-      if (!full) continue;
-      mine.set(r.id, await store.put(full));
-      out.got++;
-    }
-  }
+  // 받을 그림은 몇 개씩 함께 받는다(새 기기에서 수십 개를 하나씩 받으면 사진마다 기다려 아주 오래 걸렸다).
+  // store.got(그림 | null, 받은 수, 받을 수): 하나 받을 때마다 알린다(첫 화면이 받는 대로 보여 주고 몇 개째인지 알린다).
+  const wanted = remote.filter((r) => { const here = mine.get(r.id); return !here || r.updatedAt > here.updatedAt; });
+  let done = 0;
+  if (wanted.length) store.got?.(null, 0, wanted.length);
+  await eachAtOnce(wanted, PULL_AT_ONCE, async (r) => {
+    const full = cleanRecord(sync.load ? await sync.load(r) : r);
+    const saved = full ? await store.put(full) : null;
+    if (saved) { mine.set(r.id, saved); out.got++; }
+    store.got?.(saved, ++done, wanted.length);
+  });
   for (const here of mine.values()) {
     const r = there.get(here.id);
     if (!r || here.updatedAt > r.updatedAt) {

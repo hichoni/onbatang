@@ -173,6 +173,21 @@ const cleanSlide = (d, index, documentId) => {
     return { ...out, ...(crop?{crop}:{}), ...(runs.length?{runs}:{}), ...(chart||{}), ...(math||{}), ...(item.layout==='slide'?{layout:'slide'}:{}), ...metadata({ ...item, id: item.id ?? legacyId('e', `${documentId}:${pageId}:${i}`) }, { identity: true }) };
   }) };
 };
+const MAX_DECK_PARTS = 100;
+/**
+ * 온바탕 파일로 연 여러 파트 자료의 묶음(app.js 의 fileDecks)을 파트마다 적어 둔 것: { id, title?, part(0부터), parts, pageOrder? }.
+ * 그림 기록 안에 있으므로 계정을 거쳐 다른 기기에서도 한 자료로 묶인다(예전에는 처음 연 기기의 localStorage 에만 있었다).
+ * 모양이 이상하면 버린다(그림은 그대로 읽는다).
+ */
+export function fileDeckOf(v) {
+  if (!v || typeof v !== 'object' || Array.isArray(v) || !isId(v.id)) return {};
+  const { part, parts } = v;
+  if (!Number.isSafeInteger(parts) || parts < 2 || parts > MAX_DECK_PARTS || !Number.isSafeInteger(part) || part < 0 || part >= parts) return {};
+  const title = cleanName(v.title);
+  const order = Array.isArray(v.pageOrder) && v.pageOrder.length <= parts * MAX_SLIDES && v.pageOrder.every(isId)
+    && new Set(v.pageOrder).size === v.pageOrder.length ? [...v.pageOrder] : null;
+  return { fileDeck: { id: v.id, ...(title ? { title } : {}), part, parts, ...(order ? { pageOrder: order } : {}) } };
+}
 /**
  * 저장해 둔 기록 하나를 정리한다. { id, name, ratio, slides, updatedAt, … } 모양이 아니면 null.
  * 슬라이드(디자인)는 그대로 둔다(그릴 때 모듈의 cleanDesign 이 정리한다). 다만 터무니없이 큰 것은 받지 않는다.
@@ -196,7 +211,7 @@ export function cleanRecord(raw) {
   const out = {
     id, schemaVersion: SCHEMA_VERSION, revision,
     size, originalSize: cleanSize(r.originalSize ?? size, 'originalSize'),
-    source: { kind: 'local' }, ...metadata(r), assets: cleanAssets(r.assets),
+    source: { kind: 'local' }, ...metadata(r), assets: cleanAssets(r.assets), ...fileDeckOf(r.fileDeck),
     name: cleanName(r.name) || '이름 없는 그림',
     ratio: `${size.width}:${size.height}`,
     slides,
@@ -221,7 +236,8 @@ export function migrateRecord(raw) {
 /** A copy has fresh identities; origin references describe where its content came from. */
 export function copyRecord(raw) {
   const r = migrateRecord(raw), id = newDesignId();
-  return migrateRecord({ ...r, id, revision: 0, name: `${r.name} 복사`, origin: { documentId: r.id, revision: r.revision },
+  // 사본은 원래 묶음(fileDeck)에 끼지 않는다: 같은 파트 번호로 원본 묶음에 섞여 들어가지 않게.
+  return migrateRecord({ ...r, fileDeck: undefined, id, revision: 0, name: `${r.name} 복사`, origin: { documentId: r.id, revision: r.revision },
     slides: r.slides.map(p => ({ ...p, id: newId('p'), ...(p.activity?{activity:{...p.activity,id:newId('a')}}:{}), origin: { documentId: r.id, pageId: p.id, revision: r.revision },
       items: p.items.map(e => ({ ...e, id: newId(), origin: { documentId: r.id, pageId: p.id, elementId: e.id, revision: r.revision } })) })) });
 }
