@@ -572,7 +572,11 @@ function render() {
     paint();
   }
   if (S.error) mine.append(el('p', { class: 'warn-box', text: S.error }));
-  for (const issue of listDesignIssues()) mine.append(el('div', { class: 'warn-box', role: 'status' },
+  // 브라우저가 따로 둔 저장 파일이 지워져 읽을 수 없는 그림(store.js): 하나씩 알리지 않고 한 번에. 계정이 있으면 계정 맞추기가 다시 받아 덮어쓴다.
+  const lost = listDesignIssues().filter((issue) => issue.code === 'unreadable').length;
+  if (lost) mine.append(el('p', { class: 'warn-box', role: 'status', dataset: { unreadable: String(lost) },
+    text: `이 기기에 저장된 그림 ${lost}개를 읽을 수 없어요. 브라우저가 따로 두는 저장 파일이 지워졌어요(청소 프로그램 등). ${sync ? '계정에 올라가 있던 그림은 계정에서 다시 받아 와요.' : '내려받아 둔 온바탕 파일이 있으면 다시 열어 주세요.'}` }));
+  for (const issue of listDesignIssues().filter((issue) => issue.code !== 'unreadable')) mine.append(el('div', { class: 'warn-box', role: 'status' },
     el('p', { text: `${issue.name || '그림'}: 지금 열 수 없는 자료예요 (${issue.code}). 원본은 그대로 남아 있어요.` }),
     el('button', { class: 'btn', type: 'button', onClick: async () => {
       try { saveBlob(new Blob([JSON.stringify(await getOriginalDesign(issue.id), null, 2)], { type: 'application/json' }), 'onbatang-original.json'); }

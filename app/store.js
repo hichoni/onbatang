@@ -43,10 +43,33 @@ const run = async (mode, work, stores = [STORE], { commit = false } = {}) => {
   });
 };
 
-/** 이 기기의 그림들(최근에 고친 것부터). 모양이 이상한 것은 뺀다. */
+// 그림 칸을 한 번 읽는다. 실패하면 그 요청의 오류를 돌려준다(요청이 실패한 바로 그때는 tx.error 가 아직 비어 있어 run 으로는 오류가 null 로 온다).
+const read = async (work) => {
+  const db = await open();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction([STORE], 'readonly'), req = work(tx.objectStore(STORE));
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = (event) => { event.preventDefault(); reject(req.error || new Error('read failed')); };
+    tx.onabort = () => reject(tx.error || req.error || new Error('aborted'));
+  });
+};
+// 브라우저는 큰 그림을 따로 파일로 둔다. 그 파일이 지워지면(청소 프로그램 등) 그 그림은 읽을 수 없고(NotReadableError),
+// 한꺼번에 읽기(getAll)는 그런 그림이 하나만 있어도 통째로 실패해 나머지 그림까지 하나도 보이지 않았다.
+const lostFile = (error) => error?.name === 'NotReadableError';
+/** 이 기기의 그림들(최근에 고친 것부터). 모양이 이상한 것은 뺀다.
+ *  읽을 수 없는 그림도 빼고 listDesignIssues 에 'unreadable' 로 남긴다(지우지 않는다: 계정 맞추기가 계정의 것으로 덮어쓸 수 있다). */
 export async function listDesigns() {
-  const all = await run('readonly', (s) => s.getAll());
   issues = [];
+  let all;
+  try { all = await read((s) => s.getAll()); }
+  catch (error) {
+    if (!lostFile(error)) throw error;
+    all = [];
+    for (const key of await read((s) => s.getAllKeys())) {
+      try { all.push(await read((s) => s.get(key))); }
+      catch (one) { if (!lostFile(one)) throw one; issues.push({ id: String(key), name: '', code: 'unreadable' }); }
+    }
+  }
   const records = [];
   for (const raw of all || []) {
     if (raw?.id && raw.schemaVersion === undefined) legacy.add(raw.id);
