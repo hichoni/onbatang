@@ -109,6 +109,7 @@ const S = {
   open: null,
   error: '',                  // 이 창에서는 기기에 저장할 수 없다
   account: '',                // 계정과 맞추기: '' · 'syncing' · 'ok' · 'bad'
+  pulling: null,              // 계정에서 그림을 받는 중이면 { done, total }
 };
 let homeRail = null;
 /** 지금 무슨 화면인지 적어 둔다(app.css 가 이것을 보고 짜임을 바꾼다): 'home' · 'edit'. 들여 쓰는 곳에도 알린다(onView). */
@@ -187,7 +188,9 @@ const videoMB = () => (Number.isFinite(sync?.videoMB) && sync.videoMB > 0 ? Math
 function accountNote() {
   if (!sync) return [el('b', { text: '이 기기에 저장돼요.' }), ' 완성한 그림은 내려받아 두세요.'];
   if (S.account === 'bad') return [el('b', { text: '계정에 연결하지 못했어요.' }), ' 이 기기에는 저장돼요. 새로 고침하면 다시 맞춰요.'];
-  if (S.account === 'syncing') return [el('b', { text: '계정과 맞추는 중이에요…' })];
+  if (S.account === 'syncing') return S.pulling?.total
+    ? [el('b', { text: `계정에서 그림을 받는 중이에요 (${S.pulling.done}/${S.pulling.total})` }), ' 받은 그림부터 바로 열 수 있어요.']
+    : [el('b', { text: '계정과 맞추는 중이에요…' })];
   return [el('b', { text: '내 계정에 저장돼요.' }), videoMB() ? ` 다른 기기에서도 움직임까지 그대로 열려요. 바탕 영상도 한 개 ${videoMB()}MB까지 함께 올라가요.` : ' 다른 기기에서도 열려요. 바탕에 깐 영상은 이 기기에만 있어요.'];
 }
 // ---------- 시작 ----------
@@ -233,18 +236,31 @@ async function refresh() {
 }
 /** 계정이 있으면 이 기기의 그림과 계정의 그림을 맞춘다(sync.js). 첫 화면에 있을 때만 목록을 다시 그린다. */
 async function syncAccount() {
-  if (!sync || S.error) return;
+  if (S.error) return;
+  if (!sync) { await shareFileDecks(); return; }
   S.account = 'syncing';
   if (!S.open) render();
+  // 받는 대로 첫 화면에 더한다. 첫 화면을 다시 그리는 것은 잠깐씩 모아서(그사이에는 받은 수만 바꾼다).
+  let paint = 0;
+  const got = (record, done, total) => {
+    S.pulling = { done, total };
+    if (record) upsert(record);
+    if (S.open) return;
+    app.querySelector('.cv-account-text')?.replaceChildren(...accountNote());
+    if (record && !paint) paint = setTimeout(() => { paint = 0; if (!S.open && S.account === 'syncing') render(); }, 700);
+  };
   try {
-    await mergeAccount(sync, { list: listDesigns, put: putDesign, remove: removeDesign });
+    await mergeAccount(sync, { list: listDesigns, put: putDesign, remove: removeDesign, got });
     S.account = 'ok';
     if (!S.open) S.list = await listDesigns();
   } catch (ex) {
     console.warn(ex);
     S.account = 'bad';
+  } finally {
+    clearTimeout(paint); S.pulling = null;
   }
   if (!S.open) render();
+  if (S.account === 'ok') await shareFileDecks();
 }
 /** 계정에 다 올렸을 때 꾸미는 화면의 저장 상태를 알린다. */
 function pushed(id, ok) {
@@ -659,7 +675,7 @@ let openDeck = '';                 // 파트를 펼쳐 둔 PPT 묶음(한 번에
 // 호스트가 아는 PPT 묶음(가져온 한 번 = 한 묶음, materialNavigation.groups). 목록이 바뀔 때 한 번 묻고, 답이 오면 다시 그린다.
 let groupsFor = null, groupsKnown = [];
 function homeGroups(list) {
-  const mine = fileDecks();
+  const mine = fileDecks(list);
   if (typeof materialNavigation?.groups !== 'function') return mine;
   if (groupsFor !== list) {
     groupsFor = list;
@@ -674,13 +690,53 @@ function homeGroups(list) {
 // 온바탕 파일로 연 여러 파트 PPT 의 묶음(이름 · 파트 · 쪽 차례). 이 기기에 PPT 원본(전체 자료)이 없어도 처음 기기와 같은 이름 · 차례로 묶어 보여 준다.
 // [{ id, title, documents: [그림 id…], pageOrder?, createdAt }]. 그 그림들이 지워지면 묶음은 저절로 쓰이지 않는다(homeEntries 가 파트 둘 이상만 묶는다).
 const fileDecksKey = () => `onbatang-file-decks-v1:${storageName()}`;
-function fileDecks() {
+function localFileDecks() {
   try { const v = JSON.parse(localStorage.getItem(fileDecksKey()) || '[]'); return Array.isArray(v) ? v.filter((d) => d && typeof d.id === 'string' && Array.isArray(d.documents)) : []; }
   catch { return []; }
 }
+// 묶음은 파트 그림 기록에도 적혀(fileDeck, designs.js) 계정을 거쳐 다른 기기로 간다. 그 기기에서는 기록으로 다시 묶는다.
+// 파트 번호가 겹치거나 빠진 것이 있으면 묶지 않는다(사본 · 일부만 받은 경우).
+function recordFileDecks(list) {
+  const byDeck = new Map();
+  for (const r of list || []) if (r?.fileDeck) (byDeck.get(r.fileDeck.id) || byDeck.set(r.fileDeck.id, []).get(r.fileDeck.id)).push(r);
+  const out = [];
+  for (const [id, parts] of byDeck) {
+    parts.sort((a, b) => a.fileDeck.part - b.fileDeck.part);
+    if (parts.length < 2 || new Set(parts.map((r) => r.fileDeck.part)).size !== parts.length) continue;
+    const head = parts.reduce((a, b) => ((b.updatedAt || 0) > (a.updatedAt || 0) ? b : a)).fileDeck;
+    out.push({ id, title: head.title || '', documents: parts.map((r) => r.id), ...(head.pageOrder ? { pageOrder: head.pageOrder } : {}), createdAt: 0 });
+  }
+  return out;
+}
+// 이 기기에 적힌 묶음이 먼저다(이 기기에서 바꾼 쪽 차례를 지킨다). 이 기기에 없는 묶음은 그림 기록으로 채운다.
+function fileDecks(list = S.list || []) {
+  const mine = localFileDecks(), known = new Set(mine.flatMap((d) => d.documents));
+  return [...mine, ...recordFileDecks(list).filter((d) => !d.documents.some((id) => known.has(id)))];
+}
+const fileDeckFor = (deck, part) => ({ id: deck.id, title: deck.title || '', part, parts: deck.documents.length, ...(Array.isArray(deck.pageOrder) ? { pageOrder: deck.pageOrder } : {}) });
+// 0.141.0 전에 온바탕 파일로 연 묶음은 이 기기(localStorage)에만 있었다. 그 파트 기록에도 묶음을 적어 계정에 올린다.
+// 고친 때는 1ms 만 늦춘다: 내 그림의 차례는 그대로이고, 다른 기기는 새것으로 알아 받는다. 꾸미는 중에는 하지 않는다(다음에 한다).
+async function shareFileDecks() {
+  if (S.open || !S.list) return;
+  const byId = new Map(S.list.map((r) => [r.id, r]));
+  for (const deck of localFileDecks()) {
+    // fileDeckOf(designs.js)가 받는 모양만: 이름표 모양 · 파트 2~100개
+    if (!/^[a-z][a-z0-9]{5,31}$/.test(deck.id) || deck.documents.length < 2 || deck.documents.length > 100) continue;
+    for (const [part, id] of deck.documents.entries()) {
+      const r = byId.get(id);
+      if (!r || (r.fileDeck?.id === deck.id && r.fileDeck.part === part && r.fileDeck.parts === deck.documents.length)) continue;
+      if (S.open) return;
+      try {
+        const saved = await putDesign({ ...r, fileDeck: fileDeckFor(deck, part), updatedAt: (r.updatedAt || 0) + 1 });
+        upsert(saved);
+        if (accountFor(saved)) pusher.queue(saved);
+      } catch (error) { console.warn(error); }
+    }
+  }
+}
 function keepFileDeck(deck) {
   try {
-    const known = new Set(deck.documents), rest = fileDecks().filter((d) => !d.documents.some((id) => known.has(id)));
+    const known = new Set(deck.documents), rest = localFileDecks().filter((d) => !d.documents.some((id) => known.has(id)));
     localStorage.setItem(fileDecksKey(), JSON.stringify([...rest, deck].slice(-MAX_DESIGNS)));
   } catch (error) { console.warn(error); }
 }
@@ -1167,7 +1223,7 @@ async function looseDeck(O){
   const list=await listDesigns(),entry=homeEntries(list,homeGroups(list)).find(e=>e.deck&&e.records.some(r=>r.id===O.record.id));
   if(!entry||entry.records.length<2)return null;
   // 온바탕 파일로 연 PPT: 첫 기기의 쪽 차례를 쓰고, 쪽 차례 바꾸기도 이 기기에 적어 둔다(fileDeck).
-  const file=fileDecks().find(d=>d.documents.includes(O.record.id)&&entry.records.every(r=>d.documents.includes(r.id)));
+  const file=fileDecks(list).find(d=>d.documents.includes(O.record.id)&&entry.records.every(r=>d.documents.includes(r.id)));
   return {title:entry.name,documents:entry.records.map(r=>migrateRecord(r.id===O.record.id?{...O.record,slides:currentSlides(O)}:r)),materialRef:null,loose:true,...(file?{fileDeck:file.id,...(Array.isArray(file.pageOrder)?{pageOrder:file.pageOrder}:{})}:{})};
 }
 const LOOSE_PUBLIC='여러 파트로 나뉜 PPT라 쪽 차례 바꾸기는 한 파트 안에서만 돼요. 모든 쪽을 보고 고치는 것은 그대로 할 수 있어요.';
@@ -4163,12 +4219,14 @@ async function openOnbatangFile(file) {
     }
     // 계정에 저장하는 곳(GBE-AI Lab)에서는 받은 때를 고친 때로 적는다: 계정의 예전 것이 받은 것을 덮거나 지우지 않게.
     const stamp = pusher ? Date.now() : 0, made = [];
-    for (const record of got.records) {
-      const saved = await putDesign(stamp ? { ...record, updatedAt: stamp } : record);
+    // 여러 파트 묶음: 이 기기(localStorage)와 함께 파트 기록마다 적어 계정을 거쳐 다른 기기에서도 한 자료로 보이게 한다.
+    const deck = got.deck && got.records.length > 1 ? { id: `f${got.records[0].id}`, title: got.deck.title || title, documents: got.records.map((r) => r.id), ...(got.deck.pageOrder ? { pageOrder: got.deck.pageOrder } : {}), createdAt: Date.now() } : null;
+    for (const [part, record] of got.records.entries()) {
+      const saved = await putDesign({ ...record, ...(stamp ? { updatedAt: stamp } : {}), ...(deck ? { fileDeck: fileDeckFor(deck, part) } : {}) });
       made.push(saved); upsert(saved);
       if (accountFor(saved)) pusher.queue(saved);
     }
-    if (got.deck) keepFileDeck({ id: `f${made[0].id}`, title: got.deck.title || title, documents: made.map((r) => r.id), ...(got.deck.pageOrder ? { pageOrder: got.deck.pageOrder } : {}), createdAt: Date.now() });
+    if (deck) keepFileDeck(deck);
     S.list = await listDesigns();
     loading.node.remove(); app.inert = wasInert;
     if (S.open) return true;

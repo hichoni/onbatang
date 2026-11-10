@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { mergeAccount, createPusher, syncsRecord } from '../app/sync.js';
+import { mergeAccount, createPusher, syncsRecord, eachAtOnce, PULL_AT_ONCE } from '../app/sync.js';
 import { newDesignId } from '../app/designs.js';
 
 const rec = (id, updatedAt, name = '그림') => ({ id, name, ratio: '1:1', slides: [{ bg: 'paper', items: [{ t: 'text', x: 50, y: 50, w: 80, text: name }] }], uploads: [], updatedAt });
@@ -99,4 +99,39 @@ test('앱은 sync 가 있으면 저장 뒤에 계정으로 올리고, 지울 때
   assert.match(app, /if \(pusher\) pusher\.cancel\(record\.id\);\n\s+if \(sync && syncsRecord\(sync, record\)\) sync\.drop\(record\.id\)/);
   assert.match(app, /render\(\);\n  syncAccount\(\);\n\}/);
   assert.match(app, /\['pull', 'push', 'drop'\]\.every/);
+});
+
+test('계정에서 받을 그림은 몇 개씩 함께 받고, 받을 때마다 몇 개째인지 알린다', async () => {
+  const ids = Array.from({ length: 10 }, (_, n) => newDesignId(1700000000100 + n, n / 20));
+  const store = localStore([]), seen = [];
+  let running = 0, most = 0;
+  const sync = { pull: async () => ({ records: ids.map((id, n) => rec(id, 100 + n)), deleted: [] }), push: async () => {}, drop: async () => {},
+    load: async (r) => { running++; most = Math.max(most, running); await new Promise((ok) => setTimeout(ok, 20)); running--; return r; } };
+  const started = Date.now();
+  const out = await mergeAccount(sync, { ...store, got: (r, done, total) => seen.push([r?.id ?? null, done, total]) });
+  assert.equal(out.got, 10);
+  assert.equal(most, PULL_AT_ONCE, '정해진 수만큼 함께 받는다');
+  assert.ok(Date.now() - started < 10 * 20, '하나씩 받을 때보다 빠르다');
+  assert.deepEqual(seen[0], [null, 0, 10], '받기 전에 받을 수를 알린다');
+  assert.deepEqual(seen.slice(1).map(([, done, total]) => [done, total]), Array.from({ length: 10 }, (_, n) => [n + 1, 10]));
+  assert.deepEqual(new Set(seen.slice(1).map(([id]) => id)), new Set(ids), '받은 그림을 하나씩 건넨다');
+  assert.equal(store.m.size, 10);
+});
+
+test('함께 받다가 하나가 실패하면 새로 시작하지 않고 그 오류로 끝난다(이미 받은 것은 남는다)', async () => {
+  const ids = Array.from({ length: 12 }, (_, n) => newDesignId(1700000000200 + n, n / 20));
+  const store = localStore([]);
+  let started = 0;
+  const sync = { pull: async () => ({ records: ids.map((id) => rec(id, 100)), deleted: [] }), push: async () => {}, drop: async () => {},
+    load: async (r) => { started++; await new Promise((ok) => setTimeout(ok, 5)); if (r.id === ids[1]) throw new Error('photo'); return r; } };
+  await assert.rejects(mergeAccount(sync, store), /photo/);
+  assert.ok(started < ids.length, '실패한 뒤에는 새 그림을 받기 시작하지 않는다');
+  assert.ok(!store.m.has(ids[1]));
+});
+
+test('eachAtOnce: 빈 목록 · 한도보다 적은 목록도 처리한다', async () => {
+  const done = [];
+  await eachAtOnce([], 4, async () => { throw new Error('never'); });
+  await eachAtOnce([1, 2], 4, async (n) => { done.push(n); });
+  assert.deepEqual(done.sort(), [1, 2]);
 });

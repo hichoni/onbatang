@@ -85,7 +85,9 @@ test('온바탕 파일: every part, page, field, background video and page order
   await b.waitForFunction(() => document.querySelector('input.cv-name')?.value === '발명 수업 · 1');
   await b.waitForFunction(() => document.querySelectorAll('[data-material-page]').length === 3);
   const after = await b.evaluate(async () => ({records: await Promise.all(['d1111111aa', 'd1111111bb'].map(id => window.getDesign(id))), video: [...new Uint8Array(await (await window.loadVideo('vfilekey01')).arrayBuffer())]}));
-  assert.deepEqual(after.records, before.records, 'every record is identical, field for field');
+  // 연 쪽은 파트마다 묶음(fileDeck)을 더 적는다: 계정을 거쳐 다른 기기에서도 한 자료로 묶이게. 그 밖에는 한 글자도 다르지 않다.
+  assert.deepEqual(after.records.map(({fileDeck, ...r}) => r), before.records, 'every record is identical, field for field');
+  assert.deepEqual(after.records.map(r => r.fileDeck), [0, 1].map(part => ({id: 'fd1111111aa', title: '발명 수업', part, parts: 2, pageOrder: ['p3file01', 'p1file01', 'p2file01']})), 'each part carries the deck so it travels through an account');
   assert.deepEqual(after.video, before.video, 'the background video is the same file under the same key');
   assert.match(await b.locator('#toast').textContent(), /3쪽을 고친 그대로 열었어요\(바탕 영상 1개 포함\)/);
   // 쪽 차례도 첫 기기와 같다: 첫 쪽은 둘째 파트의 "셋째 쪽"
@@ -101,7 +103,9 @@ test('온바탕 파일: every part, page, field, background video and page order
   // 쪽 차례 바꾸기도 된다(PPT 원본이 없는 기기여도 이 기기에 적어 두고, 새로 고쳐도 그대로): 고른 "첫 쪽"을 맨 앞으로
   await b.locator('[data-material-page="1"]').focus(); await b.keyboard.press('Alt+ArrowLeft');
   await b.waitForFunction(() => JSON.parse(localStorage.getItem('onbatang-file-decks-v1:file-b') || '[]')[0]?.pageOrder?.join() === 'p1file01,p3file01,p2file01');
-  assert.deepEqual(await b.evaluate(() => window.getDesign('d1111111aa')), before.records[0], 'reordering pages never rewrites the records');
+  const {fileDeck: kept, ...plain} = await b.evaluate(() => window.getDesign('d1111111aa'));
+  assert.deepEqual(plain, before.records[0], 'reordering pages never rewrites the records');
+  assert.equal(kept.part, 0);
 
   // 이 온바탕에 없던 글꼴(호스트의 글꼴)도 파일에 담겨 와서, 그 글꼴로 보이고 글꼴 목록에도 있다. 새로 고쳐도 그대로다.
   const fontOf = () => b.evaluate(() => { const n = [...document.querySelectorAll('.cv-canvas .fe-stage .fi-text')].find(x => /학교 글꼴/.test(x.textContent)); return n && getComputedStyle(n).fontFamily; });
@@ -147,7 +151,9 @@ test('온바탕 파일: every part, page, field, background video and page order
   await b.locator('[data-file-clash]').waitFor();
   await b.locator('[data-file-choice=replace]').click();
   await b.waitForFunction(() => document.querySelector('input.cv-name')?.value === '발명 수업 · 1');
-  assert.deepEqual(await b.evaluate(() => window.getDesign('d1111111bb')), before.records[1], 'restored exactly');
+  const {fileDeck: deck2, ...restored} = await b.evaluate(() => window.getDesign('d1111111bb'));
+  assert.deepEqual(restored, before.records[1], 'restored exactly');
+  assert.equal(deck2.part, 1, 'and still part 2 of its deck');
 
   // 온바탕 파일이 아닌 것은 열지 않고 까닭을 알린다
   await b.locator('.cv-back').click();
