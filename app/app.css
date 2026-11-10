@@ -1099,6 +1099,13 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero-go { display: flex
 .cv-slide-list.is-sorting{cursor:grabbing}
 .cv-material-loading{position:absolute;right:12px;bottom:12px;z-index:6;max-width:calc(100% - 24px);pointer-events:none;box-shadow:0 2px 10px #18332c18}
 .cv-copy-loading{position:fixed;inset:auto 50% 50% auto;transform:translate(50%,50%);z-index:2147483000;width:min(440px,calc(100vw - 32px));box-shadow:0 0 0 100vmax #18332ccc,0 18px 50px #0004}
+/* 첫 화면에 파일을 끌고 들어오면 덮는 안내(app.js 의 bindHomeDrop). 눌리지 않게 두어 끌기 신호는 아래 화면이 그대로 받는다 */
+.cv-drop-zone{position:fixed;inset:0;z-index:2147482000;display:grid;place-items:center;padding:16px;background:#171c44b8;pointer-events:none}
+.cv-drop-zone[hidden]{display:none}
+.cv-drop-card{display:grid;justify-items:center;gap:10px;width:min(520px,100%);padding:36px 24px;border:3px dashed #ffd43b;border-radius:22px;background:#171c44f2;color:#fff;text-align:center}
+.cv-drop-card svg{width:40px;height:40px;color:#ffd43b}
+.cv-drop-card b{font-size:1.35rem}
+.cv-drop-kinds{color:#c8cdf1;line-height:1.5}
 /* 온바탕 파일: 같은 자료가 이미 있을 때 묻는 창 · 만드는 창 */
 .cv-file-clash,.cv-file-make{max-width:440px}
 .cv-file-clash h2,.cv-file-make h2{margin:0 0 8px}
