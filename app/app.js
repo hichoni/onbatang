@@ -4192,6 +4192,60 @@ function fileOpenButton(loading) {
   return [button, input];
 }
 
+// ---------- 첫 화면에 파일 끌어다 놓기 ----------
+// 내 그림(첫 화면) 어디에든 온바탕 파일(.onbatang) · PPT(.pptx) · PDF 를 끌어다 놓으면 '파일 가져오기'의 단추와 같은 길로 연다.
+// 첫 화면이 아니거나(꾸미는 화면 · 가져오기 화면), 창이 떠 있거나, 목록을 읽거나 무엇을 여는 중이면 건드리지 않는다.
+// 첫 화면에서는 열 수 없는 파일을 놓아도 브라우저가 그 파일로 넘어가 버리지 않게 막고 무엇을 놓을 수 있는지 알려 준다.
+function dropKind(file) {
+  const name = String(file?.name || '').toLowerCase();
+  if (name.endsWith('.onbatang')) return 'onbatang';
+  if (name.endsWith('.pptx')) return importAction?.homeFile ? 'pptx' : '';
+  if (name.endsWith('.pdf') || file?.type === 'application/pdf') return 'pdf';
+  return '';
+}
+const dropKinds = () => ['온바탕 파일(.onbatang)', importAction?.homeFile ? 'PPT(.pptx)' : '', 'PDF'].filter(Boolean).join(' · ');
+function bindHomeDrop() {
+  const kinds = el('span', { class: 'cv-drop-kinds' });
+  const zone = el('div', { class: 'cv-drop-zone', hidden: true, 'aria-hidden': 'true' },
+    el('div', { class: 'cv-drop-card' }, ic('upload'), el('b', { text: '여기에 놓으면 열어요' }), kinds));
+  document.body.append(zone);
+  // home: 첫 화면이 떠 있다(이때는 브라우저가 파일로 넘어가지 않게 늘 막는다). ready: 그중에서도 지금 열 수 있다.
+  const home = () => S.phase === 'home' && app.dataset.view === 'home' && !S.open && !accountHome;
+  const ready = () => home() && !moving && S.list !== null && !app.inert && !document.body.classList.contains('modal-open');
+  const files = (e) => [...(e.dataTransfer?.types || [])].includes('Files');
+  // 안쪽 요소를 지날 때마다 dragenter · dragleave 가 짝지어 오므로 깊이를 세어, 창 밖으로 나갔을 때만 안내를 내린다.
+  let depth = 0;
+  const hide = () => { depth = 0; zone.hidden = true; };
+  document.addEventListener('dragenter', (e) => {
+    if (!files(e) || !home()) return;
+    e.preventDefault();
+    if (!ready()) return;
+    depth++;
+    if (zone.hidden) { kinds.textContent = dropKinds(); zone.hidden = false; }
+  });
+  document.addEventListener('dragover', (e) => {
+    if (!files(e) || !home()) return;
+    e.preventDefault(); e.dataTransfer.dropEffect = ready() ? 'copy' : 'none';
+  });
+  document.addEventListener('dragleave', () => { if (!zone.hidden && --depth <= 0) hide(); });
+  document.addEventListener('drop', (e) => {
+    if (!files(e)) return;
+    hide();
+    if (!home()) return;
+    e.preventDefault();
+    if (!ready()) { toast('지금은 파일을 열 수 없어요. 하던 일이 끝나면 다시 놓아 주세요.', 4000); return; }
+    const dropped = [...(e.dataTransfer.files || [])];
+    if (dropped.length !== 1) { toast('파일은 한 번에 하나씩 놓아 주세요.', 4000); return; }
+    const file = dropped[0], kind = dropKind(file);
+    if (kind === 'onbatang') void openOnbatangFile(file);
+    else if (kind === 'pdf') void importPdf(file);
+    else if (kind === 'pptx') void openHomeWorkspace(importAction, file);
+    else toast(`여기에는 ${dropKinds()}만 놓을 수 있어요.`, 5000);
+  });
+  window.addEventListener('dragend', hide);
+  window.addEventListener('blur', hide);
+}
+
 // ---------- PDF 가져오기(pdf-import.js): 쪽마다 그 쪽 그림(잠금) 한 장 · 고르면 쪽의 글은 발표자 노트로. 20쪽이 넘으면 파트로 ----------
 function pdfOpenButton(loading) {
   const input = el('input', { type: 'file', hidden: true, accept: '.pdf,application/pdf', dataset: { pdfInput: '' }, onChange: async () => {
@@ -4703,6 +4757,7 @@ export function startMinican({ root = document.getElementById('app'), fonts = []
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') S.open?.co?.ping(); });
   document.addEventListener('contextmenu', onPageMenu);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
+  bindHomeDrop();
   S.phase = 'boot';
   return refresh();
 }
