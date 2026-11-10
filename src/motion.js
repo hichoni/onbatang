@@ -824,6 +824,20 @@ const PRIME_SKIP = new Set(['offset', 'easing', 'composite']);
 // 한 요소의 같은 속성에 여러 움직임이 함께 적을 수 있다(이어 움직이기의 나타나기 + 그 요소의 나타나기). 속성마다 원래 값을 처음 한 번만 기억하고, 그 속성을 적은 움직임이 모두 돌려줄 때 되돌린다.
 const primes = new WeakMap();
 export function primedAnimate(node, keyframes, opts) {
+  const primable = Array.isArray(keyframes) && keyframes.length > 1 && !!node.style && (opts?.fill === 'backwards' || opts?.fill === 'both');
+  // 끝 키프레임에 없는 속성은 브라우저가 요소의 바탕 값으로 채운다. 시작 모습을 요소에 적어 두면 그 바탕 값이 시작 값이 되어,
+  // 움직이는 내내 시작 모습(예: 투명)에 머물다 끝에서 뚝 바뀐다. 그래서 적기 전의 실제 값으로 끝 키프레임을 채운다.
+  if (primable) {
+    const last = keyframes[keyframes.length - 1];
+    let fill = null, style = null;
+    for (const [key, value] of Object.entries(keyframes[0])) {
+      if (PRIME_SKIP.has(key) || value == null || key in last) continue;
+      style ||= getComputedStyle(node);
+      const now = key.startsWith('--') ? style.getPropertyValue(key).trim() : style[key];
+      if (now !== undefined && now !== '') (fill ||= {})[key] = now;
+    }
+    if (fill) keyframes = [...keyframes.slice(0, -1), { ...last, ...fill }];
+  }
   const a = node.animate(keyframes, opts);
   const first = Array.isArray(keyframes) ? keyframes[0] : null;
   if (!first || !node.style || !(opts?.fill === 'backwards' || opts?.fill === 'both')) return a;

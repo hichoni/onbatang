@@ -53,3 +53,20 @@ test('leaves the element alone without a backwards fill or under an important st
   primedAnimate(locked, [{ opacity: 0 }, { opacity: 1 }], { duration: 300, fill: 'both' });
   assert.equal(locked.style.getPropertyValue('opacity'), '0.5');
 });
+
+test('a value missing from the last keyframe ends at the element\'s own value, not at the primed start', () => {
+  // 이어 움직이기의 바뀐 요소: [{…, opacity: 0}, {…끝 모습}] 처럼 끝에 투명도가 없으면 브라우저는 바탕 값으로 채운다.
+  // 시작 모습(0)을 요소에 적어 두면 그 바탕 값이 0 이 되어 움직이는 내내 투명했다(0.136.0). 적기 전의 실제 값으로 끝을 채운다.
+  const node = fakeNode(), seen = [];
+  const before = globalThis.getComputedStyle;
+  globalThis.getComputedStyle = (n) => { seen.push(n); return { opacity: '0.8', getPropertyValue: (p) => (p === '--fe-edge' ? ' 2px ' : '') }; };
+  try {
+    const a = primedAnimate(node, [{ opacity: 0, '--fe-edge': '0px', transform: 'translate(10px, 0)' }, { transform: 'none' }], { duration: 600, fill: 'both' });
+    assert.deepEqual(a.keyframes.at(-1), { transform: 'none', opacity: '0.8', '--fe-edge': '2px' });
+    assert.equal(node.style.getPropertyValue('opacity'), '0', 'the start is still primed on the element');
+    assert.deepEqual(seen, [node], 'read once, before priming');
+    const plain = primedAnimate(fakeNode(), [{ opacity: 0 }, { opacity: 1 }], { duration: 600, fill: 'both' });
+    assert.deepEqual(plain.keyframes.at(-1), { opacity: 1 }, 'an explicit end value is kept');
+    assert.equal(seen.length, 1, 'nothing missing, nothing read');
+  } finally { globalThis.getComputedStyle = before; }
+});

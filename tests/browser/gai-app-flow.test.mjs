@@ -163,7 +163,7 @@ for(const [width,height]of [[1440,1000],[390,844]])test(`Gai conversation create
  await slideAction(page,'[data-add-gai-app]');await maker.waitFor();await preview.locator('#version').filter({hasText:'수업 단계 활동'}).waitFor();
  assert.equal(await page.evaluate(()=>window.gaiFixtureCalls.length),2);assert.match(await maker.locator('.gai-maker-log').innerText(),/수업 흐름에 맞춰 수정/);
  await maker.getByRole('button',{name:'이 앱을 슬라이드에 넣기',exact:true}).click();await maker.waitFor({state:'detached'});await waitPages(page,sourcePages+1);
- await page.locator(`[data-material-page="${activityIndex}"][aria-pressed=true]`).waitFor();const activityId=await page.locator(`[data-material-page="${activityIndex}"]`).getAttribute('data-page-id'),name=await page.locator('.cv-name').inputValue();
+ await page.locator(`[data-material-page="${activityIndex}"][aria-pressed=true]`).waitFor({state:'attached'});const activityId=await page.locator(`[data-material-page="${activityIndex}"]`).getAttribute('data-page-id'),name=await page.locator('.cv-name').inputValue();
 
  await page.locator('.cv-show-btn').click();const show=page.locator('.cv-show'),runtime=appFrame(show);await runtime.getByRole('button',{name:'다음 단계 실행',exact:true}).waitFor();
  assert.equal(await show.locator('.cv-show-count').innerText(),`${activityIndex+1} / ${sourcePages+1}`);assert.equal(await runtime.locator('#count').innerText(),'0','refined app starts with its own checkpoint');
