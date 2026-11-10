@@ -11,7 +11,8 @@ body{margin:0;background:#f0f4ef;color:#273f3a;font-family:system-ui,-apple-syst
 .lesson-show>.lesson-header,.lesson-show>.lesson-navigation,.lesson-show>.lesson-status,.lesson-show>.lesson-footer{display:none}
 .lesson-show .lesson-stage{max-width:none;padding:0;width:min(100vw,calc(100dvh * var(--lesson-ratio,1.7778)))}
 .lesson-show .lesson-slide{max-height:100dvh;border-radius:0;background:#000}
-.lesson-show .lesson-activity{width:100vw;height:calc(100dvh - 70px);overflow:auto;background:#f1f7f3;cursor:auto;display:flex;align-items:safe center;justify-content:center}
+.lesson-show:has(.lesson-activity){padding-bottom:var(--show-room,70px)}
+.lesson-show .lesson-activity{width:100vw;height:calc(100dvh - var(--show-room,70px));overflow:auto;background:#f1f7f3;cursor:auto;display:flex;align-items:safe center;justify-content:center}
 .lesson-show:has(.lesson-activity) .lesson-stage{width:100vw}
 .lesson-show-bar{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);z-index:10;display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:999px;background:rgba(20,24,34,.72);color:#fff;transition:opacity .35s;cursor:default}
 @media(hover:hover){.lesson-show[data-still]{cursor:none}.lesson-show[data-calm] .lesson-show-bar:not(:focus-within){opacity:0}}

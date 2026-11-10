@@ -1209,8 +1209,9 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero-go { display: flex
 }
 .cv-activity-add,.cv-activity-edit{min-height:44px;white-space:nowrap;padding:9px 14px}
 .cv-activity-edit[hidden]{display:none}
-.cv-show-stage:has(.cv-show-activity){aspect-ratio:auto!important;width:100%!important;height:calc(100dvh - 76px)!important;max-width:none!important;max-height:none!important}
-.cv-show-lesson{box-sizing:border-box;padding-bottom:76px}
+.cv-show-stage:has(.cv-show-activity){aspect-ratio:auto!important;width:100%!important;height:calc(100dvh - var(--show-room,76px))!important;max-width:none!important;max-height:none!important}
+/* 수업 발표는 아래에 발표 막대 자리(--show-room: show-tools.js 가 막대의 실제 높이로 적는다. 휴대폰에서는 두세 줄)를 비워 활동 장이 막대에 가리지 않는다 */
+.cv-show-lesson{box-sizing:border-box;padding-bottom:var(--show-room,76px)}
 
 /* Page-centered editor. The drawing engine owns the same controls; this shell
    gives pages, insertion tools and selection properties separate places. */
@@ -1436,7 +1437,7 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero{overflow:visible;z
  .cv-page-workspace .cv-canvas{padding:38px 18px 26px}
  .cv-page-workspace .fe-history-tools .fe-tb{min-width:32px}
 }
-.cv-show-lesson .cv-show-stage{position:relative;width:min(100vw,calc((100dvh - 76px)*var(--cv-show-ratio,1)))}
+.cv-show-lesson .cv-show-stage{position:relative;width:min(100vw,calc((100dvh - var(--show-room,76px))*var(--cv-show-ratio,1)))}
 @media(min-width:900px) and (max-height:560px){
  .cv-page-workspace>.cv-bar{min-height:46px;padding-block:3px}
  .cv-page-workspace .cv-side .fe-tabs{padding-block:2px}

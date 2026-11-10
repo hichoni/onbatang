@@ -453,6 +453,18 @@ export function createShowTools(root, opts) {
   root.dataset.calm = '';
   stir();
 
+  // ---------- 막대 자리 ----------
+  // 손가락으로 쓰는 화면에서는 막대가 늘 보이고, 휴대폰에서는 단추가 많으면 두세 줄로 커진다. 막대가 실제로 차지하는 높이(아래 띄움과
+  // 위 틈 14px 포함)를 root 의 --show-room 에 적어 두면, 쓰는 쪽 CSS 가 활동 장 아래를 그만큼 비워 '결과 저장' 같은 단추를 가리지 않는다.
+  // 막대는 이 함수가 돌아간 뒤에 단추를 받으므로(쓰는 쪽이 tools.buttons 를 넣는다) 다음 차례에 찾아 지켜본다.
+  const fitRoom = () => {
+    const bar = calmBar();
+    if (!bar?.isConnected || !bar.offsetHeight) { root.style.removeProperty('--show-room'); return; }
+    root.style.setProperty('--show-room', Math.ceil(root.getBoundingClientRect().bottom - bar.getBoundingClientRect().top + 14) + 'px');
+  };
+  const Watch = doc.defaultView.ResizeObserver, roomWatch = typeof Watch === 'function' ? new Watch(fitRoom) : null;
+  if (roomWatch) { roomWatch.observe(root); queueMicrotask(() => { const bar = calmBar(); if (bar) roomWatch.observe(bar); }); }
+
   // ---------- 손가락으로 넘기기 ----------
   root.addEventListener('pointerdown', (e) => { swipe = e.pointerType === 'touch' && !tool && !panel ? [e.clientX, e.clientY] : null; });
   root.addEventListener('pointerup', (e) => {
@@ -606,6 +618,7 @@ export function createShowTools(root, opts) {
       comparison?.close();
       clearTimeout(digitTimer);
       clearTimeout(calmTimer); clearTimeout(stillTimer); root.removeEventListener('pointermove', onMove); delete root.dataset.calm; delete root.dataset.still; delete root.dataset.pinned;
+      roomWatch?.disconnect(); root.style.removeProperty('--show-room');
       stopCamera();
       autoOn = false; clearTimeout(autoTimer);
       toggleRehearse(true);

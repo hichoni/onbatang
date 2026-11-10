@@ -79,3 +79,16 @@ test('a 500-page HTML lesson rejects another result before mutation and remains 
   assert.match(await again.locator('[data-pixel="0"]').getAttribute('aria-label'), /1번 색/);
   assert.deepEqual(errors, []);
 });
+
+test('on a phone the show bar keeps clear of the activity, so its save button can be pressed', options, async t => {
+  const { page, errors } = await setup(t);
+  await page.locator('.lesson-present').click(); await page.locator('.lesson-show').waitFor();
+  await page.locator('.lesson-show-bar').getByRole('button', { name: '다음 쪽' }).first().click();
+  await page.locator('.lesson-show').getByRole('button', { name: '활동 시작', exact: true }).click();
+  // 휴대폰에서는 발표 막대가 두 줄 이상이 된다. 활동 칸은 막대의 실제 높이만큼 위에서 끝나야 한다(예전에는 70px 만 비워 저장 단추가 막대 밑에 깔렸다).
+  await page.waitForFunction(() => { const a = document.querySelector('.lesson-show .lesson-activity')?.getBoundingClientRect(), b = document.querySelector('.lesson-show-bar')?.getBoundingClientRect(); return a && b && b.height > 60 && a.bottom <= b.top; });
+  await page.locator('[data-pixel="0"]').click(); await page.getByRole('button', { name: '결과를 다음 슬라이드에 저장', exact: true }).click();
+  await page.waitForFunction(() => document.querySelector('.lesson-show-count')?.textContent.startsWith('3 / 4'));
+  await page.keyboard.press('Escape'); await page.waitForFunction(() => !document.querySelector('.lesson-show') && !document.querySelector('[style*="--show-room"]'));
+  assert.deepEqual(errors, []);
+});

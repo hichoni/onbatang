@@ -169,6 +169,9 @@ for(const [width,height]of [[1440,1000],[390,844]])test(`Gai conversation create
  assert.equal(await show.locator('.cv-show-count').innerText(),`${activityIndex+1} / ${sourcePages+1}`);assert.equal(await runtime.locator('#count').innerText(),'0','refined app starts with its own checkpoint');
  for(let i=0;i<3;i++)await runtime.getByRole('button',{name:'다음 단계 실행',exact:true}).click();
  assert.equal(await runtime.locator('#count').innerText(),'3');assert.equal(await show.locator('.cv-show-count').innerText(),`${activityIndex+1} / ${sourcePages+1}`,'in-frame interaction never changes the presentation page');
+ // 발표 막대는 휴대폰에서 여러 줄이 되고, 리모컨 · 질문 단추가 붙으면(가이랩) 더 커진다. 앱 장은 늘 막대 위에서 끝나야 저장 단추를 누를 수 있다.
+ const clearOfBar=()=>page.waitForFunction(()=>{const a=document.querySelector('.cv-show-activity')?.getBoundingClientRect(),b=document.querySelector('.cv-show-bar')?.getBoundingClientRect();return a&&b&&a.bottom<=b.top;});
+ await clearOfBar();await show.locator('.cv-show-bar').evaluate(bar=>{for(const name of ['하나','둘','셋'])bar.append(Object.assign(document.createElement('button'),{type:'button',className:'cv-show-key',textContent:name}));});await clearOfBar();
  await capture(page,width,'app-in-presentation');await show.getByRole('button',{name:'결과를 다음 슬라이드에 저장',exact:true}).click();
  await page.waitForFunction(text=>document.querySelector('.cv-show-count')?.textContent===text,`${resultIndex+1} / ${sourcePages+2}`);
  assert.match(await show.locator('.cv-show-stage').innerText(),/3단계 완료/);await capture(page,width,'saved-result');
