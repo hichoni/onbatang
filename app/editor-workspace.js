@@ -1,4 +1,5 @@
 import {el} from './ui.js';
+import {revealSelected} from './filmstrip.js';
 
 /** Move the existing controls, with their original handlers and host guards. */
 export function documentMenu(groups) {
@@ -25,7 +26,7 @@ export function bindEditorWorkspace(shell) {
     shell.querySelector('.fe-tool-group.on')?.setAttribute('aria-expanded','false');
   };
   const openTools=()=>{shell.classList.remove('folded');shell.querySelector('.fe-tool-group.on')?.setAttribute('aria-expanded','true');if(compact.matches){setDrawer('pages',false);setDrawer('properties',false);}};
-  on(pageToggle,'click',()=>{const open=!shell.classList.contains('pages-open');closeTools();setDrawer('properties',false);setDrawer('pages',open);if(open){if(pages.classList.contains('cv-tray-collapsed'))pages.querySelector('.cv-tray-toggle')?.click();pages.querySelector('.cv-slide.on')?.focus({preventScroll:true});}});
+  on(pageToggle,'click',()=>{const open=!shell.classList.contains('pages-open');closeTools();setDrawer('properties',false);setDrawer('pages',open);if(open){if(pages.classList.contains('cv-tray-collapsed'))pages.querySelector('.cv-tray-toggle')?.click();revealSelected(pages);pages.querySelector('.cv-slide.on')?.focus({preventScroll:true});}});
   on(propToggle,'click',()=>{const open=!shell.classList.contains('properties-open');closeTools();setDrawer('pages',false);setDrawer('properties',open);if(open)properties.querySelector('.cv-properties-close')?.focus({preventScroll:true});});
   on(properties.querySelector('.cv-properties-close'),'click',()=>{setDrawer('properties',false);propToggle.focus({preventScroll:true});});
   on(pages,'click',event=>{if(compact.matches&&event.target.closest('.cv-slide:not(.add)'))setDrawer('pages',false);});

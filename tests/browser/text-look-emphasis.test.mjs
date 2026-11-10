@@ -44,7 +44,7 @@ test('text look emphasis: a toggle per text box, a click step in the show, then 
   await page.waitForFunction(() => window.ready);
   const slide = async () => page.evaluate(async (id) => (await window.getDesign(id)).slides[0], await page.evaluate(() => window.recordId));
   const texts = page.locator('.cv-canvas .fe-stage .fi-text');
-  const fx = () => page.locator('.fe-bar button').filter({hasText: '효과'}).click();
+  const fx = () => page.locator('.fe-bar button').filter({hasText: '효과', hasNotText: '시네마'}).click();
 
   // 효과 없는 글은 강조를 켤 수 없다.
   await texts.nth(1).click();

@@ -7,6 +7,7 @@ import {createServer} from 'node:http';
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {resolve,extname,sep} from 'node:path';
+import {openTool} from './open-tool.mjs';
 
 const root=resolve(fileURLToPath(new URL('../../',import.meta.url)));
 const options={skip:!process.env.MINICAN_PLAYWRIGHT_PATH,timeout:150000};
@@ -27,7 +28,7 @@ test('math: add from the text tab, preview with MathJax, apply, edit by double c
  await page.goto(origin+'/app/');
  assert.ok(!served.some(p=>p.includes('/mathjax/')),'MathJax is not fetched until the math window opens');
  await page.locator('.cv-hero .cv-new-btn').click();
- await page.getByRole('tab',{name:'글',exact:true}).click();
+ await openTool(page,'text');
  await page.locator('[data-add-math]').click();
  const dlg=page.locator('.fe-math-dlg');await dlg.waitFor();
  await dlg.getByText('수식을 적으면 여기에 보여요.').waitFor();
@@ -36,7 +37,7 @@ test('math: add from the text tab, preview with MathJax, apply, edit by double c
  await dlg.locator('.fe-math-preview svg path').first().waitFor();
  await dlg.locator('[data-math-apply]:not([disabled])').click();
  await dlg.waitFor({state:'detached'});
- const math=page.locator('.fe-card .fi-math').first();
+ const math=page.locator('.cv-canvas .fe-card .fi-math').first();   // 장 목록의 작은 그림이 아니라 편집 화면
  assert.ok(await math.locator('svg path').count()>10);
  assert.equal(await math.getAttribute('aria-label'),'수식: x=\\frac{-b\\pm\\sqrt{b^2-4ac}}{2a}');
  const box=await math.boundingBox();assert.ok(box.width>box.height*2,'a long formula lies wide');

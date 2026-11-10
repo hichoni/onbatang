@@ -10,6 +10,10 @@
 @media(max-width:850px){.gai-maker{padding:12px}.gai-maker-body{grid-template-columns:1fr}.gai-maker header{align-items:start;flex-wrap:wrap}.gai-maker-preview{height:460px;min-height:320px}.gai-maker-log{max-height:180px}.gai-maker h2{font-size:20px}}
 @media(max-width:850px){
  .cv-activity-config:has(>.gai-maker){position:fixed;inset:0;z-index:35;padding:0;max-height:100dvh;background:#fffdf8}
+ /* 전체 화면 만들기 창은 캔버스(.cv-canvas) 안에 붙는다. 캔버스의 clip-path 는 fixed 인 자식도 캔버스 밖을 잘라 위쪽 머리말(편집으로 돌아가기)이
+    위쪽 막대 밑으로 사라지고, 캔버스 칸(.cv-work)의 z-index 는 창을 막대(z-index 30) 밑에 가둔다. 창이 열린 동안에만 둘 다 푼다. */
+ .cv-page-workspace .cv-canvas:has(>.cv-activity-config>.gai-maker){clip-path:none}
+ .cv-page-workspace>.cv-work:has(.cv-activity-config>.gai-maker){z-index:40}
  .gai-maker{border-radius:0;padding-top:0;min-height:100dvh}
  .gai-maker>header{position:sticky;top:0;z-index:2;background:#fffdf8;padding:12px 0;margin:0 0 12px;border-bottom:1px solid #d5e2da}
  .gai-maker>header>div{flex:1 1 160px}.gai-maker>header>button{font-size:13px;padding:8px 10px;white-space:nowrap}

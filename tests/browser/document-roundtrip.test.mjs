@@ -18,7 +18,8 @@ test('actual app migrates, edits, saves twice, reopens, copies, reorders and dis
   const dbName = hosted ? 'gailab-minican' : 'minican';
   const sample = JSON.parse(await readFile(new URL('../../app/samples/studio-document.json', import.meta.url)));
   const legacy = { id: 'dlegacybrowser', name: '이전 그림', ratio: '4:3', design: { bg: 'mint', items: [{t:'text',text:'예전 내용 그대로',x:40,y:35,w:70}] }, updatedAt: 1, recoverableExtra: '원문 보존' };
-  const rejected = { id:'dlimitbrowser', name:'21쪽 원본', slides:Array.from({length:21},()=>({items:[]})),updatedAt:2 };
+  // 한 그림의 한도(MAX_SLIDES 100)를 넘는 원본: 목록에 이유와 함께 남고 원본은 그대로 보존된다.
+  const rejected = { id:'dlimitbrowser', name:'101쪽 원본', slides:Array.from({length:101},()=>({items:[]})),updatedAt:2 };
   const server = createServer(async (req, res) => {
     try {
       const pathname = new URL(req.url, 'http://localhost').pathname;
@@ -52,7 +53,7 @@ test('actual app migrates, edits, saves twice, reopens, copies, reorders and dis
   }, {dbName,records:[sample,legacy,rejected]});
   const url = origin + (hosted ? '/minican-app.html' : '/app/index.html');
   await page.goto(url);
-  await page.getByText('21쪽 원본: 지금 열 수 없는 자료예요', {exact:false}).waitFor();
+  await page.getByText('101쪽 원본: 지금 열 수 없는 자료예요', {exact:false}).waitFor();
   await page.getByRole('button',{name:'이전 그림 열기',exact:true}).click();
   await page.locator('.cv-name').waitFor();
   // Close optional first-open tour without relying on a guessed persistence key.
@@ -115,7 +116,7 @@ test('actual app migrates, edits, saves twice, reopens, copies, reorders and dis
   const copy = await page.evaluate(async base => (await (await import(base+'/app/store.js')).listDesigns()).find(r=>r.name==='두 번째 저장 복사'),base);
   assert.notEqual(copy.id,sample.id); assert.equal(copy.origin.documentId,sample.id);
   const original = await page.evaluate(async ({base,id}) => (await import(base+'/app/store.js')).getOriginalDesign(id), {base,id:rejected.id});
-  assert.equal(original.slides.length,21);
+  assert.equal(original.slides.length,101);
   await page.evaluate(async ({base,id}) => (await import(base+'/app/app.js')).openSavedDesign(id), {base,id:sample.id});
   await page.locator('.cv-name').waitFor();
   const mismatch = await page.evaluate(async ({base,id}) => {

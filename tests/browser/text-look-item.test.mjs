@@ -50,7 +50,7 @@ test('per text box looks: picked in the text effects panel, ahead of the slide l
 
   // 장의 효과가 없는 장: 제목만 골라 불꽃 글자 → 제목만 빛나고, 꾸미기 판에서 순간마다 바뀐다.
   await texts.nth(0).click();
-  await page.locator('.fe-bar button').filter({hasText: '효과'}).click();
+  await page.locator('.fe-bar button').filter({hasText: '효과', hasNotText: '시네마'}).click();
   assert.equal(await page.locator('[data-item-look]').count(), 39, 'follow the slide · none · 37 looks');
   assert.match(await page.locator('[data-item-look=auto]').innerText(), /장 효과 따르기 · 없음/);
   assert.equal(await page.locator('[data-item-look=auto]').getAttribute('aria-pressed'), 'true');
@@ -74,7 +74,7 @@ test('per text box looks: picked in the text effects panel, ahead of the slide l
   await page.waitForFunction(() => [...document.querySelectorAll('.cv-canvas .fe-stage .fi-text')].every(n => n.style.textShadow.split('rgba').length > 2));
   await page.keyboard.press('Escape');
   await texts.nth(2).click();
-  await page.locator('.fe-bar button').filter({hasText: '효과'}).click();
+  await page.locator('.fe-bar button').filter({hasText: '효과', hasNotText: '시네마'}).click();
   assert.match(await page.locator('[data-item-look=auto]').innerText(), /장 효과 따르기 · 황금빛/);
   await page.locator('[data-item-look=none]').click();
   assert.deepEqual((await until(d => d.items[2].lk === 'none')).items.map(i => i.lk), ['fire', undefined, 'none']);

@@ -47,7 +47,7 @@ test('text look intros: on slide open, on click for click-to-appear text, handed
   // 꾸미기 판: 효과를 고르면(여기서는 다른 효과로 바꾸면) 그 글이 다시 한 번 나타나는 움직임을 한다.
   const stage = (i) => `.cv-canvas .fe-stage .fi-text >> nth=${i}`;
   await page.locator(stage(0)).click();
-  await page.locator('.fe-bar button').filter({hasText: '효과'}).click();
+  await page.locator('.fe-bar button').filter({hasText: '효과', hasNotText: '시네마'}).click();
   assert.match(await page.locator('[data-item-look=pop]').getAttribute('title'), /나타날 때 쾅 찍기/);
   await page.locator('[data-item-look=longshadow]').click();
   await page.locator('[data-item-look=pop]').click();

@@ -48,7 +48,7 @@ test('text look loops: a toggle per text box, moving all the time in the editor 
 
   // "콩콩 뛰는 글"을 골라 "계속 움직이기"를 켜면 저장된다. 고르는 중에는 가만히 있고(손잡이와 어긋나지 않게), 고르기를 풀면 콩콩 뛴다.
   await texts.nth(0).click();
-  await page.locator('.fe-bar button').filter({hasText: '효과'}).click();
+  await page.locator('.fe-bar button').filter({hasText: '효과', hasNotText: '시네마'}).click();
   assert.match(await page.locator('.fe-poshead', {hasText: '계속 움직이기'}).innerText(), /콩콩 뛰기/);
   await page.locator('[data-look-loop=on]').click();
   for (let i = 0; i < 40 && (await slide()).items[0].lkloop !== true; i++) await page.waitForTimeout(250);
@@ -59,6 +59,7 @@ test('text look loops: a toggle per text box, moving all the time in the editor 
   assert.ok(Math.min(...ed) < -0.15 && new Set(ed.map((v) => v.toFixed(2))).size > 3, `hops in the editor: ${ed}`);
   // 움직임 칸의 차례: 머무는 동안 계속 움직이는 조각에 적힌다.
   await openTool(page,'motion');
+  await page.getByLabel('움직임 종류').selectOption('재생 차례');   // 차례는 움직임 칸의 '재생 차례'에서 본다
   assert.match(await page.locator('.fe-note', {hasText: '머무는 동안 계속 움직이는 조각'}).innerText(), /글자 효과 · 콩콩 뛰기/);
 
   // 발표: 나타나는 움직임(떨어져 튀기)이 끝난 뒤에도 계속 콩콩 뛴다. 켜지 않은 글은 자리를 옮기지 않는다.

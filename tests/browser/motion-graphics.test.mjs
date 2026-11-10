@@ -1,4 +1,4 @@
-import {openTool} from './open-tool.mjs';
+import {openTool,pickPage} from './open-tool.mjs';
 // 모션그래픽(브라우저): 사라지기 · 빠르기 · 늦추기를 움직임 칸에서 고르면 저장되고, 움직임 차례에서 조각을 고를 수 있으며,
 // 발표에서 누르면 사라지고(앞 장으로 돌아와도 사라진 채), 흐림 · 늘이기 효과가 실제로 화면에 걸리는지.
 // MINICAN_PLAYWRIGHT_PATH 가 없으면 건너뛴다(emphasis-auto-gif.test.mjs 와 같다).
@@ -167,7 +167,9 @@ test('임팩트: new combo, effects and transitions are picked in the panel, sav
   await page.getByLabel('움직임 종류').selectOption('재생 차례');
   assert.match(await page.locator('.fe-timeline').textContent(), /확 박히기[\s\S]*끼익 멈추기/);
   // 둘째 장에 회오리 전환, 첫 장의 동그라미에 강조 · 사라지기.
-  await page.locator('.cv-slide').nth(1).click();
+  // 열린 도구 칸은 장 목록까지 덮는다: 닫고 장을 고른 뒤 움직임 칸을 다시 연다.
+  await pickPage(page, '.cv-slide >> nth=1');
+  await openTool(page, 'motion');
   await page.getByLabel('움직임 종류').selectOption('장 전환');
   await page.locator('.fe-motions[data-group="tr"] .fe-mo[data-motion="spin"]').click();
   await saved(page, r => r.slides[1].tr === 'spin');
@@ -176,8 +178,9 @@ test('임팩트: new combo, effects and transitions are picked in the panel, sav
   await page.locator('.fe-motions[data-group="combo"] .fe-mo[data-motion="storm"]').click();
   await saved(page, r => r.slides[1].tr === 'spin' && r.slides[1].pa === 'storm');
   assert.match(await page.locator('[data-motion-both]').innerText(), /회오리 로 넘어온 뒤 → 휘몰아치기/);
-  await page.locator('.cv-slide').nth(0).click();
+  await pickPage(page, '.cv-slide >> nth=0');
   await page.locator('.cv-canvas .fe-card .fi-shape').click();
+  await openTool(page, 'motion');
   await page.getByLabel('움직임 종류').selectOption('누를 때 강조하기');
   await page.locator('.fe-motions[data-group="emph"] .fe-mo[data-motion="boom"]').click();
   await page.getByLabel('움직임 종류').selectOption('누를 때 사라지기');

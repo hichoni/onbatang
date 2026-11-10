@@ -128,7 +128,7 @@ test('text effects and photo alt text render, save and round-trip through editab
   const {page, external} = await setup(t);
   const text = page.locator('.cv-canvas .fe-card .fi-text').first();
   await text.click();
-  await page.locator('.fe-bar button').filter({hasText: '효과'}).click();
+  await page.locator('.fe-bar button').filter({hasText: '효과', hasNotText: '시네마'}).click();
   await page.locator('[data-stroke="white"]').click();
   await page.locator('[data-shadow="on"]').click();
   await page.locator('[data-line-spacing="1.5"]').click();

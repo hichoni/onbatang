@@ -68,6 +68,15 @@ export function bindFilmstrip(list,{reorder,busy=()=>false,vertical=false}={}){
   return {stop,destroy(){stop();controller.abort();}};
 }
 
+/** 고른 장이 목록에서 안 보이면 그 장까지 목록만 넘긴다(쪽은 움직이지 않는다). 접어 두거나 서랍을 닫아 둔 사이에
+ * 이전 · 다음으로 넘긴 뒤 다시 펼칠 때 쓴다: 숨겨 둔 목록은 크기가 없어 그동안의 넘김 계산이 소용없다. */
+export function revealSelected(strip){
+  const list=strip?.querySelector('.cv-slide-list'),selected=list?.querySelector('.cv-slide.on');
+  if(!selected||!list.clientHeight)return;
+  const box=list.getBoundingClientRect(),r=selected.getBoundingClientRect();
+  list.scrollTop+=r.top<box.top+8?r.top-box.top-8:r.bottom>box.bottom-8?r.bottom-box.bottom+8:0;
+}
+
 /** Page-centered workspace: the same navigation/actions in a vertical rail. */
 export function bindPageRail(strip,{key,navigation=()=>({}),step=()=>{}}={}){
   const shell=strip.closest('.cv-page-workspace'),controller=new AbortController();
@@ -77,6 +86,7 @@ export function bindPageRail(strip,{key,navigation=()=>({}),step=()=>{}}={}){
   const save=()=>{try{localStorage.setItem(key,JSON.stringify({width,collapsed}));}catch{}};
   const closeMenu=()=>{const menu=strip.querySelector('.cv-tray-menu');if(menu)menu.open=false;};
   function refresh(){
+    const wasCollapsed=strip.classList.contains('cv-tray-collapsed');
     shell.style.setProperty('--cv-pages-width',`${collapsed?48:width}px`);
     shell.classList.toggle('pages-collapsed',collapsed);
     strip.classList.toggle('cv-tray-collapsed',collapsed);
@@ -91,6 +101,7 @@ export function bindPageRail(strip,{key,navigation=()=>({}),step=()=>{}}={}){
     for(const button of strip.querySelectorAll('[data-tray-step]'))button.disabled=Number(button.dataset.trayStep)<0?!state.previous:!state.next;
     const count=strip.querySelector('.cv-slide-count');
     const label=shell.querySelector('.cv-canvas-label');if(label&&count)label.textContent=`${count.textContent} · 편집 캔버스`;
+    if(wasCollapsed&&!collapsed)revealSelected(strip);
   }
   on(strip,'click',event=>{
     if(event.target.closest('.cv-tray-toggle')){collapsed=!collapsed;closeMenu();refresh();save();}
