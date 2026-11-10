@@ -32,11 +32,13 @@ const pages = {
   // 계정이 있는 기기. ?delay= 이면 계정의 그림 하나를 받는 데 그만큼 걸린다.
   '/device.html': `${head}
 window.deckFile=await packOnbatang({title:'발명 수업',records:parts('발명 수업',2,0x1000),deck:{title:'발명 수업'},app:'test'});
-await startMinican({storage,sync:fakeSync({delay:Number(q.get('delay')||0)})});window.ready=true;</script>`,
+// ?resume=그림: 처음 열 때는 그 그림을 꾸미던 탭인 것처럼 적어만 두고 멈춘다(held). 시험이 새로 고침하면 온바탕이 그 그림을 바로 다시 연다.
+if(q.get('resume')&&performance.getEntriesByType('navigation')[0]?.type!=='reload'){sessionStorage.setItem('onbatang-open-v1:'+storage,JSON.stringify({id:q.get('resume'),at:0}));window.held=true;}
+else{await startMinican({storage,sync:fakeSync({delay:Number(q.get('delay')||0)}),resume:!!q.get('resume')});window.ready=true;}</script>`,
   // 0.141.0 전 기기: 묶음이 그 기기의 localStorage 에만 있고 파트 기록에는 없다. 계정 없이 먼저 적어 둔다.
   '/legacy-seed.html': `${head}
-setStorageName(storage);const old=parts('옛 연수',2,0x2000);for(const r of old)await putDesign(r);
-localStorage.setItem('onbatang-file-decks-v1:'+storage,JSON.stringify([{id:'f'+old[0].id,title:'옛 연수',documents:old.map(r=>r.id),createdAt:1}]));
+setStorageName(storage);const title=q.get('t')||'옛 연수',old=parts(title,2,Number(q.get('at')||0x2000));for(const r of old)await putDesign(r);
+localStorage.setItem('onbatang-file-decks-v1:'+storage,JSON.stringify([{id:'f'+old[0].id,title,documents:old.map(r=>r.id),createdAt:1}]));
 window.ready=true;</script>`,
 };
 
@@ -95,5 +97,45 @@ test('a multi-part deck opened from a file shows as one deck on another device, 
   assert.ok(await page.evaluate(() => window.loads) === 4);
   await page.waitForFunction(() => document.querySelectorAll('.cv-home .cv-deck').length === 2);
   assert.deepEqual((await decks().allInnerTexts()).map(t => /발명 수업/.test(t) ? '발명' : /옛 연수/.test(t) ? '옛' : t).sort(), ['발명', '옛']);
+  assert.deepEqual(errors, []);
+});
+
+test('a tab that reopens straight into a part of an old deck shares the deck once its teacher goes back to the home screen', options, async t => {
+  const server = createServer(async (req, res) => {
+    try {
+      const path = new URL(req.url, 'http://x').pathname;
+      if (pages[path]) { res.setHeader('Content-Type', path.endsWith('.js') ? 'text/javascript' : 'text/html'); return res.end(pages[path]); }
+      const f = resolve(root, '.' + decodeURIComponent(path));
+      if (!f.startsWith(root + sep)) throw Error('path');
+      res.setHeader('Content-Type', ({'.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.json': 'application/json'})[extname(f)] || 'application/octet-stream');
+      res.end(await readFile(f));
+    } catch { res.writeHead(404); res.end(); }
+  });
+  await new Promise(done => server.listen(0, '127.0.0.1', done));
+  t.after(() => new Promise(done => server.close(done)));
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  const {chromium} = await import(pathToFileURL(process.env.MINICAN_PLAYWRIGHT_PATH).href);
+  const browser = await chromium.launch({channel: process.env.MINICAN_BROWSER || 'msedge', headless: true});
+  t.after(() => browser.close());
+  const page = await (await browser.newContext({viewport: {width: 1280, height: 900}})).newPage();
+  const errors = []; page.on('pageerror', e => errors.push(e.message));
+  const open = async (path) => { await page.goto(origin + path); await page.waitForFunction(() => window.ready); };
+  const shared = () => page.evaluate(() => Object.values(JSON.parse(localStorage.getItem('fake-cloud') || '{}')).filter(r => r.fileDeck?.title === '바로 연 연수').length);
+  const first = 'd' + (0x3000).toString(16).padStart(24, '0');
+
+  // 예전 기기: 묶음이 localStorage 에만 있다. 새로 고침하면 첫 화면 없이 그 묶음의 첫 파트를 바로 다시 연다.
+  await open(`/legacy-seed.html?s=deck-e&t=${encodeURIComponent('바로 연 연수')}&at=${0x3000}`);
+  await page.goto(`${origin}/device.html?s=deck-e&resume=${first}`); await page.waitForFunction(() => window.held);
+  await page.reload(); await page.waitForFunction(() => window.ready);
+  await page.waitForFunction(() => document.getElementById('app').dataset.view === 'edit');
+  // 계정 맞추기는 이 기기에만 있던 두 파트를 올리지만, 꾸미는 중이라 묶음은 아직 적지 않는다.
+  await page.waitForFunction(() => window.pushed.length >= 2, null, {timeout: 20000});
+  await page.waitForTimeout(2500);
+  assert.equal(await shared(), 0, 'nothing is rewritten while the teacher is editing');
+  // '내 그림'으로 돌아오면 묶음을 파트마다 적어 올린다.
+  await page.locator('.cv-back').click();
+  await page.waitForFunction(() => document.getElementById('app').dataset.view === 'home');
+  await page.waitForFunction(() => Object.values(JSON.parse(localStorage.getItem('fake-cloud') || '{}')).filter(r => r.fileDeck?.title === '바로 연 연수').length === 2, null, {timeout: 20000});
+  await page.locator('.cv-home .cv-deck').filter({hasText: '바로 연 연수'}).waitFor();
   assert.deepEqual(errors, []);
 });

@@ -715,18 +715,30 @@ function fileDecks(list = S.list || []) {
 }
 const fileDeckFor = (deck, part) => ({ id: deck.id, title: deck.title || '', part, parts: deck.documents.length, ...(Array.isArray(deck.pageOrder) ? { pageOrder: deck.pageOrder } : {}) });
 // 0.141.0 전에 온바탕 파일로 연 묶음은 이 기기(localStorage)에만 있었다. 그 파트 기록에도 묶음을 적어 계정에 올린다.
-// 고친 때는 1ms 만 늦춘다: 내 그림의 차례는 그대로이고, 다른 기기는 새것으로 알아 받는다. 꾸미는 중에는 하지 않는다(다음에 한다).
-async function shareFileDecks() {
+// 고친 때는 1ms 만 늦춘다: 내 그림의 차례는 그대로이고, 다른 기기는 새것으로 알아 받는다.
+// 꾸미는 중에는 하지 않는다. 계정 맞추기가 끝날 때와 꾸미기를 마치고 첫 화면으로 돌아올 때(closeDesign) 한다:
+// 새로 고침하면 첫 화면을 거치지 않고 하던 그림을 다시 여는 탭은 맞추기 때 꾸미는 중이라 건너뛰었기 때문이다.
+let sharingDecks = null;
+function shareFileDecks() {
+  sharingDecks ||= shareFileDecksNow().finally(() => { sharingDecks = null; });
+  return sharingDecks;
+}
+const sameFileDeck = (r, deck, part) => r.fileDeck?.id === deck.id && r.fileDeck.part === part && r.fileDeck.parts === deck.documents.length;
+async function shareFileDecksNow() {
   if (S.open || !S.list) return;
   const byId = new Map(S.list.map((r) => [r.id, r]));
   for (const deck of localFileDecks()) {
     // fileDeckOf(designs.js)가 받는 모양만: 이름표 모양 · 파트 2~100개
     if (!/^[a-z][a-z0-9]{5,31}$/.test(deck.id) || deck.documents.length < 2 || deck.documents.length > 100) continue;
     for (const [part, id] of deck.documents.entries()) {
-      const r = byId.get(id);
-      if (!r || (r.fileDeck?.id === deck.id && r.fileDeck.part === part && r.fileDeck.parts === deck.documents.length)) continue;
+      const listed = byId.get(id);
+      if (!listed || sameFileDeck(listed, deck, part)) continue;
       if (S.open) return;
       try {
+        // 목록을 읽은 뒤에 고쳐졌을 수 있으니 저장소의 것을 다시 읽어 그 위에 묶음만 더한다(방금 고친 것을 덮지 않게).
+        const r = await getDesign(id);
+        if (!r || sameFileDeck(r, deck, part)) continue;
+        if (S.open) return;
         const saved = await putDesign({ ...r, fileDeck: fileDeckFor(deck, part), updatedAt: (r.updatedAt || 0) + 1 });
         upsert(saved);
         if (accountFor(saved)) pusher.queue(saved);
@@ -3656,6 +3668,8 @@ async function closeDesign(O, btn = null) {
   await leaveEditor(O);
   // 이 기기의 그림 목록은 다시 읽는다(싸다).
   try { S.list = await listDesigns(); } catch { /* 저장소를 못 쓰는 창: 기억하고 있는 목록을 그대로 쓴다 */ }
+  // 꾸미는 중이라 계정 맞추기 때 건너뛴 묶음 올리기를 마저 한다(shareFileDecks). 대개 할 것이 없어 곧 끝난다.
+  void shareFileDecks();
   // 꾸미던 그림이 작아지면서 목록의 그 그림 자리로 돌아간다(저장되지 않은 빈 그림이면 그냥 사라진다).
   const returnToShelf = () => {
     render();
