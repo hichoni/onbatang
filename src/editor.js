@@ -2926,8 +2926,36 @@ export function createEditor({
         tb(icon('redo'), redo, { title: '다시 실행 (Ctrl+Y / Ctrl+Shift+Z)', name: '다시 실행', disabled: !!cropJob || !canRedo(), cls: 'icon redo' }));
     }
     drawBar();
+    placePop();
     tidySeps();
     if (back) toolbar.querySelector(back)?.focus({ preventScroll: true });
+  }
+  // 속성 칸 짜임(inspector): 펼친 칸을 단추들 맨 아래가 아니라, 누른 단추가 있는 줄 바로 아래에 편다.
+  // (단추가 여러 줄이면 칸이 화면 밖 저 아래에 펴져, 색을 누르고도 팔레트를 찾아 내려가야 했다.)
+  // 막 펼쳤을 때는 칸이 다 보이게 속성 칸을 굴린다. 칸이 속성 칸보다 길면 누른 단추를 맨 위에 둔다.
+  let popShown = null;
+  function placePop() {
+    if (!inspector) return;
+    if (bar.contains(popBox)) popBox.remove();
+    const opener = popBox.hidden ? null : bar.querySelector('.fe-tb.has-pop.on');
+    if (!opener) { if (popBox.parentElement !== toolbar) toolbar.append(popBox); popShown = null; return; }
+    const row = opener.getBoundingClientRect();
+    let last = opener;
+    for (let n = opener.nextElementSibling; n; n = n.nextElementSibling) {
+      const r = n.getBoundingClientRect();
+      if (!r.width && !r.height) continue;         // 감춘 조각
+      if (r.top >= row.bottom - 2) break;          // 다음 줄
+      last = n;
+    }
+    last.after(popBox);
+    if (popShown === pop) return;
+    popShown = pop;
+    let box = toolbar.parentElement;
+    const scrolls = (n) => typeof getComputedStyle === 'function' && /(auto|scroll)/.test(getComputedStyle(n).overflowY);
+    while (box && box !== document.body && !scrolls(box)) box = box.parentElement;
+    const room = box && box !== document.body ? box.clientHeight : globalThis.innerHeight || 0;
+    if (popBox.offsetHeight + opener.offsetHeight + 16 <= room) popBox.scrollIntoView?.({ block: 'nearest' });
+    else opener.scrollIntoView?.({ block: 'start' });
   }
   // 도구 막대가 두 줄이 되면 구분선이 줄의 맨 끝이나 맨 앞에 걸릴 수 있다. 그런 선은 자리만 두고 보이지 않게 한다(자리는 그대로라 줄이 다시 바뀌지 않는다).
   function tidySeps() {
