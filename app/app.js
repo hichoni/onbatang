@@ -853,6 +853,9 @@ function openDesign(record, isNew) {
     colorPalettes,
     design: O.slides[0],
     onChange: () => touched(O),
+    // 되돌리기는 자료 전체의 차례로(다른 장의 일 · 장을 지운 일까지): 아래 '되돌리기(자료 전체)'.
+    onRemember: () => noteEdit(O),
+    hostHistory: { undo: () => stepUndo(O, true), redo: () => stepUndo(O, false), canUndo: () => canStep(O, true), canRedo: () => canStep(O, false) },
     uploadImage: photoToData,
     // 같이 고치기: 내가 고른 것을 알리고, 다른 사람이 고르고 있는 것은 고르지 못한다(그 사람의 색 테두리).
     onSelect: () => coSelect(O),
@@ -888,6 +891,7 @@ function openDesign(record, isNew) {
       const next = dropPhoto(O.slides, img.url);
       if (next === O.slides) return;
       O.slides = next;
+      dropUndo(O);                                // 다른 장에서도 지웠다: 되돌리면 앞뒤가 맞지 않는다
       renderStrip(O);
     },
     // 실행 취소·다시 실행으로 그림의 모양이 되돌아갔을 때: 고른 모양 표시와 기록을 맞춘다.
@@ -897,6 +901,11 @@ function openDesign(record, isNew) {
       markRatio(O, shapes);
     },
   });
+  // 편집기에 장을 끼우는 길 가운데 되돌리기 기록을 이어 가도 되는 것은 showSlide 뿐이다(장 넘기기 · 장 더하기/지우기 · 되돌리기).
+  // 그 밖의 길(찾아 바꾸기 · 개요 · 가져오기 · 같이 고치기 · 다시 불러오기)은 다른 장까지 바꾸므로 기록을 비운다.
+  const setRaw = O.editor.setDesign, forgetRaw = O.editor.forget;
+  O.editor.setDesign = (next, opts) => { if (!opts?.kept) dropUndo(O); return setRaw(next, opts); };
+  O.editor.forget = () => { dropUndo(O); forgetRaw(); };
   const down = el('button', { class: 'btn btn-primary cv-down-btn', type: 'button', title: '그림·영상·PPTX로 내려받아요', onClick: () => askDownload(O, down) }, ...face('download', '내려받기'));
   let acceptsMaterial = false;
   try { acceptsMaterial = !!materialAction && (!materialAction.accepts || materialAction.accepts(record)); } catch { /* An optional host action must fail closed. */ }
@@ -1157,7 +1166,8 @@ function renderStrip(O) {
   if(O.materialDeck)O.strip.dataset.materialLayout='1';
 }
 function moveStripSelection(O,delta){if(O.materialDeck){const pages=materialPages(O),from=pages.findIndex(v=>v.record.id===O.record.id&&v.index===O.at);reorderStrip(O,from,from+delta);}else changeSlides(O,(slides,at)=>moveSlide(slides,at,delta));}
-async function reorderStrip(O,from,to){
+// replay: 되돌리기 · 다시 실행으로 부른 것(기록에 또 적지 않는다). 전체 자료의 쪽 차례를 바꿨으면 true.
+async function reorderStrip(O,from,to,{replay=false}={}){
   if(O.closed||O.leaving||O.inlineImport||app.inert||videoBusy(O))return;
   if(!O.materialDeck){changeSlides(O,(slides,at)=>{const next=[...slides];next.splice(to,0,...next.splice(from,1));const selected=slides[at];return [next,next.indexOf(selected)];});return;}
   if(O.materialDeck.fileDeck){
@@ -1165,16 +1175,19 @@ async function reorderStrip(O,from,to){
     const pages=materialPages(O);if(from<0||to<0||from>=pages.length||to>=pages.length||from===to)return;
     const pageOrder=movePage(pages.map(v=>v.page.id),from,to),deck=fileDecks().find(d=>d.id===O.materialDeck.fileDeck);
     if(deck)keepFileDeck({...deck,pageOrder});
-    O.materialDeck={...O.materialDeck,pageOrder};renderStrip(O);return;
+    O.materialDeck={...O.materialDeck,pageOrder};renderStrip(O);
+    if(!replay)noteUndo(O,{t:'order',doc:O.record.id,from,to});
+    return true;
   }
   if(looseBlock(O))return;
   if(!materialNavigation.reorder){toast('이 자료의 순서를 저장하는 기능을 연결하지 못했어요.');return;}
   const pages=materialPages(O);if(from<0||to<0||from>=pages.length||to>=pages.length||from===to)return;
-  O.leaving=true;app.inert=true;
+  O.leaving=true;app.inert=true;let done=false;
   try{await persistLocal(O);const deck=await materialNavigation.reorder({designId:O.record.id,materialRef:O.materialDeck.materialRef,pageIds:movePage(pages.map(v=>v.page.id),from,to)});
-    if(!O.closed&&S.open===O){O.materialDeck={...deck,documents:deck.documents.map(migrateRecord)};renderStrip(O);toast('슬라이드 순서를 저장했어요. 원본과 이전 저장본은 그대로예요.');}
+    if(!O.closed&&S.open===O){O.materialDeck={...deck,documents:deck.documents.map(migrateRecord)};renderStrip(O);done=true;if(!replay)noteUndo(O,{t:'order',doc:O.record.id,from,to});toast('슬라이드 순서를 저장했어요. 원본과 이전 저장본은 그대로예요.');}
   }catch(error){toast(error?.message||'순서를 저장하지 못했어요. 원래 순서와 편집은 유지돼요.',5000);}
   finally{O.leaving=false;if(!O.closed&&S.open===O)app.inert=false;}
+  return done;
 }
 function decorateStrip(O){
   const list=O.strip.querySelector('.cv-slide-list'),count=O.strip.querySelector('.cv-slide-count');
@@ -1323,9 +1336,10 @@ async function navigateMaterialPage(O,value) {
     // needs room for an activity/result. Foreign drafts must still conflict.
     O.materialDeck.documents=O.materialDeck.documents.map(row=>row.id===O.record.id?structuredClone(O.persistedRecord):row);
     clearTimeout(O.timer);clearTimeout(O.thumbTimer);O.editor.quiet();
+    keepStack(O);                               // 다른 파트로 가도 이 장의 되돌리기 기록은 맡아 둔다
     O.persistedRecord=structuredClone(ready);O.record={...ready};delete O.record.slides;O.slides=ready.slides;O.at=value.index;
     O.dirty=false;O.saved=true;O.localOk=true;O.accountOk=null;O.nameInput.value=ready.name;
-    setupApp(ready);markRatio(O,O.shapes);O.editor.setUploads(libraryOf(ready.uploads,ready.slides));O.editor.setDesign(O.slides[O.at]);
+    setupApp(ready);markRatio(O,O.shapes);O.editor.setUploads(libraryOf(ready.uploads,ready.slides));showSlide(O);
     setStatus(O,accountFor(ready)?'저장돼 있어요':'이 기기에 저장돼 있어요');upsert(ready);renderStrip(O);
   }catch{
     if(!O.closed&&S.open===O){setStatus(O,'현재 쪽을 저장하거나 다음 쪽을 열지 못했어요. 편집은 그대로 유지돼요.','bad');toast('저장 상태를 확인한 뒤 다시 이동해주세요.',5000);}
@@ -1413,10 +1427,10 @@ const EDITOR_KEYS = [
   ['화살표 (Shift: 크게)', '고른 것 옮기기'],
   ['Enter · 두 번 누르기', '글 고치기'],
   ['Esc', '고르기 풀기 · 글 고치기 끝내기'],
-  ['Delete · Backspace', '지우기'],
+  ['Delete · Backspace', '고른 것 지우기(장 목록에서 장을 누른 뒤 Delete: 그 장 지우기)'],
   ['Ctrl+C · Ctrl+X · Ctrl+V', '복사 · 잘라내기 · 붙여넣기'],
   ['Ctrl+D', '복제'],
-  ['Ctrl+Z · Ctrl+Y (Ctrl+Shift+Z)', '실행 취소 · 다시 실행'],
+  ['Ctrl+Z · Ctrl+Y (Ctrl+Shift+Z)', '실행 취소 · 다시 실행(다른 장에서 한 일 · 장 지우기까지 차례대로)'],
   ['Ctrl+A', '모두 고르기'],
   ['Ctrl+G · Ctrl+Shift+G', '그룹으로 묶기 · 풀기'],
   ['두 조각 고르기 → 연결선', '두 조각을 화살표로 잇기(옮기면 따라와요)'],
@@ -1637,6 +1651,7 @@ function offerVoice(O, takes, ids) {
       closeModal();
       if (O.closed) return;
       O.slides[O.at] = O.editor.getDesign();
+      dropUndo(O);
       O.slides = O.slides.map((p) => { const v = mine.get(p.id); return v ? { ...p, voice: { src: keys.get(v.take), at: v.at, ms: v.ms, ...(v.steps ? { steps: v.steps } : {}) } } : p; });
       O.editor.setDesign(O.slides[O.at]);
       renderStrip(O);
@@ -1670,6 +1685,7 @@ function offerRehearsal(O, list) {
   const save = () => {
     closeModal();
     O.slides[O.at] = O.editor.getDesign();
+    dropUndo(O);
     O.slides = O.slides.map((p) => (mine.has(p.id) ? { ...p, dur: Math.min(DUR_LIMIT, mine.get(p.id)) } : p));
     O.editor.setDesign(O.slides[O.at]);
     renderStrip(O);
@@ -1694,7 +1710,7 @@ function openTopic(O) {
     const topic = cleanTopic(input.value);
     closeModal();
     if (topic === now) return;
-    O.editor.patchSlide({ topic });
+    patchSlideKept(O, { topic });
     renderStrip(O);
     toast(topic ? `이 장부터 「${topic}」 주제예요. 발표의 전체 보기(G)에서 주제별로 모여요.` : '이 장의 주제를 없앴어요.', 3500);
   };
@@ -1711,30 +1727,144 @@ function openTopic(O) {
 }
 function setSlideHidden(O, hidden) {
   if (O.closed || videoBusy(O)) return;
-  O.editor.patchSlide({ hidden });
+  patchSlideKept(O, { hidden });
   renderStrip(O);
   toast(hidden ? '이 장은 발표할 때 건너뛰어요. 지우지 않았고, 편집·저장·PPTX 에는 그대로 있어요.' : '이 장을 다시 발표에 넣었어요.', 3500);
 }
+// ---------- 되돌리기(자료 전체) ----------
+// 편집기는 한 장의 기록만 안다. 프로젝트가 '무슨 일을 어떤 차례로 했는지'를 적어 두고(O.undo), Ctrl+Z 마다 맨 뒤의 일부터 되돌린다:
+//   { t: 'edit', id }               그 장에서 꾸민 일 한 번(그 장으로 가서 편집기의 기록으로 되돌린다)
+//   { t: 'deck', before, after }    장 목록이 바뀐 일(더하기 · 복제 · 지우기 · 옮기기 · 숨김 · 주제). 앞뒤의 { slides, at } 를 통째로 적는다
+//   { t: 'order', from, to }        전체 자료(여러 파트)의 쪽 차례를 바꾼 일
+// doc 은 그 일을 한 파트(그림 기록)의 이름표다. 다른 파트의 일이면 그 파트로 먼저 간다.
+// 장마다 편집기의 기록(stacks)을 맡아 두었다가 그 장을 다시 열 때 돌려준다. 다른 장까지 한꺼번에 바꾸는 일은 기록을 모두 비운다(dropUndo).
+const UNDO_MAX = 300;
+const undoOf = (O) => (O.undo ||= { past: [], future: [], stacks: new Map() });
+const undoOn = (O) => !O.co;                    // 같이 고치는 중에는 예전처럼 장마다 따로(다른 사람의 변경이 끼어들면 차례가 어긋난다)
+const slideKey = (O) => O.slides[O.at]?.id || '';
+function dropUndo(O) { if (!O.undo) return; O.undo = null; O.editor?.markHistory?.(); }
+function keepStack(O) { const id = slideKey(O); if (id && undoOn(O) && O.editor) undoOf(O).stacks.set(id, O.editor.history()); }
+/** 지금 장(O.slides[O.at])을 편집기에 끼운다. 그 장에서 쌓아 둔 되돌리기 기록을 이어 준다. */
+function showSlide(O) {
+  // 편집기는 받은 객체를 그대로 고쳐 쓴다. 적어 둔 장 목록(되돌리기 기록)이 함께 바뀌지 않게 얕은 사본을 준다.
+  const design = O.slides[O.at] = { ...O.slides[O.at] };
+  O.editor.setDesign(design, { kept: true, history: (undoOn(O) && design.id && O.undo?.stacks.get(design.id)) || null });
+}
+function noteUndo(O, entry) {
+  if (!undoOn(O)) return;
+  const U = undoOf(O);
+  U.past.push(entry);
+  if (U.past.length > UNDO_MAX) U.past.shift();
+  U.future = [];
+  O.editor?.markHistory?.();
+}
+function noteEdit(O) { noteUndo(O, { t: 'edit', doc: O.record.id, id: slideKey(O) }); }
+function canStep(O, back) {
+  if (!O.editor) return false;
+  if (!undoOn(O)) return back ? O.editor.canUndoLocal() : O.editor.canRedoLocal();
+  return !!(back ? O.undo?.past.length : O.undo?.future.length);
+}
+const deckState = (O) => ({ slides: O.slides.map((d, i) => (i === O.at ? O.editor.getDesign() : d)), at: O.at });
+/** 장 자체의 표시(숨김 · 주제)를 바꾸고, 되돌릴 수 있게 적어 둔다. */
+function patchSlideKept(O, patch) {
+  const before = deckState(O);
+  O.editor.patchSlide(patch);
+  noteUndo(O, { t: 'deck', doc: O.record.id, before, after: deckState(O) });
+}
+function applyDeck(O, state) {
+  keepStack(O);
+  O.slides = state.slides.slice();
+  O.at = Math.max(0, Math.min(state.at, O.slides.length - 1));
+  showSlide(O);
+  renderStrip(O);
+  touched(O);
+}
+/** 한 걸음 되돌린다(back) · 다시 한다. 맨 뒤의 일이 다른 장 · 다른 파트의 것이면 그리로 먼저 간다. */
+async function stepUndo(O, back) {
+  if (!O || O.closed || S.open !== O || O.leaving || O.inlineImport || app.inert || O.undoBusy || videoBusy(O)) return;
+  if (!undoOn(O)) { if (back) O.editor.undoLocal(); else O.editor.redoLocal(); return; }
+  const U = undoOf(O), from = back ? U.past : U.future, to = back ? U.future : U.past;
+  O.undoBusy = true;
+  try {
+    while (from.length) {
+      const e = from[from.length - 1];
+      if (e.doc !== O.record.id) {
+        // 다른 파트에서 한 일: 그 파트의 그 장(없으면 그 파트의 아무 장)으로 먼저 간다. 가지 못하면(저장 실패 등) 그대로 둔다.
+        const pages = O.materialDeck ? materialPages(O).filter((v) => v.record.id === e.doc) : [];
+        const page = pages.find((v) => v.page.id === e.id) || pages[0];
+        if (!page) { from.pop(); continue; }
+        await navigateMaterialPage(O, page);
+        if (O.closed || S.open !== O || O.record.id !== e.doc || O.undo !== U) return;
+      }
+      from.pop();
+      if (e.t === 'edit') {
+        const i = O.slides.findIndex((d) => d.id === e.id);
+        if (i < 0) continue;                    // 그 장이 없다(기록보다 오래된 일): 건너뛴다
+        if (i !== O.at) goSlide(O, i);
+        if (O.at !== i || !(back ? O.editor.undoLocal() : O.editor.redoLocal())) continue;
+      } else if (e.t === 'deck') applyDeck(O, back ? e.before : e.after);
+      else if (e.t === 'order') { if (!await reorderStrip(O, back ? e.to : e.from, back ? e.from : e.to, { replay: true })) continue; }
+      else continue;
+      if (O.undo === U) to.push(e);
+      break;
+    }
+  } finally { O.undoBusy = false; if (!O.closed) O.editor.markHistory(); }
+}
+/** 장 목록에서 고른 장을 Delete 글쇠로 지운다(지우기 단추와 같은 일. 한 번에 지우고, Ctrl+Z 로 되돌린다). */
+function removeSlideByKey(O) {
+  const del = O.strip?.querySelectorAll('.cv-slide-tool')[3];
+  if (!del || del.disabled || O.closed || videoBusy(O)) return false;
+  changeSlides(O, removeSlide);
+  toast('장을 지웠어요. Ctrl+Z 로 되돌릴 수 있어요.', 3500);
+  return true;
+}
+// 꾸미는 화면의 글쇠: 그림판 밖(도구 막대 · 옆 칸 · 장 목록 · 페이지 바탕)에 초점이 있어도 Delete 와 Ctrl+Z · Ctrl+Y 를 듣는다.
+// 그림판과 옆 칸은 제 글쇠를 먼저 듣는다(defaultPrevented). 글을 쓰는 칸 · 창(모달) · 발표 화면 · 가져오기 화면은 건드리지 않는다.
+function onEditorKeys(e) {
+  const O = S.open;
+  if (!O || O.closed || O.inlineImport || e.defaultPrevented || e.isComposing || !O.editor || !O.shell?.isConnected || app.inert) return;
+  if (document.querySelector('.modal-backdrop, .cv-show') || document.body.classList.contains('modal-open')) return;
+  const t = e.target instanceof Element ? e.target : null;
+  if (!t || O.editor.stage.contains(t)) return;
+  if (t !== document.body && t !== document.documentElement && !O.shell.contains(t) && !O.strip?.contains(t)) return;
+  if (t.isContentEditable || t.closest('textarea, select, iframe, [contenteditable]:not([contenteditable="false"]), .cv-activity-config') || (t.tagName === 'INPUT' && t.type !== 'range')) return;
+  const mod = e.ctrlKey || e.metaKey;
+  if (mod && !e.altKey && e.code === 'KeyZ') { e.preventDefault(); stepUndo(O, !e.shiftKey); return; }
+  if (mod && !e.altKey && !e.shiftKey && e.code === 'KeyY') { e.preventDefault(); stepUndo(O, false); return; }
+  if (mod || e.altKey || e.shiftKey || (e.key !== 'Delete' && e.key !== 'Backspace')) return;
+  // 고른 요소가 있으면 그것을, 없고 방금 장 목록의 장을 눌렀으면(Delete 만) 그 장을 지운다.
+  if (O.editor.removeSelected()) e.preventDefault();
+  else if (e.key === 'Delete' && O.stripPicked && removeSlideByKey(O)) e.preventDefault();
+}
+// 마지막으로 누른 곳이 장 목록의 장인지 적어 둔다(장을 누르면 목록을 다시 그려 초점이 사라지므로 초점으로는 알 수 없다).
+function onEditorPress(e) {
+  const O = S.open, t = e.target instanceof Element ? e.target : null;
+  if (O) O.stripPicked = !!(t && O.strip?.contains(t) && t.closest('.cv-slide:not(.add)'));
+}
 function goSlide(O, i) {
   if (O.closed || i === O.at || !O.slides[i] || videoBusy(O)) return;
+  keepStack(O);
   O.slides[O.at] = O.editor.getDesign();
   O.at = i;
-  O.editor.setDesign(O.slides[i]);
+  showSlide(O);
   renderStrip(O);
   // Selection is immediate; entrance motion belongs to presentation, not editing.
 }
 /** 슬라이드 목록을 바꾼다(더하기·복제·지우기·옮기기). change(slides, at) 는 [새 목록, 이어서 꾸밀 번호] 를 돌려준다. */
 function changeSlides(O, change) {
   if (O.closed || videoBusy(O)) return;
+  keepStack(O);
   O.slides[O.at] = O.editor.getDesign();
   const before = O.slides;
   const was = O.at;
   const [next, at] = change(O.slides, O.at);
   if (at < 0) { toast(`슬라이드는 ${MAX_SLIDES}장까지 만들 수 있어요.`, 3500); return; }
   if (next === O.slides) return;
+  // 장을 더하고 · 복제하고 · 지우고 · 옮긴 것도 Ctrl+Z 로 되돌린다(앞뒤의 장 목록을 적어 둔다)
+  noteUndo(O, { t: 'deck', doc: O.record.id, before: { slides: before.slice(), at: was }, after: { slides: next.slice(), at } });
   O.slides = next;
   O.at = at;
-  O.editor.setDesign(O.slides[at]);
+  showSlide(O);
   renderStrip(O);
   // 보이는 장이 바뀌었으면(더하기·복제·지우기) 그림이 들어오는 것처럼 보여 준다. 같은 장의 순서만 옮겼으면 그림은 그대로 둔다.
   if (next[at] !== before[was]) slideIn(stageCard(O), Math.sign(at - was));
@@ -3114,6 +3244,7 @@ function coApply(O, kit, ops) {
   let at = list.findIndex((d) => d.id === cur);
   const gone = at < 0;
   if (gone) at = Math.min(O.at, list.length - 1);
+  dropUndo(O);                                // 같이 고치는 동안에는 장마다 따로 되돌린다
   O.slides = list;
   O.at = at;
   const c = changed.get(cur);
@@ -4828,6 +4959,8 @@ export function startMinican({ root = document.getElementById('app'), fonts = []
   window.addEventListener('pagehide', () => S.open?.co?.close());
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') S.open?.co?.ping(); });
   document.addEventListener('contextmenu', onPageMenu);
+  document.addEventListener('keydown', onEditorKeys);
+  document.addEventListener('pointerdown', onEditorPress, true);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
   bindHomeDrop();
   S.phase = 'boot';
