@@ -91,7 +91,7 @@ test('7-day links: anyone makes a view link and an edit link, no video, says whe
   await page.locator('.cv-down-btn').click(); await page.locator('.cv-down-format[data-type=link]').click();
   const body = await page.locator('.cv-down-body').innerText();
   assert.match(body, /보기 링크: 받은 사람이 발표처럼 그대로 봐요/); assert.match(body, /고치기 링크: 받은 사람의 온바탕에 사본이 생겨/);
-  assert.match(body, /7일 동안만 열려요/); assert.match(body, /사진 포함 20MB까지, 하루에 5개까지/);
+  assert.match(body, /7일 동안만 열려요/); assert.match(body, /사진 포함 60MB까지, 하루에 5개까지/);
   assert.match(body, /바탕 영상 1개는 7일 링크에 실리지 않아요/);
   assert.equal(await page.locator('[data-copy-members]').count(), 0);
   const save = page.locator('[data-download-save]');

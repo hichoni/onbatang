@@ -3655,7 +3655,7 @@ async function openGuestLink(O) {
         el('p', { class: 'cv-guest-note', text: `보낼 자료: ${pages}쪽${ids.length > 1 ? ` · 파트 ${ids.length}개` : ''}` }),
         el('ul', { class: 'cv-guest-terms' },
           el('li', {}, el('b', { text: `${kit.GUEST_DAYS}일 동안만 열려요.` }), ' 그 뒤에는 링크와 자료가 서버에서 저절로 지워져요.'),
-          el('li', { text: `사진 포함 20MB까지, 하루에 ${kit.GUEST_PER_DAY}개까지 만들 수 있어요. 바탕 영상은 빠져요.` }),
+          el('li', { text: `사진 포함 ${kit.GUEST_MAX_BYTES / 1e6}MB까지, 하루에 ${kit.GUEST_PER_DAY}개까지 만들 수 있어요. 바탕 영상은 빠져요.` }),
           el('li', { text: '오래 두고 보내거나 영상까지 보내려면 내려받기의 "온바탕 파일"을 써 주세요.' })),
         el('label', { class: 'cv-guest-field' }, '자료 이름(받는 사람에게 보여요)', title),
         el('div', { class: 'cv-file-choices' },
@@ -4186,7 +4186,7 @@ function askDownload(O, btn) {
       const films=filmAll.filter(p=>hasVideo(p)).length;
       rows.push(section('링크로 보낼 것',el('p',{class:'cv-down-note',text:`이 자료 전체 ${scopeN}쪽${O.materialDeck?`(파트 ${O.materialDeck.documents.length}개)`:''}을 링크 하나로 보내요.`}),
         el('p',{class:'cv-down-note',dataset:{linkModes:''}},el('b',{text:'두 가지로 만들어요. '}),'보기 링크: 받은 사람이 발표처럼 그대로 봐요(고칠 수 없어요). 고치기 링크: 받은 사람의 온바탕에 사본이 생겨 바로 고쳐요.'),
-        el('p',{class:'cv-down-note',dataset:{guestTerms:''}},el('b',{text:'7일 동안만 열려요. '}),'7일이 지나면 링크와 자료가 서버에서 저절로 지워져요. 사진 포함 20MB까지, 하루에 5개까지 만들 수 있어요.'),
+        el('p',{class:'cv-down-note',dataset:{guestTerms:''}},el('b',{text:'7일 동안만 열려요. '}),'7일이 지나면 링크와 자료가 서버에서 저절로 지워져요. 사진 포함 60MB까지, 하루에 5개까지 만들 수 있어요.'),
         el('p',{class:'cv-down-note',text:'사진 · 움직임 · 발표자 노트까지 그대로 가요. 오래 두고 보내려면 "온바탕 파일"을 써 주세요.'}),
         films?el('p',{class:'cv-down-note warn',role:'note',text:`바탕 영상 ${films}개는 7일 링크에 실리지 않아요(유튜브 주소로 넣은 영상은 그대로 틀어져요). 영상까지 보내려면 "온바탕 파일"을 써 주세요.`}):null));
     }
