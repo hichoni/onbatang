@@ -5,6 +5,9 @@ import {applyFontPlan,loadImportFontAssets} from './fonts.js';
 
 const MIME='application/vnd.openxmlformats-officedocument.presentationml.presentation';
 const BUDGET=524288-16384;
+// PPT 원본은 100쪽씩 파트로 저장한다(그림 한 편 MAX_SLIDES 와 따로 둔다). 파트는 원본에 묶인 고정 문서라 계정 저장 한 문서의 크기를 작게 두고,
+// 내 그림 · 다른 기기에서는 파트들이 한 자료(전체 PPT)로 이어 보인다. 가져온 뒤 파트마다 장을 더해 그림 한 편 한도까지 늘릴 수 있다.
+export const PPT_PART_PAGES=100;
 const clone=value=>structuredClone(value);
 const bytes=value=>new TextEncoder().encode(JSON.stringify(value)).length;
 const fail=(code,message)=>{throw Object.assign(Error(message||code),{code});};
@@ -52,7 +55,7 @@ export function planImportParts(inspection,selectedPages,importModes={}){
   if(!Number.isSafeInteger(n)||!page||!['image','editable'].includes(mode))fail('INVALID_PAGE_SELECTION');
   if(mode==='editable'&&!page.canImport)fail('UNSUPPORTED_SLIDES',`${n}쪽은 화면 이미지로 가져오기를 선택해 주세요.`);
   const estimate=mode==='image'?240000:Math.max(0,Number(page.estimatedBytes)||0);
-  if(pages.length&&(pages.length>=DOCUMENT_LIMITS.pages||size+estimate>BUDGET)){parts.push(pages);pages=[];size=0;}
+  if(pages.length&&(pages.length>=PPT_PART_PAGES||size+estimate>BUDGET)){parts.push(pages);pages=[];size=0;}
   pages.push(n);size+=estimate;
  }
  if(pages.length)parts.push(pages);

@@ -1165,6 +1165,34 @@ function renderStrip(O) {
   if (selected) { const box = list.getBoundingClientRect(), r = selected.getBoundingClientRect(); list.scrollTop += r.top < box.top + 8 ? r.top - box.top - 8 : r.bottom > box.bottom - 8 ? r.bottom - box.bottom + 8 : 0; }
   if(O.materialDeck)O.strip.dataset.materialLayout='1';
 }
+// 장만 옮겼을 때(목록은 그대로): 띠를 통째로 다시 만들지 않고 고른 표시 · 떠난 장의 작은 그림과 표시 · 장 번호 · 도구만 맞춘다.
+// 그림 한 편이 200장까지 되면서, 장을 옮길 때마다 모든 장을 다시 만들면 화면이 눈에 띄게 멈춘다. 맞출 수 없는 모양이면 false(다시 그린다).
+function selectStripSlide(O, from) {
+  if (!O.strip || O.closed || O.materialDeck || O.strip.dataset.materialLayout === '1') return false;
+  const list = O.strip.querySelector('.cv-slide-list'), count = O.strip.querySelector('.cv-slide-count'), tools = O.strip.querySelectorAll('.cv-slide-tool');
+  const tiles = list ? [...list.querySelectorAll('.cv-slide[data-slide]')] : [];
+  if (!count || tools.length < 4 || tiles.length !== O.slides.length || tiles.some((t, k) => t.dataset.slide !== String(k))) return false;
+  O.activityConfig?.remove(); O.activityConfig = null;
+  const n = O.slides.length, left = tiles[from], design = O.slides[from];
+  if (left && design) {
+    left.querySelector('.cv-slide-view')?.replaceChildren(stripView(O, design, aspectOf(O.record), new Set()));
+    left.classList.toggle('moves', hasMotion(design)); left.classList.toggle('film', hasVideo(design)); left.classList.toggle('skip', !!design.hidden);
+    left.setAttribute('aria-label', slideLabel(from, design));
+    left.querySelector('.cv-slide-topic')?.remove();
+    if (design.topic) left.append(el('span', { class: 'cv-slide-topic', 'aria-hidden': 'true', text: design.topic }));
+  }
+  for (const k of [from, O.at]) { const tile = tiles[k]; if (tile) { tile.classList.toggle('on', k === O.at); tile.setAttribute('aria-pressed', String(k === O.at)); } }
+  count.textContent = `${O.at + 1} / ${n}장`;
+  tools[0].disabled = O.at === 0; tools[1].disabled = O.at === n - 1;
+  const del = tools[3];
+  del.disabled = n === 1 && !O.editor.getDesign().items.length && !hasVideo(O.editor.getDesign());
+  if (del.dataset.armed === '1') { del.dataset.armed = '0'; del.classList.remove('danger'); del.parentElement?.classList.remove('arming'); relabel(del, '지우기'); }
+  updateActivityTools(O);
+  if (O.co) paintCo(O);
+  const on = tiles[O.at];
+  if (on) { const box = list.getBoundingClientRect(), r = on.getBoundingClientRect(); list.scrollTop += r.top < box.top + 8 ? r.top - box.top - 8 : r.bottom > box.bottom - 8 ? r.bottom - box.bottom + 8 : 0; }
+  return true;
+}
 function moveStripSelection(O,delta){if(O.materialDeck){const pages=materialPages(O),from=pages.findIndex(v=>v.record.id===O.record.id&&v.index===O.at);reorderStrip(O,from,from+delta);}else changeSlides(O,(slides,at)=>moveSlide(slides,at,delta));}
 // replay: 되돌리기 · 다시 실행으로 부른 것(기록에 또 적지 않는다). 전체 자료의 쪽 차례를 바꿨으면 true.
 async function reorderStrip(O,from,to,{replay=false}={}){
@@ -1844,10 +1872,11 @@ function onEditorPress(e) {
 function goSlide(O, i) {
   if (O.closed || i === O.at || !O.slides[i] || videoBusy(O)) return;
   keepStack(O);
+  const from = O.at;
   O.slides[O.at] = O.editor.getDesign();
   O.at = i;
   showSlide(O);
-  renderStrip(O);
+  if (!selectStripSlide(O, from)) renderStrip(O);
   // Selection is immediate; entrance motion belongs to presentation, not editing.
 }
 /** 슬라이드 목록을 바꾼다(더하기·복제·지우기·옮기기). change(slides, at) 는 [새 목록, 이어서 꾸밀 번호] 를 돌려준다. */

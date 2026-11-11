@@ -2,7 +2,7 @@
 // 그 자료(PPT 파트 여러 개 포함)를 이 브라우저에 사본으로 내려받아 바로 고친다. 로그인은 없다. 보낸 사람의 자료는 바뀌지 않는다.
 // 링크는 둘이다: GBE-AI Lab 선생님의 링크(GBE-AI Lab이 만든다)와, 누구나 공용 온바탕에서 만드는 7일 링크(createGuestLinks: 만든 때부터 7일만 열리고 그 뒤에는 서버에서 지워진다).
 // 서버: GBE-AI Lab의 공개 함수 onbatang_copy_info · onbatang_copy_part · onbatang_guest_copy_*(로그인 없이 부르는 열쇠로), 바탕 영상은 onbatang-copy-videos/<코드>/<sha>.
-import { cleanRecord, isDesignId, newDesignId } from './designs.js';
+import { cleanRecord, isDesignId, newDesignId, MAX_SLIDES } from './designs.js';
 
 export const COPY_PARAM = 'copy';
 const GAILAB = { url: 'https://wiaciazdsnhzgwplwjpu.supabase.co', key: 'sb_publishable_uYeQYITkob0HiEHUCaUZPA_w_1GXN_Q' };
@@ -69,10 +69,10 @@ export function createCopyIntake({ url = GAILAB.url, key = GAILAB.key, fetch: ge
 }
 
 // ---------- 7일 링크: 누구나(GBE-AI Lab 회원이 아니어도) 공용 온바탕에서 만드는 복사 링크 ----------
-// 만든 때부터 7일만 열리고, 그 뒤에는 자료가 서버에서 지워진다. 한 링크 파트 20개 · 사진 포함 20MB(파트 하나 5MB)까지, 바탕 영상은 싣지 않는다.
+// 만든 때부터 7일만 열리고, 그 뒤에는 자료가 서버에서 지워진다. 한 링크 파트 20개 · 사진 포함 60MB(파트 하나 30MB)까지, 바탕 영상은 싣지 않는다.
 // 한 곳(접속 주소)에서 하루 5개까지(서버가 센다). 다시 올리기 · 지우기는 만들 때 받은 비밀 열쇠(token)로만 하고, 열쇠는 이 브라우저에만 둔다.
 // 링크 주소는 GBE-AI Lab의 복사 링크 페이지다: 카카오톡 · 메신저에 붙이면 그 자료의 제목 · 첫 장이 보이고, 열면 곧바로 공용 온바탕(?copy=코드)으로 간다.
-export const GUEST_DAYS = 7, GUEST_PER_DAY = 5, GUEST_MAX_PARTS = 20, GUEST_PART_MAX_BYTES = 5000000, GUEST_MAX_BYTES = 20000000;
+export const GUEST_DAYS = 7, GUEST_PER_DAY = 5, GUEST_MAX_PARTS = 20, GUEST_PART_MAX_BYTES = 30000000, GUEST_MAX_BYTES = 60000000;
 export const GUEST_PAGE = 'https://gbe.ai.kr/onbatang-copy.html';
 export const guestUrl = (code, page = GUEST_PAGE) => `${page}?c=${copyCode(code)}`;
 // 보기 링크(받은 사람이 발표처럼 그대로 본다 · 고칠 수 없다)의 재생 페이지(GBE-AI Lab). 회원 링크 · 7일 링크가 함께 쓴다.
@@ -93,8 +93,8 @@ export function guestRecords(records) {
 const GUEST_MESSAGES = {
   onbatang_guest_limit: `링크는 하루에 ${GUEST_PER_DAY}개까지 만들 수 있어요. 내일 다시 하거나, 내려받기의 "온바탕 파일"로 보내 주세요.`,
   onbatang_guest_busy: '지금은 7일 링크가 너무 많아 새로 만들 수 없어요. 내려받기의 "온바탕 파일"로 보내 주세요.',
-  onbatang_guest_too_large: '사진이 많아 7일 링크로 보내기에 커요(사진 포함 20MB · 파트 하나 5MB까지). 내려받기의 "온바탕 파일"로 보내 주세요.',
-  onbatang_copy_invalid: '자료를 확인해 주세요(파트는 20개, 한 파트는 1~100장, 이름은 60자까지).',
+  onbatang_guest_too_large: `사진이 많아 7일 링크로 보내기에 커요(사진 포함 ${GUEST_MAX_BYTES / 1e6}MB · 파트 하나 ${GUEST_PART_MAX_BYTES / 1e6}MB까지). 내려받기의 "온바탕 파일"로 보내 주세요.`,
+  onbatang_copy_invalid: `자료를 확인해 주세요(파트는 ${GUEST_MAX_PARTS}개, 한 파트는 1~${MAX_SLIDES}장, 이름은 60자까지).`,
   onbatang_copy_not_found: '이 링크는 지워졌거나 7일이 지났어요. 새 링크를 만들어 주세요.',
 };
 /** 7일 링크를 만들거나 고칠 때의 알림 글. */

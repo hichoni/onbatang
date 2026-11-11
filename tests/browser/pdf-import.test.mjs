@@ -1,6 +1,6 @@
 // PDF 가져오기 한 바퀴(브라우저): 시험 브라우저가 한글 PDF(103쪽, 4쪽만 가로)를 만든다 → 첫 화면 "PDF 가져오기" →
-// 쪽 고르기(틀린 범위 · 한 번에 가져올 수 있는 100쪽을 넘는 범위는 까닭을 알린다) → 1-100쪽 → 쪽마다 잠근 그림 한 장 · 쪽의 글은 발표자 노트 → 그림 한 편(100장).
-// 그다음 나머지 범위만("101-103") 노트 없이 한 번 더 가져온다. 100장이 넘는 PDF 를 파트로 나누는 것은 단위 시험(tests/pdf-import.test.mjs)이 본다.
+// 쪽 고르기(틀린 범위는 까닭을 알린다) → 모든 쪽(103쪽, 한 번에 200쪽까지) → 쪽마다 잠근 그림 한 장 · 쪽의 글은 발표자 노트 → 그림 한 편(103장).
+// 그다음 범위만("101-103") 노트 없이 한 번 더 가져온다. 한 번에 200쪽 · 그림 한 편 200장을 넘는 경우는 단위 시험(tests/pdf-import.test.mjs)이 본다.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
@@ -12,7 +12,7 @@ const root=resolve(fileURLToPath(new URL('../../',import.meta.url)));
 const options={skip:!process.env.MINICAN_PLAYWRIGHT_PATH,timeout:300000};
 const types={'.js':'text/javascript','.mjs':'text/javascript','.css':'text/css','.html':'text/html; charset=utf-8','.json':'application/json','.svg':'image/svg+xml','.png':'image/png','.webp':'image/webp','.woff2':'font/woff2','.wasm':'application/wasm','.bcmap':'application/octet-stream'};
 
-test('PDF import: every page becomes a locked page picture with its text in the notes, the first 100 of 103 pages become one 100-slide drawing',options,async t=>{
+test('PDF import: every page becomes a locked page picture with its text in the notes, all 103 pages become one drawing (up to 200 at once)',options,async t=>{
  const served=[];
  const server=createServer(async(req,res)=>{
   try{let path=new URL(req.url,'http://localhost').pathname;served.push(path);if(path.endsWith('/'))path+='index.html';const file=resolve(root,'.'+decodeURIComponent(path));if(!file.startsWith(root+sep)){res.writeHead(403);return res.end();}
@@ -36,34 +36,31 @@ test('PDF import: every page becomes a locked page picture with its text in the 
  await page.setInputFiles('[data-pdf-input]',{name:'과학 안내문.pdf',mimeType:'application/pdf',buffer:pdf});
  const box=page.locator('#cv-pdf-title');await box.waitFor();
  await page.getByText('"과학 안내문.pdf" · 103쪽',{exact:false}).waitFor();
- assert.equal(await page.locator('[data-pdf-pages]').inputValue(),'1-100');
- await page.getByText('나머지는 다시 가져오며 "101-103"',{exact:false}).waitFor();
+ assert.equal(await page.locator('[data-pdf-pages]').inputValue(),'','a PDF under the 200-page import limit starts with every page');
  await page.fill('[data-pdf-pages]','0-3');await page.locator('[data-pdf-import]').click();
  await page.getByText('1부터 103 사이로 적어 주세요.',{exact:false}).waitFor();
  await page.fill('[data-pdf-pages]','');await page.locator('[data-pdf-import]').click();
- await page.getByText('한 번에 100쪽까지 가져올 수 있어요.',{exact:false}).waitFor();
- await page.fill('[data-pdf-pages]','1-100');await page.locator('[data-pdf-import]').click();
- await page.waitForFunction(()=>document.querySelector('.cv-slide-count')?.textContent.endsWith('/ 100장'),null,{timeout:150000});
+ await page.waitForFunction(()=>document.querySelector('.cv-slide-count')?.textContent.endsWith('/ 103장'),null,{timeout:150000});
  assert.match(await page.locator('.cv-name').inputValue(),/^과학 안내문$/);
  // 저장된 그림: 쪽마다 잠근 그림 한 장, 쪽의 글은 노트, 가로 쪽은 세로 장 안에 맞춰 들어간다
  const stored=await page.evaluate(()=>new Promise((done,fail)=>{const q=indexedDB.open('minican');q.onsuccess=()=>{const g=q.result.transaction('designs').objectStore('designs').getAll();g.onsuccess=()=>done(g.result.map(r=>({name:r.name,source:r.source,slides:r.slides.map(s=>({n:s.source?.pageNumber,notes:s.notes,item:{...s.items[0],url:s.items[0].url.slice(0,30),bytes:s.items[0].url.length}}))})));g.onerror=fail;};q.onerror=fail;}));
  stored.sort((a,b)=>a.name.localeCompare(b.name));
- assert.deepEqual(stored.map(r=>[r.name,r.slides.length,r.source.kind]),[['과학 안내문',100,'pdf']]);
+ assert.deepEqual(stored.map(r=>[r.name,r.slides.length,r.source.kind]),[['과학 안내문',103,'pdf']]);
  const [first]=stored;
- assert.deepEqual(first.slides.map(s=>s.n),Array.from({length:100},(_,i)=>i+1));
- assert.match(first.slides[99].notes,/100쪽 식물의 한살이/);
+ assert.deepEqual(first.slides.map(s=>s.n),Array.from({length:103},(_,i)=>i+1));
+ assert.match(first.slides[102].notes,/103쪽 식물의 한살이/);
  const one=first.slides[0];
  assert.equal(one.item.t,'image');assert.equal(one.item.lock,true);assert.equal(one.item.w,100);assert.equal(one.item.h,100);
  assert.match(one.item.url,/^data:image\/(webp|jpeg);base64,/);
  assert.ok(one.item.bytes<400000,'each page picture stays small');
  assert.match(one.notes,/1쪽 식물의 한살이/);assert.match(one.notes,/씨앗이 싹 터요/);
  const land=first.slides[3].item;assert.equal(land.w,100);assert.ok(land.h<75,'the landscape page fits inside the portrait slide');
- // 내 그림: 파트로 나누지 않은 그림 한 편(100장)
+ // 내 그림: 파트로 나누지 않은 그림 한 편(103장)
  await page.locator('.cv-back').click();
  const card=page.locator('.cv-item',{has:page.locator('.cv-item-name',{hasText:'과학 안내문'})});await card.waitFor();
  assert.equal(await page.locator('.cv-item.cv-deck').count(),0);
- assert.equal(await card.locator('.cv-pages').innerText(),'100장');
- // 나머지 범위만 · 노트 없이 한 번 더
+ assert.equal(await card.locator('.cv-pages').innerText(),'103장');
+ // 범위만 · 노트 없이 한 번 더
  await page.setInputFiles('[data-pdf-input]',{name:'과학 안내문.pdf',mimeType:'application/pdf',buffer:pdf});
  await box.waitFor();
  await page.fill('[data-pdf-pages]','101-103');await page.locator('[data-pdf-notes]').uncheck();await page.locator('[data-pdf-import]').click();
