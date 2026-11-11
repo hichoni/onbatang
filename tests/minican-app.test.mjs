@@ -40,8 +40,8 @@ test('그림 기록: 이름표·이름·모양을 정리하고, 모양이 아니
   assert.throws(() => cleanRecord({ id, slides: Array.from({ length: MAX_SLIDES + 5 }, () => ({ items: [] })), updatedAt: 1 }), { code: 'PAGE_LIMIT' });
 });
 
-test('그림 한 편은 100장까지: 편집기 한도와 문서 한도가 같다', () => {
-  assert.equal(MAX_SLIDES, 100);
+test('그림 한 편은 200장까지: 편집기 한도와 문서 한도가 같다', () => {
+  assert.equal(MAX_SLIDES, 200);
   assert.equal(DOCUMENT_LIMITS.pages, MAX_SLIDES);
   const id = newDesignId(1700000000000, 0.5);
   assert.equal(cleanRecord({ id, slides: Array.from({ length: MAX_SLIDES }, () => ({ items: [] })), updatedAt: 1 }).slides.length, MAX_SLIDES);

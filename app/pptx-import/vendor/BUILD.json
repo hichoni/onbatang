@@ -16,7 +16,7 @@
   },
   "previewScriptSha256": "CxniqZwjYsO/QbCuMDojvI1zrz++0iuiCbcDE2aeeqY=",
   "sources": {
-    "app/designs.js": "2f02ff7834fa5ae865ac7f4eb3d5d420e0e4553199bd9487bac7091ee2f51c8e",
+    "app/designs.js": "99a699e0b07f5b544691ce33592b16167e104946c71b859e8ac4c4be02b0f3dc",
     "app/import-document.js": "c44c87c8bc22e18725e705a8887c79c14bd14bada41084ce33e71d6badd128e6",
     "app/pptx-import/bullets.js": "7f19b7f374bf31645195ad97c24569e1840c6517af46cd8782d245f70a32634b",
     "app/pptx-import/converter.js": "f0598476f6b45527c1b5f16fa64d92d482fdc7a09168eef87b30ba1f275a5ef4",
@@ -25,7 +25,7 @@
     "app/pptx-import/preview-punctuation.js": "8ff4f855942dde60b6302e775e5a06b58b411e34b015c129088157533934c90e",
     "app/pptx-import/worker.js": "e4ea8c3a9237c1e1b2fc8dc93f57389cbb2f7966134252b8078ab44ef01dc14c",
     "app/zip.js": "c7c09e5385bab4e403509ab734acb182d15ff017c469e731b05a5d1f3eead18e",
-    "package-lock.json": "ce95d8da6fbfe20d3f58a39693a10b0c17531e53506fc9cc6c39c81d2198871d",
+    "package-lock.json": "448df0f3ea0b0fe7a9e0bc3e9e58dd692e63e785ff778f8dc1c01fb8c40af9e8",
     "src/activity.js": "6b28d0b6302ebe0cdfbc80a4a324f3184e873e5edc7c963eb997d3d089c66737",
     "src/chart.js": "ec041e78d1221d41f66e304ecdff4173ec0f23d4394632a409dc2dc7d83eb407",
     "src/cinema-layout.js": "8515317fdbfc512977a4975ea6b31ab49943498e39ab7be272ec52c096cebdeb",
@@ -33,7 +33,7 @@
     "src/classroom-accents.js": "41b27fa7ca336ef4c700c00c606b0bc9983d352299ce62362305c1212ffb9aa8",
     "src/clue-card.js": "b298780516482ead7cc49da2293dba41882cb9ee62be7fd8a174fb4a5e95d824",
     "src/crop.js": "ec9159574565f560476ede8f5292609ab74eae42d130fe0bf59a1ad8844ac1fb",
-    "src/document.js": "95e624c49525341c4e20a26f8b757fd3478f663ced2933e56ac11658a8a9517c",
+    "src/document.js": "f844dbc24a3c24a2912545562f105471105bac803908c9e64793950a7c8af031",
     "src/dom.js": "381c1e39c6b79f846820e6dd8a9e214e0afda803c65fbb6c5272cd36326ac5b6",
     "src/effect-assets.js": "b28e8d38a5f9099e2c96a91b82bfe9932827afbcef1449447819521f1c6e9d28",
     "src/effect-scenes.js": "76f21f554798156965a8e795a2c4251c9ed0b4b811ad96a5ae3c08b2c548080a",
@@ -109,7 +109,7 @@
     },
     "pptx-worker.js": {
       "bytes": 275485,
-      "sha256": "b186dd161355d9b384da342b98edff452b73d1c947fdbf67465b697a9a9a1649"
+      "sha256": "99574650be5a21660da093fb2a2812bb241e959a7537c0dfc867e78316e9b0fd"
     },
     "preview-frame.html": {
       "bytes": 1243897,

@@ -8,7 +8,8 @@ import {inspectPptx,convertPptx,PPTX_MIME,PPTX_LIMITS} from '../app/pptx-import/
 import {createPptxClient} from '../app/pptx-import/client.js';
 import {getImportFontRegistry,createImportFontServices,createFontPlan,applyFontPlan,loadImportFontAssets} from '../app/pptx-import/fonts.js';
 import {importConvertedDocument} from '../app/import-document.js';
-import {migrateRecord} from '../app/designs.js';
+import {migrateRecord,MAX_SLIDES} from '../app/designs.js';
+import {planImportParts,PPT_PART_PAGES} from '../app/pptx-import/workflow.js';
 import {cleanDesign} from '../src/model.js';
 import {buildPptxImport} from '../tools/build-pptx-import.mjs';
 import {bulletChar,autoNumber} from '../app/pptx-import/bullets.js';
@@ -41,13 +42,20 @@ test('self-authored PPTX bytes convert to stable editable identities, text, dime
  assert.deepEqual(texts(reversed.document),texts(first.document).toReversed());assert.deepEqual(bytes,before);
 });
 
-test('inspection preserves long authored text and all 101 original pages without silently truncating editable document limits',async()=>{
+test('a PPT is saved in 100-page original parts, apart from the 200-slide drawing limit; a selection over 200 pages is refused',()=>{
+ const inspection=n=>({pages:Array.from({length:n},(_,i)=>({pageNumber:i+1,canImport:true,estimatedBytes:1000}))}),pages=n=>Array.from({length:n},(_,i)=>i+1);
+ assert.equal(PPT_PART_PAGES,100);assert.ok(PPT_PART_PAGES<MAX_SLIDES);
+ assert.deepEqual(planImportParts(inspection(101),pages(101)).map(p=>p.length),[100,1]);
+ assert.deepEqual(planImportParts(inspection(200),pages(200)).map(p=>p.length),[100,100]);
+ assert.throws(()=>planImportParts(inspection(201),pages(201)),{code:'INVALID_PAGE_SELECTION'});
+});
+test('inspection preserves long authored text and all 101 original pages; one drawing (200) holds them all, and a deliberate subset still works',async()=>{
  const longBytes=await readFile(fixture('self-authored-long-text.pptx')),long=await convertPptx(fileOf(longBytes));
  const expected=JSON.parse(await readFile(fixture('self-authored-long-text.expected.json'),'utf8'));
  assert.deepEqual(texts(long.document),texts(expected.document));assert.ok(texts(long.document)[0][0].length>120);
  const many=fileOf(await readFile(fixture('self-authored-101-pages.pptx'))),inspection=await inspectPptx(many);
  assert.equal(inspection.pageCount,101);assert.equal(inspection.pages.length,101);
- await assert.rejects(convertPptx(many),{code:'PAGE_LIMIT'});
+ const whole=await convertPptx(many);assert.equal(whole.document.slides.length,101);assert.deepEqual(whole.document.slides.map(p=>p.source.pageNumber),Array.from({length:101},(_,i)=>i+1));
  const tail=await convertPptx(many,{selectedPages:[101]});assert.deepEqual(tail.report.selectedPages,[101]);assert.equal(tail.document.slides[0].source.pageNumber,101);
 });
 

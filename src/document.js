@@ -1,6 +1,6 @@
 // Shared, storage-independent document contract. No network or host account concepts.
 export const SCHEMA_VERSION = 1;
-export const DOCUMENT_LIMITS = Object.freeze({ pages: 100, items: 40, photos: 10, text: 120, assets: 256 });
+export const DOCUMENT_LIMITS = Object.freeze({ pages: 200, items: 40, photos: 10, text: 120, assets: 256 });
 // Imported slides keep authored text boxes and pictures as individual elements.
 // The public marker also works after a guest projection removes provenance.
 // PPT 에서 가져온 장(slide 배치 요소)은 표의 칸마다 네모와 글이 하나씩 생기므로 요소를 더 많이 둔다.
