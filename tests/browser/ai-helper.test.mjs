@@ -118,6 +118,7 @@ test('AI-G polishes the current slide: text and layout go out, the answer is pre
   assert.equal(await card.locator('.cv-assist-pair .fe-card').count(), 2);
   assert.match(await card.locator('.cv-assist-note').textContent(), /지시 3개는 온바탕이 쓸 수 없는 것이라 뺐어요/);
   assert.match(await card.locator('.cv-assist-tail').textContent(), /질문권 1회 사용/);
+  assert.equal(await card.locator('.cv-assist-actions').textContent(), '움직임 보기적용버리기질문권 1회 사용 · 오늘 9회 남음');
   assert.equal(await panel.locator('.cv-assist-bubble.me').textContent(), '1장 · 글 · 움직임 · 발표자 노트\n6학년이 읽기 쉽게');
   await shot(page, 'preview');
   await page.waitForTimeout(1200);
@@ -203,6 +204,7 @@ test('without an AI connection the panel still polishes motion by rule, for the 
   await card.waitFor();
   assert.match(await card.locator('.cv-assist-count').textContent(), /^바꿀 것 \d+가지 · 3장$/);
   assert.equal(await card.locator('.cv-assist-change').count(), 3);
+  assert.equal(await card.locator('.cv-assist-actions').textContent(), '움직임 보기적용버리기', 'only the buttons: no stray text where a receipt would be');
   await shot(page, 'polish');
   await card.locator('[data-assist-apply]').click();
   await saved(page, r => r.slides[0].items[1].an === 'stomp');

@@ -154,12 +154,13 @@ export function createAiHelper(host) {
       notes.textContent = extra.join(' ');
       notes.hidden = !extra.length;
       const btn = (label, attrs, onClick) => el('button', { class: 'btn', type: 'button', ...attrs, onClick }, label);
-      actions.replaceChildren(...(state === 'ready' ? [
+      actions.replaceChildren(...[...(state === 'ready' ? [
         full.changes.some((c) => c.lines.some((l) => /나타나기|계속|전환|조합/.test(l.text))) ? btn('움직임 보기', { dataset: { assistPlay: '' }, disabled: !now.count }, play) : null,
         btn('적용', { class: 'btn btn-primary', dataset: { assistApply: '' }, disabled: !now.count }, apply),
         btn('버리기', { class: 'btn btn-ghost', dataset: { assistDrop: '' } }, () => { state = 'dropped'; draw(); }),
-      ] : state === 'applied' ? [btn('되돌리기', { dataset: { assistUndo: '' }, disabled: !host.canUndo(token) }, async () => { if (await host.undo(token)) { state = 'undone'; draw(); } else draw(); })] : []).filter(Boolean),
-      tail && state !== 'dropped' ? el('small', { class: 'cv-assist-tail', text: tail }) : null);
+      ] : state === 'applied' ? [btn('되돌리기', { dataset: { assistUndo: '' }, disabled: !host.canUndo(token) }, async () => { if (await host.undo(token)) { state = 'undone'; draw(); } else draw(); })] : []),
+      // replaceChildren 은 null 을 "null" 글자로 넣는다: 없는 것은 걸러서 넘긴다(영수증 글이 없는 자동 다듬기 카드에 null 이 보였다)
+      tail && state !== 'dropped' ? el('small', { class: 'cv-assist-tail', text: tail }) : null].filter(Boolean));
     };
     // 체크를 바꾸면 뒤 그림만 다시 그린다
     const refresh = () => {
