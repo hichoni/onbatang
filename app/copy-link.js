@@ -50,12 +50,13 @@ export function createCopyIntake({ url = GAILAB.url, key = GAILAB.key, fetch: ge
       const info = await rpc('onbatang_copy_info', { p_code: code });
       if (info?.expired) throw Error('onbatang_copy_expired');      // 7일이 지난 7일 링크
       if (info?.mode === 'view' && !view) throw Error('onbatang_copy_view_only');
-      const total = Number(info?.parts) || 0, records = [];
+      const total = Number(info?.parts) || 0, parts = [];
       onProgress({ phase: 'part', completed: 0, total });
       for (let n = 0; n < total; n++) {
-        records.push(await rpc('onbatang_copy_part', { p_code: code, p_n: n, p_version: info.version }));
+        parts.push(await rpc('onbatang_copy_part', { p_code: code, p_n: n, p_version: info.version }));
         onProgress({ phase: 'part', completed: n + 1, total });
       }
+      const records = joinParts(parts);   // 조각으로 나눠 올린 큰 그림은 다시 한 그림으로
       const refs = [...new Set(records.flatMap((r) => (r?.slides || []).map((s) => s?.video?.src)).filter((src) => VIDEO_REF.test(src || '')))];
       const videos = new Map();
       for (const [i, src] of refs.entries()) {
@@ -69,7 +70,8 @@ export function createCopyIntake({ url = GAILAB.url, key = GAILAB.key, fetch: ge
 }
 
 // ---------- 7일 링크: 누구나(GBE-AI Lab 회원이 아니어도) 공용 온바탕에서 만드는 복사 링크 ----------
-// 만든 때부터 7일만 열리고, 그 뒤에는 자료가 서버에서 지워진다. 한 링크 파트 20개 · 사진 포함 60MB(파트 하나 30MB)까지, 바탕 영상은 싣지 않는다.
+// 만든 때부터 7일만 열리고, 그 뒤에는 자료가 서버에서 지워진다. 사진 포함 60MB까지(큰 그림은 조각 파트로 나눠 올린다 · 파트 20개,
+// 파트 하나 30MB까지), 바탕 영상은 싣지 않는다.
 // 한 곳(접속 주소)에서 하루 5개까지(서버가 센다). 다시 올리기 · 지우기는 만들 때 받은 비밀 열쇠(token)로만 하고, 열쇠는 이 브라우저에만 둔다.
 // 링크 주소는 GBE-AI Lab의 복사 링크 페이지다: 카카오톡 · 메신저에 붙이면 그 자료의 제목 · 첫 장이 보이고, 열면 곧바로 공용 온바탕(?copy=코드)으로 간다.
 export const GUEST_DAYS = 7, GUEST_PER_DAY = 5, GUEST_MAX_PARTS = 20, GUEST_PART_MAX_BYTES = 30000000, GUEST_MAX_BYTES = 60000000;
@@ -80,20 +82,72 @@ export const PLAY_PAGE = 'https://gbe.ai.kr/onbatang-play.html';
 export const playUrl = (code, page = PLAY_PAGE) => `${page}?c=${copyCode(code)}`;
 export const linkUrl = (code, mode) => (mode === 'view' ? playUrl(code) : guestUrl(code));
 const bytesOf = (value) => new TextEncoder().encode(JSON.stringify(value)).length;
-/** 7일 링크에 실을 파트: 올려 두기만 한 사진 목록(uploads)과 바탕 영상은 뺀다. { records, bytes, videos(영상을 뺀 장 수), big(파트 하나가 너무 큰가) } */
+
+// ---------- 큰 그림은 조각 파트로 나눠 싣는다(7일 링크 · GBE-AI Lab 회원 링크가 함께 쓴다) ----------
+// 링크 서버(GBE-AI Lab의 작은 DB)는 파트 하나를 받을 때 그 본문을 통째로 풀어서, 파트가 클수록 아주 느려진다.
+// 운영에서 잰 값(2026-11-11): 파트 5MB 0.5초 · 10MB 6초 · 25MB는 20초를 넘겨 시간 초과. 그래서 그림 하나가 PART_TARGET_BYTES 를 넘으면
+// 장을 차례대로 나눠 여러 파트로 올리고(조각마다 piece: { i, n }), 받는 쪽(createCopyIntake.take → joinParts)이 이어 붙여 한 그림으로 되돌린다.
+// 장 하나가 목표보다 크면 그 장만으로 한 파트다. 파트 수가 maxParts 를 넘으면 목표를 키워(cap 까지) 다시 나눈다.
+export const PART_TARGET_BYTES = 4000000;
+/** 나눌 자리: [{ r(그림 차례), from, to(장 범위), i, n(그 그림의 조각 수), bytes(파트의 대략 크기) }]. 크기는 JSON 바이트(서버와 같다). */
+export function pieceRanges(records, { target = PART_TARGET_BYTES, maxParts = Infinity, cap = 30000000 } = {}) {
+  const list = Array.isArray(records) ? records : [];
+  const sizes = list.map((record) => (Array.isArray(record?.slides) ? record.slides : []).map((slide) => bytesOf(slide) + 1));
+  const heads = list.map((record) => { const { slides, ...meta } = record || {}; return bytesOf({ ...meta, slides: [], piece: { i: 0, n: 0 } }) + 8; });
+  const plan = (goal) => {
+    const out = [];
+    list.forEach((_, r) => {
+      const all = heads[r] + sizes[r].reduce((a, b) => a + b, 0);
+      if (all <= goal || sizes[r].length < 2) { out.push({ r, from: 0, to: sizes[r].length, i: 0, n: 1, bytes: all }); return; }
+      const cuts = [];
+      let from = 0, used = heads[r];
+      sizes[r].forEach((size, k) => { if (k > from && used + size > goal) { cuts.push([from, k, used]); from = k; used = heads[r]; } used += size; });
+      cuts.push([from, sizes[r].length, used]);
+      cuts.forEach(([a, b, bytes], i) => out.push({ r, from: a, to: b, i, n: cuts.length, bytes }));
+    });
+    return out;
+  };
+  let goal = target, ranges = plan(goal);
+  while (ranges.length > maxParts && goal < cap) { goal = Math.min(cap, Math.ceil(goal * 1.25)); ranges = plan(goal); }
+  return ranges;
+}
+/** 나눈 자리대로 파트를 만든다(조각이 하나뿐인 그림은 그대로 한 파트). */
+export function takeRanges(records, ranges) {
+  return ranges.map(({ r, from, to, i, n }) => (n === 1 ? records[r] : { ...records[r], slides: records[r].slides.slice(from, to), piece: { i, n } }));
+}
+export const splitParts = (records, options) => takeRanges(records, pieceRanges(records, options));
+/** 받은 파트를 그림으로: 같은 그림의 조각(piece)을 차례대로 이어 붙이고 조각 표시는 뗀다. 조각이 아닌 파트는 그대로다. */
+export function joinParts(parts) {
+  const out = [];
+  let open = null;   // 이어 붙이는 중인 그림
+  for (const part of Array.isArray(parts) ? parts : []) {
+    const piece = part && typeof part === 'object' ? part.piece : null;
+    if (!piece || typeof piece !== 'object') { out.push(part); open = null; continue; }
+    const { piece: _, ...rest } = part, slides = Array.isArray(rest.slides) ? rest.slides : [];
+    if (open && Number(piece.i) > 0 && open.id === rest.id) open.slides.push(...slides);
+    else { open = { ...rest, slides: [...slides] }; out.push(open); }
+    if (!(Number(piece.i) < Number(piece.n) - 1)) open = null;
+  }
+  return out;
+}
+
+/**
+ * 7일 링크에 실을 것: 올려 두기만 한 사진 목록(uploads)과 바탕 영상은 뺀다.
+ * { records, parts(올릴 파트: 큰 그림은 조각), bytes, videos(영상을 뺀 장 수), big(파트 하나가 너무 큰가: 장 하나가 30MB 넘음) }
+ */
 export function guestRecords(records) {
   let videos = 0;
   const out = (Array.isArray(records) ? records : []).map((record) => {
     const { uploads, ...rest } = record || {};
     return { ...rest, slides: (rest.slides || []).map((slide) => { if (!slide?.video) return slide; videos++; const { video, ...plain } = slide; return plain; }) };
   });
-  const sizes = out.map(bytesOf);
-  return { records: out, bytes: sizes.reduce((a, b) => a + b, 0), videos, big: sizes.some((n) => n > GUEST_PART_MAX_BYTES) };
+  const ranges = pieceRanges(out, { maxParts: GUEST_MAX_PARTS, cap: GUEST_PART_MAX_BYTES });
+  return { records: out, parts: takeRanges(out, ranges), bytes: out.map(bytesOf).reduce((a, b) => a + b, 0), videos, big: ranges.some((p) => p.bytes > GUEST_PART_MAX_BYTES) };
 }
 const GUEST_MESSAGES = {
   onbatang_guest_limit: `링크는 하루에 ${GUEST_PER_DAY}개까지 만들 수 있어요. 내일 다시 하거나, 내려받기의 "온바탕 파일"로 보내 주세요.`,
   onbatang_guest_busy: '지금은 7일 링크가 너무 많아 새로 만들 수 없어요. 내려받기의 "온바탕 파일"로 보내 주세요.',
-  onbatang_guest_too_large: `사진이 많아 7일 링크로 보내기에 커요(사진 포함 ${GUEST_MAX_BYTES / 1e6}MB · 파트 하나 ${GUEST_PART_MAX_BYTES / 1e6}MB까지). 내려받기의 "온바탕 파일"로 보내 주세요.`,
+  onbatang_guest_too_large: `사진이 많아 7일 링크로 보내기에 커요(사진 포함 ${GUEST_MAX_BYTES / 1e6}MB까지, 한 장은 ${GUEST_PART_MAX_BYTES / 1e6}MB까지). 내려받기의 "온바탕 파일"로 보내 주세요.`,
   onbatang_copy_invalid: `자료를 확인해 주세요(파트는 ${GUEST_MAX_PARTS}개, 한 파트는 1~${MAX_SLIDES}장, 이름은 60자까지).`,
   onbatang_copy_not_found: '이 링크는 지워졌거나 7일이 지났어요. 새 링크를 만들어 주세요.',
 };
@@ -115,14 +169,14 @@ export function createGuestLinks({ url = GAILAB.url, key = GAILAB.key, fetch: ge
     // mode: 'view'(보기 링크) · 'edit'(고치기 링크). 만들 때만 정한다(다시 올리기는 그 링크의 종류 그대로).
     async publish({ title, records, link = null, mode = 'edit', onProgress = () => {}, card = null }) {
       const plain = guestRecords(records);
-      if (!plain.records.length || plain.records.length > GUEST_MAX_PARTS) throw Error('onbatang_copy_invalid');
+      if (!plain.records.length || plain.parts.length > GUEST_MAX_PARTS) throw Error('onbatang_copy_invalid');
       if (plain.big || plain.bytes > GUEST_MAX_BYTES) throw Error('onbatang_guest_too_large');
-      const started = await rpc('onbatang_guest_copy_publish', { p_title: title, p_parts: plain.records.length, ...(link ? { p_code: link.code, p_token: link.token } : mode === 'view' ? { p_mode: 'view' } : {}) });
+      const started = await rpc('onbatang_guest_copy_publish', { p_title: title, p_parts: plain.parts.length, ...(link ? { p_code: link.code, p_token: link.token } : mode === 'view' ? { p_mode: 'view' } : {}) });
       const token = link?.token || started.token, code = started.code;
       let last = started;
-      for (const [n, record] of plain.records.entries()) {
-        onProgress({ phase: 'part', completed: n, total: plain.records.length });
-        last = await rpc('onbatang_guest_copy_put', { p_code: code, p_token: token, p_n: n, p_record: record });
+      for (const [n, part] of plain.parts.entries()) {
+        onProgress({ phase: 'part', completed: n, total: plain.parts.length });
+        last = await rpc('onbatang_guest_copy_put', { p_code: code, p_token: token, p_n: n, p_record: part });
       }
       if (card) {
         onProgress({ phase: 'card' });
