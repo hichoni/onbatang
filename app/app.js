@@ -37,6 +37,8 @@ import {parseOutline,outlineSlides,outlineFromAnswer,drawingText,OUTLINE_STYLES}
 import { pollResultPage } from './poll-result.js';
 import {ONBATANG_VERSION} from './version.js';
 import {createGaiMaker,gaiLessonContext} from './gai-maker.js';
+import {createAiHelper} from './ai-helper.js';
+import {editCost} from './ai-edits.js';
 import {
   createEditor, designView, designToBlob, designToCanvas, configure, settings, reshapeItems, layoutList, layoutItems, icon, cleanDesign, hasMotion, playDesign, playTransition,
   COMBOS, TRANSITIONS, designsToVideo, canMakeVideo, canFilmScenes, filmPlan, readCheck, READ, liveBackdrops, leaveLooks, morphs, MAX_FILM_SECONDS, videoSize, STAYS, DEFAULT_STAY, scenePlayer, dropScene, sceneUrl, sceneBlob, youTubePlayers,
@@ -1027,6 +1029,8 @@ function editorShell(O, bar) {
       el('button', { class: 'btn cv-pages-toggle', type: 'button', 'aria-expanded': 'false' }, ...face('layers', '장 목록')),
       O.editor.historyTools,
       el('span', { class: 'cv-canvas-label', text: '편집 캔버스' }),
+      // AI-G 도우미: 장을 다듬어 달라고 부탁하거나(AI-G 를 이어 준 곳), AI 없이 움직임을 자동으로 다듬는다. 오른쪽 속성 칸 자리에 열린다.
+      el('button', { class: 'cv-assist-toggle', type: 'button', 'aria-expanded': 'false', dataset: { assistToggle: '' }, title: 'AI-G 도우미: 장을 다듬고 움직임을 입혀요', onClick: () => toggleAssist(O) }, gaiOwl(), el('span', { class: 'cv-lbl', text: 'AI-G 도우미' })),
       el('button', { class: 'btn cv-properties-toggle', type: 'button', 'aria-expanded': 'false' }, ...face('pencil', '속성'))),
     canvasBox,
     O.editor.notes);
@@ -1036,9 +1040,60 @@ function editorShell(O, bar) {
   // 노트 칸을 펴 두었는지는 이 기기에 기억한다(다음에 열 때도 그대로).
   try { O.editor.notes.open = localStorage.getItem(NOTES_OPEN_KEY) === '1'; } catch { /* 저장 공간이 막힌 기기: 접어 둔다 */ }
   O.editor.notes.addEventListener('toggle', () => { try { localStorage.setItem(NOTES_OPEN_KEY, O.editor.notes.open ? '1' : '0'); } catch { /* 기억하지 못해도 칸은 그대로 쓴다 */ } });
-  const shell = O.shell = el('div', { class: 'cv-app cv-page-workspace folded' }, bar, O.alert, side, O.strip, work, properties);
+  O.assistBox = el('aside', { class: 'cv-assist', 'aria-label': 'AI-G 도우미' });
+  const shell = O.shell = el('div', { class: 'cv-app cv-page-workspace folded' }, bar, O.alert, side, O.strip, work, properties, O.assistBox);
   O.workspace = bindEditorWorkspace(shell);
+  // 좁은 화면에서 장 목록 · 속성 서랍을 열거나 Esc 를 누르면 도우미 칸은 닫는다(서랍이 겹치지 않게)
+  shell.addEventListener('click', (e) => { if (e.target.closest?.('.cv-pages-toggle, .cv-properties-toggle')) toggleAssist(O, false); }, true);
+  shell.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !e.defaultPrevented && shell.classList.contains('assist-open') && O.assistBox.contains(e.target)) { toggleAssist(O, false); e.preventDefault(); } });
   return shell;
+}
+// ---------- AI-G 도우미(옆 칸) ----------
+/** 도우미 칸을 열고 닫는다(open 을 주지 않으면 번갈아). 처음 열 때 칸을 만든다. */
+function toggleAssist(O, open = !O.shell.classList.contains('assist-open')) {
+  if (O.closed || !O.shell || open === O.shell.classList.contains('assist-open')) return;
+  const button = O.shell.querySelector('.cv-assist-toggle');
+  if (open) {
+    if (O.inlineImport) return;
+    if (!O.assist) { O.assist = createAiHelper(assistHost(O)); O.assistBox.replaceChildren(O.assist.node); }
+    O.workspace.showCanvas();                          // 도구 칸 · 서랍을 닫고 그림 옆에 연다
+    O.assist.refresh();
+  }
+  O.shell.classList.toggle('assist-open', open);
+  button?.setAttribute('aria-expanded', String(open));
+  if (open) O.assist.focus(); else if (O.assistBox.contains(document.activeElement)) button?.focus({ preventScroll: true });
+}
+function assistHost(O) {
+  return {
+    provider: appMaker,
+    slides: () => currentSlides(O),
+    at: () => O.at,
+    title: () => O.record.name || '',
+    aspect: () => aspectOf(O.record),
+    view: (slide) => slideView(slide, aspectOf(O.record), 320),
+    // 작은 그림에서 그 장의 움직임을 한 번 튼다: 누를 때 나오는 것은 조금씩 사이를 두고 차례로 보여 준다
+    play: (view, slide) => {
+      const control = playDesign(view, slide, { delay: 150 });
+      let timer = setInterval(() => { if (!control.next()) { clearInterval(timer); timer = 0; } }, 1400);
+      return () => { clearInterval(timer); control.restore(); };
+    },
+    blocked: () => (O.closed || S.open !== O ? '편집 화면을 다시 열어 주세요.' : O.co ? '같이 고치기를 마친 뒤에 쓸 수 있어요.' : O.inlineImport ? '가져오기를 마친 뒤에 쓸 수 있어요.'
+      : O.editor.busy() ? '영상을 찍거나 넣는 일을 마친 뒤에 쓸 수 있어요.' : O.undoBusy || O.motionAll ? '앞의 일을 마친 뒤에 다시 눌러 주세요.' : ''),
+    apply: (slides) => applyAssist(O, slides),
+    canUndo: (entry) => !!entry && !O.closed && O.undo?.past[O.undo.past.length - 1] === entry,
+    undo: async (entry) => { if (O.closed || O.undo?.past[O.undo.past.length - 1] !== entry) return false; await stepUndo(O, true); return O.undo?.future[O.undo.future.length - 1] === entry; },
+    cost: (count) => `질문권 ${editCost(count)}회`,
+    close: () => toggleAssist(O, false),
+  };
+}
+/** 도우미가 다듬은 장 목록을 적용한다. 몇 장을 바꾸든 되돌리기 기록은 하나다(Ctrl+Z 한 번으로 통째로 되돌린다). */
+function applyAssist(O, slides) {
+  if (O.closed || S.open !== O || O.co || O.inlineImport || O.undoBusy || O.editor.busy() || !Array.isArray(slides) || slides.length !== O.slides.length) return null;
+  const before = deckState(O);
+  const entry = { t: 'deck', doc: O.record.id, before, after: { slides: slides.slice(), at: before.at } };
+  noteUndo(O, entry);
+  applyDeck(O, entry.after);
+  return entry;
 }
 
 // ---------- 슬라이드 ----------
@@ -1080,6 +1135,7 @@ function slideLabel(i, design) {
 }
 function renderStrip(O) {
   if (!O.strip || O.closed) return;
+  if (O.assist && O.shell?.classList.contains('assist-open')) queueMicrotask(() => { if (!O.closed) O.assist?.refresh(); });   // 도우미 칸의 '지금 장' · 장 고르기 목록을 맞춘다
   O.activityConfig?.remove();O.activityConfig=null;
   if(O.materialDeck&&O.strip.dataset.materialLayout==='1'){
     renderMaterialNavigation(O,O.strip.querySelector('.cv-slide-list').scrollTop);
@@ -2986,6 +3042,7 @@ async function leaveEditor(O, { requireSaved = false, waitForSync = false, tidy 
   O.stripDrag?.destroy();
   O.tray?.destroy();
   O.workspace?.destroy();
+  O.assist?.destroy();O.assist=null;
   if (accountFor(O.record)) {
     const uploading = pusher.flush(O.record.id);
     if (waitForSync) await uploading;            // 바깥 화면으로 가면 이 앱이 닫히므로 올리기까지 기다린다
@@ -3693,6 +3750,7 @@ async function openInlineImport(O, context, action=importAction) {
   // has accepted the transition (saving/partial work can refuse or suspend it).
   for (const [input] of readonlyInputs) input.readOnly = true;
   for (const [node] of previousChildren) node.hidden = true;
+  toggleAssist(O, false);                       // 가져오기 화면에서는 도우미 칸을 닫는다
   O.shell.classList.add('inline-importing'); work.append(region); app.inert = false;
   const controlFor = event => {
     const target = event.target instanceof Element ? event.target.closest('button,a,input,select,textarea,summary') : null;
