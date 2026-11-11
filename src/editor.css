@@ -355,6 +355,9 @@
 }
 .fe-a:has(.dot) { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
 .fe-pop { position: relative; display: grid; gap: 8px; padding: 10px 44px 10px 12px; border-top: 2px solid var(--fe-line); background: #fafbff; border-radius: 0 0 12px 12px; }
+/* 속성 칸 짜임(inspector): 펼친 칸은 누른 단추의 줄 바로 아래(막대 안)에 한 줄을 다 차지하고 놓인다(editor.js 의 placePop). */
+.fe-inspector .fe-bar .fe-pop { flex: 0 0 100%; width: 100%; box-sizing: border-box; }
+.fe-inspector .fe-bar .fe-group:has(> .fe-pop) { flex: 0 0 100%; width: 100%; }
 .fe-pop-close {
   position: absolute; top: 6px; right: 6px; display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%;
   background: transparent; color: var(--fe-muted); font-size: .9rem; cursor: pointer;

@@ -1387,6 +1387,9 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero{overflow:visible;z
 .cv-page-workspace .cv-properties .fe-hint{width:100%;white-space:normal;line-height:1.65;font-size:12px;margin:0;color:var(--muted)}
 .cv-page-workspace .cv-properties .fe-pop{position:relative;inset:auto;width:auto;max-height:none;overflow:visible;margin:0;padding:46px 16px 24px;border:0;border-top:1px solid var(--cv-line);border-radius:0;background:transparent;box-shadow:none}
 .cv-page-workspace .cv-properties .fe-pop[hidden]{display:none}
+/* 누른 단추의 줄 바로 아래에 펴진 칸: 어느 단추의 것인지 보이게 옅은 상자로 묶는다 */
+.cv-page-workspace .cv-properties .fe-bar .fe-pop{margin:2px 0 4px;padding:40px 12px 14px;border:1px solid #dfe5da;border-radius:10px;background:#fff;box-shadow:0 1px 0 #0000000a}
+.cv-page-workspace .cv-properties .fe-bar .fe-pop .fe-pop-close{right:8px;top:6px}
 .cv-page-workspace .cv-properties .fe-pop-close{right:12px;top:8px}
 .cv-page-workspace .cv-properties .fe-pos-grid{min-width:0}
 .cv-page-workspace .cv-properties .fe-btn{min-width:0;white-space:normal}
