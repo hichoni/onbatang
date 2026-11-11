@@ -110,6 +110,9 @@ export function createEditor({
   inspector = false, onToolOpen = null, onToolClose = null, onInsert = null,
   saveVideo = null, createCamera = null, videoLimits = null, videoNote = '', videoHint = '',
   onSelect = null, lockedBy = null, slideMenu = null, outline = null,
+  // 되돌리기를 프로젝트가 맡을 때(여러 장에 걸친 기록): onRemember() 는 기록이 하나 쌓일 때마다, hostHistory 는 { undo, redo, canUndo, canRedo }.
+  // 주지 않으면 지금처럼 이 장의 기록만으로 되돌린다.
+  onRemember = null, hostHistory = null,
 } = {}) {
   let card = null;            // 지금 꾸미는 디자인(card.items 를 새 목록으로, card.bg 를 새 값으로 바꿔 끼운다)
   let palettes;try{palettes=cleanPalettes(colorPalettes?.read());}catch{palettes=cleanPalettes();}
@@ -361,14 +364,19 @@ export function createEditor({
     past.push(snap());
     if (past.length > HISTORY) past.shift();
     future = [];
+    onRemember?.();
     markHistory();
   }
+  // 되돌릴 것 · 다시 할 것이 있는지: 프로젝트가 되돌리기를 맡았으면 프로젝트에 묻는다.
+  const canUndo = () => (hostHistory ? !!hostHistory.canUndo() : past.length > 0);
+  const canRedo = () => (hostHistory ? !!hostHistory.canRedo() : future.length > 0);
   // 실행 취소·다시 실행 단추만 고친다(글을 치거나 화살표로 옮길 때는 도구 막대를 통째로 다시 그리지 않으므로).
   function markHistory() {
-    const u = bar.querySelector('.fe-tb.undo');
-    const r = bar.querySelector('.fe-tb.redo');
-    if (u) u.disabled = !past.length;
-    if (r) r.disabled = !future.length;
+    // 단추는 도구 막대에 있거나, 속성 칸 짜임(inspector)에서는 따로 떼어 둔 편집 기록 칸(historyTools)에 있다.
+    const u = bar.querySelector('.fe-tb.undo') || historyTools.querySelector('.fe-tb.undo');
+    const r = bar.querySelector('.fe-tb.redo') || historyTools.querySelector('.fe-tb.redo');
+    if (u) u.disabled = !canUndo();
+    if (r) r.disabled = !canRedo();
   }
   function restore(text) {
     const s = JSON.parse(text);
@@ -393,18 +401,24 @@ export function createEditor({
     onChange();
     keepKeys();
   }
-  function undo() {
-    if (!past.length) return;
+  // 이 장의 기록으로 한 걸음 되돌린다 · 다시 한다. 했으면 true.
+  function undoLocal() {
+    if (!past.length) return false;
     endEdit();
     future.push(snap());
     restore(past.pop());
+    return true;
   }
-  function redo() {
-    if (!future.length) return;
+  function redoLocal() {
+    if (!future.length) return false;
     endEdit();
     past.push(snap());
     restore(future.pop());
+    return true;
   }
+  // 단추 · 글쇠 · 메뉴의 되돌리기: 프로젝트가 맡았으면 프로젝트에 넘긴다(다른 장의 일 · 장을 지운 일까지 차례대로 되돌린다).
+  function undo() { if (hostHistory) hostHistory.undo(); else undoLocal(); }
+  function redo() { if (hostHistory) hostHistory.redo(); else redoLocal(); }
 
   // 끄는 도중에 목록이 바뀌면(사진이 다 올라왔거나, 되돌리기·지우기 키를 눌렀거나) 끌기를 그만둔다.
   function stopDrag() {
@@ -1660,7 +1674,7 @@ export function createEditor({
     } else if (!it) {
       groups = [
         [row('paste', '붙여넣기', 'Ctrl+V', () => pasteFromMenu(at), { disabled: !clipboard && !navigator.clipboard?.read })],
-        [row('undo', '실행 취소', 'Ctrl+Z', undo, { disabled: !past.length }), row('redo', '다시 실행', 'Ctrl+Y / Ctrl+Shift+Z', redo, { disabled: !future.length })],
+        [row('undo', '실행 취소', 'Ctrl+Z', undo, { disabled: !canUndo() }), row('redo', '다시 실행', 'Ctrl+Y / Ctrl+Shift+Z', redo, { disabled: !canRedo() })],
         // 장(슬라이드)에 하는 일: 새 장 · 복제 · 바탕 · 발표 … 프로젝트가 정한다(slideMenu).
         ...hostRows(slideMenu),
       ];
@@ -2908,8 +2922,8 @@ export function createEditor({
       inspectorTitle.textContent = cropJob ? '사진 자르기' : many.length ? `${many.length}개 조각` : it ? names[it.t] || '선택한 조각' : '현재 장';
       inspectorNote.textContent = it?.lock ? '잠긴 조각 · 잠금을 풀어 고쳐요' : many.length ? '함께 정렬하고 묶어 편집해요' : it ? '선택한 조각에 적용해요' : `${items().length}개 조각 · 장의 바탕을 꾸며요`;
       historyTools.replaceChildren(
-        tb(icon('undo'), undo, { title: '실행 취소 (Ctrl+Z)', name: '실행 취소', disabled: !!cropJob || !past.length, cls: 'icon undo' }),
-        tb(icon('redo'), redo, { title: '다시 실행 (Ctrl+Y / Ctrl+Shift+Z)', name: '다시 실행', disabled: !!cropJob || !future.length, cls: 'icon redo' }));
+        tb(icon('undo'), undo, { title: '실행 취소 (Ctrl+Z)', name: '실행 취소', disabled: !!cropJob || !canUndo(), cls: 'icon undo' }),
+        tb(icon('redo'), redo, { title: '다시 실행 (Ctrl+Y / Ctrl+Shift+Z)', name: '다시 실행', disabled: !!cropJob || !canRedo(), cls: 'icon redo' }));
     }
     drawBar();
     tidySeps();
@@ -2931,8 +2945,8 @@ export function createEditor({
     if(cropJob){drawCropBar();return;}
     const it = cur();
     const always = inspector ? [] : [
-      tb(icon('undo'), undo, { title: '실행 취소 (Ctrl+Z)', name: '실행 취소', disabled: !past.length, cls: 'icon undo' }),
-      tb(icon('redo'), redo, { title: '다시 실행 (Ctrl+Y / Ctrl+Shift+Z)', name: '다시 실행', disabled: !future.length, cls: 'icon redo' }),
+      tb(icon('undo'), undo, { title: '실행 취소 (Ctrl+Z)', name: '실행 취소', disabled: !canUndo(), cls: 'icon undo' }),
+      tb(icon('redo'), redo, { title: '다시 실행 (Ctrl+Y / Ctrl+Shift+Z)', name: '다시 실행', disabled: !canRedo(), cls: 'icon redo' }),
       el('span', { class: 'fe-sep' }),
     ];
     if (many.length) {
@@ -4860,8 +4874,8 @@ export function createEditor({
     markHistory();
   }
 
-  /** 꾸밀 디자인을 바꾼다(다른 카드·다른 쪽으로 넘어갈 때). 고르기와 되돌리기 기록은 비워진다. */
-  function setDesign(next) {
+  /** 꾸밀 디자인을 바꾼다(다른 카드·다른 쪽으로 넘어갈 때). 고르기와 되돌리기 기록은 비워진다(history 를 주면 그 장에서 쌓아 둔 기록을 이어 쓴다). */
+  function setDesign(next, { history = null } = {}) {
     stopLinking();
     sampling?.controller.abort();sampling=null;
     card = next && typeof next === 'object' ? next : { bg: undefined, items: [] };
@@ -4880,8 +4894,8 @@ export function createEditor({
     sel = -1;
     many = [];
     others = [];
-    past = [];
-    future = [];
+    past = Array.isArray(history?.past) ? history.past.slice() : [];
+    future = Array.isArray(history?.future) ? history.future.slice() : [];
     pop = null;
     cut = null;
     armed = null;
@@ -4990,6 +5004,22 @@ export function createEditor({
     },
     /** 되돌리기 기록을 비운다(예: 저장한 뒤 안 쓰는 사진 파일을 지웠다면, 그 사진을 되살리는 되돌리기는 막아야 한다). */
     forget: () => { past = []; future = []; if (card) renderBar(); },
+    /** 이 장에서 쌓은 되돌리기 기록 { past, future } (다른 장에 다녀올 때 프로젝트가 맡아 두었다가 setDesign 에 돌려준다). */
+    history: () => ({ past: past.slice(), future: future.slice() }),
+    /** 이 장의 기록으로만 한 걸음 되돌린다 · 다시 한다(했으면 true). 프로젝트가 되돌리기를 맡았을 때 쓴다. */
+    undoLocal, redoLocal,
+    canUndoLocal: () => past.length > 0, canRedoLocal: () => future.length > 0,
+    /** 실행 취소 · 다시 실행 단추의 켜짐을 다시 맞춘다(프로젝트의 기록이 바뀌었을 때). */
+    markHistory: () => { if (card) markHistory(); },
+    /** 고른 요소(들)를 지운다. 그림판 밖에 초점이 있을 때 프로젝트가 Delete 글쇠로 부른다. 지웠으면 true(글을 고치는 중 · 잠근 요소 · 고른 것이 없으면 false). */
+    removeSelected: () => {
+      if (!card || cam || cropJob || editing >= 0) return false;
+      if (many.length) { remove(); return true; }
+      const it = cur();
+      if (!it || it.lock) return false;
+      remove();
+      return true;
+    },
     /** 편집기를 치운다(열린 메뉴와 지켜보던 것들을 정리한다). 화면 조각은 프로젝트가 떼어 낸다. */
     destroy: () => {
       galleryObserver?.disconnect();
