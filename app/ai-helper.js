@@ -3,10 +3,10 @@
 //
 // host(편집 화면이 넘겨 주는 것):
 //   provider        AI 연결({ connect(), generate(input, { signal, onProgress }) }) 또는 null(공용 온바탕: 자동 다듬기만)
-//   slides()        지금 장 목록(꾸미는 중인 장은 편집기에서 꺼낸 것) · at() 지금 장 번호 · title() 그림 이름 · aspect() 가로 ÷ 세로
+//   slides()        지금 장 목록(꾸미는 중인 장은 편집기에서 꺼낸 것. 여러 파트로 나뉜 자료는 모든 파트의 장) · at() 지금 장 번호 · title() 그림 이름 · aspect() 가로 ÷ 세로
 //   view(slide)     그 장의 작은 그림(DOM) · play(view, slide) 그 그림에서 움직임을 한 번 튼다 → 멈추는 함수
 //   blocked()       지금 쓸 수 없으면 그 까닭(글), 쓸 수 있으면 ''
-//   apply(slides)   새 장 목록을 적용한다(되돌리기 기록 하나). 적용했으면 그 기록(표), 못 했으면 null
+//   apply(slides, base) 새 장 목록을 적용한다(되돌리기 기록 하나. base: slides() 로 받아 간 목록). 적용했으면 그 기록(표), 못 했으면 null 을 약속으로
 //   undo(token)     그 적용이 맨 뒤의 일이면 되돌린다 → 되돌렸으면 true · canUndo(token)
 //   cost(count)     AI 부탁의 값(단추에 적는 글. 예: '질문권 1회')
 import { el } from './ui.js';
@@ -186,7 +186,9 @@ export function createAiHelper(host) {
         if (typeof stop === 'function') { box._stops.push(stop); stops.add(stop); }
       }
     };
-    const apply = () => {
+    let applying = false;
+    const apply = async () => {
+      if (applying) return;
       const blocked = host.blocked();
       if (blocked) { notes.hidden = false; notes.textContent = blocked; return; }
       const current = host.slides();
@@ -196,7 +198,10 @@ export function createAiHelper(host) {
         notes.textContent = done.stale.length ? '부탁한 뒤에 그 장을 고치셔서 적용하지 않았어요. 다시 부탁해 주세요.' : '바꿀 것이 없어요.';
         return;
       }
-      token = host.apply(done.slides);
+      // 여러 파트의 자료는 다른 파트를 저장하느라 잠깐 걸린다: 그동안 한 번 더 눌리지 않게 한다
+      applying = true;
+      try { token = await host.apply(done.slides, current); } finally { applying = false; }
+      if (disposed) return;
       if (!token) { notes.hidden = false; notes.textContent = '지금은 적용할 수 없어요. 편집 화면을 확인한 뒤 다시 눌러 주세요.'; return; }
       if (done.stale.length) extra.push(`부탁한 뒤에 고친 ${done.stale.map((i) => `${i + 1}장`).join(' · ')}은 그대로 두었어요.`);
       state = 'applied';
