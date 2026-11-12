@@ -41,12 +41,26 @@ await putDesign(seed);window.readSaved=()=>getDesign(seed.id);
 await startMinican({storage:'assist-fixture'${ai}});window.ready=true;
 </script>`;
 
+// 여러 파트로 나뉜 자료(같은 PPT 에서 온 파트 둘, 온바탕 파일의 묶음): 장 목록 띠는 네 장을 한 자료로 보여 준다.
+const partsHtml = `<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/src/editor.css"><link rel="stylesheet" href="/app/app.css"><body class="mc-app"><main id="app"></main><script type="module">
+import {startMinican} from '/app/app.js';import {newRecord} from '/app/designs.js';import {putDesign,getDesign,setStorageName} from '/app/store.js';
+setStorageName('assist-parts');
+const page=(id,text,extra={})=>({id,bg:'#f7f5ef',items:[{id:'e'+id.slice(1),t:'text',layout:'slide',text,x:50,y:20,w:80,size:5,color:'#121a3a',align:'c'}],...extra});
+const order=['ppartone001','ppartone002','pparttwo001','pparttwo002'];
+const part=(id,n,slides)=>({...newRecord('16:9'),id,name:'연수 자료 · '+(n+1),updatedAt:Date.now()-n,slides,source:{kind:'pptx',sourceDocumentId:'sassistdeck0001'},fileDeck:{id:'kassistdeck0001',title:'연수 자료',part:n,parts:2,pageOrder:order}});
+await putDesign(part('dassistpart001',0,[page('ppartone001','첫 파트 첫 장',{topic:'여는 말'}),page('ppartone002','첫 파트 둘째 장')]));
+await putDesign(part('dassistpart002',1,[page('pparttwo001','둘째 파트 첫 장',{topic:'1부'}),page('pparttwo002','둘째 파트 둘째 장')]));
+window.readParts=async()=>[await getDesign('dassistpart001'),await getDesign('dassistpart002')];
+await startMinican({storage:'assist-parts'${maker}});window.ready=true;
+</script>`;
+
 async function setup(t, page0 = '/fixture-ai.html') {
   const server = createServer(async (req, res) => {
     try {
       const path = new URL(req.url, 'http://localhost').pathname;
       if (path === '/fixture.html') { res.setHeader('Content-Type', 'text/html'); return res.end(html()); }
       if (path === '/fixture-ai.html') { res.setHeader('Content-Type', 'text/html'); return res.end(html(maker)); }
+      if (path === '/fixture-parts.html') { res.setHeader('Content-Type', 'text/html'); return res.end(partsHtml); }
       const f = resolve(root, '.' + decodeURIComponent(path));
       if (!f.startsWith(root + sep)) throw Error('path');
       res.setHeader('Content-Type', ({'.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.woff': 'font/woff', '.png': 'image/png'})[extname(f)] || 'application/octet-stream');
@@ -222,5 +236,64 @@ test('without an AI connection the panel still polishes motion by rule, for the 
   assert.equal(await panel.isVisible(), false);
   assert.equal(await page.locator('[data-assist-toggle]').getAttribute('aria-expanded'), 'false');
   assert.deepEqual(external, []);
+  assert.deepEqual(errors, []);
+});
+
+test('a deck in several parts is one deck to the helper: every slide can be chosen, parts change together and come back with one undo', options, async t => {
+  const {page, errors} = await setup(t, '/fixture-parts.html');
+  const parts = () => page.evaluate(() => window.readParts());
+  const look = list => list.map(r => r.slides.map(s => [s.items[0].text, s.tr || '', s.notes || '']));
+  const before = look(await parts());
+  await page.waitForFunction(() => document.querySelectorAll('.cv-slide-list .cv-slide:not(.add)').length === 4);   // the rail shows both parts
+  await page.locator('[data-assist-toggle]').click();
+  const panel = page.locator('.cv-assist');
+  await panel.locator('input[value="pick"]').check();
+  assert.deepEqual(await panel.locator('.cv-assist-pick span').allTextContents(), ['1장 (지금)', '2장', '3장', '4장'], 'the slides of the other part are listed too');
+  for (const i of [1, 2, 3]) await panel.locator(`[data-assist-pick="${i}"]`).check();
+  assert.match(await panel.locator('.cv-assist-pick-count').textContent(), /^4장 고름/);
+  await panel.locator('[data-assist-ask]').click();
+  const card = panel.locator('[data-assist-card]');
+  await card.waitFor();
+  const asked = await page.evaluate(() => window.asked);
+  assert.deepEqual(asked[0].slides.map(s => [s.no, s.items[0].text]), [[1, '첫 파트 첫 장'], [2, '첫 파트 둘째 장'], [3, '둘째 파트 첫 장'], [4, '둘째 파트 둘째 장']]);
+  assert.equal(asked[0].deck.count, 4);
+  assert.equal(await card.locator('.cv-assist-count').textContent(), '바꿀 것 4가지 · 4장');
+  await card.locator('[data-assist-apply]').click();
+  await page.waitForFunction(() => document.querySelector('[data-assist-card]').dataset.state === 'applied');
+  for (let end = Date.now() + 15000; ; await new Promise(r => setTimeout(r, 200))) {
+    const now = look(await parts());
+    if (now.flat().every(row => row[1])) break;
+    assert.ok(Date.now() < end, 'both parts are saved with the change');
+  }
+  assert.deepEqual(look(await parts()).map(p => p.map(row => row[1])), [['pushup', 'zoomblur'], ['zoomblur', 'zoomblur']]);
+  assert.equal(look(await parts())[0][0][2], '손을 들어 물어봅니다.');
+  // One Ctrl+Z: the open part and the stored part both go back.
+  await page.keyboard.press('Control+z');
+  for (let end = Date.now() + 15000; ; await new Promise(r => setTimeout(r, 200))) {
+    if (JSON.stringify(look(await parts())) === JSON.stringify(before)) break;
+    assert.ok(Date.now() < end, 'one undo takes both parts back');
+  }
+  // And again forward, then the rule-based polish over the whole deck reaches the other part as well.
+  await page.keyboard.press('Control+y');
+  for (let end = Date.now() + 15000; ; await new Promise(r => setTimeout(r, 200))) {
+    if (look(await parts()).flat().every(row => row[1])) break;
+    assert.ok(Date.now() < end, 'redo puts both parts on again');
+  }
+  await page.keyboard.press('Control+z');
+  for (let end = Date.now() + 15000; ; await new Promise(r => setTimeout(r, 200))) {
+    if (JSON.stringify(look(await parts())) === JSON.stringify(before)) break;
+    assert.ok(Date.now() < end);
+  }
+  await panel.locator('.cv-assist-select').selectOption('all');
+  await panel.locator('[data-assist-polish]').click();
+  const polish = panel.locator('[data-assist-card]').last();
+  await polish.waitFor();
+  assert.match(await polish.locator('.cv-assist-count').textContent(), /· 4장$/);
+  await polish.locator('[data-assist-apply]').click();
+  for (let end = Date.now() + 15000; ; await new Promise(r => setTimeout(r, 200))) {
+    const now = await parts();
+    if (now.every(r => r.slides.every(s => s.items[0].an === 'blur'))) break;
+    assert.ok(Date.now() < end, 'titles in both parts get their entrance');
+  }
   assert.deepEqual(errors, []);
 });

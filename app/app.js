@@ -1066,8 +1066,9 @@ function toggleAssist(O, open = !O.shell.classList.contains('assist-open')) {
 function assistHost(O) {
   return {
     provider: appMaker,
-    slides: () => currentSlides(O),
-    at: () => O.at,
+    // 여러 파트로 나뉜 자료(PPT 전체 자료 · 온바탕 파일의 묶음)는 모든 파트의 장을 쪽 차례대로 보여 준다(장 목록 띠와 같다)
+    slides: () => assistPages(O)?.map((row) => row.page) || currentSlides(O),
+    at: () => { const pages = assistPages(O); return pages ? Math.max(0, pages.findIndex((row) => row.record.id === O.record.id && row.index === O.at)) : O.at; },
     title: () => O.record.name || '',
     aspect: () => aspectOf(O.record),
     view: (slide) => slideView(slide, aspectOf(O.record), 320),
@@ -1078,22 +1079,88 @@ function assistHost(O) {
       return () => { clearInterval(timer); control.restore(); };
     },
     blocked: () => (O.closed || S.open !== O ? '편집 화면을 다시 열어 주세요.' : O.co ? '같이 고치기를 마친 뒤에 쓸 수 있어요.' : O.inlineImport ? '가져오기를 마친 뒤에 쓸 수 있어요.'
-      : O.editor.busy() ? '영상을 찍거나 넣는 일을 마친 뒤에 쓸 수 있어요.' : O.undoBusy || O.motionAll ? '앞의 일을 마친 뒤에 다시 눌러 주세요.' : ''),
-    apply: (slides) => applyAssist(O, slides),
+      : O.editor.busy() ? '영상을 찍거나 넣는 일을 마친 뒤에 쓸 수 있어요.' : O.undoBusy || O.motionAll || O.assistBusy || O.leaving ? '앞의 일을 마친 뒤에 다시 눌러 주세요.' : ''),
+    apply: (slides, base) => applyAssist(O, slides, base),
     canUndo: (entry) => !!entry && !O.closed && O.undo?.past[O.undo.past.length - 1] === entry,
     undo: async (entry) => { if (O.closed || O.undo?.past[O.undo.past.length - 1] !== entry) return false; await stepUndo(O, true); return O.undo?.future[O.undo.future.length - 1] === entry; },
     cost: (count) => `질문권 ${editCost(count)}회`,
     close: () => toggleAssist(O, false),
   };
 }
-/** 도우미가 다듬은 장 목록을 적용한다. 몇 장을 바꾸든 되돌리기 기록은 하나다(Ctrl+Z 한 번으로 통째로 되돌린다). */
-function applyAssist(O, slides) {
-  if (O.closed || S.open !== O || O.co || O.inlineImport || O.undoBusy || O.editor.busy() || !Array.isArray(slides) || slides.length !== O.slides.length) return null;
-  const before = deckState(O);
-  const entry = { t: 'deck', doc: O.record.id, before, after: { slides: slides.slice(), at: before.at } };
+/** 도우미가 보는 장들: 여러 파트로 나뉜 자료이면 모든 파트의 쪽(쪽 차례대로. { record, page, index }), 아니면 null(지금 그림의 장들). */
+function assistPages(O) {
+  return O.materialDeck && !O.materialLoadError ? materialPages(O) : null;
+}
+/**
+ * 도우미가 다듬은 장 목록(slides)을 적용한다. base 는 도우미가 다듬기 전에 받아 간 목록이다(달라진 장만 고른다).
+ * 몇 장을 바꾸든 되돌리기 기록은 하나다(Ctrl+Z 한 번으로 통째로 되돌린다). 다른 파트의 장은 그 파트의 저장본에 바로 적는다.
+ * 돌려주는 것: 그 기록(표), 못 했으면 null.
+ */
+async function applyAssist(O, slides, base) {
+  if (O.closed || S.open !== O || O.co || O.inlineImport || O.undoBusy || O.assistBusy || O.leaving || O.editor.busy() || !Array.isArray(slides)) return null;
+  const pages = assistPages(O), before = deckState(O);
+  if (!pages) {
+    if (slides.length !== O.slides.length) return null;
+    const entry = { t: 'deck', doc: O.record.id, before, after: { slides: slides.slice(), at: before.at } };
+    noteUndo(O, entry);
+    applyDeck(O, entry.after);
+    return entry;
+  }
+  if (!Array.isArray(base) || slides.length !== pages.length || base.length !== pages.length) return null;
+  const mine = before.slides.slice(), others = new Map();
+  let here = false;
+  slides.forEach((page, i) => {
+    if (page === base[i]) return;
+    const row = pages[i];
+    if (row.record.id === O.record.id) { mine[row.index] = page; here = true; }
+    else (others.get(row.record.id) || others.set(row.record.id, []).get(row.record.id)).push({ before: row.page, after: page });
+  });
+  const parts = [...others].map(([id, rows]) => ({ id, rows }));
+  if (!here && !parts.length) return null;
+  if (parts.length) {
+    O.assistBusy = true;
+    try { await writeAssistParts(O, parts, 'after'); }
+    catch (error) { toast(assistError(error, '다른 파트를 저장하지 못했어요. 아무것도 바꾸지 않았어요.'), 5000); return null; }
+    finally { O.assistBusy = false; }
+    if (O.closed || S.open !== O) return null;
+  }
+  const entry = { t: 'assist', doc: O.record.id, before, after: { slides: mine, at: before.at }, parts };
   noteUndo(O, entry);
-  applyDeck(O, entry.after);
+  if (here) applyDeck(O, entry.after); else renderStrip(O);
   return entry;
+}
+const message = (error, fallback) => (/\p{Script=Hangul}/u.test(error?.message || '') ? String(error.message).slice(0, 200) : fallback);
+/**
+ * 다른 파트의 장들을 저장본에 적는다(to: 'after' 적용 · 'before' 되돌리기). 저장본의 그 장이 떠날 모습과 다르면(다른 창에서 고쳤으면)
+ * 어느 파트도 바꾸지 않고 알린다. 파트들은 함께 바뀌거나 함께 그대로다(replaceDesignsIfUnchanged).
+ */
+async function writeAssistParts(O, parts, to) {
+  const from = to === 'after' ? 'before' : 'after', plans = [];
+  for (const { id, rows } of parts) {
+    const record = await getDesign(id);
+    if (!record) throw Error('다른 파트를 찾지 못했어요. 닫고 다시 열어 주세요.');
+    const left = new Map(rows.map((row) => [row[from].id, row]));
+    if (left.has(undefined) || left.size !== rows.length) throw Error('이름표가 없는 장이 있어 다른 파트는 바꾸지 못했어요.');
+    const same = (a, b) => { try { return JSON.stringify(cleanDesign(a)) === JSON.stringify(cleanDesign(b)); } catch { return false; } };
+    const next = record.slides.map((page) => {
+      const row = left.get(page.id);
+      if (!row) return page;
+      if (!same(page, row[from])) throw Error('다른 창에서 고친 장이 있어요. 어느 파트도 덮어쓰지 않았어요.');
+      left.delete(page.id);
+      return row[to];
+    });
+    if (left.size) throw Error('다른 파트의 장이 그 사이 바뀌었어요. 어느 파트도 덮어쓰지 않았어요.');
+    plans.push({ expected: record, record: { ...record, slides: next, synced: false } });
+  }
+  let saved;
+  try { saved = await replaceDesignsIfUnchanged(plans); }
+  catch (error) { throw Error(error.message === 'DRAFT_CHANGED' ? '다른 창에서 자료가 바뀌었어요. 어느 파트도 덮어쓰지 않았어요.' : '다른 파트를 저장하지 못했어요. 저장 공간을 확인해 주세요.'); }
+  for (const kept of saved) {
+    upsert(kept);
+    if (O.materialDeck) O.materialDeck.documents = O.materialDeck.documents.map((row) => (row.id === kept.id ? migrateRecord(kept) : row));
+    if (accountFor(kept)) pusher.queue(kept);
+    if (typeof shareAction?.saved === 'function') { try { shareAction.saved(kept); } catch (error) { console.warn(error); } }
+  }
 }
 
 // ---------- 슬라이드 ----------
@@ -1887,6 +1954,15 @@ async function stepUndo(O, back) {
         if (i !== O.at) goSlide(O, i);
         if (O.at !== i || !(back ? O.editor.undoLocal() : O.editor.redoLocal())) continue;
       } else if (e.t === 'deck') applyDeck(O, back ? e.before : e.after);
+      else if (e.t === 'assist') {
+        // 도우미가 여러 파트의 장을 함께 바꾼 일: 다른 파트의 저장본부터 되돌리고(못 하면 그대로 두고 알린다), 지금 파트를 되돌린다
+        if (e.parts.length) {
+          try { await writeAssistParts(O, e.parts, back ? 'before' : 'after'); }
+          catch (error) { from.push(e); toast(assistError(error, '다른 파트를 되돌리지 못했어요.'), 5000); break; }
+          if (O.closed || S.open !== O || O.undo !== U) return;
+        }
+        applyDeck(O, back ? e.before : e.after);
+      }
       else if (e.t === 'order') { if (!await reorderStrip(O, back ? e.to : e.from, back ? e.from : e.to, { replay: true })) continue; }
       else continue;
       if (O.undo === U) to.push(e);
