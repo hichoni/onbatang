@@ -3655,18 +3655,28 @@ function askCoName() {
     setTimeout(() => input.focus(), 0);
   });
 }
-// 링크 공유(내보내기): 저장을 마친 뒤 호스트의 링크 창을 연다. records() 는 이 자료의 모든 파트(이 기기에 저장된 것)를 차례대로 준다.
+// Share exactly the open editor, including its inactive PPT parts. IndexedDB can
+// change independently (account sync / another tab); re-reading it after flushing
+// must not substitute an older draft for what the teacher is looking at.
+async function linkRecordsFromEditor(O) {
+  if (O.materialLoadingPromise) await O.materialLoadingPromise;
+  if (O.closed || S.open !== O) throw Error('EDITOR_BUSY');
+  if (O.materialLoadError || O.recoveryRequired) throw Error('자료를 다시 열어 최신 내용을 확인한 뒤 링크를 만들어 주세요.');
+  await flushSavedDesign(O.record.id);
+  if (O.closed || S.open !== O) throw Error('EDITOR_BUSY');
+  const current = { ...O.record, updatedAt: O.persistedRecord.updatedAt, slides: currentSlides(O), uploads: O.editor.getUploads().map(u => u.url) };
+  return (O.materialDeck?.documents || [current]).map(record =>
+    structuredClone(migrateRecord(record.id === O.record.id ? current : record)));
+}
+// 링크 공유(내보내기): 저장을 마친 뒤 현재 화면의 모든 파트를 호스트에 준다.
 async function openCopyFromEditor(O) {
   if (!copyAction || S.open !== O) return;
-  const ids = O.materialDeck ? O.materialDeck.documents.map((r) => r.id) : [O.record.id];
   try {
+    if (O.materialLoadingPromise) await O.materialLoadingPromise;
+    if (O.closed || S.open !== O) return;
+    const ids = O.materialDeck ? O.materialDeck.documents.map((r) => r.id) : [O.record.id];
     await copyAction.open({ designId: ids[0], title: O.materialDeck?.title || O.record.name,
-      records: async () => {
-        await flushSavedDesign(O.record.id);
-        const out = [];
-        for (const id of ids) { const record = await getDesign(id) || O.materialDeck?.documents.find((r) => r.id === id); if (record) out.push(record); }
-        return out;
-      } });
+      records: () => linkRecordsFromEditor(O) });
   } catch (error) { toast(String(error?.message || '링크 창을 열지 못했어요.').slice(0, 200), 4500); }
 }
 // 7일 링크(공용 온바탕 · 누구나): 이 자료의 모든 파트를 링크 하나로 보낸다. 만든 때부터 7일만 열리고 그 뒤에는 서버에서 지워진다(app/copy-link.js).
@@ -3678,6 +3688,8 @@ const LINK_MODES = Object.freeze([
 ]);
 async function openGuestLink(O) {
   if (!copyLink || S.open !== O) return;
+  if (O.materialLoadingPromise) await O.materialLoadingPromise;
+  if (O.closed || S.open !== O) return;
   const [kit, cards] = await Promise.all([import('./copy-link.js'), import('./link-card.js')]);
   const ids = O.materialDeck ? O.materialDeck.documents.map((r) => r.id) : [O.record.id], owner = ids[0];
   const name = () => String(O.materialDeck?.title || O.record.name || '').replace(/\s*·\s*\d{1,3}$/, '').trim().slice(0, 60) || '온바탕 자료';
@@ -3692,13 +3704,7 @@ async function openGuestLink(O) {
   openModal(box, { onClose: () => { closed = true; clearTimeout(timer); app.inert = wasInert; } });
   app.inert = true;
   box.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); closeModal(); } });
-  const records = async () => {
-    await flushSavedDesign(O.record.id);
-    const out = [];
-    for (const id of ids) { const record = await getDesign(id) || O.materialDeck?.documents.find((r) => r.id === id); if (record) out.push(record); }
-    if (!out.length) throw Error('보낼 자료를 읽지 못했어요. 저장한 뒤 다시 해 주세요.');
-    return out;
-  };
+  const records = () => linkRecordsFromEditor(O);
   const refreshed = new Set();   // 이 창을 연 뒤 서버에 있는지 확인한 링크의 종류
   // 링크를 올린 뒤 자료가 바뀌었나(종류마다 · null: 아직 견주지 않음). 바뀌었으면 다시 올리기를 앞세운다.
   const changed = { view: null, edit: null };
@@ -3743,7 +3749,19 @@ async function openGuestLink(O) {
     if (changed[mode] === null) {
       const kind = mode;
       changed[kind] = false;
-      records().then((list) => { changed[kind] = kit.linkChanged(list, { sig: link.sig, sentAt: link.sentAt || Date.parse(link.expiresAt) - kit.GUEST_DAYS * 864e5 }); if (changed[kind] && mode === kind) paint(); }).catch((error) => console.warn(error));
+      body.replaceChildren(el('p', {class:'cv-guest-note',text:'지금 자료를 링크에 반영하고 있어요…'}),
+        el('button', {class:'btn',type:'button',onClick:()=>busy(async()=>{await send(link.title || name());paint();})}, '다시 시도'),
+        el('button', {class:'btn btn-ghost',type:'button',onClick:closeModal}, '닫기'));
+      busy(async () => {
+        const list = await records();
+        if (closed || mode !== kind) return;
+        if (kit.linkChanged(list, { sig: link.sig, sentAt: link.sentAt || Date.parse(link.expiresAt) - kit.GUEST_DAYS * 864e5 })) {
+          await send(link.title || name());
+          message.textContent = '지금 자료로 링크를 갱신했어요.';
+        }
+        paint();
+      });
+      return;
     }
     const copy = el('button', { class: `btn${stale ? '' : ' btn-primary'}`, type: 'button', dataset: { guestCopy: '' }, onClick: async () => {
       try { await navigator.clipboard.writeText(url); copy.textContent = '복사했어요'; } catch { prompt('링크', url); }

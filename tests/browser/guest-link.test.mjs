@@ -169,6 +169,27 @@ test('7-day links: anyone makes a view link and an edit link, no video, says whe
   await dialog.getByText(/링크 서버가 아직 준비되지 않았어요/).waitFor();
   state.fail = null;
 
+  // Reopening link creation must refresh the existing URL; a failed refresh
+  // must not offer the old URL as though the latest content was uploaded.
+  await page.locator('.modal-close').click();
+  await dialog.waitFor({state:'detached'});
+  await page.locator('.cv-name').fill('수정한 알림장');
+  await openLink();
+  await dialog.getByText('지금 자료로 링크를 갱신했어요.').waitFor();
+  assert.equal(state.links[VIEW].records[0].name,'수정한 알림장');
+  assert.equal(await dialog.locator('[data-guest-url]').innerText(),`https://gbe.ai.kr/onbatang-play.html?c=${VIEW}`);
+  await page.locator('.modal-close').click();
+  await dialog.waitFor({state:'detached'});
+  await page.locator('.cv-name').fill('마지막 알림장');
+  state.fail = 'network failed';
+  await openLink();
+  await dialog.getByText(/인터넷 연결이 원활하지 않아요/).waitFor();
+  assert.equal(await dialog.locator('[data-guest-copy]').count(),0,'no stale copy control on upload failure');
+  state.fail = null;
+  await dialog.getByRole('button',{name:'다시 시도',exact:true}).click();
+  await dialog.locator('[data-guest-url]').waitFor();
+  assert.equal(state.links[VIEW].records[0].name,'마지막 알림장');
+
   // 받는 쪽: 7일이 지난 링크는 그렇다고 알리고, 보기 링크는 사본으로 받지 않고 재생 화면으로 보낸다
   state.info = {expired: true, title: '우리 반 알림장', expiresAt: '2026-10-01T00:00:00+00:00', mode: 'edit'};
   const other = await context.newPage(); other.on('pageerror', e => errors.push(e.message));
