@@ -12,12 +12,15 @@ const options = {skip: !process.env.MINICAN_PLAYWRIGHT_PATH, timeout: 180000};
 const CODE = 'abcdef123456', SHA = 'a'.repeat(32);
 const seen = "try{localStorage.setItem('onbatang-tour-seen-v1:editor','1');localStorage.setItem('onbatang-tour-seen-v1:news-0.45','1');}catch{}";
 const host = (withAction) => `<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/src/editor.css"><link rel="stylesheet" href="/app/app.css"><body class="mc-app"><main id="app"></main><script type="module">
-import {startMinican,openSavedDesign} from '/app/app.js';import {newRecord} from '/app/designs.js';import {putDesign,setStorageName} from '/app/store.js';
+import {startMinican,openSavedDesign} from '/app/app.js';import {newRecord,copyRecord} from '/app/designs.js';import {putDesign,setStorageName} from '/app/store.js';
 ${seen}
 setStorageName('copy-host');
-const record=newRecord('16:9');record.name='알림장';record.slides=[record.slides[0],{...record.slides[0],id:'p2copy01'}];await putDesign(record);
+let record=newRecord('16:9');record.name='알림장';record.slides=[record.slides[0],{...record.slides[0],id:'p2copy01'}];
+record.slides[0].items=[{id:'ecurrent1',t:'text',text:'현재 편집본',x:20,y:20,w:50,size:6}];
+if(new URL(location.href).searchParams.has('fixtureCopy'))record=copyRecord(record);
+await putDesign(record);
 window.opened=[];
-await startMinican({storage:'copy-host',${withAction ? "copyAction:{open:async(context)=>{const records=await context.records();window.opened.push({designId:context.designId,title:context.title,ids:records.map(r=>r.id),slides:records.map(r=>r.slides.length)});}}" : ''}});
+await startMinican({storage:'copy-host',${withAction ? "copyAction:{open:async(context)=>{const records=await context.records();window.opened.push({designId:context.designId,title:context.title,ids:records.map(r=>r.id),slides:records.map(r=>r.slides.length),records});}}" : ''}});
 await openSavedDesign(record.id);window.designId=record.id;window.ready=true;
 </script>`;
 const taker = `<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/src/editor.css"><link rel="stylesheet" href="/app/app.css"><body class="mc-app"><main id="app"></main><script type="module">
@@ -90,6 +93,31 @@ test('export dialog: 링크 공유 opens the host with every saved part; without
   assert.equal(await plain.locator('[data-download-save]').isDisabled(), true);
   assert.match(await plain.locator('[data-copy-members]').innerText(), /GBE-AI Lab 회원만/);
   assert.deepEqual(errors, []);
+});
+
+test('link creation publishes the open editor even if an older stored draft arrives after it opened', options, async t => {
+  const {base, browser} = await serve(t);
+  for (const suffix of ['', '?fixtureCopy=1']) {
+  const page = await browser.newPage({viewport: {width: 1280, height: 800}});
+  await page.goto(base + '/host.html' + suffix);
+  await page.waitForFunction(() => window.ready);
+  // A background account response / another tab can change IndexedDB without
+  // replacing the visible editor. Link creation must not silently use that draft.
+  await page.evaluate(async () => {
+    const {getDesign, putDesign} = await import('/app/store.js');
+    const record = await getDesign(window.designId);
+    record.slides[0].items = [{id:'eoldlink1',t:'text',text:'예전 저장본',x:20,y:20,w:50,size:6}];
+    await putDesign(record);
+  });
+  assert.equal(await page.getByText('예전 저장본',{exact:true}).count(),0);
+  await page.locator('.cv-down-btn').click();
+  await page.locator('.cv-down-format[data-type=link]').click();
+  await page.locator('[data-download-save]').click();
+  await page.waitForFunction(() => window.opened.length === 1);
+  const sent = await page.evaluate(() => window.opened[0].records);
+  assert.equal(sent[0].slides[0].items[0].text,'현재 편집본','originals and fresh copies share the visible text');
+  await page.close();
+  }
 });
 
 test('public 온바탕: ?copy= takes every part into this browser as a new copy, opens it editable, and opening again reuses it', options, async t => {
