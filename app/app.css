@@ -1409,11 +1409,18 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero{overflow:visible;z
 .modal-backdrop:has(.cv-html-inline-editor){padding:12px}
 .modal-panel:has(.cv-html-inline-editor){width:100%;max-width:1600px;height:calc(100dvh - 24px);max-height:none;padding:0;overflow:hidden;border-radius:12px}
 .modal-panel:has(.cv-html-inline-editor)>.modal-close{display:none}
-.cv-html-inline-editor{display:grid;grid-template-rows:auto minmax(0,1fr);height:100%;min-width:0}
+.cv-html-inline-editor{display:grid;grid-template-rows:auto auto minmax(0,1fr);height:100%;min-width:0}
 .cv-html-edit-bar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 18px;border-bottom:1px solid var(--cv-line);background:#fffdf8}
 .cv-html-edit-bar h2{margin:0 0 4px;font-size:17px}
 .cv-html-edit-bar p{margin:0;color:var(--muted);font-size:13px;line-height:1.4}
 .cv-html-edit-bar>.row{flex:none;gap:8px}
+.cv-html-text-format{display:flex;align-items:center;gap:18px;padding:8px 18px;border-bottom:1px solid var(--cv-line);background:#fffdf8;min-width:0}
+.cv-html-text-selected{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:13px}
+.cv-html-text-format label{display:flex;align-items:center;gap:6px;flex:none;font-size:13px}
+.cv-html-text-format input[type=number]{width:76px;min-height:36px;padding:5px 7px;border:1px solid var(--cv-line);border-radius:7px;font:inherit;background:white}
+.cv-html-text-format input[type=color]{width:44px;height:36px;padding:3px;border:1px solid var(--cv-line);border-radius:7px;background:white;cursor:pointer}
+.cv-html-text-format input:disabled{opacity:.45;cursor:default}
+.cv-html-text-format input:focus-visible{outline:2px solid #286f62;outline-offset:2px}
 .cv-html-inline-editor>iframe{width:100%;height:100%;min-height:0;border:0;background:white}
 @media(max-width:520px){
  .modal-backdrop:has(.cv-html-inline-editor){padding:0}
@@ -1421,6 +1428,8 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero{overflow:visible;z
  .cv-html-edit-bar{gap:8px;padding:10px;align-items:flex-start;flex-wrap:wrap}
  .cv-html-edit-bar>div:first-child{flex:1 1 180px}
  .cv-html-edit-bar .btn{padding:6px 12px;min-height:36px;font-size:13px}
+ .cv-html-text-format{gap:12px;padding:8px 10px;flex-wrap:wrap}
+ .cv-html-text-selected{flex-basis:100%}
 }
 .cv-page-workspace.inline-importing>.cv-work{grid-column:2/-1}
 .cv-page-workspace.inline-importing>.cv-properties,.cv-page-workspace.inline-importing .fe-tabbody{display:none}
