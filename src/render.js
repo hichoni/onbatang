@@ -10,6 +10,7 @@ import { ytThumb, ytEmbed, YT_ORIGIN } from './youtube.js';
 import { linkSvg } from './links.js';
 import { runPieces } from './runs.js';
 import { webHost, blockedSite } from './web.js';
+import {htmlFileSource, HTML_FILE_SANDBOX} from './html-file.js';
 import { fitWebFrame } from './web-fit.js';
 import { chartView } from './chart.js';
 import { mathView } from './math.js';
@@ -249,10 +250,11 @@ export function liveWebBoxes(root) {
  * 웹사이트 장의 실제 사이트(발표 화면 · 공유 링크 재생기). 사이트가 이 화면을 다른 곳으로 옮기지 못하게(allow-top-navigation 없음) 묶어 둔다.
  */
 export function webFrame(web) {
+  const uploaded = typeof web.html === 'string';
   const frame = el('iframe', {
-    class: 'fe-web-frame', src: web.url, title: `웹사이트: ${webHost(web.url)}`, loading: 'eager', referrerpolicy: 'strict-origin-when-cross-origin',
+    class: 'fe-web-frame', ...(uploaded ? {srcdoc: htmlFileSource(web.html)} : {src: web.url}), title: uploaded ? `HTML: ${web.filename}` : `웹사이트: ${webHost(web.url)}`, loading: 'eager', referrerpolicy: uploaded ? 'no-referrer' : 'strict-origin-when-cross-origin',
     allow: 'fullscreen; autoplay; encrypted-media; picture-in-picture; clipboard-write',
-    sandbox: 'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads allow-presentation allow-pointer-lock',
+    sandbox: uploaded ? HTML_FILE_SANDBOX : 'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads allow-presentation allow-pointer-lock',
     allowfullscreen: true,
   });
   // 붙은 뒤(같은 차례의 다음 순간)에 자리 크기를 보고 맞춘다.
@@ -267,9 +269,9 @@ export function webFrame(web) {
 export function webCard(web) {
   return el('div', { class: 'fe-web', dataset: { web: web.url } },
     el('span', { class: 'fe-web-globe', html: GLOBE }),
-    el('b', { class: 'fe-web-host', text: webHost(web.url) }),
-    el('span', { class: 'fe-web-url', text: web.url }),
-    el('span', { class: 'fe-web-note', text: '발표할 때 이 장에 실제 사이트가 열려요' }));
+    el('b', { class: 'fe-web-host', text: web.html ? web.filename : webHost(web.url) }),
+    el('span', { class: 'fe-web-url', text: web.html ? 'HTML 자료' : web.url }),
+    el('span', { class: 'fe-web-note', text: web.html ? '발표하면 HTML이 열려요 · 사이트 둘러보기를 켜면 직접 누를 수 있어요' : '발표할 때 이 장에 실제 사이트가 열려요' }));
 }
 
 /**

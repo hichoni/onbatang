@@ -11,6 +11,7 @@ import { cleanEffectTargets, mountOfflineEffects,stepOpenQuestion } from '../src
 import { questionEffect,steppedEffect } from '../src/effect-assets.js';
 import {cleanLessonTarget,cleanLessonBinding,returnedResultsFromLesson} from './lesson-results.js';
 import {cleanHtmlFlow,playHtmlFlow} from './html-lesson-flow.js';
+import {cleanHtmlFile, htmlFileSource, HTML_FILE_SANDBOX} from '../src/html-file.js';
 
 const png = value => typeof value === 'string' && /^data:image\/png;base64,[A-Za-z\d+/=]+$/.test(value) && value.length <= 4_000_000;
 export const safeLessonJson = value => JSON.stringify(value).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
@@ -22,6 +23,11 @@ export function cleanHtmlLesson(raw) {
     seen.add(page.id); bytes += page.image.length;
     if (bytes > 200_000_000) throw new Error('수업 파일이 너무 커요. 그림 크기를 줄여 다시 내려받아 주세요.');
     const out = { id: page.id, image: page.image, aspect: page.aspect, ...slideNotes(page), ...slideTopic(page), ...slideDur(page) };
+    if (page.web !== undefined) {
+      const file = cleanHtmlFile(page.web);
+      if (!file) throw Error('HTML 자료를 확인해 주세요.');
+      out.web = file; bytes += new TextEncoder().encode(JSON.stringify(file)).length;
+    }
     if(page.flow!==undefined){
       if(page.activity)throw Error('활동 화면에는 슬라이드 모핑을 넣을 수 없어요.');
       out.flow=cleanHtmlFlow(page.flow);bytes+=new TextEncoder().encode(JSON.stringify(out.flow)).length;
@@ -183,6 +189,13 @@ export function mountHtmlLesson(raw, host = document.getElementById('onbatang-le
     const picture = el('img', { class: 'lesson-slide', src: page.image, alt: `${current + 1}쪽${page.activity ? ` ${page.activity.title}` : page.result ? ' 활동 결과' : ''}` });
     const frame = page.effects?.length || page.flow ? el('div', { class:'lesson-effects-frame' }, picture) : null;
     scene.append(frame || picture);
+    if (page.web) scene.append(el('button', {type: 'button', class: 'lesson-start', text: 'HTML 열기', onclick: () => {
+      executing = true; returnToCover.hidden = showClose.hidden = false;
+      ++renderVersion; flow?.finish(); flow = null; stopEffects?.(); stopEffects = null;
+      const target = el('section', {class: 'lesson-scene lesson-activity'});
+      target.append(el('iframe', {srcdoc: htmlFileSource(page.web.html), title: page.web.filename, sandbox: HTML_FILE_SANDBOX, referrerpolicy: 'no-referrer', style: 'width:100%;height:100%;border:0;background:white', allow: 'fullscreen; autoplay', allowfullscreen: true}));
+      stage.replaceChildren(target);
+    }}));
     // 한바탕 장은 서버의 실시간 판이라 따로 내려받은 수업에서는 표지(주소 · 코드)만 보인다.
     if (page.activity && page.activity.kind !== 'wall') scene.append(el('button', { type: 'button', class: 'lesson-start', text: page.activity.kind === 'quiz' ? '퀴즈 풀기' : '활동 시작', onclick: () => {
       executing = true; returnToCover.hidden = showClose.hidden = false;
