@@ -271,7 +271,7 @@ export function webCard(web) {
     el('span', { class: 'fe-web-globe', html: GLOBE }),
     el('b', { class: 'fe-web-host', text: web.html ? web.filename : webHost(web.url) }),
     el('span', { class: 'fe-web-url', text: web.html ? 'HTML 전용 모드 · 원본 보관' : web.url }),
-    el('span', { class: 'fe-web-note', text: web.html ? '발표하면 원본 HTML이 열려요 · 바로 버튼을 누르고 사용할 수 있어요' : '발표할 때 이 장에 실제 사이트가 열려요' }));
+    el('span', { class: 'fe-web-note', text: web.html ? '열면 바로 조작해요 · 글 수정으로 문구를 바꿀 수 있어요' : '발표할 때 이 장에 실제 사이트가 열려요' }));
 }
 
 /**

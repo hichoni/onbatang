@@ -29,6 +29,7 @@ import {createShowTools} from './show-tools.js';
 import {startVoice,canRecordVoice,voiceSlides} from './voice-record.js';
 import {spokenNotes} from './show-keys.js';
 import {webFrame, liveWebBoxes} from '../src/render.js';
+import {createHtmlWorkspace, editHtmlText} from './html-workspace.js';
 import {blockedSite, webHost} from '../src/web.js';
 import {PRINT_LAYOUTS,printHtml} from './print.js';
 import {encodeGif,GIF_LIMITS} from './gif.js';
@@ -921,7 +922,7 @@ function openDesign(record, isNew) {
   // 편집기에 장을 끼우는 길 가운데 되돌리기 기록을 이어 가도 되는 것은 showSlide 뿐이다(장 넘기기 · 장 더하기/지우기 · 되돌리기).
   // 그 밖의 길(찾아 바꾸기 · 개요 · 가져오기 · 같이 고치기 · 다시 불러오기)은 다른 장까지 바꾸므로 기록을 비운다.
   const setRaw = O.editor.setDesign, forgetRaw = O.editor.forget;
-  O.editor.setDesign = (next, opts) => { if (!opts?.kept) dropUndo(O); return setRaw(next, opts); };
+  O.editor.setDesign = (next, opts) => { if (!opts?.kept) dropUndo(O); const result = setRaw(next, opts); syncHtmlWorkspace(O); return result; };
   O.editor.forget = () => { dropUndo(O); forgetRaw(); };
   const down = el('button', { class: 'btn btn-primary cv-down-btn', type: 'button', title: '그림·영상·PPTX로 내려받아요', onClick: () => askDownload(O, down) }, ...face('download', '내려받기'));
   let acceptsMaterial = false;
@@ -979,6 +980,7 @@ function openDesign(record, isNew) {
     el('span', { class: 'onba-editor-logo' }, onbatangLogo()), ...(embedBar.close ? [embedBar.close, el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' })] : []),
     el('div', { class: 'cv-document-name' }, name, O.status), documentMenu([['자료 관리', historyButton(O)], ['도움말', tourButton('editor', O)]]), el('span', { class: 'cv-bar-gap' }), embedBar.done) : null;
   const shell = editorShell(O, embedHeader || bar);
+  syncHtmlWorkspace(O);
   // ? : 꾸미는 화면 단축키 표(글을 쓰는 칸에서는 그냥 글자다). 아무 데도 누르지 않은 때에도 듣도록 문서에 단다.
   const onHelpKey = (e) => {
     if (!shell.isConnected) { document.removeEventListener('keydown', onHelpKey); return; }
@@ -996,7 +998,8 @@ function openDesign(record, isNew) {
   O.materialLoadingPromise=loadMaterialNavigation(O);
   // 처음 꾸미는 화면을 열면 사용법 안내를 한 번 보여 준다(이 기기에서 한 번). 언제든 ? 단추로 다시 본다.
   // 안내를 이미 본 기기에는 새 기능이 들어온 뒤 처음 열 때 새 기능 안내를 한 번 보여 준다(처음 온 기기의 안내에는 이미 들어 있다).
-  if (embedMode) { markTourSeen('editor'); markTourSeen(NEWS_KEY); }   // 들여쓰기는 바로 꾸민다(사용법은 ? 단추로)
+  if (embedMode) { markTourSeen('editor'); markTourSeen(NEWS_KEY); }
+  else if (O.slides[O.at]?.web?.html) { /* HTML은 원본 화면을 가리지 않는다. */ }
   else if (!tourSeen('editor')) {
     const first = firstVisit(new Set(O.materialDeck ? O.materialDeck.documents.map((r) => r.id) : [O.record.id]));
     markTourSeen('editor');
@@ -1044,10 +1047,12 @@ function editorShell(O, bar) {
       el('button', { class: 'btn cv-pages-toggle', type: 'button', 'aria-expanded': 'false' }, ...face('layers', '장 목록')),
       O.editor.historyTools,
       el('span', { class: 'cv-canvas-label', text: '편집 캔버스' }),
+      el('button', {class: 'btn cv-html-action', type: 'button', onClick: () => openHtmlTextEditor(O)}, '글 수정'),
+      el('button', {class: 'btn cv-html-action', type: 'button', onClick: () => { O.editor.openTab('upload'); O.workspace.openTools(); }}, 'HTML 설정'),
       // AI-G 도우미: 장을 다듬어 달라고 부탁하거나(AI-G 를 이어 준 곳), AI 없이 움직임을 자동으로 다듬는다. 오른쪽 속성 칸 자리에 열린다.
       el('button', { class: 'cv-assist-toggle', type: 'button', 'aria-expanded': 'false', dataset: { assistToggle: '' }, title: 'AI-G 도우미: 장을 다듬고 움직임을 입혀요', onClick: () => toggleAssist(O) }, gaiOwl(), el('span', { class: 'cv-lbl', text: 'AI-G 도우미' })),
       el('button', { class: 'btn cv-properties-toggle', type: 'button', 'aria-expanded': 'false' }, ...face('pencil', '속성'))),
-    canvasBox,
+    canvasBox, O.htmlHost = el('div', {class: 'cv-html-live', hidden: true, dataset: {htmlWorkspace: ''}}),
     O.editor.notes);
   const properties = el('aside', { class: 'cv-properties cv-tools', 'aria-label': '선택 속성' },
     el('button', { class: 'cv-properties-close', type: 'button', 'aria-label': '속성 닫기' }, ic('close')),
@@ -1058,11 +1063,33 @@ function editorShell(O, bar) {
   O.assistBox = el('aside', { class: 'cv-assist', 'aria-label': 'AI-G 도우미' });
   const shell = O.shell = el('div', { class: 'cv-app cv-page-workspace folded' }, bar, O.alert, side, O.strip, work, properties, O.assistBox);
   O.workspace = bindEditorWorkspace(shell);
-  if (O.slides[O.at]?.web?.html) O.workspace.openTools();
+  O.htmlWorkspace = createHtmlWorkspace(O.htmlHost);
   // 좁은 화면에서 장 목록 · 속성 서랍을 열거나 Esc 를 누르면 도우미 칸은 닫는다(서랍이 겹치지 않게)
   shell.addEventListener('click', (e) => { if (e.target.closest?.('.cv-pages-toggle, .cv-properties-toggle')) toggleAssist(O, false); }, true);
   shell.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !e.defaultPrevented && shell.classList.contains('assist-open') && O.assistBox.contains(e.target)) { toggleAssist(O, false); e.preventDefault(); } });
   return shell;
+}
+function syncHtmlWorkspace(O) {
+  if (!O.htmlWorkspace || O.closed || O.htmlPresenting) return;
+  const design = O.editor.getDesign(), html = !!design.web?.html;
+  const changed = O.shell.classList.contains('cv-html-mode') !== html;
+  O.shell.classList.toggle('cv-html-mode', html);
+  O.shell.querySelector('.cv-canvas-label').textContent = html ? 'HTML 원본' : '편집 캔버스';
+  if (changed) O.workspace.showCanvas();
+  O.htmlWorkspace.show(design);
+}
+function openHtmlTextEditor(O) {
+  if (O.closed || O.leaving || O.recoveryRequired || O.inlineImport || videoBusy(O)) return;
+  const design = O.editor.getDesign(), source = design.web?.html;
+  if (!source) return;
+  const trigger = document.activeElement;
+  editHtmlText(source, html => {
+    const current = O.editor.getDesign();
+    if (O.closed || O.leaving || O.recoveryRequired || current.id !== design.id || current.web?.html !== source) throw Error('자료가 바뀌었어요. 글 수정을 다시 열어 주세요.');
+    const changed = O.editor.replaceHtml(html);
+    if (changed) toast('글을 바꿨어요. 실행 취소로 되돌릴 수 있어요.');
+    return changed;
+  }, () => trigger?.isConnected && trigger.focus({preventScroll: true}));
 }
 // ---------- AI-G 도우미(옆 칸) ----------
 /** 도우미 칸을 열고 닫는다(open 을 주지 않으면 번갈아). 처음 열 때 칸을 만든다. */
@@ -2890,6 +2917,7 @@ async function present(O) {
     document.removeEventListener('fullscreenchange', onFull);
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     overlay.remove();
+    O.htmlPresenting = false; syncHtmlWorkspace(O);
     document.body.classList.remove('modal-open');
     if(O.recoveryRequired){closeDesign(O);return;}
     if(rehearsed?.length)offerRehearsal(O,rehearsed);
@@ -2930,6 +2958,7 @@ async function present(O) {
   if (audienceBtn) audienceBtn.dataset.showAudience = '';
   overlay.querySelector('.cv-show-bar').append(...tools.buttons, ...(voiceBtn ? [voiceBtn] : []), ...(remoteBtn ? [remoteBtn] : []), ...(audienceBtn ? [audienceBtn] : []), btn([ic('close'), word('끝내기')], '발표 끝내기 (Esc)', close));
   overlay.addEventListener('pointermove', takeKeys);       // 웹사이트를 조작하다 마우스가 사이트 밖으로 나오면 글쇠를 돌려받는다
+  O.htmlPresenting = true; O.htmlWorkspace?.destroy(); // 발표 뒤에서 같은 HTML의 소리와 동작이 겹치지 않게 한다.
   document.body.append(overlay);
   document.body.classList.add('modal-open');
   draw();
@@ -3065,6 +3094,7 @@ function setStatus(O, text, cls = '') {
 }
 function touched(O) {
   if (O.closed||O.recoveryRequired) return;
+  syncHtmlWorkspace(O);
   O.co?.changed();                       // 같이 고치는 중이면 고친 것을 조금 모았다가 나눈다
   clearTimeout(O.thumbTimer);
   O.thumbTimer = setTimeout(() => refreshThumb(O), 300);
@@ -3138,6 +3168,7 @@ async function leaveEditor(O, { requireSaved = false, waitForSync = false, tidy 
   O.stripDrag?.destroy();
   O.tray?.destroy();
   O.workspace?.destroy();
+  O.htmlWorkspace?.destroy();
   O.assist?.destroy();O.assist=null;
   if (accountFor(O.record)) {
     const uploading = pusher.flush(O.record.id);
@@ -4678,7 +4709,7 @@ async function importHtml(file) {
     S.list = await listDesigns();
     app.inert = wasInert; loading.node.remove();
     if (!S.open) openDesign(saved, false);
-    toast('HTML 전용 모드로 가져왔어요. 발표에서 바로 버튼을 누르고 사용할 수 있어요. 별도 폴더의 그림·코드는 파일에 함께 넣어 주세요.', 8000);
+    toast('HTML을 열었어요. 바로 조작하고, 위의 ‘글 수정’에서 문구를 바꿀 수 있어요.', 4500);
     return true;
   } catch (error) {
     console.warn(error);

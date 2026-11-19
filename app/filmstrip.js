@@ -100,7 +100,7 @@ export function bindPageRail(strip,{key,navigation=()=>({}),step=()=>{}}={}){
     const state=navigation();
     for(const button of strip.querySelectorAll('[data-tray-step]'))button.disabled=Number(button.dataset.trayStep)<0?!state.previous:!state.next;
     const count=strip.querySelector('.cv-slide-count');
-    const label=shell.querySelector('.cv-canvas-label');if(label&&count)label.textContent=`${count.textContent} · 편집 캔버스`;
+    const label=shell.querySelector('.cv-canvas-label');if(label&&count)label.textContent=`${count.textContent} · ${shell.classList.contains('cv-html-mode')?'HTML 원본':'편집 캔버스'}`;
     if(wasCollapsed&&!collapsed)revealSelected(strip);
   }
   on(strip,'click',event=>{
