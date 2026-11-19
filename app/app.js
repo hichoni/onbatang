@@ -538,7 +538,7 @@ function render() {
           const button = event.currentTarget; button.disabled = true;
           try { await importAction.open(); } catch (error) { console.warn(error); toast('가져오기 화면을 열지 못했어요. 다시 시도해주세요.'); }
           finally { button.disabled = false; }
-        } }, importAction.label) : null, ...fileOpenButton(loading), ...pdfOpenButton(loading));
+        } }, importAction.label) : null, ...fileOpenButton(loading), ...pdfOpenButton(loading), ...htmlOpenButton(loading || full));
   const tools = homeMenu('more', '더보기', tourButton('home'), newsButton(),
         cloudAction ? el('button',{class:'btn cv-cloud-btn',type:'button',disabled:loading,dataset:{cloudAction:''},title:cloudAction.title||'',onClick:()=>openHomeWorkspace(cloudAction)},...face('cloud',cloudAction.label)) : null,
         accountAction ? el('button',{class:'btn cv-account-btn',type:'button',disabled:loading,dataset:{accountAction:''},onClick:()=>openHomeWorkspace(accountAction)},accountAction.label) : null,
@@ -2674,7 +2674,7 @@ async function present(O) {
       onClick: (e) => { e.stopPropagation(); webMode(on ? 'view' : 'use'); } },
     ic('cursor'), el('span', { class: 'cv-web-switch', 'aria-hidden': 'true' }, el('i')), el('b', { class: 'cv-web-state', 'aria-hidden': 'true', text: on ? 'ON' : 'OFF' }));
     web.pill.replaceChildren(...(on ? [webIcon('left', '앞 장', () => go(-1), { webPrev: '' }), webIcon('right', '다음 장', () => go(1), { webNext: '' })] : []),
-      toggle, webIcon('external', '이 사이트를 새 창으로 열기', () => openSite(web.url), { webOpen: '' }));
+      toggle, ...(web.url ? [webIcon('external', '이 사이트를 새 창으로 열기', () => openSite(web.url), { webOpen: '' })] : []));
   };
   // 사이트 위에 마우스가 있는 동안에는 이 화면(발표)에 마우스 알림이 오지 않는다: 알림이 오면 마우스가 사이트 밖(위 · 아래 막대 등)에 있는 것이다.
   // 장 전체 사이트 · 웹사이트 상자 · 유튜브 모두: 글쇠를 가져간 사이트 밖으로 마우스가 나오면 발표가 돌려받는다.
@@ -2703,11 +2703,11 @@ async function present(O) {
       status.append(el('b', { text: `${blocked}은(는) 다른 화면 안에 넣는 것을 막아 두었어요` }), el('span', { text: '새 창으로 열어 보여 주고, 이 창으로 돌아와 이어서 발표해요.' }),
         webKey([ic('screen'), el('span', { text: `${webHost(url)} 새 창으로 열기` })], '이 사이트를 새 창으로 열기', () => openSite(url), { webOpen: '' }));
     } else {
-      status.append(el('span', { text: `${webHost(url)} 여는 중…` }));
+      status.append(el('span', { text: `${site.filename || webHost(url)} 여는 중…` }));
       const me = web;   // 켜 둔 사이트는 숨긴 동안에 다 열릴 수 있다: 지금 보이는 것이 아니라 이 사이트를 본다
       frame.addEventListener('load', () => { clearTimeout(me.slow); status.hidden = true; });
       // 오래 걸리면(또는 사이트가 막아 둔 곳이면) 새 창으로 여는 길을 알려 준다.
-      web.slow = setTimeout(() => { if (!status.hidden) status.replaceChildren(el('span', { text: '사이트가 열리지 않으면 오른쪽 위의 새 창 단추로 열어요.' })); }, 10000);
+      web.slow = setTimeout(() => { if (!status.hidden) status.replaceChildren(el('span', { text: site.html ? 'HTML을 여는 중이에요. 파일에 필요한 그림과 코드가 함께 있는지 확인해 주세요.' : '사이트가 열리지 않으면 오른쪽 위의 새 창 단추로 열어요.' })); }, 10000);
       // 사이트 밖으로 마우스가 나오면 글쇠를 발표로 돌려받는다(사이트 안의 글쇠는 발표가 들을 수 없다).
       frame.addEventListener('mouseleave', takeKeys);
       paintWebPill();
@@ -4593,7 +4593,7 @@ function fileOpenButton(loading) {
 }
 
 // ---------- 첫 화면에 파일 끌어다 놓기 ----------
-// 내 그림(첫 화면) 어디에든 온바탕 파일(.onbatang) · PPT(.pptx) · PDF 를 끌어다 놓으면 '파일 가져오기'의 단추와 같은 길로 연다.
+// 내 그림(첫 화면) 어디에든 온바탕 파일(.onbatang) · PPT(.pptx) · PDF · HTML 을 끌어다 놓으면 같은 가져오기 경로로 연다.
 // 첫 화면이 아니거나(꾸미는 화면 · 가져오기 화면), 창이 떠 있거나, 목록을 읽거나 무엇을 여는 중이면 건드리지 않는다.
 // 첫 화면에서는 열 수 없는 파일을 놓아도 브라우저가 그 파일로 넘어가 버리지 않게 막고 무엇을 놓을 수 있는지 알려 준다.
 function dropKind(file) {
@@ -4601,9 +4601,10 @@ function dropKind(file) {
   if (name.endsWith('.onbatang')) return 'onbatang';
   if (name.endsWith('.pptx')) return importAction?.homeFile ? 'pptx' : '';
   if (name.endsWith('.pdf') || file?.type === 'application/pdf') return 'pdf';
+  if (/\.html?$/.test(name) || file?.type?.split(';')[0].trim().toLowerCase() === 'text/html') return 'html';
   return '';
 }
-const dropKinds = () => ['온바탕 파일(.onbatang)', importAction?.homeFile ? 'PPT(.pptx)' : '', 'PDF'].filter(Boolean).join(' · ');
+const dropKinds = () => ['온바탕 파일(.onbatang)', importAction?.homeFile ? 'PPT(.pptx)' : '', 'PDF', 'HTML(.html · .htm)'].filter(Boolean).join(' · ');
 function bindHomeDrop() {
   const kinds = el('span', { class: 'cv-drop-kinds' });
   const zone = el('div', { class: 'cv-drop-zone', hidden: true, 'aria-hidden': 'true' },
@@ -4639,11 +4640,46 @@ function bindHomeDrop() {
     const file = dropped[0], kind = dropKind(file);
     if (kind === 'onbatang') void openOnbatangFile(file);
     else if (kind === 'pdf') void importPdf(file);
+    else if (kind === 'html') void importHtml(file);
     else if (kind === 'pptx') void openHomeWorkspace(importAction, file);
     else toast(`여기에는 ${dropKinds()}만 놓을 수 있어요.`, 5000);
   });
   window.addEventListener('dragend', hide);
   window.addEventListener('blur', hide);
+}
+
+// ---------- HTML 가져오기: 파일 전체를 실행 가능한 웹 장 하나로 보관 ----------
+function htmlOpenButton(loading) {
+  const input = el('input', {type: 'file', hidden: true, accept: '.html,.htm,text/html', 'aria-label': 'HTML 파일 선택', dataset: {htmlInput: ''}, onChange: async () => {
+    const file = input.files?.[0]; input.value = '';
+    if (file) { button.disabled = true; try { await importHtml(file); } finally { button.disabled = false; } }
+  }});
+  const button = el('button', {class: 'btn cv-html-open-btn', type: 'button', disabled: loading, dataset: {htmlOpen: ''}, title: 'HTML 파일을 한 장으로 가져와 발표에서 실행해요(25MB까지). 그림·코드가 파일 안에 포함된 HTML을 사용해 주세요.', onClick: () => input.click()}, ...face('upload', 'HTML 가져오기'));
+  return [button, input];
+}
+let importingHtml = false;
+async function importHtml(file) {
+  if (S.open || moving || importingHtml || !file) return false;
+  if (homeEntries(S.list || [], homeGroups(S.list || [])).length >= MAX_DESIGNS) { toast(`이 브라우저에는 그림을 ${MAX_DESIGNS}개까지 둘 수 있어요. 안 쓰는 그림을 지우고 다시 가져와 주세요.`, 7000); return false; }
+  importingHtml = true;
+  const wasInert = app.inert; app.inert = true;
+  const loading = onbatangLoading({title: 'HTML을 가져오고 있어요', detail: '파일의 화면과 코드를 함께 보관해요.'});
+  loading.node.classList.add('cv-copy-loading'); document.body.append(loading.node);
+  try {
+    const {readHtmlFile} = await import('./html-import.js');
+    const record = await readHtmlFile(file);
+    const saved = await putDesign(record); upsert(saved);
+    if (accountFor(saved)) pusher.queue(saved);
+    S.list = await listDesigns();
+    app.inert = wasInert; loading.node.remove();
+    if (!S.open) openDesign(saved, false);
+    toast('HTML을 가져왔어요. 발표에서 열고 ‘사이트 둘러보기’를 켜면 버튼을 누를 수 있어요. 별도 폴더의 그림·코드는 파일에 함께 넣어 주세요.', 8000);
+    return true;
+  } catch (error) {
+    console.warn(error);
+    toast(error?.message || 'HTML을 가져오지 못했어요. 파일과 저장 공간을 확인해 주세요.', 7000);
+    return false;
+  } finally { importingHtml = false; loading.node.remove(); app.inert = wasInert; }
 }
 
 // ---------- PDF 가져오기(pdf-import.js): 쪽마다 그 쪽 그림(잠금) 한 장 · 고르면 쪽의 글은 발표자 노트로. 20쪽이 넘으면 파트로 ----------
@@ -4816,6 +4852,7 @@ async function makeHtmlLesson(O,{notes=false}={}){
         if(flow)pages[pages.length-1].flow=flow;
       }
       if (value.page.source?.pageNumber) pages[pages.length-1].sourcePage=value.page.source.pageNumber;
+      if (value.page.web?.html) pages[pages.length-1].web = value.page.web;
       htmlBytes+=new TextEncoder().encode(JSON.stringify(pages[pages.length-1])).length;
       if(htmlBytes>200_000_000)throw Error('수업 파일이 너무 커요. 슬라이드를 나누어 다시 내려받아 주세요.');
     }

@@ -3,6 +3,7 @@
 // 사이트가 "다른 화면 안에 넣지 마"라고 막아 두면(X-Frame-Options · frame-ancestors) 어떤 도구로도 넣을 수 없다:
 // 잘 알려진 곳은 넣을 때 미리 알리고(blockedSite), 발표 화면에는 늘 "새 창으로 열기"를 둔다.
 
+import {cleanHtmlFile} from './html-file.js';
 export const WEB_URL_MAX = 2000;
 
 // 잘 알려진, 다른 화면 안에 넣는 것을 막아 둔 곳(주소의 이름 끝으로 견준다). 막지 않는 하위 주소는 embedOf 가 먼저 바꾼다.
@@ -32,6 +33,8 @@ export function cleanWebUrl(raw) {
 /** 디자인의 웹사이트 장: { web: { url } } 또는 빈 객체. */
 // keep: 발표 중 다른 장으로 넘겨도 사이트를 끄지 않고 켜 둔다(돌아오면 하던 그대로). 켠 때에만 적는다.
 export function designWeb(design) {
+  const file = cleanHtmlFile(design?.web);
+  if (file) return { web: { ...file, ...(design.web.keep === true ? { keep: true } : {}) } };
   const url = cleanWebUrl(design?.web?.url);
   return url ? { web: { url, ...(design.web.keep === true ? { keep: true } : {}) } } : {};
 }

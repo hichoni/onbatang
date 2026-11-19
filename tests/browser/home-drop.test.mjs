@@ -1,4 +1,4 @@
-// 첫 화면에 파일 끌어다 놓기: 온바탕 파일(.onbatang) · PPT(.pptx) · PDF 를 내 그림 어디에 놓아도 '파일 가져오기'의 단추와 같은 길로 연다.
+// 첫 화면에 파일 끌어다 놓기: 온바탕 파일(.onbatang) · PPT(.pptx) · PDF · HTML(.html · .htm) 를 내 그림 어디에 놓아도 '파일 가져오기'의 단추와 같은 길로 연다.
 // 끌고 들어오면 무엇을 놓을 수 있는지 덮어 알려 주고, 나가면 걷는다. 열 수 없는 파일 · 여러 파일은 알리기만 하고 브라우저가 파일로 넘어가지 않게 막는다.
 // 꾸미는 화면에서는 건드리지 않는다.
 import test from 'node:test';
@@ -53,7 +53,7 @@ test('home screen: dropping an .onbatang file, a PPTX or a PDF anywhere opens it
   assert.ok(await page.evaluate(() => window.dragFiles('dragenter', [new File(['x'], 'a.txt')])));
   await zone.waitFor();
   assert.equal(await zone.locator('b').textContent(), '여기에 놓으면 열어요');
-  assert.equal(await zone.locator('.cv-drop-kinds').textContent(), '온바탕 파일(.onbatang) · PPT(.pptx) · PDF');
+  assert.equal(await zone.locator('.cv-drop-kinds').textContent(), '온바탕 파일(.onbatang) · PPT(.pptx) · PDF · HTML(.html · .htm)');
   assert.ok(await page.evaluate(() => window.dragFiles('dragover', [new File(['x'], 'a.txt')])), 'the home screen accepts the drag');
   assert.equal(await zone.evaluate(z => getComputedStyle(z).pointerEvents), 'none');
   await page.evaluate(() => { window.dragFiles('dragenter', [new File(['x'], 'a.txt')], '.cv-hero'); window.dragFiles('dragleave', [new File(['x'], 'a.txt')]); });
@@ -63,7 +63,7 @@ test('home screen: dropping an .onbatang file, a PPTX or a PDF anywhere opens it
 
   // 열 수 없는 파일 · 여러 파일: 막고 알려 준다(브라우저가 파일로 넘어가지 않는다).
   assert.ok(await page.evaluate(() => window.dragFiles('drop', [new File(['x'], '메모.txt')])));
-  await toast('여기에는 온바탕 파일(.onbatang) · PPT(.pptx) · PDF만 놓을 수 있어요.');
+  await toast('여기에는 온바탕 파일(.onbatang) · PPT(.pptx) · PDF · HTML(.html · .htm)만 놓을 수 있어요.');
   assert.ok(await page.evaluate(() => window.dragFiles('drop', [new File(['x'], 'a.pdf'), new File(['y'], 'b.pdf')])));
   await toast('파일은 한 번에 하나씩 놓아 주세요.');
   assert.equal(new URL(page.url()).pathname, '/drop.html');

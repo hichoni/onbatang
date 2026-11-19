@@ -351,7 +351,7 @@ export async function createPptx({slides, aspect = 16 / 9, size, title = '온바
     }
     if (design.video || design.pa || design.tr || design.items.some(item => (item.an && item.an !== 'none') || item.em || item.ex || item.aw || (item.lp && item.lp !== 'none'))) pageWarn('STATIC_EXPORT', '움직임과 소리는 포함하지 않고 현재 그림을 저장해요.');
     // 웹사이트 장: PowerPoint 에는 사이트가 들어가지 않는다(표지 그림 · 주소만).
-    if (design.web) pageWarn('WEB_AS_PICTURE', `웹사이트 장은 표지 그림으로 저장해요. 주소: ${design.web.url}`);
+    if (design.web) pageWarn('WEB_AS_PICTURE', design.web.html ? `HTML 장은 표지 그림으로 저장해요. 파일: ${design.web.filename}` : `웹사이트 장은 표지 그림으로 저장해요. 주소: ${design.web.url}`);
     if (mode === 'image') await raster(await cancellable(renderSlide(original, options), signal), `슬라이드 ${pageNumber}`);
     else {
       if (design.video || design.web || !/^#[a-f0-9]{6}$/i.test(backgroundOf(design.bg).bg)) {
