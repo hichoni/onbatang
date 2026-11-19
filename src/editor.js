@@ -4400,10 +4400,10 @@ export function createEditor({
   function webPane() {
     if (card.web?.html) return [
       el('div', { class: 'fe-head', text: 'HTML 전용 모드' }),
-      el('p', { class: 'fe-note', text: 'HTML 원본의 화면·스타일·코드를 그대로 보관해요. 위의 발표를 누르면 버튼과 입력창을 바로 사용할 수 있어요.' }),
+      el('p', { class: 'fe-note', text: 'HTML을 열면 원본 화면이 바로 나타나고 버튼과 입력창을 사용할 수 있어요. 위의 글 수정에서 원본 문구를 바꿔요.' }),
       el('div', { class: 'fe-web-now', dataset: { htmlNow: '' } },
         el('b', { text: card.web.filename }),
-        el('span', { class: 'fe-note', text: '내용을 고치려면 원본 HTML을 수정하고 다시 가져와 주세요. 별도 폴더의 그림·코드는 HTML 파일에 함께 넣어 주세요.' }),
+        el('span', { class: 'fe-note', text: '글 수정은 여기서 할 수 있어요. 화면 배치나 동작을 고치려면 원본 HTML을 수정해 다시 가져와 주세요.' }),
         el('label', { class: 'fe-web-keep' },
           el('input', { type: 'checkbox', checked: card.web.keep === true, dataset: { webKeep: '' }, onChange: e => setWebKeep(e.target.checked) }),
           el('span', {}, el('b', { text: '넘겨도 켜 두기' }), el('small', { class: 'fe-note', text: '다른 장으로 넘겨도 HTML을 닫지 않아요. 돌아오면 입력한 내용과 진행 상태가 그대로 이어져요.' }))),
@@ -4996,6 +4996,15 @@ export function createEditor({
 
   const api = {
     stage, toolbar, panel, historyTools, mount, setDesign, setSelectionSurface,
+    /** 원본 HTML의 글 수정도 일반 편집처럼 실행 취소·저장에 포함한다. */
+    replaceHtml: html => {
+      if (!card?.web?.html || typeof html !== 'string' || html === card.web.html) return false;
+      const next = designWeb({web: {...card.web, html}}).web;
+      if (!next?.html) throw Error('HTML 파일은 25MB까지 저장할 수 있어요.');
+      remember(); card.web = next;
+      renderStage(); renderPanel(); onChange();
+      return true;
+    },
     /** 발표자 노트 칸(접고 펴는 칸). 프로젝트가 그림 아래 등 원하는 자리에 놓는다. 놓지 않으면 노트는 그대로 저장만 된다. */
     notes,
     /** 장(슬라이드) 자체의 표시를 바꾼다: hidden(발표에서 건너뛰기) · topic · dur(리허설 시간) · voice(녹음한 목소리). 그림이 아니라서 되돌리기 기록에는 넣지 않는다. */

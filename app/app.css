@@ -1395,6 +1395,26 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero{overflow:visible;z
 .cv-page-workspace .cv-properties .fe-pos-grid{min-width:0}
 .cv-page-workspace .cv-properties .fe-btn{min-width:0;white-space:normal}
 .cv-pages-toggle,.cv-properties-toggle,.cv-properties-close{display:none}
+/* HTML documents run directly in the workspace; covers remain for thumbnails and exports. */
+.cv-html-live{position:relative;grid-row:2;min-width:0;min-height:0;overflow:hidden;background:white}
+.cv-html-live[hidden],.cv-html-live>iframe[hidden]{display:none!important}
+.cv-html-live>iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:block;pointer-events:auto}
+.cv-html-action{display:none}
+.cv-page-workspace.cv-html-mode>.cv-work{grid-column:2/-1}
+.cv-html-mode>.cv-properties,.cv-html-mode>.cv-assist,.cv-html-mode .cv-canvas,
+.cv-html-mode .cv-side .fe-tabs,.cv-html-mode .cv-side .fe-subtools,.cv-html-mode .fe-upload-tabs,
+.cv-html-mode .cv-work-head>.cv-assist-toggle,.cv-html-mode .cv-work-head>.cv-properties-toggle{display:none!important}
+.cv-html-mode .cv-html-action{display:inline-flex;flex:none;padding:6px 10px;min-height:34px;font-size:12px}
+.cv-html-mode .cv-canvas-label{margin-right:auto}
+.cv-html-text-editor{display:grid;gap:12px;min-width:0}
+.cv-html-text-editor h2,.cv-html-text-editor p{margin:0}
+.cv-html-text-editor p{font-size:14px;line-height:1.6}
+.cv-html-text-editor label{display:grid;gap:6px}
+.cv-html-text-editor :is(input,select,textarea){width:100%;min-width:0;padding:10px;border:1px solid var(--cv-line);border-radius:8px;background:white;color:var(--text);font:inherit}
+.cv-html-text-editor select{max-width:100%}
+.cv-html-text-editor option{padding:7px;white-space:normal;overflow-wrap:anywhere}
+.cv-html-text-editor textarea{resize:vertical;min-height:100px}
+.cv-html-text-editor>.row{justify-content:flex-end}
 .cv-page-workspace.inline-importing>.cv-work{grid-column:2/-1}
 .cv-page-workspace.inline-importing>.cv-properties,.cv-page-workspace.inline-importing .fe-tabbody{display:none}
 @media(min-width:900px) and (max-width:1100px){
@@ -1418,7 +1438,7 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero{overflow:visible;z
  .cv-page-workspace .cv-bar-gap{display:none}
  .cv-page-workspace .cv-side .fe-tabs{grid-column:1;padding:4px 8px;gap:2px}
  .cv-page-workspace .cv-side .fe-tab{padding:5px 10px;min-height:40px}
- .cv-page-workspace>.cv-work,.cv-page-workspace.inline-importing>.cv-work{grid-column:1}
+ .cv-page-workspace>.cv-work,.cv-page-workspace.inline-importing>.cv-work,.cv-page-workspace.cv-html-mode>.cv-work{grid-column:1}
  .cv-page-workspace .cv-work-head{gap:8px;padding:5px 10px;min-height:48px}
  .cv-page-workspace .cv-canvas-label{margin-right:auto}
  .cv-page-workspace .cv-pages-toggle,.cv-page-workspace .cv-properties-toggle{display:flex;flex:none;min-height:36px;padding:6px 9px;font-size:12px;border:1px solid var(--cv-line);background:#fffdf8}

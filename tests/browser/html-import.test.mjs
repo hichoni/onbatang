@@ -17,7 +17,7 @@ const fixture = `<!doctype html><meta charset="utf-8"><meta name="viewport" cont
 import {startMinican} from '/app/app.js';import {listDesigns,putDesign} from '/app/store.js';import {markTourSeen,NEWS_KEY} from '/app/tour.js';
 for(const name of ['home','editor',NEWS_KEY])markTourSeen(name);window.listDesigns=listDesigns;window.putDesign=putDesign;
 await startMinican({storage:'html-import-test'});window.ready=true;</script>`;
-test('choose and drop HTML, reopen, run isolated interactions, export an executable offline HTML', options, async t => {
+test('HTML runs on open, supports text edits and undo, preserves isolation and exports edited offline HTML', options, async t => {
   const server = createServer(async (req, res) => {
     try {
       const p = new URL(req.url, 'http://x').pathname;
@@ -33,17 +33,61 @@ test('choose and drop HTML, reopen, run isolated interactions, export an executa
   const page = await browser.newPage({viewport: {width: 1280, height: 820}}), errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/fixture.html`); await page.waitForFunction(() => window.ready);
+  const draftChecks = await page.evaluate(async () => {
+    const {htmlTextDraft} = await import('/app/html-workspace.js');
+    const source = '<!doctype html><!--keep--><style>.a{color:red}</style><h1>A &amp; B</h1><p hidden>hidden</p><textarea>input</textarea><script>window.draftExecuted=true;</script>';
+    const draft = htmlTextDraft(source);
+    const first = draft.apply(new Map([['0','<img onerror="alert(1)">']]));
+    const second = draft.apply(new Map([['0','두 번째']]));
+    return {fields:draft.fields.map(f=>f.text), untouched:htmlTextDraft(source).apply(new Map())===source,
+      escaped:first.includes('&lt;img onerror="alert(1)"&gt;'), script:first.includes('<script>window.draftExecuted=true;</script>'),
+      comment:first.includes('<!--keep-->'), second:second.includes('<h1>두 번째</h1>'), executed:!!window.draftExecuted};
+  });
+  assert.deepEqual(draftChecks,{fields:['A & B'],untouched:true,escaped:true,script:true,comment:true,second:true,executed:false});
   await page.locator('[data-home-menu=import] > summary').click();
   const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.locator('[data-html-open]').click()]);
   await chooser.setFiles({name: '수업.HTML', mimeType: 'text/html', buffer: Buffer.from(html)});
-  await page.locator('.cv-canvas .fe-web-host').filter({hasText: '수업.HTML'}).waitFor();
-  await page.locator('[data-html-now]').filter({hasText: '수업.HTML'}).waitFor();
-  assert.equal(await page.getByRole('tab', {name: 'HTML 자료', exact: true}).getAttribute('aria-selected'), 'true');
-  assert.equal(await page.getByRole('textbox', {name: '웹사이트 주소', exact: true}).count(), 0);
+  const workspace = page.frameLocator('[data-html-workspace] iframe:not([hidden])');
+  await workspace.locator('#status').filter({hasText: 'isolated'}).waitFor();
+  assert.equal(await page.locator('.cv-show').count(), 0, 'HTML runs without starting a presentation');
+  await workspace.locator('#count').click();
+  assert.equal(await workspace.locator('#count').textContent(), '완료');
+  await page.getByRole('textbox', {name: '그림 이름', exact:true}).fill('HTML 바로 쓰기');
+  assert.equal(await workspace.locator('#count').textContent(), '완료', 'metadata edits do not restart HTML');
   assert.equal(await page.evaluate(() => document.body.dataset.compromised), undefined);
-  assert.equal(await page.locator('iframe[srcdoc]').count(), 0, 'no uploaded code runs in the editor');
+  assert.ok(!(await page.locator('[data-html-workspace] iframe').getAttribute('sandbox')).includes('allow-same-origin'));
+  assert.equal(await page.locator('.cv-strip iframe').count(), 0, 'thumbnail covers remain inert');
   await page.locator('.cv-back').click(); await page.reload(); await page.waitForFunction(() => window.ready);
+  assert.equal(await page.locator('iframe[srcdoc]').count(), 0, 'closing the document disposes the running HTML');
   assert.equal((await page.evaluate(() => window.listDesigns()))[0].slides[0].web.html, html);
+  await page.locator('.cv-item .cv-thumb').first().click();
+  await workspace.locator('h1').filter({hasText:'HTML 수업'}).waitFor();
+  await page.getByRole('button',{name:'글 수정',exact:true}).click();
+  const edit = page.getByRole('dialog',{name:'HTML 글 수정',exact:true});
+  await mkdir(resolve(root,'work'),{recursive:true});
+  await page.screenshot({path:resolve(root,'work/html-text-editor.png')});
+  await edit.getByRole('listbox',{name:'수정할 글',exact:true}).selectOption({label:'HTML 수업'});
+  await edit.getByRole('textbox',{name:'바꿀 글',exact:true}).fill('바뀐 <제목> & 수업');
+  await edit.getByRole('button',{name:'저장',exact:true}).click();
+  await workspace.locator('h1').filter({hasText:'바뀐 <제목> & 수업'}).waitFor();
+  assert.equal(await workspace.locator('h1 > *').count(),0,'text editing never injects markup');
+  await workspace.locator('#count').click();
+  assert.equal(await workspace.locator('#count').textContent(),'완료','scripts still work after editing text');
+  await page.locator('.fe-history-tools .undo').click();
+  await workspace.locator('h1').filter({hasText:'HTML 수업'}).waitFor();
+  await page.locator('.fe-history-tools .redo').click();
+  await workspace.locator('h1').filter({hasText:'바뀐 <제목> & 수업'}).waitFor();
+  await page.getByRole('button',{name:'글 수정',exact:true}).click();
+  await edit.getByRole('textbox',{name:'바꿀 글',exact:true}).fill('취소한 글');
+  await edit.getByRole('button',{name:'취소',exact:true}).click();
+  assert.equal(await workspace.locator('h1').textContent(),'바뀐 <제목> & 수업');
+  await mkdir(resolve(root, 'work'), {recursive: true});
+  await page.screenshot({path:resolve(root,'work/html-import-workspace.png')});
+  await page.locator('.cv-back').click();
+  const edited = (await page.evaluate(() => window.listDesigns()))[0].slides[0].web.html;
+  assert.equal(edited.match(/<script>([\s\S]*?)<\/script>/)[1],html.match(/<script>([\s\S]*?)<\/script>/)[1]);
+  assert.equal(edited.match(/<style>([\s\S]*?)<\/style>/)[1],html.match(/<style>([\s\S]*?)<\/style>/)[1]);
+  assert.ok(edited.includes('바뀐 &lt;제목&gt; &amp; 수업'));
   await page.evaluate(async () => {
     const [record] = await window.listDesigns();
     record.slides[0].web.keep = true;
@@ -51,8 +95,16 @@ test('choose and drop HTML, reopen, run isolated interactions, export an executa
     await window.putDesign(record);
   });
   await page.reload(); await page.waitForFunction(() => window.ready);
-  await page.locator('.cv-item .cv-thumb').first().click(); await page.locator('.cv-show-btn').click();
+  await page.locator('.cv-item .cv-thumb').first().click();
+  await workspace.locator('h1').filter({hasText:'바뀐 <제목> & 수업'}).waitFor();
+  await workspace.locator('#count').click();
+  await page.locator('.cv-slide[data-slide="1"]').click();
+  await page.locator('.cv-canvas').waitFor();
+  await page.locator('.cv-slide[data-slide="0"]').click();
+  assert.equal(await workspace.locator('#count').textContent(),'완료','kept workspace HTML retains its state across slides');
+  await page.locator('.cv-show-btn').click();
   const frame = page.frameLocator('[data-show-web] iframe');
+  assert.equal(await page.locator('[data-html-workspace] iframe').count(),0,'presentation stops duplicate background execution');
   await frame.locator('#status').filter({hasText: 'isolated'}).waitFor();
   assert.ok(!(await page.locator('[data-show-web] iframe').getAttribute('sandbox')).includes('allow-same-origin'));
   assert.equal(await page.getByRole('switch', {name: 'HTML 조작', exact: true}).getAttribute('aria-checked'), 'true');
@@ -70,13 +122,21 @@ test('choose and drop HTML, reopen, run isolated interactions, export an executa
   assert.equal(await page.evaluate(() => localStorage.getItem('html-import-secret')), null);
   await mkdir(resolve(root, 'work'), {recursive: true});
   await page.screenshot({path: resolve(root, 'work/html-import-presentation.png')});
+  await page.getByRole('switch',{name:'HTML 조작',exact:true}).click();
+  await page.keyboard.press('Escape');
+  await workspace.locator('h1').filter({hasText:'바뀐 <제목> & 수업'}).waitFor();
   await page.reload(); await page.waitForFunction(() => window.ready);
   await page.setViewportSize({width:390, height:844});
   await page.evaluate(source => {
     const dt = new DataTransfer(); dt.items.add(new File([source], '둘째.htm', {type: 'text/html'}));
     document.querySelector('#app').dispatchEvent(new DragEvent('drop', {bubbles:true,cancelable:true,dataTransfer:dt}));
   }, html);
-  await page.locator('.cv-canvas .fe-web-host').filter({hasText: '둘째.htm'}).waitFor();
+  await workspace.locator('#status').filter({hasText:'isolated'}).waitFor();
+  await workspace.locator('#count').click();
+  assert.equal(await workspace.locator('#count').textContent(),'완료');
+  assert.equal(await page.locator('[data-html-workspace] iframe').getAttribute('data-scaled'),null,'HTML uses the real mobile viewport');
+  await page.screenshot({path:resolve(root,'work/html-workspace-mobile.png'),fullPage:true});
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
   assert.equal((await page.evaluate(() => window.listDesigns())).length, 2);
   await page.locator('.cv-back').click();
   await page.locator('[data-home-menu=import] > summary').click();
@@ -87,12 +147,13 @@ test('choose and drop HTML, reopen, run isolated interactions, export an executa
   assert.equal((await page.evaluate(() => window.listDesigns())).length, 2);
   // Exported lessons retain the uploaded document as executable data, including script escaping.
   const image = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aF1sAAAAASUVORK5CYII=';
-  const exported = await createHtmlLesson({title:'HTML 수업', pages:[{id:'phtml001',image,aspect:16/9,web:{html,filename:'수업.html'}}]}).text();
+  const exported = await createHtmlLesson({title:'HTML 수업', pages:[{id:'phtml001',image,aspect:16/9,web:{html:edited,filename:'수업.html'}}]}).text();
   const file = resolve(root,'work/html-import-lesson.html'); await writeFile(file, exported);
   await page.context().setOffline(true); await page.goto(pathToFileURL(file).href);
   await page.getByRole('button',{name:'HTML 열기',exact:true}).click();
   const offline = page.frameLocator('.lesson-activity iframe');
   await offline.locator('#status').filter({hasText:'isolated'}).waitFor();
+  assert.equal(await offline.locator('h1').textContent(),'바뀐 <제목> & 수업','edited text survives offline export');
   await offline.locator('#count').click(); assert.equal(await offline.locator('#count').textContent(),'완료');
   assert.deepEqual(errors, []);
 });
