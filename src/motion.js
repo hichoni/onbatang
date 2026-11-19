@@ -823,6 +823,15 @@ export const calm = reducedMotion;
 const PRIME_SKIP = new Set(['offset', 'easing', 'composite']);
 // 한 요소의 같은 속성에 여러 움직임이 함께 적을 수 있다(이어 움직이기의 나타나기 + 그 요소의 나타나기). 속성마다 원래 값을 처음 한 번만 기억하고, 그 속성을 적은 움직임이 모두 돌려줄 때 되돌린다.
 const primes = new WeakMap();
+// 낱개 속성을 품은 줄임 속성의 이름(없으면 빈 글). 줄임 속성이 var() 를 담고 있으면(도형의 둥글기: render.js 의 dressShape) 낱개 속성은
+// 빈 글로 읽힌다. 그 낱개에 시작 모습을 적었다가 "원래 없던 것"으로 알고 지우면 줄임 속성까지 사라져, 이어 움직인 둥근 네모가
+// 각진 네모로 남았다. 그래서 줄임 속성의 글을 기억해 두었다가 통째로 되돌린다.
+const SHORTHANDS = [
+  [/^border-(?:top|bottom)-(?:left|right)-radius$/, () => 'border-radius'],
+  [/^border-(?:top|right|bottom|left)-(width|color|style)$/, (m) => `border-${m[1]}`],
+  [/^(padding|margin)-(?:top|right|bottom|left)$/, (m) => m[1]],
+];
+const shorthandOf = (prop) => { for (const [re, name] of SHORTHANDS) { const m = re.exec(prop); if (m) return name(m); } return ''; };
 export function primedAnimate(node, keyframes, opts) {
   const primable = Array.isArray(keyframes) && keyframes.length > 1 && !!node.style && (opts?.fill === 'backwards' || opts?.fill === 'both');
   // 끝 키프레임에 없는 속성은 브라우저가 요소의 바탕 값으로 채운다. 시작 모습을 요소에 적어 두면 그 바탕 값이 시작 값이 되어,
@@ -850,8 +859,17 @@ export function primedAnimate(node, keyframes, opts) {
   if (!props.length) return a;
   let held = primes.get(node);
   if (!held) primes.set(node, held = new Map());
+  // 원래 값은 하나도 적기 전에 모두 읽어 둔다: 낱개 속성 하나를 적는 순간, 그것을 품은 줄임 속성은 더는 한 글로 읽히지 않는다.
+  const fresh = new Map();
+  for (const [prop] of props) {
+    if (held.has(prop) || fresh.has(prop)) continue;
+    const orig = node.style.getPropertyValue(prop);
+    const short = orig ? '' : shorthandOf(prop);
+    const whole = short && (node.style.getPropertyValue(short) || [...held.values()].find((o) => o.short === short)?.whole);
+    fresh.set(prop, { orig, count: 0, ...(whole ? { short, whole } : {}) });
+  }
   for (const [prop, value] of props) {
-    const one = held.get(prop) || { orig: node.style.getPropertyValue(prop), count: 0 };
+    const one = held.get(prop) || fresh.get(prop);
     one.count++; held.set(prop, one);
     node.style.setProperty(prop, value);
   }
@@ -863,7 +881,12 @@ export function primedAnimate(node, keyframes, opts) {
       const one = held.get(prop);
       if (!one || --one.count > 0) continue;
       held.delete(prop);
-      if (one.orig) node.style.setProperty(prop, one.orig); else node.style.removeProperty(prop);
+      if (one.orig) { node.style.setProperty(prop, one.orig); continue; }
+      // 줄임 속성에 딸린 낱개였으면: 그사이 줄임 속성을 다시 적었으면(크기가 바뀌어 둥글기를 새로 적었다) 그대로 두고,
+      // 아니면 낱개를 지운 뒤, 같은 줄임 속성의 다른 낱개를 붙든 움직임이 없을 때 줄임 속성을 통째로 다시 적는다.
+      if (one.short && node.style.getPropertyValue(one.short)) continue;
+      node.style.removeProperty(prop);
+      if (one.short && ![...held.values()].some((o) => o.short === one.short)) node.style.setProperty(one.short, one.whole);
     }
     if (!held.size && primes.get(node) === held) primes.delete(node);
   };
