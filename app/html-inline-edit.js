@@ -13,9 +13,9 @@ function inlineTextRuntime(channel) {
   }
   function at(event) {
     const caret = document.caretPositionFromPoint?.(event.clientX, event.clientY);
-    const range = caret ? null : document.caretRangeFromPoint?.(event.clientX, event.clientY);
-    const node = caret?.offsetNode || range?.startContainer;
-    if (byNode.has(node)) return {node, offset: caret?.offset ?? range.startOffset};
+    const textRange = caret ? null : document.caretRangeFromPoint?.(event.clientX, event.clientY);
+    const node = caret?.offsetNode || textRange?.startContainer;
+    if (byNode.has(node)) return {node, offset: caret?.offset ?? textRange.startOffset};
     for (const node of fields.values()) {
       if (!node.isConnected || !event.target.contains(node)) continue;
       const box = document.createRange(); box.selectNodeContents(node);
@@ -37,17 +37,17 @@ function inlineTextRuntime(channel) {
       event.preventDefault();
       const selection = getSelection();
       if (!selection.rangeCount) return;
-      const range = selection.getRangeAt(0);
-      if (!element.contains(range.commonAncestorContainer)) return;
-      range.deleteContents();
+      const textRange = selection.getRangeAt(0);
+      if (!element.contains(textRange.commonAncestorContainer)) return;
+      textRange.deleteContents();
       const text = document.createTextNode(event.clipboardData?.getData('text/plain') || '');
-      range.insertNode(text); range.setStartAfter(text); range.collapse(true); selection.removeAllRanges(); selection.addRange(range);
+      textRange.insertNode(text); textRange.setStartAfter(text); textRange.collapse(true); selection.removeAllRanges(); selection.addRange(textRange);
       changed();
     });
     element.focus();
-    const range = document.createRange();
-    range.setStart(element.firstChild || element, Math.min(offset, element.firstChild?.length || 0)); range.collapse(true);
-    const selection = getSelection(); selection.removeAllRanges(); selection.addRange(range);
+    const textRange = document.createRange();
+    textRange.setStart(element.firstChild || element, Math.min(offset, element.firstChild?.length || 0)); textRange.collapse(true);
+    const selection = getSelection(); selection.removeAllRanges(); selection.addRange(textRange);
   }
   // The preview has no source scripts or handlers. Capture native navigation too.
   document.addEventListener('click', event => {
@@ -65,8 +65,8 @@ function inlineTextRuntime(channel) {
     if (!outline || event.pointerType === 'touch' || editing) return;
     const picked = at(event); outline.hidden = !picked;
     if (!picked) return;
-    const range = document.createRange(); range.selectNodeContents(picked.node);
-    const r = range.getBoundingClientRect();
+    const textRange = document.createRange(); textRange.selectNodeContents(picked.node);
+    const r = textRange.getBoundingClientRect();
     Object.assign(outline.style, {left: `${r.left - 2}px`, top: `${r.top - 2}px`, width: `${r.width + 4}px`, height: `${r.height + 4}px`});
   }, true);
   document.addEventListener('scroll', () => { if (outline) outline.hidden = true; }, true);
