@@ -1058,6 +1058,7 @@ function editorShell(O, bar) {
   O.assistBox = el('aside', { class: 'cv-assist', 'aria-label': 'AI-G 도우미' });
   const shell = O.shell = el('div', { class: 'cv-app cv-page-workspace folded' }, bar, O.alert, side, O.strip, work, properties, O.assistBox);
   O.workspace = bindEditorWorkspace(shell);
+  if (O.slides[O.at]?.web?.html) O.workspace.openTools();
   // 좁은 화면에서 장 목록 · 속성 서랍을 열거나 Esc 를 누르면 도우미 칸은 닫는다(서랍이 겹치지 않게)
   shell.addEventListener('click', (e) => { if (e.target.closest?.('.cv-pages-toggle, .cv-properties-toggle')) toggleAssist(O, false); }, true);
   shell.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !e.defaultPrevented && shell.classList.contains('assist-open') && O.assistBox.contains(e.target)) { toggleAssist(O, false); e.preventDefault(); } });
@@ -2669,8 +2670,9 @@ async function present(O) {
   const paintWebPill = () => {
     if (!web) return;
     const on = web.mode === 'use';
-    const toggle = el('button', { class: `cv-web-toggle${on ? ' on' : ''}`, type: 'button', role: 'switch', 'aria-checked': String(on), 'aria-label': '사이트 둘러보기',
-      title: on ? '사이트 둘러보기 끄기 · 발표로 돌아가기 (Esc)' : '사이트 둘러보기 켜기 · 사이트를 직접 누르고 써요', dataset: on ? { webView: '' } : { webUse: '' },
+    const label = web.html ? 'HTML 조작' : '사이트 둘러보기';
+    const toggle = el('button', { class: `cv-web-toggle${on ? ' on' : ''}`, type: 'button', role: 'switch', 'aria-checked': String(on), 'aria-label': label,
+      title: on ? `${label} 끄기 · 발표로 돌아가기 (Esc)` : `${label} 켜기 · ${web.html ? 'HTML을' : '사이트를'} 직접 누르고 써요`, dataset: on ? { webView: '' } : { webUse: '' },
       onClick: (e) => { e.stopPropagation(); webMode(on ? 'view' : 'use'); } },
     ic('cursor'), el('span', { class: 'cv-web-switch', 'aria-hidden': 'true' }, el('i')), el('b', { class: 'cv-web-state', 'aria-hidden': 'true', text: on ? 'ON' : 'OFF' }));
     web.pill.replaceChildren(...(on ? [webIcon('left', '앞 장', () => go(-1), { webPrev: '' }), webIcon('right', '다음 장', () => go(1), { webNext: '' })] : []),
@@ -2681,18 +2683,21 @@ async function present(O) {
   const takeKeys = () => { const at = document.activeElement; if (at?.tagName === 'IFRAME' && overlay.contains(at)) overlay.focus({ preventScroll: true }); };
   const mountWeb = (site, slideId = '') => {
     const url = site.url, blocked = blockedSite(url), key = `${slideId} ${url}`;
+    // 가져온 HTML은 처음 열거나 돌아올 때 바로 쓴다. 주소로 넣은 사이트는 보기부터 시작한다.
+    const html = !!site.html, mode = html ? 'use' : 'view';
     const kept = !blocked && site.keep === true ? keptWeb.get(key) : null;
     if (kept) {
       web = kept;
       delete web.host.dataset.away; web.host.inert = false;
+      web.mode = mode; web.host.dataset.mode = mode;
       paintWebPill();
       return;
     }
-    const pill = el('div', { class: 'cv-web-pill', role: 'group', 'aria-label': '웹사이트' });
+    const pill = el('div', { class: 'cv-web-pill', role: 'group', 'aria-label': html ? 'HTML 자료' : '웹사이트' });
     const status = el('div', { class: 'cv-web-status', role: 'status' });
     const frame = blocked ? null : webFrame(site);
-    const host = el('section', { class: 'cv-show-web', dataset: { mode: 'view', showWeb: '' } }, ...(frame ? [frame] : []), status, pill);
-    web = { url, host, frame, pill, mode: 'view', slow: 0, keep: !blocked && site.keep === true };
+    const host = el('section', { class: 'cv-show-web', dataset: { mode, showWeb: '' } }, ...(frame ? [frame] : []), status, pill);
+    web = { url, html, host, frame, pill, mode, slow: 0, keep: !blocked && site.keep === true };
     if (web.keep) {
       // 너무 많이 켜 두지 않는다: 가장 오래된 것부터 닫는다.
       if (keptWeb.size >= KEEP_WEB_MAX) { const [oldKey, old] = keptWeb.entries().next().value; clearTimeout(old.slow); old.host.remove(); keptWeb.delete(oldKey); }
@@ -4673,7 +4678,7 @@ async function importHtml(file) {
     S.list = await listDesigns();
     app.inert = wasInert; loading.node.remove();
     if (!S.open) openDesign(saved, false);
-    toast('HTML을 가져왔어요. 발표에서 열고 ‘사이트 둘러보기’를 켜면 버튼을 누를 수 있어요. 별도 폴더의 그림·코드는 파일에 함께 넣어 주세요.', 8000);
+    toast('HTML 전용 모드로 가져왔어요. 발표에서 바로 버튼을 누르고 사용할 수 있어요. 별도 폴더의 그림·코드는 파일에 함께 넣어 주세요.', 8000);
     return true;
   } catch (error) {
     console.warn(error);

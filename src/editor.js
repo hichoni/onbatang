@@ -4398,6 +4398,18 @@ export function createEditor({
   }
   // 웹사이트 칸: 이 장을 다른 사이트의 실제 화면으로(발표할 때 직접 누르고 쓸 수 있다). 주소는 그 사이트가 허락하는 퍼가기 주소로 바꿔 넣는다.
   function webPane() {
+    if (card.web?.html) return [
+      el('div', { class: 'fe-head', text: 'HTML 전용 모드' }),
+      el('p', { class: 'fe-note', text: 'HTML 원본의 화면·스타일·코드를 그대로 보관해요. 위의 발표를 누르면 버튼과 입력창을 바로 사용할 수 있어요.' }),
+      el('div', { class: 'fe-web-now', dataset: { htmlNow: '' } },
+        el('b', { text: card.web.filename }),
+        el('span', { class: 'fe-note', text: '내용을 고치려면 원본 HTML을 수정하고 다시 가져와 주세요. 별도 폴더의 그림·코드는 HTML 파일에 함께 넣어 주세요.' }),
+        el('label', { class: 'fe-web-keep' },
+          el('input', { type: 'checkbox', checked: card.web.keep === true, dataset: { webKeep: '' }, onChange: e => setWebKeep(e.target.checked) }),
+          el('span', {}, el('b', { text: '넘겨도 켜 두기' }), el('small', { class: 'fe-note', text: '다른 장으로 넘겨도 HTML을 닫지 않아요. 돌아오면 입력한 내용과 진행 상태가 그대로 이어져요.' }))),
+        el('button', { class: 'fe-btn danger', type: 'button', dataset: { webRemove: '' }, onClick: removeWebsite }, icon('trash'), 'HTML 빼기')),
+      el('p', { class: 'fe-note', text: '발표 중 장을 넘길 때는 위의 ◀ ▶ 또는 아래 발표 막대를 사용해요. HTML 조작을 끄면 화면을 누르거나 방향키로 장을 넘길 수 있어요.' }),
+    ];
     const input = el('input', {
       class: 'fe-search fe-web-input', type: 'url', inputmode: 'url', placeholder: 'https://…', 'aria-label': '웹사이트 주소', autocomplete: 'off', spellcheck: 'false',
       value: card.web?.url || '', onKeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); setWebsite(input.value); } },
@@ -4511,7 +4523,7 @@ export function createEditor({
   }
   // 내 자료: 종류를 먼저 고르고, 고른 자료의 작업만 보여 준다.
   function uploadPane() {
-    const choices = [['photo', '사진'], ...(hasDocumentImport ? [['ppt', 'PPT']] : []), ['video', '영상'], ['web', '웹사이트']];
+    const choices = [['photo', '사진'], ...(hasDocumentImport ? [['ppt', 'PPT']] : []), ['video', '영상'], ['web', card.web?.html ? 'HTML 자료' : '웹사이트']];
     const choose = id => {
       if (importingDocument || !choices.some(([key]) => key === id)) return;
       uploadTab = id; armedFile = null; renderPanel({ top: true });
@@ -4935,7 +4947,8 @@ export function createEditor({
     closeMenu();
     // 움직임 칸을 보고 있었으면 그대로 둔다(장마다 전환 효과를 정하는 중일 수 있다). 빈 장은 템플릿 칸부터.
     // 영상 칸도 그대로 둔다(장마다 영상을 넣는 중일 수 있다).
-    tab = videoOpen() ? 'upload' : !card.items.length ? 'layout' : tab === 'motion' && settings().motion ? 'motion' : 'text';
+    if (card.web?.html) { tab = 'upload'; uploadTab = 'web'; }
+    else tab = videoOpen() ? 'upload' : !card.items.length ? 'layout' : tab === 'motion' && settings().motion ? 'motion' : 'text';
     motionSel = -1;
     renderStage();
     renderBar();

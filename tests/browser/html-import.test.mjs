@@ -14,8 +14,8 @@ try{parent.document.body.dataset.compromised='yes';status.textContent='unsafe';}
 try{localStorage.setItem('html-import-secret','stolen');}catch{}
 </script>`;
 const fixture = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/src/editor.css"><link rel="stylesheet" href="/app/app.css"><body class="mc-app"><main id="app"></main><script type="module">
-import {startMinican} from '/app/app.js';import {listDesigns} from '/app/store.js';import {markTourSeen,NEWS_KEY} from '/app/tour.js';
-for(const name of ['home','editor',NEWS_KEY])markTourSeen(name);window.listDesigns=listDesigns;
+import {startMinican} from '/app/app.js';import {listDesigns,putDesign} from '/app/store.js';import {markTourSeen,NEWS_KEY} from '/app/tour.js';
+for(const name of ['home','editor',NEWS_KEY])markTourSeen(name);window.listDesigns=listDesigns;window.putDesign=putDesign;
 await startMinican({storage:'html-import-test'});window.ready=true;</script>`;
 test('choose and drop HTML, reopen, run isolated interactions, export an executable offline HTML', options, async t => {
   const server = createServer(async (req, res) => {
@@ -37,16 +37,36 @@ test('choose and drop HTML, reopen, run isolated interactions, export an executa
   const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.locator('[data-html-open]').click()]);
   await chooser.setFiles({name: '수업.HTML', mimeType: 'text/html', buffer: Buffer.from(html)});
   await page.locator('.cv-canvas .fe-web-host').filter({hasText: '수업.HTML'}).waitFor();
+  await page.locator('[data-html-now]').filter({hasText: '수업.HTML'}).waitFor();
+  assert.equal(await page.getByRole('tab', {name: 'HTML 자료', exact: true}).getAttribute('aria-selected'), 'true');
+  assert.equal(await page.getByRole('textbox', {name: '웹사이트 주소', exact: true}).count(), 0);
   assert.equal(await page.evaluate(() => document.body.dataset.compromised), undefined);
   assert.equal(await page.locator('iframe[srcdoc]').count(), 0, 'no uploaded code runs in the editor');
   await page.locator('.cv-back').click(); await page.reload(); await page.waitForFunction(() => window.ready);
   assert.equal((await page.evaluate(() => window.listDesigns()))[0].slides[0].web.html, html);
+  await page.evaluate(async () => {
+    const [record] = await window.listDesigns();
+    record.slides[0].web.keep = true;
+    record.slides.push({id: 'pnext001', items: []});
+    await window.putDesign(record);
+  });
+  await page.reload(); await page.waitForFunction(() => window.ready);
   await page.locator('.cv-item .cv-thumb').first().click(); await page.locator('.cv-show-btn').click();
   const frame = page.frameLocator('[data-show-web] iframe');
   await frame.locator('#status').filter({hasText: 'isolated'}).waitFor();
   assert.ok(!(await page.locator('[data-show-web] iframe').getAttribute('sandbox')).includes('allow-same-origin'));
-  await page.locator('[data-web-use]').click(); await frame.locator('#count').click();
+  assert.equal(await page.getByRole('switch', {name: 'HTML 조작', exact: true}).getAttribute('aria-checked'), 'true');
+  await frame.locator('#count').click();
   assert.equal(await frame.locator('#count').textContent(), '완료');
+  // Even after intentionally switching to slide navigation, returning to kept HTML restores direct use.
+  await page.getByRole('switch', {name: 'HTML 조작', exact: true}).click();
+  await page.keyboard.press('ArrowRight');
+  await page.waitForFunction(() => document.querySelector('.cv-show-count')?.textContent.startsWith('2 /'));
+  await page.keyboard.press('ArrowLeft');
+  await page.waitForFunction(() => document.querySelector('.cv-show-count')?.textContent.startsWith('1 /'));
+  assert.equal(await page.getByRole('switch', {name: 'HTML 조작', exact: true}).getAttribute('aria-checked'), 'true');
+  assert.equal(await frame.locator('#count').textContent(), '완료', 'kept HTML retains its state');
+  await frame.locator('#count').click();
   assert.equal(await page.evaluate(() => localStorage.getItem('html-import-secret')), null);
   await mkdir(resolve(root, 'work'), {recursive: true});
   await page.screenshot({path: resolve(root, 'work/html-import-presentation.png')});
