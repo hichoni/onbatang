@@ -8,7 +8,7 @@ import {createHtmlLesson} from '../../app/html-lesson.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const options = {skip: !process.env.MINICAN_PLAYWRIGHT_PATH, timeout: 120000};
-const html = `<!doctype html><meta charset="utf-8"><style>body{background:#e6f4ef;font:24px sans-serif}button{font:inherit;padding:20px}</style><h1>HTML 수업</h1><button id="count">눌러요</button><p id="status"></p><script>
+const html = `<!doctype html><meta charset="utf-8"><style>body{background:#e6f4ef;font:24px sans-serif}button{font:inherit;padding:20px}</style><h1>HTML 수업</h1><button id="count">눌러요</button><p id="status"></p><p id="duplicate-a">같은 글</p><p id="duplicate-b">같은 글</p><p id="mixed">앞 <strong>강조</strong> 뒤</p><script>
 count.onclick=()=>count.textContent='완료';
 try{parent.document.body.dataset.compromised='yes';status.textContent='unsafe';}catch{document.getElementById('status').textContent='isolated';}
 try{localStorage.setItem('html-import-secret','stolen');}catch{}
@@ -30,7 +30,7 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   await new Promise(done => server.listen(0, '127.0.0.1', done)); t.after(() => new Promise(done => server.close(done)));
   const {chromium} = await import(pathToFileURL(process.env.MINICAN_PLAYWRIGHT_PATH).href);
   const browser = await chromium.launch({channel: process.env.MINICAN_BROWSER || 'msedge', headless: true}); t.after(() => browser.close());
-  const page = await browser.newPage({viewport: {width: 1280, height: 820}}), errors = [];
+  const page = await browser.newPage({viewport: {width: 1280, height: 820}, hasTouch:true}), errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/fixture.html`); await page.waitForFunction(() => window.ready);
   const draftChecks = await page.evaluate(async () => {
@@ -64,13 +64,35 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   await workspace.locator('h1').filter({hasText:'HTML 수업'}).waitFor();
   await page.getByRole('button',{name:'글 수정',exact:true}).click();
   const edit = page.getByRole('dialog',{name:'HTML 글 수정',exact:true});
+  const editFrame = page.frameLocator('[data-html-text-frame]');
+  await edit.getByRole('status').filter({hasText:'화면의 글을 눌러'}).waitFor();
+  assert.equal(await edit.getByRole('listbox').count(),0,'text editing uses the page, not a list');
+  assert.equal(await editFrame.locator('#status').textContent(),'','original scripts do not run while editing');
+  assert.equal(await page.locator('[data-html-text-frame]').getAttribute('sandbox'),'allow-scripts');
+  await page.evaluate(() => {
+    const channel=document.querySelector('[data-html-text-frame]').srcdoc.match(/script-src 'nonce-([^']+)/)[1];
+    window.postMessage({channel,type:'change',id:'0',text:'forged'},'*');
+  });
+  assert.equal(await edit.getByRole('button',{name:'저장',exact:true}).isDisabled(),true,'other windows cannot supply edits');
   await mkdir(resolve(root,'work'),{recursive:true});
+  await editFrame.locator('h1').click();
+  await page.keyboard.press('ControlOrMeta+A');
+  await page.keyboard.insertText('바뀐 <제목> & 수업');
+  await editFrame.locator('#duplicate-b').click();
+  await editFrame.getByRole('textbox',{name:'화면의 글 수정',exact:true}).fill('두 번째 글');
+  await editFrame.locator('#count').click();
+  await editFrame.getByRole('textbox',{name:'화면의 글 수정',exact:true}).fill('시작하기');
+  await editFrame.locator('#mixed strong').click();
+  await editFrame.getByRole('textbox',{name:'화면의 글 수정',exact:true}).fill('바뀐 강조');
   await page.screenshot({path:resolve(root,'work/html-text-editor.png')});
-  await edit.getByRole('listbox',{name:'수정할 글',exact:true}).selectOption({label:'HTML 수업'});
-  await edit.getByRole('textbox',{name:'바꿀 글',exact:true}).fill('바뀐 <제목> & 수업');
   await edit.getByRole('button',{name:'저장',exact:true}).click();
   await workspace.locator('h1').filter({hasText:'바뀐 <제목> & 수업'}).waitFor();
   assert.equal(await workspace.locator('h1 > *').count(),0,'text editing never injects markup');
+  assert.equal(await workspace.locator('#duplicate-a').textContent(),'같은 글','matching text elsewhere is unchanged');
+  assert.equal(await workspace.locator('#duplicate-b').textContent(),'두 번째 글');
+  assert.equal(await workspace.locator('#mixed').textContent(),'앞 바뀐 강조 뒤');
+  assert.equal(await workspace.locator('#mixed strong').textContent(),'바뀐 강조','nested formatting survives');
+  assert.equal(await workspace.locator('#count').textContent(),'시작하기','button labels can be edited without activating buttons');
   await workspace.locator('#count').click();
   assert.equal(await workspace.locator('#count').textContent(),'완료','scripts still work after editing text');
   await page.locator('.fe-history-tools .undo').click();
@@ -78,7 +100,9 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   await page.locator('.fe-history-tools .redo').click();
   await workspace.locator('h1').filter({hasText:'바뀐 <제목> & 수업'}).waitFor();
   await page.getByRole('button',{name:'글 수정',exact:true}).click();
-  await edit.getByRole('textbox',{name:'바꿀 글',exact:true}).fill('취소한 글');
+  await edit.getByRole('status').filter({hasText:'화면의 글을 눌러'}).waitFor();
+  await editFrame.locator('h1').click();
+  await editFrame.getByRole('textbox',{name:'화면의 글 수정',exact:true}).fill('취소한 글');
   await edit.getByRole('button',{name:'취소',exact:true}).click();
   assert.equal(await workspace.locator('h1').textContent(),'바뀐 <제목> & 수업');
   await mkdir(resolve(root, 'work'), {recursive: true});
@@ -88,6 +112,7 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   assert.equal(edited.match(/<script>([\s\S]*?)<\/script>/)[1],html.match(/<script>([\s\S]*?)<\/script>/)[1]);
   assert.equal(edited.match(/<style>([\s\S]*?)<\/style>/)[1],html.match(/<style>([\s\S]*?)<\/style>/)[1]);
   assert.ok(edited.includes('바뀐 &lt;제목&gt; &amp; 수업'));
+  assert.doesNotMatch(edited,/onba-text-|contenteditable|data-onba-editing|script-src 'nonce-/,'editing helpers never enter the saved source');
   await page.evaluate(async () => {
     const [record] = await window.listDesigns();
     record.slides[0].web.keep = true;
@@ -134,6 +159,14 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   await workspace.locator('#status').filter({hasText:'isolated'}).waitFor();
   await workspace.locator('#count').click();
   assert.equal(await workspace.locator('#count').textContent(),'완료');
+  await page.getByRole('button',{name:'글 수정',exact:true}).tap();
+  await edit.getByRole('status').filter({hasText:'화면의 글을 눌러'}).waitFor();
+  await editFrame.locator('h1').tap();
+  await editFrame.getByRole('textbox',{name:'화면의 글 수정',exact:true}).fill('휴대폰에서 수정');
+  await page.screenshot({path:resolve(root,'work/html-inline-mobile.png'),fullPage:true});
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  await edit.getByRole('button',{name:'저장',exact:true}).tap();
+  await workspace.locator('h1').filter({hasText:'휴대폰에서 수정'}).waitFor();
   assert.equal(await page.locator('[data-html-workspace] iframe').getAttribute('data-scaled'),null,'HTML uses the real mobile viewport');
   await page.screenshot({path:resolve(root,'work/html-workspace-mobile.png'),fullPage:true});
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));

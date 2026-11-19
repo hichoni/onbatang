@@ -1070,7 +1070,7 @@ function editorShell(O, bar) {
   return shell;
 }
 function syncHtmlWorkspace(O) {
-  if (!O.htmlWorkspace || O.closed || O.htmlPresenting) return;
+  if (!O.htmlWorkspace || O.closed || O.htmlPresenting || O.htmlEditing) return;
   const design = O.editor.getDesign(), html = !!design.web?.html;
   const changed = O.shell.classList.contains('cv-html-mode') !== html;
   O.shell.classList.toggle('cv-html-mode', html);
@@ -1083,13 +1083,14 @@ function openHtmlTextEditor(O) {
   const design = O.editor.getDesign(), source = design.web?.html;
   if (!source) return;
   const trigger = document.activeElement;
+  O.htmlEditing = true; O.htmlWorkspace.pause();
   editHtmlText(source, html => {
     const current = O.editor.getDesign();
     if (O.closed || O.leaving || O.recoveryRequired || current.id !== design.id || current.web?.html !== source) throw Error('자료가 바뀌었어요. 글 수정을 다시 열어 주세요.');
     const changed = O.editor.replaceHtml(html);
     if (changed) toast('글을 바꿨어요. 실행 취소로 되돌릴 수 있어요.');
     return changed;
-  }, () => trigger?.isConnected && trigger.focus({preventScroll: true}));
+  }, () => { O.htmlEditing = false; syncHtmlWorkspace(O); if (trigger?.isConnected) trigger.focus({preventScroll: true}); });
 }
 // ---------- AI-G 도우미(옆 칸) ----------
 /** 도우미 칸을 열고 닫는다(open 을 주지 않으면 번갈아). 처음 열 때 칸을 만든다. */
