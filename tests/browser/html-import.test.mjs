@@ -109,6 +109,9 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   assert.equal(await sizeControl.inputValue(),'24','choosing another text loads its own size');
   await sizeControl.fill('30');
   await edit.getByLabel('글자 색깔',{exact:true}).evaluate(input=>{input.value='#0066cc';input.dispatchEvent(new Event('input',{bubbles:true}));});
+  const previewShape = await editFrame.locator('#duplicate-a').evaluate(e=>new Promise(resolve=>{
+    const check=()=>{const s=getComputedStyle(e);if(s.fontSize==='30px')resolve({size:s.fontSize,margin:s.marginTop});else requestAnimationFrame(check);};check();
+  }));
   await page.screenshot({path:resolve(root,'work/html-text-editor.png')});
   await edit.getByRole('button',{name:'저장',exact:true}).click();
   await workspace.locator('h1').filter({hasText:'바뀐 <제목> & 수업'}).waitFor();
@@ -120,6 +123,7 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   assert.deepEqual(await workspace.locator('#mixed strong').evaluate(e=>({size:getComputedStyle(e).fontSize,color:getComputedStyle(e).color,weight:getComputedStyle(e).fontWeight})),{size:'40px',color:'rgb(194, 24, 91)',weight:'700'});
   assert.equal(await workspace.locator('#mixed').evaluate(e=>getComputedStyle(e).fontSize),'24px','neighboring text keeps its size');
   assert.equal(await workspace.locator('#duplicate-a').evaluate(e=>getComputedStyle(e).fontSize),'30px','format-only edits save');
+  assert.deepEqual(await workspace.locator('#duplicate-a').evaluate(e=>({size:getComputedStyle(e).fontSize,margin:getComputedStyle(e).marginTop})),previewShape,'em spacing is identical before and after saving');
   assert.equal(await workspace.locator('#duplicate-b').evaluate(e=>getComputedStyle(e).fontSize),'24px','duplicate wording is styled independently');
   assert.equal(await workspace.locator('#count').textContent(),'시작하기','button labels can be edited without activating buttons');
   await workspace.locator('#count').click();

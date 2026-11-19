@@ -24,7 +24,13 @@ function inlineTextRuntime(channel) {
     let holder = holders.get(data.id);
     if (!holder) {
       const target = editing?.id === data.id ? editing.element : fields.get(data.id);
-      holder = document.createElement('span'); target.replaceWith(holder); holder.append(target); holders.set(data.id, holder);
+      // Match the saved source's target, including em-based spacing on the
+      // original element. Only our temporary marker comments are ignored.
+      const parentElement = target.parentElement;
+      const siblings = [...parentElement.childNodes].filter(node => !(node.nodeType === Node.COMMENT_NODE && node.data.startsWith(prefix)));
+      if (siblings.length === 1) holder = parentElement;
+      else { holder = document.createElement('span'); target.replaceWith(holder); holder.append(target); }
+      holders.set(data.id, holder);
     }
     if (style.fontSize !== undefined) holder.style.setProperty('font-size', style.fontSize + 'px', 'important');
     if (style.color !== undefined) holder.style.setProperty('color', style.color, 'important');
