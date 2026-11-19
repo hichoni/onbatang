@@ -270,8 +270,8 @@ export function webCard(web) {
   return el('div', { class: 'fe-web', dataset: { web: web.url } },
     el('span', { class: 'fe-web-globe', html: GLOBE }),
     el('b', { class: 'fe-web-host', text: web.html ? web.filename : webHost(web.url) }),
-    el('span', { class: 'fe-web-url', text: web.html ? 'HTML 자료' : web.url }),
-    el('span', { class: 'fe-web-note', text: web.html ? '발표하면 HTML이 열려요 · 사이트 둘러보기를 켜면 직접 누를 수 있어요' : '발표할 때 이 장에 실제 사이트가 열려요' }));
+    el('span', { class: 'fe-web-url', text: web.html ? 'HTML 전용 모드 · 원본 보관' : web.url }),
+    el('span', { class: 'fe-web-note', text: web.html ? '발표하면 원본 HTML이 열려요 · 바로 버튼을 누르고 사용할 수 있어요' : '발표할 때 이 장에 실제 사이트가 열려요' }));
 }
 
 /**
