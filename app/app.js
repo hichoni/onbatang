@@ -237,14 +237,20 @@ async function refresh() {
   syncAccount();
 }
 /** 계정이 있으면 이 기기의 그림과 계정의 그림을 맞춘다(sync.js). 첫 화면에 있을 때만 목록을 다시 그린다. */
-async function syncAccount() {
+// 한 번에 하나만 돈다(도는 중에 또 부르면 그 약속을 그대로 돌려준다).
+// quiet: 새로 고침 없이 다시 맞출 때(resync). 받을 것이 생기기 전에는 '맞추는 중' 표시도, 첫 화면 다시 그리기도 하지 않고, 못 맞췄어도 표시를 바꾸지 않는다.
+let syncing = null, syncedAt = 0;
+function syncAccount(options) { return syncing ||= syncAccountNow(options).finally(() => { syncing = null; syncedAt = Date.now(); }); }
+async function syncAccountNow({ quiet = false } = {}) {
   if (S.error) return;
   if (!sync) { await shareFileDecks(); return; }
-  S.account = 'syncing';
-  if (!S.open) render();
+  const was = S.account;
+  let changed = false;
+  if (!quiet) { S.account = 'syncing'; if (!S.open) render(); }
   // 받는 대로 첫 화면에 더한다. 첫 화면을 다시 그리는 것은 잠깐씩 모아서(그사이에는 받은 수만 바꾼다).
   let paint = 0;
   const got = (record, done, total) => {
+    if (quiet && S.account !== 'syncing') { S.account = 'syncing'; if (!S.open) render(); }   // 받을 것이 있다: 이제부터는 보여 준다
     S.pulling = { done, total };
     if (record) upsert(record);
     if (S.open) return;
@@ -252,17 +258,26 @@ async function syncAccount() {
     if (record && !paint) paint = setTimeout(() => { paint = 0; if (!S.open && S.account === 'syncing') render(); }, 700);
   };
   try {
-    await mergeAccount(sync, { list: listDesigns, put: putDesign, remove: removeDesign, got });
+    const out = await mergeAccount(sync, { list: listDesigns, put: putDesign, remove: removeDesign, got });
+    changed = (out?.got || 0) + (out?.removed || 0) > 0;
     S.account = 'ok';
-    if (!S.open) S.list = await listDesigns();
+    if (!S.open && (!quiet || changed)) S.list = await listDesigns();
   } catch (ex) {
     console.warn(ex);
-    S.account = 'bad';
+    S.account = quiet && S.account !== 'syncing' ? was : 'bad';
   } finally {
     clearTimeout(paint); S.pulling = null;
   }
-  if (!S.open) render();
+  if (!S.open && (!quiet || changed || S.account !== was)) render();
   if (S.account === 'ok') await shareFileDecks();
+}
+// 다시 맞추기: 다른 기기에서 고친 것을 새로 고침 없이 받는다. 첫 화면('내 그림')을 보고 있고, 마지막으로 맞춘 지 resyncGap 이 지났을 때만 한다.
+// 창으로 돌아올 때(보이게 될 때 · 초점을 받을 때)와 꾸미기를 마치고 내 그림으로 돌아올 때 부른다. 서버에 주기적으로 묻지는 않는다(계정 서버의 짐을 늘리지 않게).
+let resyncGap = 30000;
+function resync() {
+  if (!sync || S.error || S.open || S.phase !== 'home' || syncing || Date.now() - syncedAt < resyncGap) return;
+  if (document.visibilityState !== 'visible' || document.querySelector('.modal-backdrop')) return;
+  void syncAccount({ quiet: true });
 }
 /** 계정에 다 올렸을 때 꾸미는 화면의 저장 상태를 알린다. */
 function pushed(id, ok) {
@@ -3985,6 +4000,7 @@ async function closeDesign(O, btn = null) {
   // 꾸미던 그림이 작아지면서 목록의 그 그림 자리로 돌아간다(저장되지 않은 빈 그림이면 그냥 사라진다).
   const returnToShelf = () => {
     render();
+    queueMicrotask(resync);                       // 꾸미는 동안 다른 기기에서 바뀐 것이 있으면 이제 받는다
     window.scrollTo({ top: 0 });
     return app.querySelector(`.cv-item[data-id="${O.record.id}"] .cv-thumb .fe-card`);
   };
@@ -5079,7 +5095,7 @@ function readOpen() {
  * - copyLink: {url?,key?}; 공용 온바탕이 켠다. 주소의 ?copy=코드를 열면 그 자료를 이 기기에 사본으로 받아 바로 연다(app/copy-link.js).
  * - shareAction: {label,title?,open({designId,flush(),goTo(slideIndex,{upload})}),saved?(record)}; 편집기 위 막대의 공유 단추(GBE-AI Lab의 보기 전용 링크). saved 는 이 기기에 저장할 때마다 불린다(링크에 반영은 호스트가 모아서). 기본값은 숨김.
  */
-export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, accountAction: accountLibrary = null, cloudAction: cloudLibrary = null, shareAction: sharing = null, copyAction: copying = null, copyLink: copyIntake = null, accountBridge: bridging = null, showRemote: remoting = null, phoneRemote: phoning = null, coEdit: coing = null, coRelay: relaying = null, showAudience: audiencing = null, wallAction: walling = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false, resume = false, embed = null, syncDelay = null } = {}) {
+export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, resyncGap: resyncWait = 30000, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, accountAction: accountLibrary = null, cloudAction: cloudLibrary = null, shareAction: sharing = null, copyAction: copying = null, copyLink: copyIntake = null, accountBridge: bridging = null, showRemote: remoting = null, phoneRemote: phoning = null, coEdit: coing = null, coRelay: relaying = null, showAudience: audiencing = null, wallAction: walling = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false, resume = false, embed = null, syncDelay = null } = {}) {
   if (app) throw new Error('minican already started');
   if (!root) throw new Error('minican root');
   app = root;
@@ -5114,6 +5130,7 @@ export function startMinican({ root = document.getElementById('app'), fonts = []
   if(maker&&typeof maker.connect==='function'&&typeof maker.generate==='function')appMaker=maker;
   if (account && ['pull', 'push', 'drop'].every((k) => typeof account[k] === 'function')) {
     sync = account;
+    resyncGap = Number.isFinite(resyncWait) && resyncWait >= 0 ? resyncWait : 30000;
     pusher = createPusher(sync, { onDone: pushed, ...(Number.isFinite(syncDelay) && syncDelay >= 500 ? { delay: Math.min(60000, syncDelay) } : {}) });
   }
   setStorageName(storage);
@@ -5140,6 +5157,9 @@ export function startMinican({ root = document.getElementById('app'), fonts = []
   window.addEventListener('pagehide', () => S.open?.co?.close());
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') S.open?.co?.ping(); });
   document.addEventListener('contextmenu', onPageMenu);
+  // 다른 창을 보다 돌아오면 계정의 바뀐 것을 받는다(resync: 첫 화면에서만 · 간격을 두고)
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') resync(); });
+  window.addEventListener('focus', resync);
   document.addEventListener('keydown', onEditorKeys);
   document.addEventListener('pointerdown', onEditorPress, true);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
