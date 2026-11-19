@@ -70,3 +70,55 @@ test('a value missing from the last keyframe ends at the element\'s own value, n
     assert.equal(seen.length, 1, 'nothing missing, nothing read');
   } finally { globalThis.getComputedStyle = before; }
 });
+
+// 브라우저의 줄임 속성 흉내: var() 를 담은 줄임 속성(border-radius …)은 낱개 속성(border-top-left-radius …)으로 읽으면 빈 글이다.
+// 낱개 하나를 따로 적으면 줄임 속성은 더는 한 글로 읽히지 않고, 낱개를 지우면 그 모서리의 값은 사라진다.
+function shorthandNode(short, longs, value) {
+  const own = new Map(longs.map((p) => [p, null]));   // null: 줄임 속성의 값(읽으면 빈 글) · 글: 따로 적은 값 · 없음: 지워졌다
+  let whole = value;
+  return {
+    style: {
+      getPropertyValue: (p) => (p === short ? (whole != null && longs.every((l) => own.get(l) === null) ? whole : '') : (own.get(p) ?? '')),
+      getPropertyPriority: () => '',
+      setProperty: (p, v) => { if (p === short) { whole = String(v); for (const l of longs) own.set(l, null); } else own.set(p, String(v)); },
+      removeProperty: (p) => { if (p === short) { whole = null; for (const l of longs) own.delete(l); } else own.delete(p); },
+    },
+    // 그 모서리가 지금 어떤 값으로 그려지는가(줄임 속성의 값 · 따로 적은 값 · 없음)
+    shown: (p) => (!own.has(p) ? '' : own.get(p) === null ? whole : own.get(p)),
+    animate(keyframes, opts) {
+      let settle; return { keyframes, opts, finished: new Promise((r, j) => { settle = { r, j }; }), end: () => settle.r(), cancel: () => settle.j(Error('cancel')) };
+    },
+  };
+}
+const CORNERS = ['border-top-left-radius', 'border-top-right-radius', 'border-bottom-right-radius', 'border-bottom-left-radius'];
+const ROUND = 'calc(min(21cqw, 10cqw / var(--fe-ratio, 1)) * 0.15)';
+const corners = (v) => ({ borderTopLeftRadius: v, borderTopRightRadius: v, borderBottomRightRadius: v, borderBottomLeftRadius: v });
+
+test('a var() shorthand comes back whole after its longhands were primed (rounded corners survive a morph)', async () => {
+  // 이어 움직이기: 둥글기가 달라지는 둥근 네모는 네 모서리의 둥글기를 낱개로 적었다 지운다. 0.146.0 까지는 그 뒤 border-radius 가 사라져
+  // 발표 화면의 둥근 네모가 각진 네모로 남았다(도형의 둥글기는 var(--fe-ratio) 를 담은 줄임 속성으로 적혀 있다: render.js dressShape).
+  const node = shorthandNode('border-radius', CORNERS, ROUND);
+  const a = primedAnimate(node, [{ ...corners('31px'), transform: 'translate(40px, 0)' }, { ...corners('12px'), transform: 'none' }], { duration: 1000, fill: 'both' });
+  assert.equal(node.shown('border-top-left-radius'), '31px', 'the start look is primed on the element');
+  a.end(); await tick();
+  assert.equal(node.style.getPropertyValue('border-radius'), ROUND, 'the shorthand is written back');
+  for (const p of CORNERS) assert.equal(node.shown(p), ROUND, p);
+});
+
+test('a var() shorthand waits for the last motion holding one of its longhands, and is left alone when rewritten meanwhile', async () => {
+  const node = shorthandNode('border-radius', CORNERS, ROUND);
+  const move = primedAnimate(node, [corners('31px'), corners('12px')], { duration: 1000, fill: 'both' });
+  const fade = primedAnimate(node, [{ borderTopLeftRadius: '20px', opacity: 0 }, { borderTopLeftRadius: '12px', opacity: 1 }], { duration: 300, fill: 'backwards' });
+  move.cancel(); await tick();
+  assert.equal(node.shown('border-top-left-radius'), '20px', 'one corner is still held by the other motion');
+  assert.equal(node.style.getPropertyValue('border-radius'), '', 'so the shorthand is not written back yet');
+  fade.end(); await tick();
+  assert.equal(node.style.getPropertyValue('border-radius'), ROUND);
+
+  // 움직이는 동안 크기가 바뀌어 둥글기를 다시 적었으면(placeItem → dressShape) 그 새 값을 그대로 둔다.
+  const resized = shorthandNode('border-radius', CORNERS, ROUND);
+  const again = primedAnimate(resized, [corners('31px'), corners('12px')], { duration: 1000, fill: 'both' });
+  resized.style.setProperty('border-radius', 'calc(min(30cqw, 12cqw / var(--fe-ratio, 1)) * 0.15)');
+  again.end(); await tick();
+  assert.equal(resized.style.getPropertyValue('border-radius'), 'calc(min(30cqw, 12cqw / var(--fe-ratio, 1)) * 0.15)');
+});
