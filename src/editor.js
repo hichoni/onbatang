@@ -4400,7 +4400,7 @@ export function createEditor({
   function webPane() {
     if (card.web?.html) return [
       el('div', { class: 'fe-head', text: 'HTML 전용 모드' }),
-      el('p', { class: 'fe-note', text: 'HTML을 열면 원본 화면이 바로 나타나고 버튼과 입력창을 사용할 수 있어요. 글 수정을 누른 뒤 화면의 글을 직접 눌러 바꿔요.' }),
+      el('p', { class: 'fe-note', text: 'HTML을 열면 원본 화면이 바로 나타나고 버튼과 입력창을 사용할 수 있어요. 글 수정을 누른 뒤 화면의 글을 직접 눌러 내용·크기·색깔을 바꿔요.' }),
       el('div', { class: 'fe-web-now', dataset: { htmlNow: '' } },
         el('b', { text: card.web.filename }),
         el('span', { class: 'fe-note', text: '글 수정은 여기서 할 수 있어요. 화면 배치나 동작을 고치려면 원본 HTML을 수정해 다시 가져와 주세요.' }),

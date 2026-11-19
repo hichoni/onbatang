@@ -3,6 +3,11 @@ import {webFrame} from '../src/render.js';
 import {HTML_FILE_MAX_BYTES} from '../src/html-file.js';
 import {inlineTextScript} from './html-inline-edit.js';
 
+const validTextStyle = style => !!style && typeof style === 'object' && !Array.isArray(style) &&
+  Object.keys(style).length > 0 && Object.keys(style).every(key => ['fontSize', 'color'].includes(key)) &&
+  (!('fontSize' in style) || (Number.isFinite(style.fontSize) && style.fontSize >= 6 && style.fontSize <= 300)) &&
+  (!('color' in style) || (typeof style.color === 'string' && /^#[\da-f]{6}$/i.test(style.color)));
+
 // Only the opened document runs. Covers, thumbnails and exports stay inert.
 export function createHtmlWorkspace(host) {
   const kept = new Map();
@@ -74,55 +79,97 @@ export function htmlTextDraft(source) {
       copy.head.prepend(charset, csp, base, runtime);
       return '<!doctype html>' + copy.documentElement.outerHTML;
     },
-    apply(changes) {
+    apply(changes, styles = new Map()) {
       const edits = [...changes].filter(([id, text]) => {
         if (!fields[Number(id)] || fields[Number(id)].id !== id || typeof text !== 'string') throw Error('수정할 글을 다시 골라 주세요.');
         return text !== fields[Number(id)].text;
       });
-      if (!edits.length) return source;
-      for (let i = 0; i < nodes.length; i++) nodes[i].data = fields[i].text;
-      for (const [id, text] of edits) nodes[Number(id)].data = text;
+      for (const [id, style] of styles) if (typeof id !== 'string' || fields[Number(id)]?.id !== id || !validTextStyle(style)) throw Error('글자 크기와 색깔을 확인해 주세요.');
+      if (!edits.length && !styles.size) return source;
+      // Work on a fresh copy: repeated saves cannot accumulate formatting wrappers.
+      const output = doc.cloneNode(true), texts = output.createTreeWalker(output.body, NodeFilter.SHOW_TEXT), targets = [];
+      for (let node; (node = texts.nextNode());) if (node.data.trim() && !node.parentElement.closest(excluded)) targets.push(node);
+      for (const [id, text] of edits) targets[Number(id)].data = text;
+      for (const [id, style] of styles) {
+        const node = targets[Number(id)];
+        let target = node.parentElement;
+        // A sole text child can use its own element. Mixed content needs a span
+        // around only the chosen text, so sibling words keep their formatting.
+        if (target.childNodes.length !== 1) { target = output.createElement('span'); node.replaceWith(target); target.append(node); }
+        if (style.fontSize !== undefined) target.style.setProperty('font-size', style.fontSize + 'px', 'important');
+        if (style.color !== undefined) target.style.setProperty('color', style.color, 'important');
+      }
       const xml = new XMLSerializer();
-      return [...doc.childNodes].map(node => node.nodeType === Node.ELEMENT_NODE ? node.outerHTML : xml.serializeToString(node)).join('');
+      return [...output.childNodes].map(node => node.nodeType === Node.ELEMENT_NODE ? node.outerHTML : xml.serializeToString(node)).join('');
     },
   };
 }
 
 export function editHtmlText(source, apply, onClose) {
-  const draft = htmlTextDraft(source), changes = new Map(), channel = crypto.randomUUID().replaceAll('-', '');
+  const draft = htmlTextDraft(source), changes = new Map(), styles = new Map(), channel = crypto.randomUUID().replaceAll('-', '');
   const frame = el('iframe', {title: 'HTML 화면에서 글 수정', sandbox: 'allow-scripts', referrerpolicy: 'no-referrer', srcdoc: draft.preview(channel), dataset: {htmlTextFrame: ''}});
   const status = el('p', {role: 'status', text: '글을 불러오는 중…'});
-  let pending = '', timeout = 0;
+  let pending = '', timeout = 0, selected = null;
+  const countChanges = () => new Set([...changes.keys(), ...styles.keys()]).size;
+  const sendStyle = style => {
+    if (selected === null || pending || !validTextStyle(style)) return;
+    frame.contentWindow.postMessage({channel, type: 'format', id: selected, style}, '*');
+  };
+  const size = el('input', {type: 'number', min: 6, max: 300, step: 1, disabled: true, 'aria-label': '글자 크기 (px)', onInput: event => {
+    if (event.target.value !== '') sendStyle({fontSize: Number(event.target.value)});
+  }});
+  const color = el('input', {type: 'color', value: '#000000', disabled: true, 'aria-label': '글자 색깔', onInput: event => sendStyle({color: event.target.value})});
+  const selectedLabel = el('span', {class: 'cv-html-text-selected', text: '화면의 글을 먼저 눌러 주세요.'});
   const save = el('button', {type: 'button', class: 'btn btn-primary', disabled: true, onClick: () => {
     if (pending) return;
-    pending = crypto.randomUUID(); save.disabled = true;
+    pending = crypto.randomUUID(); save.disabled = true; size.disabled = color.disabled = true;
     frame.contentWindow.postMessage({channel, type: 'commit', request: pending}, '*');
-    timeout = setTimeout(() => { pending = ''; save.disabled = !changes.size; toast('수정한 글을 받지 못했어요. 다시 저장해 주세요.'); }, 5000);
+    timeout = setTimeout(() => { pending = ''; refresh(); toast('수정한 글을 받지 못했어요. 다시 저장해 주세요.'); }, 5000);
   }}, '저장');
   const valid = (id, text) => typeof id === 'string' && draft.fields[Number(id)]?.id === id && typeof text === 'string' && text.length <= HTML_FILE_MAX_BYTES && !text.includes('\0');
   const update = (id, text) => { if (text === draft.fields[Number(id)].text) changes.delete(id); else changes.set(id, text); };
+  const refresh = () => {
+    const count = countChanges(); save.disabled = !!pending || !count;
+    size.disabled = color.disabled = !!pending || selected === null;
+    status.textContent = count ? `${count}곳 수정됨 · 저장하면 HTML을 다시 열어요.` : '화면의 글을 눌러 내용·크기·색깔을 바꾸세요.';
+  };
   const receive = event => {
     const data = event.data;
     if (event.source !== frame.contentWindow || !data || data.channel !== channel) return;
-    if (data.type === 'ready') { status.textContent = draft.fields.length ? '화면의 글을 눌러 바로 수정하세요. 수정 중에는 버튼 동작을 멈춰요.' : '직접 수정할 원본 글이 없어요. 코드로 생성되는 글과 이미지 속 글은 지원하지 않아요.'; return; }
+    if (data.type === 'ready') { status.textContent = draft.fields.length ? '화면의 글을 눌러 내용·크기·색깔을 바꾸세요. 수정 중에는 버튼 동작을 멈춰요.' : '직접 수정할 원본 글이 없어요. 코드로 생성되는 글과 이미지 속 글은 지원하지 않아요.'; return; }
+    if (data.type === 'selected') {
+      if (data.id === null) { selected = null; selectedLabel.textContent = '화면의 글을 먼저 눌러 주세요.'; refresh(); return; }
+      if (!valid(data.id, draft.fields[Number(data.id)]?.text) || !Number.isFinite(data.fontSize) || data.fontSize <= 0 || !validTextStyle({color: data.color})) return;
+      selected = data.id; size.value = String(Math.round(data.fontSize * 100) / 100); color.value = data.color;
+      selectedLabel.textContent = (changes.get(selected) ?? draft.fields[Number(selected)].text).trim().slice(0, 100);
+      refresh(); return;
+    }
+    if (data.type === 'style-change') {
+      if (!valid(data.id, draft.fields[Number(data.id)]?.text) || !validTextStyle(data.style)) return;
+      styles.set(data.id, data.style); refresh(); return;
+    }
     if (data.type === 'committed') {
       if (!pending || data.request !== pending) return;
       clearTimeout(timeout); pending = '';
       try {
         if (!Array.isArray(data.edits) || data.edits.length > draft.fields.length || !data.edits.every(row => Array.isArray(row) && row.length === 2 && valid(...row))) throw Error('수정한 글을 확인할 수 없어요. 다시 열어 주세요.');
+        if (!Array.isArray(data.styles) || data.styles.length > draft.fields.length || !data.styles.every(row => Array.isArray(row) && row.length === 2 && valid(row[0], draft.fields[Number(row[0])]?.text) && validTextStyle(row[1]))) throw Error('글자 크기와 색깔을 확인할 수 없어요. 다시 열어 주세요.');
         changes.clear(); for (const [id, text] of data.edits) update(id, text);
-        if (!changes.size || apply(draft.apply(changes)) !== false) closeModal();
+        styles.clear(); for (const [id, style] of data.styles) styles.set(id, style);
+        if (!countChanges() || apply(draft.apply(changes, styles)) !== false) closeModal();
       } catch (error) { toast(error.message || '글을 저장하지 못했어요.', 4500); }
-      save.disabled = !changes.size; return;
+      refresh(); return;
     }
     if (data.type !== 'change' || !valid(data.id, data.text)) return;
     update(data.id, data.text);
-    save.disabled = !!pending || !changes.size;
-    status.textContent = changes.size ? `${changes.size}곳 수정됨 · 저장하면 HTML을 다시 열어요.` : '화면의 글을 눌러 바로 수정하세요.';
+    if (selected === data.id) selectedLabel.textContent = data.text.trim().slice(0, 100);
+    refresh();
   };
   window.addEventListener('message', receive);
   openModal(el('section', {class: 'cv-html-inline-editor', role: 'dialog', 'aria-label': 'HTML 글 수정'},
     el('header', {class: 'cv-html-edit-bar'}, el('div', {}, el('h2', {text: '화면에서 글 수정'}), status),
-      el('div', {class: 'row'}, el('button', {type: 'button', class: 'btn btn-ghost', onClick: closeModal}, '취소'), save)), frame),
+      el('div', {class: 'row'}, el('button', {type: 'button', class: 'btn btn-ghost', onClick: closeModal}, '취소'), save)),
+    el('div', {class: 'cv-html-text-format', role: 'group', 'aria-label': '글자 모양'},
+      selectedLabel, el('label', {}, '크기', size, el('span', {text: 'px'})), el('label', {}, '색깔', color)), frame),
   {wide: true, onClose: () => { clearTimeout(timeout); window.removeEventListener('message', receive); onClose?.(); }});
 }

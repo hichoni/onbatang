@@ -44,6 +44,20 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
       comment:first.includes('<!--keep-->'), second:second.includes('<h1>두 번째</h1>'), executed:!!window.draftExecuted};
   });
   assert.deepEqual(draftChecks,{fields:['A & B'],untouched:true,escaped:true,script:true,comment:true,second:true,executed:false});
+  const styleChecks = await page.evaluate(async () => {
+    const {htmlTextDraft} = await import('/app/html-workspace.js');
+    const source = '<!doctype html><p>A <strong>B</strong> C</p><style>p{color:red}</style><script>window.never=true;</script>';
+    const draft = htmlTextDraft(source), styles = new Map([['0',{fontSize:32,color:'#123456'}]]);
+    const first = draft.apply(new Map(),styles), parsed = new DOMParser().parseFromString(first,'text/html');
+    const second = draft.apply(new Map(),new Map([['0',{color:'#abcdef'}]]));
+    const repeated = htmlTextDraft(first).apply(new Map(),styles);
+    const invalid = [{fontSize:0},{fontSize:301},{color:'red;position:fixed'},{background:'url(https://bad.test)'}].every(style=>{try{draft.apply(new Map(),new Map([['0',style]]));return false;}catch{return true;}});
+    return {size:parsed.querySelector('p span').style.fontSize,color:parsed.querySelector('p span').style.color,
+      sibling:parsed.querySelector('strong').outerHTML,last:parsed.querySelector('p').lastChild.data,
+      repeatSpans:new DOMParser().parseFromString(repeated,'text/html').querySelectorAll('span').length,
+      fresh:!second.includes('font-size'),invalid,sourceCode:first.includes('<script>window.never=true;</script>')};
+  });
+  assert.deepEqual(styleChecks,{size:'32px',color:'rgb(18, 52, 86)',sibling:'<strong>B</strong>',last:' C',repeatSpans:1,fresh:true,invalid:true,sourceCode:true});
   await page.locator('[data-home-menu=import] > summary').click();
   const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.locator('[data-html-open]').click()]);
   await chooser.setFiles({name: '수업.HTML', mimeType: 'text/html', buffer: Buffer.from(html)});
@@ -74,6 +88,7 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
     window.postMessage({channel,type:'change',id:'0',text:'forged'},'*');
   });
   assert.equal(await edit.getByRole('button',{name:'저장',exact:true}).isDisabled(),true,'other windows cannot supply edits');
+  assert.equal(await edit.getByRole('spinbutton',{name:'글자 크기 (px)',exact:true}).isDisabled(),true);
   await mkdir(resolve(root,'work'),{recursive:true});
   await editFrame.locator('h1').click();
   await page.keyboard.press('ControlOrMeta+A');
@@ -84,6 +99,16 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   await editFrame.getByRole('textbox',{name:'화면의 글 수정',exact:true}).fill('시작하기');
   await editFrame.locator('#mixed strong').click();
   await editFrame.getByRole('textbox',{name:'화면의 글 수정',exact:true}).fill('바뀐 강조');
+  const sizeControl = edit.getByRole('spinbutton',{name:'글자 크기 (px)',exact:true});
+  await sizeControl.fill('40');
+  await edit.getByLabel('글자 색깔',{exact:true}).evaluate(input=>{input.value='#c2185b';input.dispatchEvent(new Event('input',{bubbles:true}));});
+  await editFrame.getByRole('textbox',{name:'화면의 글 수정',exact:true}).evaluate(element=>new Promise(resolve=>{
+    const check=()=>{const s=getComputedStyle(element);if(s.fontSize==='40px'&&s.color==='rgb(194, 24, 91)')resolve();else requestAnimationFrame(check);};check();
+  }));
+  await editFrame.locator('#duplicate-a').click();
+  assert.equal(await sizeControl.inputValue(),'24','choosing another text loads its own size');
+  await sizeControl.fill('30');
+  await edit.getByLabel('글자 색깔',{exact:true}).evaluate(input=>{input.value='#0066cc';input.dispatchEvent(new Event('input',{bubbles:true}));});
   await page.screenshot({path:resolve(root,'work/html-text-editor.png')});
   await edit.getByRole('button',{name:'저장',exact:true}).click();
   await workspace.locator('h1').filter({hasText:'바뀐 <제목> & 수업'}).waitFor();
@@ -92,19 +117,40 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   assert.equal(await workspace.locator('#duplicate-b').textContent(),'두 번째 글');
   assert.equal(await workspace.locator('#mixed').textContent(),'앞 바뀐 강조 뒤');
   assert.equal(await workspace.locator('#mixed strong').textContent(),'바뀐 강조','nested formatting survives');
+  assert.deepEqual(await workspace.locator('#mixed strong').evaluate(e=>({size:getComputedStyle(e).fontSize,color:getComputedStyle(e).color,weight:getComputedStyle(e).fontWeight})),{size:'40px',color:'rgb(194, 24, 91)',weight:'700'});
+  assert.equal(await workspace.locator('#mixed').evaluate(e=>getComputedStyle(e).fontSize),'24px','neighboring text keeps its size');
+  assert.equal(await workspace.locator('#duplicate-a').evaluate(e=>getComputedStyle(e).fontSize),'30px','format-only edits save');
+  assert.equal(await workspace.locator('#duplicate-b').evaluate(e=>getComputedStyle(e).fontSize),'24px','duplicate wording is styled independently');
   assert.equal(await workspace.locator('#count').textContent(),'시작하기','button labels can be edited without activating buttons');
   await workspace.locator('#count').click();
   assert.equal(await workspace.locator('#count').textContent(),'완료','scripts still work after editing text');
   await page.locator('.fe-history-tools .undo').click();
   await workspace.locator('h1').filter({hasText:'HTML 수업'}).waitFor();
+  assert.equal(await workspace.locator('#mixed strong').evaluate(e=>getComputedStyle(e).fontSize),'24px','undo restores formatting');
   await page.locator('.fe-history-tools .redo').click();
   await workspace.locator('h1').filter({hasText:'바뀐 <제목> & 수업'}).waitFor();
+  assert.equal(await workspace.locator('#mixed strong').evaluate(e=>getComputedStyle(e).color),'rgb(194, 24, 91)','redo restores formatting');
   await page.getByRole('button',{name:'글 수정',exact:true}).click();
   await edit.getByRole('status').filter({hasText:'화면의 글을 눌러'}).waitFor();
+  await editFrame.locator('#mixed strong').click();
+  assert.equal(await sizeControl.inputValue(),'40','reopened toolbar shows saved size');
+  assert.equal(await edit.getByLabel('글자 색깔',{exact:true}).inputValue(),'#c2185b');
   await editFrame.locator('h1').click();
   await editFrame.getByRole('textbox',{name:'화면의 글 수정',exact:true}).fill('취소한 글');
+  await sizeControl.fill('72');
   await edit.getByRole('button',{name:'취소',exact:true}).click();
   assert.equal(await workspace.locator('h1').textContent(),'바뀐 <제목> & 수업');
+  assert.equal(await workspace.locator('h1').evaluate(e=>getComputedStyle(e).fontSize),'48px','cancel discards formatting too');
+  await page.getByRole('button',{name:'글 수정',exact:true}).click();
+  await edit.getByRole('status').filter({hasText:'화면의 글을 눌러'}).waitFor();
+  await editFrame.locator('#duplicate-a').click();
+  await sizeControl.fill('31');
+  await edit.getByRole('button',{name:'저장',exact:true}).click();
+  await workspace.locator('#duplicate-a').evaluate(e=>new Promise(resolve=>{
+    const check=()=>{if(getComputedStyle(e).fontSize==='31px')resolve();else requestAnimationFrame(check);};check();
+  }));
+  await page.locator('.fe-history-tools .undo').click();
+  assert.equal(await workspace.locator('#duplicate-a').evaluate(e=>getComputedStyle(e).fontSize),'30px','a formatting-only save has its own undo step');
   await mkdir(resolve(root, 'work'), {recursive: true});
   await page.screenshot({path:resolve(root,'work/html-import-workspace.png')});
   await page.locator('.cv-back').click();
@@ -122,6 +168,7 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   await page.reload(); await page.waitForFunction(() => window.ready);
   await page.locator('.cv-item .cv-thumb').first().click();
   await workspace.locator('h1').filter({hasText:'바뀐 <제목> & 수업'}).waitFor();
+  assert.equal(await workspace.locator('#mixed strong').evaluate(e=>getComputedStyle(e).fontSize),'40px','formatting survives reopen');
   await workspace.locator('#count').click();
   await page.locator('.cv-slide[data-slide="1"]').click();
   await page.locator('.cv-canvas').waitFor();
@@ -163,10 +210,13 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   await edit.getByRole('status').filter({hasText:'화면의 글을 눌러'}).waitFor();
   await editFrame.locator('h1').tap();
   await editFrame.getByRole('textbox',{name:'화면의 글 수정',exact:true}).fill('휴대폰에서 수정');
+  await sizeControl.fill('28');
+  await edit.getByLabel('글자 색깔',{exact:true}).evaluate(input=>{input.value='#7040c0';input.dispatchEvent(new Event('input',{bubbles:true}));});
   await page.screenshot({path:resolve(root,'work/html-inline-mobile.png'),fullPage:true});
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
   await edit.getByRole('button',{name:'저장',exact:true}).tap();
   await workspace.locator('h1').filter({hasText:'휴대폰에서 수정'}).waitFor();
+  assert.deepEqual(await workspace.locator('h1').evaluate(e=>({size:getComputedStyle(e).fontSize,color:getComputedStyle(e).color})),{size:'28px',color:'rgb(112, 64, 192)'});
   assert.equal(await page.locator('[data-html-workspace] iframe').getAttribute('data-scaled'),null,'HTML uses the real mobile viewport');
   await page.screenshot({path:resolve(root,'work/html-workspace-mobile.png'),fullPage:true});
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
@@ -187,6 +237,7 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   const offline = page.frameLocator('.lesson-activity iframe');
   await offline.locator('#status').filter({hasText:'isolated'}).waitFor();
   assert.equal(await offline.locator('h1').textContent(),'바뀐 <제목> & 수업','edited text survives offline export');
+  assert.equal(await offline.locator('#mixed strong').evaluate(e=>getComputedStyle(e).fontSize),'40px','formatting survives offline export');
   await offline.locator('#count').click(); assert.equal(await offline.locator('#count').textContent(),'완료');
   assert.deepEqual(errors, []);
 });

@@ -4710,7 +4710,7 @@ async function importHtml(file) {
     S.list = await listDesigns();
     app.inert = wasInert; loading.node.remove();
     if (!S.open) openDesign(saved, false);
-    toast('HTML을 열었어요. 바로 조작하고, 위의 ‘글 수정’에서 문구를 바꿀 수 있어요.', 4500);
+    toast('HTML을 열었어요. 바로 조작하고, 위의 ‘글 수정’에서 글과 크기·색깔을 바꿀 수 있어요.', 4500);
     return true;
   } catch (error) {
     console.warn(error);
