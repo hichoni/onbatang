@@ -267,6 +267,7 @@ export function webFrame(web) {
  * 지구 그림 · 사이트 이름 · 주소 · 안내 한 줄. 카드 너비(cqw)를 따라 커지고 작아진다.
  */
 export function webCard(web) {
+  if (web.html && web.poster) return el('img', {class:'fe-html-poster',src:web.poster,alt:`${web.filename} 첫 화면`,style:'width:100%;height:100%;object-fit:contain;display:block',draggable:false});
   return el('div', { class: 'fe-web', dataset: { web: web.url } },
     el('span', { class: 'fe-web-globe', html: GLOBE }),
     el('b', { class: 'fe-web-host', text: web.html ? web.filename : webHost(web.url) }),

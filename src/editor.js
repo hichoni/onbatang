@@ -4408,7 +4408,7 @@ export function createEditor({
           el('input', { type: 'checkbox', checked: card.web.keep === true, dataset: { webKeep: '' }, onChange: e => setWebKeep(e.target.checked) }),
           el('span', {}, el('b', { text: '넘겨도 켜 두기' }), el('small', { class: 'fe-note', text: '다른 장으로 넘겨도 HTML을 닫지 않아요. 돌아오면 입력한 내용과 진행 상태가 그대로 이어져요.' }))),
         el('button', { class: 'fe-btn danger', type: 'button', dataset: { webRemove: '' }, onClick: removeWebsite }, icon('trash'), 'HTML 빼기')),
-      el('p', { class: 'fe-note', text: '발표 중 장을 넘길 때는 위의 ◀ ▶ 또는 아래 발표 막대를 사용해요. HTML 조작을 끄면 화면을 누르거나 방향키로 장을 넘길 수 있어요.' }),
+      el('p', { class: 'fe-note', text: 'HTML 안의 버튼은 바로 사용할 수 있어요. 다른 온바탕 장으로 넘길 때는 아래 발표 막대를 사용해요.' }),
     ];
     const input = el('input', {
       class: 'fe-search fe-web-input', type: 'url', inputmode: 'url', placeholder: 'https://…', 'aria-label': '웹사이트 주소', autocomplete: 'off', spellcheck: 'false',
@@ -4999,11 +4999,17 @@ export function createEditor({
     /** 원본 HTML의 글 수정도 일반 편집처럼 실행 취소·저장에 포함한다. */
     replaceHtml: html => {
       if (!card?.web?.html || typeof html !== 'string' || html === card.web.html) return false;
-      const next = designWeb({web: {...card.web, html}}).web;
+      const next = designWeb({web: {...card.web, html, poster:undefined}}).web;
       if (!next?.html) throw Error('HTML 파일은 50MB까지 저장할 수 있어요.');
       remember(); card.web = next;
       renderStage(); renderPanel(); onChange();
       return true;
+    },
+    setHtmlPoster: (source,poster) => {
+      if(card?.web?.html!==source||card.web.poster===poster)return false;
+      const next=designWeb({web:{...card.web,poster}}).web;
+      if(!next?.poster)return false;
+      card.web=next;renderStage();onChange();return true;
     },
     /** 발표자 노트 칸(접고 펴는 칸). 프로젝트가 그림 아래 등 원하는 자리에 놓는다. 놓지 않으면 노트는 그대로 저장만 된다. */
     notes,

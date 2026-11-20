@@ -1077,6 +1077,12 @@ function syncHtmlWorkspace(O) {
   O.shell.querySelector('.cv-canvas-label').textContent = html ? 'HTML 원본' : '편집 캔버스';
   if (changed) O.workspace.showCanvas();
   O.htmlWorkspace.show(design);
+  if(html&&!design.web.poster&&O.htmlPosterSource!==design.web.html){
+    O.htmlPosterSource=design.web.html;
+    import('./html-preview.js').then(({htmlFirstScreen})=>htmlFirstScreen(design.web.html,{aspect:aspectOf(O.record)})).then(poster=>{
+      if(poster&&!O.closed&&!O.leaving&&O.editor.getDesign().id===design.id)O.editor.setHtmlPoster(design.web.html,poster);
+    }).catch(console.warn);
+  }
 }
 function openHtmlTextEditor(O) {
   if (O.closed || O.leaving || O.recoveryRequired || O.inlineImport || videoBusy(O)) return;
@@ -2697,6 +2703,7 @@ async function present(O) {
   const webIcon = (name, title, onClick, data) => el('button', { class: 'cv-web-icon', type: 'button', title, 'aria-label': title, dataset: data, onClick: (e) => { e.stopPropagation(); onClick(); } }, ic(name));
   const paintWebPill = () => {
     if (!web) return;
+    if(web.html){web.pill.replaceChildren();web.pill.hidden=true;return;}
     const on = web.mode === 'use';
     const label = web.html ? 'HTML 조작' : '사이트 둘러보기';
     const toggle = el('button', { class: `cv-web-toggle${on ? ' on' : ''}`, type: 'button', role: 'switch', 'aria-checked': String(on), 'aria-label': label,
@@ -2881,7 +2888,7 @@ async function present(O) {
     if ((e.key === ' ' || e.key === 'Enter') && e.target?.closest?.('.cv-show-key')) { e.stopPropagation(); return; }
     if ((e.key === ' ' || e.key === 'Enter') && e.target?.closest?.('[data-effect-trigger]')) return;
     // 웹사이트를 둘러보는 중의 Esc 는 발표를 끝내지 않고 보기로 돌아간다.
-    if (e.key === 'Escape' && web?.mode === 'use') { e.preventDefault(); e.stopPropagation(); webMode('view'); return; }
+    if (e.key === 'Escape' && web?.mode === 'use' && !web.html) { e.preventDefault(); e.stopPropagation(); webMode('view'); return; }
     // 유튜브를 틀었으면 스페이스 바는 멈추기 · 다시 틀기다(다음 장은 → · PageDown · 누르기).
     if (e.key === ' ' && tubeNow()) { e.preventDefault(); e.stopPropagation(); tubeNow().toggle(); return; }
     // 넘기기 · 번호로 가기 · 검은 화면 · 펜 · 전체 보기 · 발표자 화면 · K(영상) … 글쇠 약속은 show-keys.js 에 있다(HTML 수업과 같다).

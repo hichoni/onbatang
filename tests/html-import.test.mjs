@@ -9,6 +9,14 @@ import {createHtmlLesson} from '../app/html-lesson.js';
 const html = '<!doctype html><meta charset="utf-8"><title>수업</title><button onclick="this.textContent=\'완료\'">눌러요</button>';
 const image = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aF1sAAAAASUVORK5CYII=';
 
+test('HTML first-screen posters survive model and backup and reject executable or oversized URLs',async()=>{
+  const poster='data:image/jpeg;base64,/9j/2Q==';
+  const record=await readHtmlFile(new File([html],'preview.html'));record.slides[0].web.poster=poster;
+  assert.equal(cleanDesign(record.slides[0]).web.poster,poster);
+  const reopened=await readOnbatang(await packOnbatang({records:[record]}));assert.equal(reopened.records[0].slides[0].web.poster,poster);
+  for(const value of ['https://example.org/x.jpg','data:image/svg+xml,<svg onload="alert(1)"/>','javascript:alert(1)',poster+'A'.repeat(400001)])assert.equal(cleanHtmlFile({html,poster:value}).poster,undefined);
+});
+
 test('HTML and HTM import losslessly and survive cleaning, backup and offline lesson serialization', async () => {
   for (const name of ['수업.html', '수업.HTM']) {
     const record = await readHtmlFile(new File([html], name));
