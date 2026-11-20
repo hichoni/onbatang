@@ -1,10 +1,63 @@
 // This function is serialized into an opaque-origin editing preview. Keep it self-contained.
 function inlineTextRuntime(channel, fonts) {
   const prefix = `onba-text-${channel}:`, fields = new Map(), byNode = new WeakMap(), edits = new Map(), styles = new Map(), holders = new Map();
+  const paragraphAttribute = `data-onba-paragraph-${channel}`, paragraphs = new Map();
   let editing = null, selected = null, outline;
   const send = data => parent.postMessage({channel, ...data}, '*');
   const value = () => editing.element.innerText.replace(/\r\n/g, '\n');
   const changed = () => { if (editing) { const text = value(); edits.set(editing.id, text); send({type: 'change', id: editing.id, text}); } };
+  const isTextBlock = display => ['block', 'flow-root', 'list-item', 'table-cell', 'inline-block'].includes(display);
+  function paragraphFor(node) {
+    for (let element = node.parentElement; element; element = element.parentElement) {
+      if (!element.hasAttribute(paragraphAttribute)) continue;
+      const display = getComputedStyle(element).display;
+      if (['inline-flex', 'inline-grid'].includes(display)) continue;
+      if (['flex', 'grid', 'table', 'table-row'].includes(display)) return null;
+      if (display === 'inline-block' && !/^(p|h[1-6]|li|td|th|button|div|section|article|blockquote|pre|figcaption)$/.test(element.localName)) continue;
+      if (!isTextBlock(display)) continue;
+      // A container with separate text blocks is not one paragraph. Never align
+      // an entire card/page just because its loose text was clicked.
+      const nested = [...element.querySelectorAll(`[${paragraphAttribute}]`)];
+      if (nested.some(child => ['block', 'flow-root', 'list-item', 'table-cell', 'flex', 'grid', 'table', 'table-row'].includes(getComputedStyle(child).display))) return null;
+      return element;
+    }
+    return null;
+  }
+  function paragraphInfo() {
+    const block = editing && paragraphFor(editing.element);
+    if (!block) return {paragraphId: null};
+    const computed = getComputedStyle(block), rtl = computed.direction === 'rtl';
+    let textAlign = computed.textAlign;
+    if (textAlign === 'start') textAlign = rtl ? 'right' : 'left';
+    if (textAlign === 'end') textAlign = rtl ? 'left' : 'right';
+    const lineHeight = computed.lineHeight === 'normal' ? 'normal' : Math.round(parseFloat(computed.lineHeight) / parseFloat(computed.fontSize) * 1000) / 1000;
+    return {paragraphId: block.getAttribute(paragraphAttribute), textAlign, lineHeight};
+  }
+  function paintParagraph(block, style) {
+    if (style.textAlign !== undefined) block.style.setProperty('text-align', style.textAlign, 'important');
+    if (style.lineHeight !== undefined) {
+      // Include the paragraph's inline text runs, which may have their own
+      // line-height. Different font sizes still use the same unitless spacing.
+      block.style.setProperty('line-height', String(style.lineHeight), 'important');
+      for (const [id, node] of fields) {
+        const leaf = editing?.id === id ? editing.element : node;
+        if (!block.contains(leaf)) continue;
+        for (let element = leaf.nodeType === Node.TEXT_NODE ? leaf.parentElement : leaf; element && element !== block; element = element.parentElement) element.style.setProperty('line-height', String(style.lineHeight), 'important');
+      }
+    }
+  }
+  function formatParagraph(data) {
+    const block = editing && paragraphFor(editing.element), patch = data.style;
+    if (data.id !== selected || !block || data.paragraphId !== block.getAttribute(paragraphAttribute) || !patch || typeof patch !== 'object') return;
+    const keys = Object.keys(patch);
+    if (!keys.length || keys.some(key => !['textAlign', 'lineHeight'].includes(key))) return;
+    if ('textAlign' in patch && !['left', 'center', 'right', 'justify'].includes(patch.textAlign)) return;
+    if ('lineHeight' in patch && patch.lineHeight !== 'normal' && (!Number.isFinite(patch.lineHeight) || patch.lineHeight < 0.8 || patch.lineHeight > 3)) return;
+    const record = {id: selected, style: {...paragraphs.get(data.paragraphId)?.style, ...patch}};
+    paragraphs.set(data.paragraphId, record); paintParagraph(block, record.style);
+    send({type: 'paragraph-change', paragraphId: data.paragraphId, ...record});
+    send({type: 'paragraph-info', id: selected, ...paragraphInfo()});
+  }
   function selectionInfo() {
     if (!editing) return;
     const computed = getComputedStyle(editing.element), canvas = document.createElement('canvas');
@@ -14,7 +67,7 @@ function inlineTextRuntime(channel, fonts) {
     const color = '#' + [...rgb].slice(0, 3).map(n => n.toString(16).padStart(2, '0')).join('');
     const family = computed.fontFamily.split(',')[0].trim().replace(/^["']|["']$/g, '');
     send({type: 'selected', id: editing.id, fontSize: parseFloat(computed.fontSize), color,
-      fontId: fonts.find(font => font.family === family)?.id || '', fontFamily: family.slice(0, 100), fontWeight: Number(computed.fontWeight)});
+      fontId: fonts.find(font => font.family === family)?.id || '', fontFamily: family.slice(0, 100), fontWeight: Number(computed.fontWeight), ...paragraphInfo()});
   }
   function format(data) {
     if (data.id !== selected || !fields.has(data.id) || !data.style || typeof data.style !== 'object') return;
@@ -47,7 +100,10 @@ function inlineTextRuntime(channel, fonts) {
     if (style.color !== undefined) holder.style.setProperty('color', style.color, 'important');
     if (style.fontId !== undefined) holder.style.setProperty('font-family', `"${fonts.find(item => item.id === style.fontId).family}"`, 'important');
     if (style.fontWeight !== undefined) holder.style.setProperty('font-weight', String(style.fontWeight), 'important');
+    const block = editing && paragraphFor(editing.element), paragraphStyle = block && paragraphs.get(block.getAttribute(paragraphAttribute))?.style;
+    if (paragraphStyle) paintParagraph(block, paragraphStyle);
     send({type: 'style-change', id: data.id, style});
+    send({type: 'paragraph-info', id: selected, ...paragraphInfo()});
   }
   function finish() {
     if (!editing) return;
@@ -120,8 +176,9 @@ function inlineTextRuntime(channel, fonts) {
   addEventListener('message', event => {
     if (event.source !== parent || event.data?.channel !== channel) return;
     if (event.data.type === 'format') {format(event.data); return;}
+    if (event.data.type === 'format-paragraph') {formatParagraph(event.data); return;}
     if (event.data.type !== 'commit') return;
-    finish(); send({type: 'committed', request: event.data.request, edits: [...edits], styles: [...styles]});
+    finish(); send({type: 'committed', request: event.data.request, edits: [...edits], styles: [...styles], paragraphs: [...paragraphs]});
   });
   document.addEventListener('DOMContentLoaded', () => {
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_COMMENT);
