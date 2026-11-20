@@ -9,6 +9,28 @@ const bytes = (v) => new TextEncoder().encode(JSON.stringify(v)).length;
 const photo = (size, seed = 0) => 'data:image/jpeg;base64,' + 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'.repeat(Math.ceil(size / 64) + 1).slice(seed % 64, (seed % 64) + size);
 const design = (id, slides, size) => ({ id, name: `그림 ${id}`, ratio: '16:9', updatedAt: 1, slides: Array.from({ length: slides }, (_, i) => ({ id: `p${id}${i}`, bg: 'paper', items: [{ id: `e${id}${i}`, t: 'image', x: 1, y: 1, w: 10, h: 10, url: photo(size, i) }] })) });
 
+test('a 50 MiB HTML slide travels in small requests and returns as exactly one intact slide', () => {
+  const prefix = '<!doctype html><h1>한글😀</h1><!--', suffix = '-->';
+  const html = prefix + 'x'.repeat(50 * 1024 * 1024 - new TextEncoder().encode(prefix + suffix).length) + suffix;
+  const record = {...design('dhtml1234', 0, 0), slides:[{id:'phtml',items:[],web:{html,filename:'발표.html'}}]};
+  const sent = guestRecords([record]);
+  assert.equal(sent.big, false); assert.ok(sent.parts.length <= GUEST_MAX_PARTS && sent.parts.length > 1);
+  assert.ok(sent.parts.every(part => bytes(part) < PART_TARGET_BYTES));
+  assert.deepEqual(joinParts(sent.parts), [record]);
+  assert.throws(() => joinParts(sent.parts.slice(1)), /invalid/);
+  assert.throws(() => joinParts(sent.parts.slice(0,-1)), /invalid/);
+  assert.throws(() => joinParts([sent.parts[0], sent.parts[0], ...sent.parts.slice(1)]), /invalid/);
+});
+
+test('HTML fragments preserve quoted Unicode, surrounding slides and adjacent records', () => {
+  const html = '<p>' + '가😀"\\\n'.repeat(8000) + '</p>';
+  const before = design('dmixed',1,10).slides[0], after = {...before,id:'plast'};
+  const record = {...design('dmixed',0,0),slides:[before,{id:'phtml',web:{html,filename:'한글.html'},items:[]},after]};
+  const small = design('dnext',1,10), parts = splitParts([record,small],{target:20000});
+  assert.ok(parts.every(part=>bytes(part)<20000));
+  assert.deepEqual(joinParts(parts),[record,small]);
+});
+
 test('a small drawing stays one part, without a piece mark', () => {
   const small = design('d01', 3, 1000);
   assert.deepEqual(splitParts([small]), [small]);

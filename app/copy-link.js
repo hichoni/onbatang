@@ -3,6 +3,7 @@
 // 링크는 둘이다: GBE-AI Lab 선생님의 링크(GBE-AI Lab이 만든다)와, 누구나 공용 온바탕에서 만드는 7일 링크(createGuestLinks: 만든 때부터 7일만 열리고 그 뒤에는 서버에서 지워진다).
 // 서버: GBE-AI Lab의 공개 함수 onbatang_copy_info · onbatang_copy_part · onbatang_guest_copy_*(로그인 없이 부르는 열쇠로), 바탕 영상은 onbatang-copy-videos/<코드>/<sha>.
 import { cleanRecord, isDesignId, newDesignId, MAX_SLIDES } from './designs.js';
+import {HTML_FILE_MAX_BYTES} from '../src/html-file.js';
 
 export const COPY_PARAM = 'copy';
 const GAILAB = { url: 'https://wiaciazdsnhzgwplwjpu.supabase.co', key: 'sb_publishable_uYeQYITkob0HiEHUCaUZPA_w_1GXN_Q' };
@@ -89,6 +90,19 @@ const bytesOf = (value) => new TextEncoder().encode(JSON.stringify(value)).lengt
 // 장을 차례대로 나눠 여러 파트로 올리고(조각마다 piece: { i, n }), 받는 쪽(createCopyIntake.take → joinParts)이 이어 붙여 한 그림으로 되돌린다.
 // 장 하나가 목표보다 크면 그 장만으로 한 파트다. 파트 수가 maxParts 를 넘으면 목표를 키워(cap 까지) 다시 나눈다.
 export const PART_TARGET_BYTES = 4000000;
+// HTML 한 장은 원문을 나눠 전송한다. JSON 이스케이프·한글 바이트까지 세고 서로게이트 쌍은 나누지 않는다.
+function htmlRanges(html, budget) {
+  const ranges = [];
+  for (let from = 0; from < html.length;) {
+    let low = from, high = Math.min(html.length, from + budget);
+    while (low < high) { const mid = Math.ceil((low + high) / 2); if (bytesOf(html.slice(from, mid)) <= budget) low = mid; else high = mid - 1; }
+    let to = low;
+    if (to < html.length && /[\uD800-\uDBFF]/.test(html[to - 1])) to--;
+    if (to <= from) throw Error('onbatang_copy_invalid');
+    ranges.push({from, to}); from = to;
+  }
+  return ranges.map((range, i) => ({...range, i, n: ranges.length, length: html.length}));
+}
 /** 나눌 자리: [{ r(그림 차례), from, to(장 범위), i, n(그 그림의 조각 수), bytes(파트의 대략 크기) }]. 크기는 JSON 바이트(서버와 같다). */
 export function pieceRanges(records, { target = PART_TARGET_BYTES, maxParts = Infinity, cap = 30000000 } = {}) {
   const list = Array.isArray(records) ? records : [];
@@ -96,7 +110,24 @@ export function pieceRanges(records, { target = PART_TARGET_BYTES, maxParts = In
   const heads = list.map((record) => { const { slides, ...meta } = record || {}; return bytesOf({ ...meta, slides: [], piece: { i: 0, n: 0 } }) + 8; });
   const plan = (goal) => {
     const out = [];
-    list.forEach((_, r) => {
+    list.forEach((record, r) => {
+      if ((record.slides || []).some((slide, k) => typeof slide?.web?.html === 'string' && sizes[r][k] + heads[r] > goal)) {
+        const cuts = []; let from = 0, used = heads[r];
+        const flush = to => { if (to > from) cuts.push({r, from, to, bytes: used}); from = to; used = heads[r]; };
+        record.slides.forEach((slide, k) => {
+          const html = slide?.web?.html;
+          const overhead = heads[r] + bytesOf({...slide, web: {...slide.web, html: ''}}) + 512;
+          if (typeof html === 'string' && sizes[r][k] + heads[r] > goal && overhead < goal - 16) {
+            if (new TextEncoder().encode(html).length > HTML_FILE_MAX_BYTES) throw Error('onbatang_copy_invalid');
+            flush(k);
+            for (const fragment of htmlRanges(html, goal - overhead)) cuts.push({r, from:k, to:k+1, html:fragment, bytes:overhead + bytesOf(html.slice(fragment.from, fragment.to))});
+            from = k + 1;
+          } else { if (k > from && used + sizes[r][k] > goal) flush(k); used += sizes[r][k]; }
+        });
+        flush(record.slides.length);
+        cuts.forEach((cut, i) => out.push({...cut, i, n:cuts.length}));
+        return;
+      }
       const all = heads[r] + sizes[r].reduce((a, b) => a + b, 0);
       if (all <= goal || sizes[r].length < 2) { out.push({ r, from: 0, to: sizes[r].length, i: 0, n: 1, bytes: all }); return; }
       const cuts = [];
@@ -113,20 +144,53 @@ export function pieceRanges(records, { target = PART_TARGET_BYTES, maxParts = In
 }
 /** 나눈 자리대로 파트를 만든다(조각이 하나뿐인 그림은 그대로 한 파트). */
 export function takeRanges(records, ranges) {
-  return ranges.map(({ r, from, to, i, n }) => (n === 1 ? records[r] : { ...records[r], slides: records[r].slides.slice(from, to), piece: { i, n } }));
+  return ranges.map(({ r, from, to, i, n, html }) => {
+    if (html) {
+      const slide = records[r].slides[from];
+      return {...records[r], slides:[{...slide, web:{...slide.web, html:slide.web.html.slice(html.from, html.to)}}],
+        piece:{i,n,html:{i:html.i,n:html.n,length:html.length}}};
+    }
+    return n === 1 ? records[r] : { ...records[r], slides: records[r].slides.slice(from, to), piece: { i, n } };
+  });
 }
 export const splitParts = (records, options) => takeRanges(records, pieceRanges(records, options));
 /** 받은 파트를 그림으로: 같은 그림의 조각(piece)을 차례대로 이어 붙이고 조각 표시는 뗀다. 조각이 아닌 파트는 그대로다. */
 export function joinParts(parts) {
+  // 조각 원문은 전부 받은 다음에만 공개한다. 빠짐·뒤섞임·중복은 손상된 링크로 처리한다.
+  const assembled = []; let htmlOpen = null;
+  for (const part of Array.isArray(parts) ? parts : []) {
+    const fragment = part?.piece?.html;
+    if (!fragment) { if (htmlOpen) throw Error('onbatang_copy_invalid'); assembled.push(part); continue; }
+    const slide = part.slides?.[0], text = slide?.web?.html;
+    if (part.slides?.length !== 1 || typeof text !== 'string' || !Number.isInteger(fragment.i) || !Number.isInteger(fragment.n)
+      || fragment.n < 2 || fragment.n > 40 || fragment.i < 0 || fragment.i >= fragment.n
+      || !Number.isInteger(fragment.length) || fragment.length < 1 || fragment.length > HTML_FILE_MAX_BYTES) throw Error('onbatang_copy_invalid');
+    if (fragment.i === 0) {
+      if (htmlOpen) throw Error('onbatang_copy_invalid');
+      htmlOpen = {part, chunks:[], length:0, bytes:0, next:0, start:part.piece.i};
+    }
+    if (!htmlOpen || htmlOpen.part.id !== part.id || htmlOpen.part.slides[0].id !== slide.id || fragment.i !== htmlOpen.next
+      || fragment.n !== htmlOpen.part.piece.html.n || fragment.length !== htmlOpen.part.piece.html.length
+      || part.piece.i !== htmlOpen.start + fragment.i || part.piece.n !== htmlOpen.part.piece.n) throw Error('onbatang_copy_invalid');
+    htmlOpen.chunks.push(text); htmlOpen.length += text.length; htmlOpen.bytes += new TextEncoder().encode(text).length; htmlOpen.next++;
+    if (htmlOpen.length > fragment.length || htmlOpen.bytes > HTML_FILE_MAX_BYTES) throw Error('onbatang_copy_invalid');
+    if (htmlOpen.next === fragment.n) {
+      if (htmlOpen.length !== fragment.length) throw Error('onbatang_copy_invalid');
+      const first = htmlOpen.part, original = first.slides[0];
+      assembled.push({...first, slides:[{...original, web:{...original.web, html:htmlOpen.chunks.join('')}}],piece:{i:first.piece.i,n:part.piece.n,end:part.piece.i}});
+      htmlOpen = null;
+    }
+  }
+  if (htmlOpen) throw Error('onbatang_copy_invalid');
   const out = [];
   let open = null;   // 이어 붙이는 중인 그림
-  for (const part of Array.isArray(parts) ? parts : []) {
+  for (const part of assembled) {
     const piece = part && typeof part === 'object' ? part.piece : null;
     if (!piece || typeof piece !== 'object') { out.push(part); open = null; continue; }
     const { piece: _, ...rest } = part, slides = Array.isArray(rest.slides) ? rest.slides : [];
     if (open && Number(piece.i) > 0 && open.id === rest.id) open.slides.push(...slides);
     else { open = { ...rest, slides: [...slides] }; out.push(open); }
-    if (!(Number(piece.i) < Number(piece.n) - 1)) open = null;
+    if (!(Number(piece.end ?? piece.i) < Number(piece.n) - 1)) open = null;
   }
   return out;
 }
@@ -147,7 +211,7 @@ export function guestRecords(records) {
 const GUEST_MESSAGES = {
   onbatang_guest_limit: `링크는 하루에 ${GUEST_PER_DAY}개까지 만들 수 있어요. 내일 다시 하거나, 내려받기의 "온바탕 파일"로 보내 주세요.`,
   onbatang_guest_busy: '지금은 7일 링크가 너무 많아 새로 만들 수 없어요. 내려받기의 "온바탕 파일"로 보내 주세요.',
-  onbatang_guest_too_large: `사진이 많아 7일 링크로 보내기에 커요(사진 포함 ${GUEST_MAX_BYTES / 1e6}MB까지, 한 장은 ${GUEST_PART_MAX_BYTES / 1e6}MB까지). 내려받기의 "온바탕 파일"로 보내 주세요.`,
+  onbatang_guest_too_large: `7일 링크는 전체 ${GUEST_MAX_BYTES / 1e6}MB까지 보낼 수 있어요(HTML 파일은 50MB까지, 다른 한 장은 ${GUEST_PART_MAX_BYTES / 1e6}MB까지). 큰 자료는 "온바탕 파일"로 보내 주세요.`,
   onbatang_copy_invalid: `자료를 확인해 주세요(파트는 ${GUEST_MAX_PARTS}개, 한 파트는 1~${MAX_SLIDES}장, 이름은 60자까지).`,
   onbatang_copy_not_found: '이 링크는 지워졌거나 7일이 지났어요. 새 링크를 만들어 주세요.',
 };
