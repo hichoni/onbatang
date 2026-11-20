@@ -1,5 +1,5 @@
 // This function is serialized into an opaque-origin editing preview. Keep it self-contained.
-function inlineTextRuntime(channel) {
+function inlineTextRuntime(channel, fonts) {
   const prefix = `onba-text-${channel}:`, fields = new Map(), byNode = new WeakMap(), edits = new Map(), styles = new Map(), holders = new Map();
   let editing = null, selected = null, outline;
   const send = data => parent.postMessage({channel, ...data}, '*');
@@ -12,14 +12,25 @@ function inlineTextRuntime(channel) {
     const ctx = canvas.getContext('2d'); ctx.fillStyle = computed.color; ctx.fillRect(0, 0, 1, 1);
     const rgb = ctx.getImageData(0, 0, 1, 1).data;
     const color = '#' + [...rgb].slice(0, 3).map(n => n.toString(16).padStart(2, '0')).join('');
-    send({type: 'selected', id: editing.id, fontSize: parseFloat(computed.fontSize), color});
+    const family = computed.fontFamily.split(',')[0].trim().replace(/^["']|["']$/g, '');
+    send({type: 'selected', id: editing.id, fontSize: parseFloat(computed.fontSize), color,
+      fontId: fonts.find(font => font.family === family)?.id || '', fontFamily: family.slice(0, 100), fontWeight: Number(computed.fontWeight)});
   }
   function format(data) {
     if (data.id !== selected || !fields.has(data.id) || !data.style || typeof data.style !== 'object') return;
     const patch = data.style, keys = Object.keys(patch);
-    if (!keys.length || keys.some(key => !['fontSize', 'color'].includes(key))) return;
+    if (!keys.length || keys.some(key => !['fontSize', 'color', 'fontId', 'fontWeight'].includes(key))) return;
     if ('fontSize' in patch && (!Number.isFinite(patch.fontSize) || patch.fontSize < 6 || patch.fontSize > 300)) return;
     if ('color' in patch && (typeof patch.color !== 'string' || !/^#[\da-f]{6}$/i.test(patch.color))) return;
+    const font = fonts.find(item => item.id === patch.fontId);
+    if ('fontId' in patch && !font) return;
+    if ('fontWeight' in patch && ![400, 700].includes(patch.fontWeight)) return;
+    if (font) {
+      if (typeof data.fontCss !== 'string' || data.fontCss.length > 8 * 1024 * 1024) return;
+      let face = document.querySelector(`style[data-onba-html-font="${font.id}"]`);
+      if (!face) { face = document.createElement('style'); face.dataset.onbaHtmlFont = font.id; document.head.append(face); }
+      face.textContent = data.fontCss;
+    }
     const style = {...styles.get(data.id), ...patch}; styles.set(data.id, style);
     let holder = holders.get(data.id);
     if (!holder) {
@@ -34,6 +45,8 @@ function inlineTextRuntime(channel) {
     }
     if (style.fontSize !== undefined) holder.style.setProperty('font-size', style.fontSize + 'px', 'important');
     if (style.color !== undefined) holder.style.setProperty('color', style.color, 'important');
+    if (style.fontId !== undefined) holder.style.setProperty('font-family', `"${fonts.find(item => item.id === style.fontId).family}"`, 'important');
+    if (style.fontWeight !== undefined) holder.style.setProperty('font-weight', String(style.fontWeight), 'important');
     send({type: 'style-change', id: data.id, style});
   }
   function finish() {
@@ -124,4 +137,4 @@ function inlineTextRuntime(channel) {
   }, {once: true});
 }
 
-export const inlineTextScript = channel => `(${inlineTextRuntime.toString()})(${JSON.stringify(channel)});`;
+export const inlineTextScript = (channel, fonts) => `(${inlineTextRuntime.toString()})(${JSON.stringify(channel)},${JSON.stringify(fonts)});`;

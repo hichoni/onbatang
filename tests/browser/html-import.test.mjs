@@ -51,7 +51,7 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
     const first = draft.apply(new Map(),styles), parsed = new DOMParser().parseFromString(first,'text/html');
     const second = draft.apply(new Map(),new Map([['0',{color:'#abcdef'}]]));
     const repeated = htmlTextDraft(first).apply(new Map(),styles);
-    const invalid = [{fontSize:0},{fontSize:301},{color:'red;position:fixed'},{background:'url(https://bad.test)'}].every(style=>{try{draft.apply(new Map(),new Map([['0',style]]));return false;}catch{return true;}});
+    const invalid = [{fontSize:0},{fontSize:301},{color:'red;position:fixed'},{background:'url(https://bad.test)'},{fontId:'Arial;position:fixed'},{fontWeight:999},{fontWeight:'700'},{fontId:'noto-sans-kr'}].every(style=>{try{draft.apply(new Map(),new Map([['0',style]]));return false;}catch{return true;}});
     return {size:parsed.querySelector('p span').style.fontSize,color:parsed.querySelector('p span').style.color,
       sibling:parsed.querySelector('strong').outerHTML,last:parsed.querySelector('p').lastChild.data,
       repeatSpans:new DOMParser().parseFromString(repeated,'text/html').querySelectorAll('span').length,
@@ -89,16 +89,44 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   });
   assert.equal(await edit.getByRole('button',{name:'저장',exact:true}).isDisabled(),true,'other windows cannot supply edits');
   assert.equal(await edit.getByRole('spinbutton',{name:'글자 크기 (px)',exact:true}).isDisabled(),true);
+  const fontControl = edit.getByRole('combobox',{name:'글꼴',exact:true});
+  const weightControl = edit.getByRole('combobox',{name:'글자 굵기',exact:true});
+  assert.equal(await fontControl.isDisabled(),true);
   await mkdir(resolve(root,'work'),{recursive:true});
   await editFrame.locator('h1').click();
   await page.keyboard.press('ControlOrMeta+A');
   await page.keyboard.insertText('바뀐 <제목> & 수업');
+  let releaseFont, fontRequested;
+  const fontGate = new Promise(resolve=>{releaseFont=resolve;}), requested = new Promise(resolve=>{fontRequested=resolve;});
+  await page.route('**/app/fonts/gowun-dodum.woff2',async route=>{fontRequested();await fontGate;await route.continue();});
+  await fontControl.selectOption('gowun-dodum'); await requested;
+  assert.equal(await edit.getByRole('button',{name:'저장',exact:true}).isDisabled(),true,'saving waits for the font bytes and license');
   await editFrame.locator('#duplicate-b').click();
+  releaseFont();
+  await page.evaluate(async()=>{const {embeddedHtmlFont}=await import('/app/html-text-fonts.js');await embeddedHtmlFont('gowun-dodum');});
+  await page.unroute('**/app/fonts/gowun-dodum.woff2');
+  assert.equal(await fontControl.inputValue(),'','a late font load does not change the newly selected text');
+  assert.ok(!(await editFrame.locator('h1').evaluate(e=>getComputedStyle(e).fontFamily)).includes('Onbatang HTML'),'leaving the selection cancels the pending change');
+  await page.route('**/app/fonts/yeon-sung.woff2',route=>route.abort());
+  await fontControl.selectOption('yeon-sung');
+  await page.locator('#toast').filter({hasText:'글꼴을 불러오지 못했어요'}).waitFor();
+  assert.equal(await fontControl.inputValue(),'','a failed font load restores the current selection');
+  await page.unroute('**/app/fonts/yeon-sung.woff2');
   await editFrame.getByRole('textbox',{name:'화면의 글 수정',exact:true}).fill('두 번째 글');
   await editFrame.locator('#count').click();
   await editFrame.getByRole('textbox',{name:'화면의 글 수정',exact:true}).fill('시작하기');
   await editFrame.locator('#mixed strong').click();
   await editFrame.getByRole('textbox',{name:'화면의 글 수정',exact:true}).fill('바뀐 강조');
+  assert.equal(await weightControl.inputValue(),'700','the original bold text is reflected in the toolbar');
+  await fontControl.selectOption('do-hyeon');
+  await edit.getByText('이 글꼴은 한 가지 굵기로 제공돼요.',{exact:true}).waitFor();
+  assert.equal(await weightControl.isDisabled(),true,'single-weight title faces do not get fake bold');
+  await fontControl.selectOption('gowun-batang');
+  await weightControl.selectOption('400');
+  await editFrame.locator('#mixed strong').evaluate(async element=>{
+    await document.fonts.load('400 40px "Onbatang HTML gowun-batang"','강조');
+    if(!getComputedStyle(element).fontFamily.includes('Onbatang HTML gowun-batang')) throw Error('preview font');
+  });
   const sizeControl = edit.getByRole('spinbutton',{name:'글자 크기 (px)',exact:true});
   await sizeControl.fill('40');
   await edit.getByLabel('글자 색깔',{exact:true}).evaluate(input=>{input.value='#c2185b';input.dispatchEvent(new Event('input',{bubbles:true}));});
@@ -106,6 +134,8 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
     const check=()=>{const s=getComputedStyle(element);if(s.fontSize==='40px'&&s.color==='rgb(194, 24, 91)')resolve();else requestAnimationFrame(check);};check();
   }));
   await editFrame.locator('#duplicate-a').click();
+  await fontControl.selectOption('noto-sans-kr');
+  await weightControl.selectOption('700');
   assert.equal(await sizeControl.inputValue(),'24','choosing another text loads its own size');
   await sizeControl.fill('30');
   await edit.getByLabel('글자 색깔',{exact:true}).evaluate(input=>{input.value='#0066cc';input.dispatchEvent(new Event('input',{bubbles:true}));});
@@ -120,7 +150,10 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   assert.equal(await workspace.locator('#duplicate-b').textContent(),'두 번째 글');
   assert.equal(await workspace.locator('#mixed').textContent(),'앞 바뀐 강조 뒤');
   assert.equal(await workspace.locator('#mixed strong').textContent(),'바뀐 강조','nested formatting survives');
-  assert.deepEqual(await workspace.locator('#mixed strong').evaluate(e=>({size:getComputedStyle(e).fontSize,color:getComputedStyle(e).color,weight:getComputedStyle(e).fontWeight})),{size:'40px',color:'rgb(194, 24, 91)',weight:'700'});
+  assert.deepEqual(await workspace.locator('#mixed strong').evaluate(e=>({size:getComputedStyle(e).fontSize,color:getComputedStyle(e).color,weight:getComputedStyle(e).fontWeight})),{size:'40px',color:'rgb(194, 24, 91)',weight:'400'});
+  assert.ok(await workspace.locator('#mixed strong').evaluate(e=>getComputedStyle(e).fontFamily.includes('Onbatang HTML gowun-batang')));
+  assert.equal(await workspace.locator('#duplicate-a').evaluate(e=>getComputedStyle(e).fontWeight),'700');
+  assert.equal(await workspace.locator('#duplicate-b').evaluate(e=>getComputedStyle(e).fontWeight),'400','only the chosen wording is made bold');
   assert.equal(await workspace.locator('#mixed').evaluate(e=>getComputedStyle(e).fontSize),'24px','neighboring text keeps its size');
   assert.equal(await workspace.locator('#duplicate-a').evaluate(e=>getComputedStyle(e).fontSize),'30px','format-only edits save');
   assert.deepEqual(await workspace.locator('#duplicate-a').evaluate(e=>({size:getComputedStyle(e).fontSize,margin:getComputedStyle(e).marginTop})),previewShape,'em spacing is identical before and after saving');
@@ -131,6 +164,8 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   await page.locator('.fe-history-tools .undo').click();
   await workspace.locator('h1').filter({hasText:'HTML 수업'}).waitFor();
   assert.equal(await workspace.locator('#mixed strong').evaluate(e=>getComputedStyle(e).fontSize),'24px','undo restores formatting');
+  assert.equal(await workspace.locator('#mixed strong').evaluate(e=>getComputedStyle(e).fontWeight),'700','undo restores original bold');
+  assert.equal(await workspace.locator('style[data-onba-html-font]').count(),0,'undo removes added font assets');
   await page.locator('.fe-history-tools .redo').click();
   await workspace.locator('h1').filter({hasText:'바뀐 <제목> & 수업'}).waitFor();
   assert.equal(await workspace.locator('#mixed strong').evaluate(e=>getComputedStyle(e).color),'rgb(194, 24, 91)','redo restores formatting');
@@ -139,22 +174,29 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   await editFrame.locator('#mixed strong').click();
   assert.equal(await sizeControl.inputValue(),'40','reopened toolbar shows saved size');
   assert.equal(await edit.getByLabel('글자 색깔',{exact:true}).inputValue(),'#c2185b');
+  assert.equal(await fontControl.inputValue(),'gowun-batang','saved font is selected after reopening');
+  assert.equal(await weightControl.inputValue(),'400');
   await editFrame.locator('h1').click();
   await editFrame.getByRole('textbox',{name:'화면의 글 수정',exact:true}).fill('취소한 글');
   await sizeControl.fill('72');
+  await fontControl.selectOption('noto-sans-kr');
+  await weightControl.selectOption('400');
   await edit.getByRole('button',{name:'취소',exact:true}).click();
   assert.equal(await workspace.locator('h1').textContent(),'바뀐 <제목> & 수업');
   assert.equal(await workspace.locator('h1').evaluate(e=>getComputedStyle(e).fontSize),'48px','cancel discards formatting too');
+  assert.equal(await workspace.locator('h1').evaluate(e=>getComputedStyle(e).fontWeight),'700','cancel discards font weight');
   await page.getByRole('button',{name:'글 수정',exact:true}).click();
   await edit.getByRole('status').filter({hasText:'화면의 글을 눌러'}).waitFor();
   await editFrame.locator('#duplicate-a').click();
   await sizeControl.fill('31');
+  await weightControl.selectOption('400');
   await edit.getByRole('button',{name:'저장',exact:true}).click();
   await workspace.locator('#duplicate-a').evaluate(e=>new Promise(resolve=>{
     const check=()=>{if(getComputedStyle(e).fontSize==='31px')resolve();else requestAnimationFrame(check);};check();
   }));
   await page.locator('.fe-history-tools .undo').click();
   assert.equal(await workspace.locator('#duplicate-a').evaluate(e=>getComputedStyle(e).fontSize),'30px','a formatting-only save has its own undo step');
+  assert.equal(await workspace.locator('#duplicate-a').evaluate(e=>getComputedStyle(e).fontWeight),'700','format-only undo restores weight');
   await mkdir(resolve(root, 'work'), {recursive: true});
   await page.screenshot({path:resolve(root,'work/html-import-workspace.png')});
   await page.locator('.cv-back').click();
@@ -162,6 +204,9 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   assert.equal(edited.match(/<script>([\s\S]*?)<\/script>/)[1],html.match(/<script>([\s\S]*?)<\/script>/)[1]);
   assert.equal(edited.match(/<style>([\s\S]*?)<\/style>/)[1],html.match(/<style>([\s\S]*?)<\/style>/)[1]);
   assert.ok(edited.includes('바뀐 &lt;제목&gt; &amp; 수업'));
+  assert.ok(edited.includes('The Gowun Batang Project Authors'),'font copyright travels with the document');
+  assert.ok(edited.includes('SIL OPEN FONT LICENSE'),'font license travels with the document');
+  assert.ok(edited.includes('src:url("data:'),'font bytes travel with the document');
   assert.doesNotMatch(edited,/onba-text-|contenteditable|data-onba-editing|script-src 'nonce-/,'editing helpers never enter the saved source');
   await page.evaluate(async () => {
     const [record] = await window.listDesigns();
@@ -214,6 +259,8 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   await edit.getByRole('status').filter({hasText:'화면의 글을 눌러'}).waitFor();
   await editFrame.locator('h1').tap();
   await editFrame.getByRole('textbox',{name:'화면의 글 수정',exact:true}).fill('휴대폰에서 수정');
+  await fontControl.selectOption('noto-sans-kr');
+  await weightControl.selectOption('400');
   await sizeControl.fill('28');
   await edit.getByLabel('글자 색깔',{exact:true}).evaluate(input=>{input.value='#7040c0';input.dispatchEvent(new Event('input',{bubbles:true}));});
   await page.screenshot({path:resolve(root,'work/html-inline-mobile.png'),fullPage:true});
@@ -221,6 +268,8 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   await edit.getByRole('button',{name:'저장',exact:true}).tap();
   await workspace.locator('h1').filter({hasText:'휴대폰에서 수정'}).waitFor();
   assert.deepEqual(await workspace.locator('h1').evaluate(e=>({size:getComputedStyle(e).fontSize,color:getComputedStyle(e).color})),{size:'28px',color:'rgb(112, 64, 192)'});
+  assert.equal(await workspace.locator('h1').evaluate(e=>getComputedStyle(e).fontWeight),'400');
+  assert.ok(await workspace.locator('h1').evaluate(e=>getComputedStyle(e).fontFamily.includes('Onbatang HTML noto-sans-kr')));
   assert.equal(await page.locator('[data-html-workspace] iframe').getAttribute('data-scaled'),null,'HTML uses the real mobile viewport');
   await page.screenshot({path:resolve(root,'work/html-workspace-mobile.png'),fullPage:true});
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
@@ -242,6 +291,10 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   await offline.locator('#status').filter({hasText:'isolated'}).waitFor();
   assert.equal(await offline.locator('h1').textContent(),'바뀐 <제목> & 수업','edited text survives offline export');
   assert.equal(await offline.locator('#mixed strong').evaluate(e=>getComputedStyle(e).fontSize),'40px','formatting survives offline export');
+  assert.equal(await offline.locator('#mixed strong').evaluate(async e=>{
+    const loaded=await document.fonts.load('400 40px "Onbatang HTML gowun-batang"','강조');
+    return loaded.length>0 && loaded.every(font=>font.status==='loaded') && getComputedStyle(e).fontWeight==='400';
+  }),true,'the real embedded font loads offline, with the saved weight');
   await offline.locator('#count').click(); assert.equal(await offline.locator('#count').textContent(),'완료');
   assert.deepEqual(errors, []);
 });
