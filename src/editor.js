@@ -5000,7 +5000,7 @@ export function createEditor({
     replaceHtml: html => {
       if (!card?.web?.html || typeof html !== 'string' || html === card.web.html) return false;
       const next = designWeb({web: {...card.web, html}}).web;
-      if (!next?.html) throw Error('HTML 파일은 25MB까지 저장할 수 있어요.');
+      if (!next?.html) throw Error('HTML 파일은 50MB까지 저장할 수 있어요.');
       remember(); card.web = next;
       renderStage(); renderPanel(); onChange();
       return true;

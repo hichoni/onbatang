@@ -1,5 +1,5 @@
 // Uploaded documents stay inert until opened in an opaque-origin sandbox.
-export const HTML_FILE_MAX_BYTES = 25 * 1024 * 1024;
+export const HTML_FILE_MAX_BYTES = 50 * 1024 * 1024;
 export const isHtmlFile = file => /\.html?$/i.test(file?.name || '') || file?.type?.split(';')[0].trim().toLowerCase() === 'text/html';
 export function cleanHtmlFile(value) {
   if (!value || typeof value.html !== 'string' || !value.html.trim() || value.html.includes('\0')) return null;

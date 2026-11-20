@@ -28,7 +28,21 @@ test('invalid, empty and oversized files fail before saving; MIME and uppercase 
   await assert.rejects(readHtmlFile(new File([html], 'lesson.txt')), /HTML 파일/);
   await assert.rejects(readHtmlFile(new File([], 'lesson.html')), /빈 HTML/);
   await assert.rejects(readHtmlFile(new File(['not an HTML file'], 'lesson.html')), /HTML 내용/);
-  await assert.rejects(readHtmlFile({name: 'large.html', size: HTML_FILE_MAX_BYTES + 1, arrayBuffer() {throw Error('must not read');}}), /25MB/);
+  await assert.rejects(readHtmlFile({name: 'large.html', size: HTML_FILE_MAX_BYTES + 1, arrayBuffer() {throw Error('must not read');}}), /50MB/);
   assert.equal(cleanHtmlFile({html: '<p>\0binary', filename: 'bad.html'}), null);
   assert.equal((await readHtmlFile(new File([html], 'lesson', {type: 'text/html'}))).slides[0].web.html, html);
+});
+
+test('HTML accepts exactly 50 MiB and rejects UTF-8 bytes beyond the limit', async () => {
+  assert.equal(HTML_FILE_MAX_BYTES, 50 * 1024 * 1024);
+  const prefix = '<!doctype html><p>50MB 경계</p><!--', suffix = '-->';
+  const padding = HTML_FILE_MAX_BYTES - new TextEncoder().encode(prefix + suffix).length;
+  const html = prefix + 'x'.repeat(padding) + suffix;
+  const file = new File([html], '50MB.html');
+  assert.equal(file.size, HTML_FILE_MAX_BYTES);
+  const record = await readHtmlFile(file);
+  assert.equal(record.slides[0].web.html, html);
+  assert.equal(cleanDesign(record.slides[0]).web.html, html);
+  assert.equal(cleanHtmlFile({html: html + '가', filename:'too-large.html'}), null);
+  await assert.rejects(readHtmlFile(new File([html + 'x'], 'too-large.html')), /50MB/);
 });

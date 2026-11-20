@@ -4691,7 +4691,7 @@ function htmlOpenButton(loading) {
     const file = input.files?.[0]; input.value = '';
     if (file) { button.disabled = true; try { await importHtml(file); } finally { button.disabled = false; } }
   }});
-  const button = el('button', {class: 'btn cv-html-open-btn', type: 'button', disabled: loading, dataset: {htmlOpen: ''}, title: 'HTML 파일을 한 장으로 가져와 발표에서 실행해요(25MB까지). 그림·코드가 파일 안에 포함된 HTML을 사용해 주세요.', onClick: () => input.click()}, ...face('upload', 'HTML 가져오기'));
+  const button = el('button', {class: 'btn cv-html-open-btn', type: 'button', disabled: loading, dataset: {htmlOpen: ''}, title: 'HTML 파일을 한 장으로 가져와 발표에서 실행해요(50MB까지). 그림·코드가 파일 안에 포함된 HTML을 사용해 주세요.', onClick: () => input.click()}, ...face('upload', 'HTML 가져오기'));
   return [button, input];
 }
 let importingHtml = false;
