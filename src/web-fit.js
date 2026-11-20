@@ -24,3 +24,36 @@ export function fitWebFrame(frame) {
   apply();
   if (typeof ResizeObserver === 'function') new ResizeObserver(apply).observe(host);
 }
+
+/**
+ * 올린 HTML 장(발표 화면 · 보기 링크 · 공유 링크 재생기): 온바탕 장처럼 HTML_EDGE(1920) 너비 화면으로 그리고 자리에 맞게 통째로 줄인다.
+ * 자리가 1920 이상이면 그대로 채운다. HTML 작업 칸처럼 dataset.fit 이 'native' 이면 줄이지 않는다.
+ * - 1920×1080 으로 짠 발표(SVG viewBox 안의 canvas 등)는 자기 화면이 1920 이라 스스로 줄일 일이 없다. 아이폰 사파리는 SVG 안의 canvas 를
+ *   줄이지 못해 작은 화면에서 장면이 크게 확대돼 보였다(K-EDU27 발표, 2026-11-21).
+ * - 줄인 만큼 load(dpr) 로 실제 선명도(화면 비율 × 줄인 비율)를 알려 준다: 컴퓨터 너비로 그려도 그림 해상도가 커지지 않는다
+ *   (그렇지 않으면 1024 너비에서도 2.6배 큰 그림을 만들어 아이폰이 탭을 껐다).
+ * load(dpr?) 는 한 번만, 자리 크기를 안 다음에 부른다(자리가 없으면 바로 줄이지 않고).
+ */
+export const HTML_EDGE = 1920;
+export function fitHtmlFrame(frame, load) {
+  const host = frame?.parentElement;
+  if (!host || frame.dataset.fit === 'native') { load(); return; }
+  frame.dataset.fit = 'html';
+  let loaded = false;
+  const apply = () => {
+    const w = host.clientWidth, h = host.clientHeight;
+    if (!w || !h) return;
+    const k = w / HTML_EDGE;
+    if (k >= 1) {
+      for (const p of ['width', 'height', 'transform', 'transform-origin']) frame.style.removeProperty(p);
+      delete frame.dataset.scaled;
+    } else {
+      Object.assign(frame.style, { width: `${HTML_EDGE}px`, height: `${Math.round(h / k)}px`, transform: `scale(${k})`, transformOrigin: '0 0' });
+      frame.dataset.scaled = '';
+    }
+    if (!loaded) { loaded = true; load(k < 1 ? (globalThis.devicePixelRatio || 1) * k : undefined); }
+  };
+  apply();
+  if (typeof ResizeObserver === 'function') new ResizeObserver(apply).observe(host);
+  else if (!loaded) { loaded = true; load(); }
+}

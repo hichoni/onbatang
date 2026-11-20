@@ -11,7 +11,10 @@ export function cleanHtmlFile(value) {
 }
 // A neutral base prevents relative image/script URLs from targeting the host application.
 // The iframe sandbox (never allow-same-origin) also applies to nested frames and navigation.
-export function htmlFileSource(html) {
-  return '<!doctype html><meta charset="utf-8"><base href="about:blank">' + html;
+// dpr: 줄여 보일 때의 실제 선명도(화면 비율 × 줄인 비율). 화면 비율로 그림 해상도를 정하는 HTML(three.js 등)이
+// 보이는 것보다 몇 배 큰 그림을 만들지 않게, 문서의 스크립트보다 먼저 window.devicePixelRatio 를 그 값으로 바꿔 둔다.
+export function htmlFileSource(html, {dpr} = {}) {
+  const shim = Number.isFinite(dpr) && dpr > 0 ? `<script>try{window.devicePixelRatio=${Math.round(dpr * 1000) / 1000}}catch{}</script>` : '';
+  return '<!doctype html><meta charset="utf-8"><base href="about:blank">' + shim + html;
 }
 export const HTML_FILE_SANDBOX = 'allow-scripts allow-forms allow-modals allow-downloads allow-presentation allow-pointer-lock';
