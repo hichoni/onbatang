@@ -1421,6 +1421,12 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero{overflow:visible;z
 .cv-html-text-format input[type=color]{width:44px;height:36px;padding:3px;border:1px solid var(--cv-line);border-radius:7px;background:white;cursor:pointer}
 .cv-html-text-format select{width:170px;min-height:36px;padding:5px 7px;border:1px solid var(--cv-line);border-radius:7px;font:inherit;background:white;color:inherit}
 .cv-html-text-format select[aria-label="글자 굵기"]{width:92px}
+.cv-html-style-toggle{min-height:36px;padding:5px 10px;border:1px solid var(--cv-line);border-radius:7px;font:inherit;font-size:13px;background:white;color:inherit;cursor:pointer}
+.cv-html-style-toggle[aria-label="기울임"]{font-style:italic}
+.cv-html-style-toggle[aria-label="밑줄"]{text-decoration:underline}
+.cv-html-style-toggle[aria-pressed="true"]{background:#286f62;color:white;border-color:#286f62}
+.cv-html-style-toggle:disabled{opacity:.45;cursor:default}
+.cv-html-style-toggle:focus-visible{outline:2px solid #286f62;outline-offset:2px}
 .cv-html-font-note{flex-basis:100%;color:var(--muted);font-size:12px}
 .cv-html-text-format input:disabled,.cv-html-text-format select:disabled{opacity:.45;cursor:default}
 .cv-html-text-format input:focus-visible,.cv-html-text-format select:focus-visible{outline:2px solid #286f62;outline-offset:2px}

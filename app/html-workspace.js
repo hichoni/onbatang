@@ -5,11 +5,17 @@ import {inlineTextScript} from './html-inline-edit.js';
 import {HTML_TEXT_FONTS, embeddedHtmlFont} from './html-text-fonts.js';
 
 const textFont = id => HTML_TEXT_FONTS.find(font => font.id === id);
+const validDecorationLine = value => typeof value === 'string' && /^(none|(?:underline|overline|line-through)(?: (?:underline|overline|line-through))*)$/.test(value);
 const validTextStyle = style => !!style && typeof style === 'object' && !Array.isArray(style) &&
-  Object.keys(style).length > 0 && Object.keys(style).every(key => ['fontSize', 'color', 'fontId', 'fontWeight'].includes(key)) &&
+  Object.keys(style).length > 0 && Object.keys(style).every(key => ['fontSize', 'color', 'fontId', 'fontWeight', 'fontStyle', 'textDecorationLine', 'textDecorationStyle', 'textDecorationColor', 'textDecorationThickness'].includes(key)) &&
   (!('fontSize' in style) || (Number.isFinite(style.fontSize) && style.fontSize >= 6 && style.fontSize <= 300)) &&
   (!('fontId' in style) || !!textFont(style.fontId)) &&
   (!('fontWeight' in style) || [400, 700].includes(style.fontWeight)) &&
+  (!('fontStyle' in style) || ['normal', 'italic'].includes(style.fontStyle)) &&
+  (!('textDecorationLine' in style) || validDecorationLine(style.textDecorationLine)) &&
+  (!('textDecorationStyle' in style) || ['solid', 'double', 'dotted', 'dashed', 'wavy'].includes(style.textDecorationStyle)) &&
+  (!('textDecorationColor' in style) || /^(#[\da-f]{6}|rgba?\([\d.,%\s]+\))$/i.test(style.textDecorationColor)) &&
+  (!('textDecorationThickness' in style) || /^(auto|from-font|\d+(?:\.\d+)?(?:px|%))$/.test(style.textDecorationThickness)) &&
   (!('color' in style) || (typeof style.color === 'string' && /^#[\da-f]{6}$/i.test(style.color)));
 const validParagraphStyle = style => !!style && typeof style === 'object' && !Array.isArray(style) &&
   Object.keys(style).length > 0 && Object.keys(style).every(key => ['textAlign', 'lineHeight'].includes(key)) &&
@@ -59,7 +65,7 @@ export function createHtmlWorkspace(host) {
 export function htmlTextDraft(source) {
   const doc = new DOMParser().parseFromString(source, 'text/html');
   const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT), nodes = [], fields = [];
-  const elements = [doc.body, ...doc.body.querySelectorAll('*')], elementIds = new Map(elements.map((element, id) => [element, String(id)]));
+  const elements = [doc.documentElement, doc.body, ...doc.body.querySelectorAll('*')], elementIds = new Map(elements.map((element, id) => [element, String(id)]));
   const excluded = 'script,style,noscript,template,textarea,select,iframe,object,embed,svg,canvas,[hidden],[aria-hidden="true"]';
   for (let node; (node = walker.nextNode());) {
     if (!node.data.trim() || node.parentElement.closest(excluded)) continue;
@@ -69,13 +75,15 @@ export function htmlTextDraft(source) {
     nodes.push(node);
   }
   const validParagraph = (id, paragraphId, style) => typeof id === 'string' && fields[Number(id)]?.id === id && typeof paragraphId === 'string' && fields[Number(id)].paragraphIds.includes(paragraphId) && validParagraphStyle(style);
+  const validDecorationReset = (elementId, record) => !!record && typeof record.id === 'string' && fields[Number(record.id)]?.id === record.id && fields[Number(record.id)].paragraphIds.includes(elementId) && validDecorationLine(record.line) && !record.line.includes('underline');
   return {
     fields,
     validParagraph,
+    validDecorationReset,
     preview(channel) {
       // Annotate a separate copy with invisible markers; never save preview markup.
       const copy = doc.cloneNode(true), texts = copy.createTreeWalker(copy.body, NodeFilter.SHOW_TEXT);
-      const copies = [copy.body, ...copy.body.querySelectorAll('*')];
+      const copies = [copy.documentElement, copy.body, ...copy.body.querySelectorAll('*')];
       for (const id of new Set(fields.flatMap(field => field.paragraphIds))) copies[Number(id)].setAttribute(`data-onba-paragraph-${channel}`, id);
       const editable = [];
       for (let node; (node = texts.nextNode());) if (node.data.trim() && !node.parentElement.closest(excluded)) editable.push(node);
@@ -94,19 +102,21 @@ export function htmlTextDraft(source) {
       copy.head.prepend(charset, csp, base, runtime);
       return '<!doctype html>' + copy.documentElement.outerHTML;
     },
-    apply(changes, styles = new Map(), fontAssets = new Map(), paragraphs = new Map()) {
+    apply(changes, styles = new Map(), fontAssets = new Map(), paragraphs = new Map(), decorationResets = new Map()) {
       const edits = [...changes].filter(([id, text]) => {
         if (!fields[Number(id)] || fields[Number(id)].id !== id || typeof text !== 'string') throw Error('수정할 글을 다시 골라 주세요.');
         return text !== fields[Number(id)].text;
       });
       for (const [id, style] of styles) if (typeof id !== 'string' || fields[Number(id)]?.id !== id || !validTextStyle(style)) throw Error('글자 모양을 확인해 주세요.');
       for (const [paragraphId, record] of paragraphs) if (!record || !validParagraph(record.id, paragraphId, record.style)) throw Error('문단 정렬과 줄간격을 확인해 주세요.');
-      if (!edits.length && !styles.size && !paragraphs.size) return source;
+      for (const [elementId, record] of decorationResets) if (!validDecorationReset(elementId, record)) throw Error('밑줄 모양을 확인해 주세요.');
+      if (!edits.length && !styles.size && !paragraphs.size && !decorationResets.size) return source;
       // Work on a fresh copy: repeated saves cannot accumulate formatting wrappers.
       const output = doc.cloneNode(true), texts = output.createTreeWalker(output.body, NodeFilter.SHOW_TEXT), targets = [];
-      const paragraphTargets = [output.body, ...output.body.querySelectorAll('*')];
+      const paragraphTargets = [output.documentElement, output.body, ...output.body.querySelectorAll('*')];
       for (let node; (node = texts.nextNode());) if (node.data.trim() && !node.parentElement.closest(excluded)) targets.push(node);
       for (const [id, text] of edits) targets[Number(id)].data = text;
+      for (const [elementId, record] of decorationResets) paragraphTargets[Number(elementId)].style.setProperty('text-decoration-line', record.line, 'important');
       for (const [id, style] of styles) {
         const node = targets[Number(id)];
         let target = node.parentElement;
@@ -116,6 +126,7 @@ export function htmlTextDraft(source) {
         if (style.fontSize !== undefined) target.style.setProperty('font-size', style.fontSize + 'px', 'important');
         if (style.color !== undefined) target.style.setProperty('color', style.color, 'important');
         if (style.fontWeight !== undefined) target.style.setProperty('font-weight', String(style.fontWeight), 'important');
+        for (const [key, css] of [['fontStyle','font-style'],['textDecorationLine','text-decoration-line'],['textDecorationStyle','text-decoration-style'],['textDecorationColor','text-decoration-color'],['textDecorationThickness','text-decoration-thickness']]) if (style[key] !== undefined) target.style.setProperty(css, style[key], 'important');
         if (style.fontId !== undefined) {
           const font = textFont(style.fontId), css = fontAssets.get(style.fontId);
           if (typeof css !== 'string') throw Error('글꼴을 불러온 뒤 다시 저장해 주세요.');
@@ -142,7 +153,7 @@ export function htmlTextDraft(source) {
 }
 
 export function editHtmlText(source, apply, onClose) {
-  const draft = htmlTextDraft(source), changes = new Map(), styles = new Map(), paragraphs = new Map(), fontAssets = new Map(), channel = crypto.randomUUID().replaceAll('-', '');
+  const draft = htmlTextDraft(source), changes = new Map(), styles = new Map(), paragraphs = new Map(), decorationResets = new Map(), fontAssets = new Map(), channel = crypto.randomUUID().replaceAll('-', '');
   const frame = el('iframe', {title: 'HTML 화면에서 글 수정', sandbox: 'allow-scripts', referrerpolicy: 'no-referrer', srcdoc: draft.preview(channel), dataset: {htmlTextFrame: ''}});
   const status = el('p', {role: 'status', text: '글을 불러오는 중…'});
   let pending = '', timeout = 0, selected = null, selectedParagraph = null, fontRequest = 0, fontLoading = false, closed = false;
@@ -174,6 +185,10 @@ export function editHtmlText(source, apply, onClose) {
   const weight = el('select', {disabled: true, 'aria-label': '글자 굵기', onChange: event => sendStyle({fontWeight: Number(event.target.value)})},
     originalWeight, el('option', {value: '400', text: '보통'}), el('option', {value: '700', text: '굵게'}));
   const weightNote = el('span', {class: 'cv-html-font-note', hidden: true, text: '이 글꼴은 한 가지 굵기로 제공돼요.'});
+  const italic = el('button', {type: 'button', class: 'cv-html-style-toggle', disabled: true, 'aria-label': '기울임', 'aria-pressed': 'false', onClick: () => sendStyle({fontStyle: italic.getAttribute('aria-pressed') === 'true' ? 'normal' : 'italic'})}, '기울임');
+  const underline = el('button', {type: 'button', class: 'cv-html-style-toggle', disabled: true, 'aria-label': '밑줄', 'aria-pressed': 'false', onClick: () => {
+    if (selected !== null && !pending && !fontLoading) frame.contentWindow.postMessage({channel, type: 'underline', id: selected, enabled: underline.getAttribute('aria-pressed') !== 'true'}, '*');
+  }}, '밑줄');
   const sendParagraph = style => {
     if (pending || fontLoading || !draft.validParagraph(selected, selectedParagraph, style)) return;
     frame.contentWindow.postMessage({channel, type: 'format-paragraph', id: selected, paragraphId: selectedParagraph, style}, '*');
@@ -204,6 +219,8 @@ export function editHtmlText(source, apply, onClose) {
     const count = countChanges(), unavailable = !!pending || selected === null;
     save.disabled = !!pending || fontLoading || !count;
     size.disabled = color.disabled = unavailable || fontLoading; family.disabled = unavailable;
+    italic.disabled = underline.disabled = unavailable || fontLoading;
+    if (selected === null) { italic.setAttribute('aria-pressed', 'false'); underline.setAttribute('aria-pressed', 'false'); }
     align.disabled = spacing.disabled = unavailable || fontLoading || selectedParagraph === null;
     paragraphNote.textContent = selected !== null && selectedParagraph === null ? '이 글에서는 문단 정렬·줄간격을 사용할 수 없어요.' : '정렬·줄간격은 선택한 문단 전체에 적용돼요.';
     const fixedWeight = !!textFont(family.value)?.noFakeBold;
@@ -223,6 +240,7 @@ export function editHtmlText(source, apply, onClose) {
       originalFont.textContent = `현재: ${typeof data.fontFamily === 'string' ? data.fontFamily.slice(0, 40) : '원본 글꼴'}`;
       weight.value = [400, 700].includes(data.fontWeight) ? String(data.fontWeight) : '';
       originalWeight.textContent = Number.isFinite(data.fontWeight) ? `현재 (${data.fontWeight})` : '현재 굵기';
+      italic.setAttribute('aria-pressed', String(data.italic === true)); underline.setAttribute('aria-pressed', String(data.underline === true));
       updateParagraphInfo(data);
       selectedLabel.textContent = (changes.get(selected) ?? draft.fields[Number(selected)].text).trim().slice(0, 100);
       refresh(); return;
@@ -230,6 +248,13 @@ export function editHtmlText(source, apply, onClose) {
     if (data.type === 'style-change') {
       if (!valid(data.id, draft.fields[Number(data.id)]?.text) || !validTextStyle(data.style)) return;
       styles.set(data.id, data.style); refresh(); return;
+    }
+    if (data.type === 'decoration-info' && data.id === selected) {
+      italic.setAttribute('aria-pressed', String(data.italic === true)); underline.setAttribute('aria-pressed', String(data.underline === true)); return;
+    }
+    if (data.type === 'decoration-reset') {
+      if (draft.validDecorationReset(data.elementId, data.record)) decorationResets.set(data.elementId, data.record);
+      return;
     }
     if (data.type === 'paragraph-info') {
       if (data.id !== selected) return;
@@ -246,10 +271,12 @@ export function editHtmlText(source, apply, onClose) {
         if (!Array.isArray(data.edits) || data.edits.length > draft.fields.length || !data.edits.every(row => Array.isArray(row) && row.length === 2 && valid(...row))) throw Error('수정한 글을 확인할 수 없어요. 다시 열어 주세요.');
         if (!Array.isArray(data.styles) || data.styles.length > draft.fields.length || !data.styles.every(row => Array.isArray(row) && row.length === 2 && valid(row[0], draft.fields[Number(row[0])]?.text) && validTextStyle(row[1]))) throw Error('글자 모양을 확인할 수 없어요. 다시 열어 주세요.');
         if (!Array.isArray(data.paragraphs) || data.paragraphs.length > draft.fields.length || !data.paragraphs.every(row => Array.isArray(row) && row.length === 2 && row[1] && draft.validParagraph(row[1].id, row[0], row[1].style))) throw Error('문단 정렬과 줄간격을 확인할 수 없어요. 다시 열어 주세요.');
+        if (!Array.isArray(data.decorationResets) || !data.decorationResets.every(row => Array.isArray(row) && row.length === 2 && draft.validDecorationReset(row[0], row[1]))) throw Error('밑줄 모양을 확인할 수 없어요. 다시 열어 주세요.');
         changes.clear(); for (const [id, text] of data.edits) update(id, text);
         styles.clear(); for (const [id, style] of data.styles) styles.set(id, style);
         paragraphs.clear(); for (const [id, record] of data.paragraphs) paragraphs.set(id, {id: record.id, style: record.style});
-        if (!countChanges() || apply(draft.apply(changes, styles, fontAssets, paragraphs)) !== false) closeModal();
+        decorationResets.clear(); for (const [id, record] of data.decorationResets) decorationResets.set(id, {id: record.id, line: record.line});
+        if (!countChanges() || apply(draft.apply(changes, styles, fontAssets, paragraphs, decorationResets)) !== false) closeModal();
       } catch (error) { toast(error.message || '글을 저장하지 못했어요.', 4500); }
       refresh(); return;
     }
@@ -263,7 +290,7 @@ export function editHtmlText(source, apply, onClose) {
     el('header', {class: 'cv-html-edit-bar'}, el('div', {}, el('h2', {text: '화면에서 글 수정'}), status),
       el('div', {class: 'row'}, el('button', {type: 'button', class: 'btn btn-ghost', onClick: closeModal}, '취소'), save)),
     el('div', {class: 'cv-html-text-format', role: 'group', 'aria-label': '글자 모양'},
-      selectedLabel, el('label', {}, '글꼴', family), el('label', {}, '굵기', weight), el('label', {}, '크기', size, el('span', {text: 'px'})), el('label', {}, '색깔', color), weightNote),
+      selectedLabel, el('label', {}, '글꼴', family), el('label', {}, '굵기', weight), italic, underline, el('label', {}, '크기', size, el('span', {text: 'px'})), el('label', {}, '색깔', color), weightNote),
     el('div', {class: 'cv-html-paragraph-format', role: 'group', 'aria-label': '문단 모양'}, paragraphNote,
       el('label', {}, '정렬', align), el('label', {}, '줄간격', spacing)), frame),
   {wide: true, onClose: () => { closed = true; fontRequest++; clearTimeout(timeout); window.removeEventListener('message', receive); onClose?.(); }});

@@ -8,7 +8,7 @@ import {createHtmlLesson} from '../../app/html-lesson.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const options = {skip: !process.env.MINICAN_PLAYWRIGHT_PATH, timeout: 120000};
-const html = `<!doctype html><meta charset="utf-8"><style>body{background:#e6f4ef;font:24px sans-serif}button{font:inherit;padding:20px}</style><h1>HTML 수업</h1><button id="count">눌러요</button><p id="status"></p><p id="duplicate-a">같은 글</p><p id="duplicate-b">같은 글</p><p id="mixed">앞 <strong>강조</strong> 뒤</p><p id="paragraph">첫 줄 <strong style="line-height:3">굵은 글</strong><br><a href="#keep">둘째 줄</a></p><p id="neighbor">다른 문단</p><div id="flex-label" style="display:flex">별도 레이아웃</div><script>
+const html = `<!doctype html><meta charset="utf-8"><style>body{background:#e6f4ef;font:24px sans-serif}button{font:inherit;padding:20px}</style><h1>HTML 수업</h1><button id="count">눌러요</button><p id="status"></p><p id="duplicate-a">같은 글</p><p id="duplicate-b">같은 글</p><p id="mixed">앞 <strong>강조</strong> 뒤</p><p id="paragraph">첫 줄 <strong style="line-height:3">굵은 글</strong><br><a href="#keep">둘째 줄</a></p><p id="neighbor">다른 문단</p><div id="flex-label" style="display:flex">별도 레이아웃</div><p id="decorated" style="font-style:italic;text-decoration:underline line-through wavy rgb(190, 30, 50) 2px">앞쪽 <strong style="text-decoration:overline">선택할 글</strong> 뒤쪽 <span id="atomic" style="display:inline-block">독립 글</span></p><script>
 count.onclick=()=>count.textContent='완료';
 try{parent.document.body.dataset.compromised='yes';status.textContent='unsafe';}catch{document.getElementById('status').textContent='isolated';}
 try{localStorage.setItem('html-import-secret','stolen');}catch{}
@@ -51,7 +51,7 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
     const first = draft.apply(new Map(),styles), parsed = new DOMParser().parseFromString(first,'text/html');
     const second = draft.apply(new Map(),new Map([['0',{color:'#abcdef'}]]));
     const repeated = htmlTextDraft(first).apply(new Map(),styles);
-    const invalid = [{fontSize:0},{fontSize:301},{color:'red;position:fixed'},{background:'url(https://bad.test)'},{fontId:'Arial;position:fixed'},{fontWeight:999},{fontWeight:'700'},{fontId:'noto-sans-kr'}].every(style=>{try{draft.apply(new Map(),new Map([['0',style]]));return false;}catch{return true;}});
+    const invalid = [{fontSize:0},{fontSize:301},{color:'red;position:fixed'},{background:'url(https://bad.test)'},{fontId:'Arial;position:fixed'},{fontWeight:999},{fontWeight:'700'},{fontStyle:'oblique;position:fixed'},{textDecorationLine:'blink'},{textDecorationColor:'url(https://bad.test)'},{textDecorationThickness:'-1px'},{fontId:'noto-sans-kr'}].every(style=>{try{draft.apply(new Map(),new Map([['0',style]]));return false;}catch{return true;}});
     return {size:parsed.querySelector('p span').style.fontSize,color:parsed.querySelector('p span').style.color,
       sibling:parsed.querySelector('strong').outerHTML,last:parsed.querySelector('p').lastChild.data,
       repeatSpans:new DOMParser().parseFromString(repeated,'text/html').querySelectorAll('span').length,
@@ -70,6 +70,15 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
       neighbor:doc.querySelectorAll('p')[1].outerHTML,rejected,wrongTarget,clean:!out.includes('data-onba-paragraph-')};
   });
   assert.deepEqual(paragraphChecks,{align:'center',line:'1.5',inline:'1.5',neighbor:'<p>D</p>',rejected:true,wrongTarget:true,clean:true});
+  const resetChecks = await page.evaluate(async()=>{
+    const {htmlTextDraft} = await import('/app/html-workspace.js');
+    const draft = htmlTextDraft('<p><u>A</u></p><p>B</p>');
+    return [draft.validDecorationReset(draft.fields[0].paragraphIds[0],{id:'0',line:'none'}),
+      draft.validDecorationReset(draft.fields[1].paragraphIds[0],{id:'0',line:'none'}),
+      draft.validDecorationReset(draft.fields[0].paragraphIds[0],{id:'0',line:'underline'}),
+      draft.validDecorationReset(draft.fields[0].paragraphIds[0],{id:'0',line:'none;display:none'})];
+  });
+  assert.deepEqual(resetChecks,[true,false,false,false],'underline resets are limited to the selected text ancestors and safe line values');
   await page.locator('[data-home-menu=import] > summary').click();
   const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.locator('[data-html-open]').click()]);
   await chooser.setFiles({name: '수업.HTML', mimeType: 'text/html', buffer: Buffer.from(html)});
@@ -103,6 +112,10 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   assert.equal(await edit.getByRole('spinbutton',{name:'글자 크기 (px)',exact:true}).isDisabled(),true);
   const fontControl = edit.getByRole('combobox',{name:'글꼴',exact:true});
   const weightControl = edit.getByRole('combobox',{name:'글자 굵기',exact:true});
+  const italicControl = edit.getByRole('button',{name:'기울임',exact:true});
+  const underlineControl = edit.getByRole('button',{name:'밑줄',exact:true});
+  assert.equal(await italicControl.isDisabled(),true);
+  assert.equal(await underlineControl.isDisabled(),true);
   const alignControl = edit.getByRole('combobox',{name:'문단 정렬',exact:true});
   const spacingControl = edit.getByRole('combobox',{name:'문단 줄간격',exact:true});
   assert.equal(await fontControl.isDisabled(),true);
@@ -138,6 +151,7 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   assert.equal(await weightControl.isDisabled(),true,'single-weight title faces do not get fake bold');
   await fontControl.selectOption('gowun-batang');
   await weightControl.selectOption('400');
+  await italicControl.click(); await underlineControl.click();
   await editFrame.locator('#mixed strong').evaluate(async element=>{
     await document.fonts.load('400 40px "Onbatang HTML gowun-batang"','강조');
     if(!getComputedStyle(element).fontFamily.includes('Onbatang HTML gowun-batang')) throw Error('preview font');
@@ -154,6 +168,8 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   assert.equal(await sizeControl.inputValue(),'24','choosing another text loads its own size');
   await sizeControl.fill('30');
   await edit.getByLabel('글자 색깔',{exact:true}).evaluate(input=>{input.value='#0066cc';input.dispatchEvent(new Event('input',{bubbles:true}));});
+  assert.equal(await italicControl.getAttribute('aria-pressed'),'false','selection loads its own italic state');
+  assert.equal(await underlineControl.getAttribute('aria-pressed'),'false');
   const previewShape = await editFrame.locator('#duplicate-a').evaluate(e=>new Promise(resolve=>{
     const check=()=>{const s=getComputedStyle(e);if(s.fontSize==='30px')resolve({size:s.fontSize,margin:s.marginTop});else requestAnimationFrame(check);};check();
   }));
@@ -175,6 +191,20 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   await editFrame.locator('#flex-label').click();
   assert.equal(await alignControl.isDisabled(),true,'flex labels do not align the outer page');
   await editFrame.locator('#paragraph a').click();
+  await editFrame.locator('#decorated strong').click();
+  assert.equal(await italicControl.getAttribute('aria-pressed'),'true','inherited italic is reflected');
+  assert.equal(await underlineControl.getAttribute('aria-pressed'),'true','ancestor underline is reflected');
+  await italicControl.click(); await underlineControl.click();
+  assert.equal(await underlineControl.getAttribute('aria-pressed'),'false');
+  assert.equal(await editFrame.locator('#decorated').evaluate(e=>getComputedStyle(e).textDecorationLine),'line-through','underline removal retains the ancestor strike-through');
+  assert.equal(await editFrame.locator('#decorated strong').evaluate(e=>getComputedStyle(e).textDecorationLine),'overline','other local decorations survive');
+  assert.equal(await editFrame.locator('#decorated strong').evaluate(e=>getComputedStyle(e).fontStyle),'normal');
+  assert.deepEqual(await editFrame.locator('#decorated > span:not(#atomic)').evaluateAll(es=>es.map(e=>{const s=getComputedStyle(e);return [s.textDecorationLine,s.textDecorationColor,s.textDecorationStyle,s.textDecorationThickness]})),[['underline','rgb(190, 30, 50)','wavy','2px'],['underline','rgb(190, 30, 50)','wavy','2px']],'neighboring underlines keep their appearance');
+  await editFrame.locator('#atomic').click();
+  assert.equal(await underlineControl.getAttribute('aria-pressed'),'false','underline does not cross atomic inline boxes');
+  await editFrame.locator('#mixed strong').click();
+  assert.equal(await italicControl.getAttribute('aria-pressed'),'true');
+  assert.equal(await underlineControl.getAttribute('aria-pressed'),'true');
   await page.screenshot({path:resolve(root,'work/html-text-editor.png')});
   await edit.getByRole('button',{name:'저장',exact:true}).click();
   await workspace.locator('h1').filter({hasText:'바뀐 <제목> & 수업'}).waitFor();
@@ -182,6 +212,11 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   assert.equal(await workspace.locator('#duplicate-a').textContent(),'같은 글','matching text elsewhere is unchanged');
   assert.equal(await workspace.locator('#duplicate-b').textContent(),'두 번째 글');
   assert.equal(await workspace.locator('#mixed').textContent(),'앞 바뀐 강조 뒤');
+  assert.deepEqual(await workspace.locator('#mixed strong').evaluate(e=>({italic:getComputedStyle(e).fontStyle,line:getComputedStyle(e).textDecorationLine})),{italic:'italic',line:'underline'});
+  assert.deepEqual(await workspace.locator('#decorated strong').evaluate(e=>({italic:getComputedStyle(e).fontStyle,line:getComputedStyle(e).textDecorationLine})),{italic:'normal',line:'overline'});
+  assert.equal(await workspace.locator('#decorated').evaluate(e=>getComputedStyle(e).textDecorationLine),'line-through');
+  assert.equal(await workspace.locator('#atomic').evaluate(e=>e.style.textDecorationLine),'','atomic sibling is unchanged');
+  assert.deepEqual(await workspace.locator('#decorated > span:not(#atomic)').evaluateAll(es=>es.map(e=>getComputedStyle(e).textDecorationLine)),['underline','underline'],'neighboring underlines survive save');
   assert.equal(await workspace.locator('#mixed strong').textContent(),'바뀐 강조','nested formatting survives');
   assert.deepEqual(await workspace.locator('#mixed strong').evaluate(e=>({size:getComputedStyle(e).fontSize,color:getComputedStyle(e).color,weight:getComputedStyle(e).fontWeight})),{size:'40px',color:'rgb(194, 24, 91)',weight:'400'});
   assert.ok(await workspace.locator('#mixed strong').evaluate(e=>getComputedStyle(e).fontFamily.includes('Onbatang HTML gowun-batang')));
@@ -201,6 +236,8 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   await workspace.locator('h1').filter({hasText:'HTML 수업'}).waitFor();
   assert.equal(await workspace.locator('#mixed strong').evaluate(e=>getComputedStyle(e).fontSize),'24px','undo restores formatting');
   assert.equal(await workspace.locator('#mixed strong').evaluate(e=>getComputedStyle(e).fontWeight),'700','undo restores original bold');
+  assert.equal(await workspace.locator('#mixed strong').evaluate(e=>getComputedStyle(e).fontStyle),'normal','undo restores italic');
+  assert.equal(await workspace.locator('#decorated').evaluate(e=>getComputedStyle(e).textDecorationLine),'underline line-through','undo restores underline source');
   assert.equal(await workspace.locator('style[data-onba-html-font]').count(),0,'undo removes added font assets');
   assert.equal(await workspace.locator('#paragraph').evaluate(e=>e.style.textAlign),'','undo restores paragraph alignment');
   assert.equal(await workspace.locator('#paragraph strong').evaluate(e=>e.style.lineHeight),'3','undo restores original inline spacing');
@@ -231,14 +268,27 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   assert.equal(await workspace.locator('h1').evaluate(e=>e.style.textAlign),'','cancel discards paragraph changes');
   await page.getByRole('button',{name:'글 수정',exact:true}).click();
   await edit.getByRole('status').filter({hasText:'화면의 글을 눌러'}).waitFor();
+  await editFrame.locator('#mixed strong').click();
+  assert.equal(await italicControl.getAttribute('aria-pressed'),'true','saved italic state is loaded');
+  assert.equal(await underlineControl.getAttribute('aria-pressed'),'true','saved underline state is loaded');
+  await italicControl.click(); await underlineControl.click();
+  assert.equal(await italicControl.getAttribute('aria-pressed'),'false');
+  assert.equal(await underlineControl.getAttribute('aria-pressed'),'false');
+  await edit.getByRole('button',{name:'취소',exact:true}).click();
+  assert.deepEqual(await workspace.locator('#mixed strong').evaluate(e=>[getComputedStyle(e).fontStyle,getComputedStyle(e).textDecorationLine]),['italic','underline'],'cancel discards both toggles');
+  await page.getByRole('button',{name:'글 수정',exact:true}).click();
+  await edit.getByRole('status').filter({hasText:'화면의 글을 눌러'}).waitFor();
   await editFrame.locator('#duplicate-a').click();
+  await italicControl.click(); await underlineControl.click();
   await sizeControl.fill('31');
   await weightControl.selectOption('400');
   await edit.getByRole('button',{name:'저장',exact:true}).click();
   await workspace.locator('#duplicate-a').evaluate(e=>new Promise(resolve=>{
     const check=()=>{if(getComputedStyle(e).fontSize==='31px')resolve();else requestAnimationFrame(check);};check();
   }));
+  assert.deepEqual(await workspace.locator('#duplicate-a').evaluate(e=>[getComputedStyle(e).fontStyle,getComputedStyle(e).textDecorationLine]),['italic','underline']);
   await page.locator('.fe-history-tools .undo').click();
+  assert.deepEqual(await workspace.locator('#duplicate-a').evaluate(e=>[getComputedStyle(e).fontStyle,getComputedStyle(e).textDecorationLine]),['normal','none'],'format-only undo restores both decorations');
   assert.equal(await workspace.locator('#duplicate-a').evaluate(e=>getComputedStyle(e).fontSize),'30px','a formatting-only save has its own undo step');
   assert.equal(await workspace.locator('#duplicate-a').evaluate(e=>getComputedStyle(e).fontWeight),'700','format-only undo restores weight');
   await page.getByRole('button',{name:'글 수정',exact:true}).click();
@@ -315,6 +365,7 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   await alignControl.selectOption('center'); await spacingControl.selectOption('2');
   await fontControl.selectOption('noto-sans-kr');
   await weightControl.selectOption('400');
+  await italicControl.tap(); await underlineControl.tap();
   await sizeControl.fill('28');
   await edit.getByLabel('글자 색깔',{exact:true}).evaluate(input=>{input.value='#7040c0';input.dispatchEvent(new Event('input',{bubbles:true}));});
   await page.screenshot({path:resolve(root,'work/html-inline-mobile.png'),fullPage:true});
@@ -325,6 +376,7 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   assert.equal(await workspace.locator('h1').evaluate(e=>getComputedStyle(e).fontWeight),'400');
   assert.ok(await workspace.locator('h1').evaluate(e=>getComputedStyle(e).fontFamily.includes('Onbatang HTML noto-sans-kr')));
   assert.deepEqual(await workspace.locator('h1').evaluate(e=>({align:getComputedStyle(e).textAlign,line:getComputedStyle(e).lineHeight})),{align:'center',line:'56px'});
+  assert.deepEqual(await workspace.locator('h1').evaluate(e=>[getComputedStyle(e).fontStyle,getComputedStyle(e).textDecorationLine]),['italic','underline'],'mobile decoration controls work');
   assert.equal(await page.locator('[data-html-workspace] iframe').getAttribute('data-scaled'),null,'HTML uses the real mobile viewport');
   await page.screenshot({path:resolve(root,'work/html-workspace-mobile.png'),fullPage:true});
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
@@ -345,6 +397,8 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   const offline = page.frameLocator('.lesson-activity iframe');
   await offline.locator('#status').filter({hasText:'isolated'}).waitFor();
   assert.equal(await offline.locator('h1').textContent(),'바뀐 <제목> & 수업','edited text survives offline export');
+  assert.deepEqual(await offline.locator('#mixed strong').evaluate(e=>[getComputedStyle(e).fontStyle,getComputedStyle(e).textDecorationLine]),['italic','underline'],'decorations survive offline export');
+  assert.equal(await offline.locator('#decorated').evaluate(e=>getComputedStyle(e).textDecorationLine),'line-through');
   assert.equal(await offline.locator('#mixed strong').evaluate(e=>getComputedStyle(e).fontSize),'40px','formatting survives offline export');
   assert.deepEqual(await offline.locator('#paragraph').evaluate(e=>({align:getComputedStyle(e).textAlign,line:getComputedStyle(e).lineHeight})),{align:'right',line:'48px'},'paragraph formatting survives offline export');
   assert.equal(await offline.locator('#mixed strong').evaluate(async e=>{
