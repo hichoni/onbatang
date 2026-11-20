@@ -56,7 +56,10 @@ export async function linkCard(records, { render } = {}) {
   const pick = cardSlide(records);
   if (!pick) return null;
   const draw = render || (await import('../src/index.js')).designToCanvas;
-  const width = Math.min(CARD_WIDTH, Math.round(CARD_HEIGHT * pick.aspect)), made = await draw(pick.slide, { width, aspect: pick.aspect });
+  const width = Math.min(CARD_WIDTH, Math.round(CARD_HEIGHT * pick.aspect));
+  let slide=pick.slide;
+  if(slide.web?.html&&!slide.web.poster){const {htmlFirstScreen}=await import('./html-preview.js');const poster=await htmlFirstScreen(slide.web.html,{aspect:pick.aspect});if(poster)slide={...slide,web:{...slide.web,poster}};}
+  const made = await draw(slide, { width, aspect: pick.aspect });
   const canvas = document.createElement('canvas');
   canvas.width = CARD_WIDTH; canvas.height = CARD_HEIGHT;
   const g = canvas.getContext('2d');

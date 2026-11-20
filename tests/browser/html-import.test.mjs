@@ -390,22 +390,22 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   assert.equal(await page.locator('[data-html-workspace] iframe').count(),0,'presentation stops duplicate background execution');
   await frame.locator('#status').filter({hasText: 'isolated'}).waitFor();
   assert.ok(!(await page.locator('[data-show-web] iframe').getAttribute('sandbox')).includes('allow-same-origin'));
-  assert.equal(await page.getByRole('switch', {name: 'HTML 조작', exact: true}).getAttribute('aria-checked'), 'true');
+  assert.equal(await page.getByRole('switch', {name: 'HTML 조작', exact: true}).count(), 0);
   await frame.locator('#count').click();
   assert.equal(await frame.locator('#count').textContent(), '완료');
-  // Even after intentionally switching to slide navigation, returning to kept HTML restores direct use.
-  await page.getByRole('switch', {name: 'HTML 조작', exact: true}).click();
+  // Parent navigation remains available without an HTML interaction switch.
+  await page.locator('.cv-show').focus();
   await page.keyboard.press('ArrowRight');
   await page.waitForFunction(() => document.querySelector('.cv-show-count')?.textContent.startsWith('2 /'));
   await page.keyboard.press('ArrowLeft');
   await page.waitForFunction(() => document.querySelector('.cv-show-count')?.textContent.startsWith('1 /'));
-  assert.equal(await page.getByRole('switch', {name: 'HTML 조작', exact: true}).getAttribute('aria-checked'), 'true');
+  assert.equal(await page.getByRole('switch', {name: 'HTML 조작', exact: true}).count(), 0);
   assert.equal(await frame.locator('#count').textContent(), '완료', 'kept HTML retains its state');
   await frame.locator('#count').click();
   assert.equal(await page.evaluate(() => localStorage.getItem('html-import-secret')), null);
   await mkdir(resolve(root, 'work'), {recursive: true});
   await page.screenshot({path: resolve(root, 'work/html-import-presentation.png')});
-  await page.getByRole('switch',{name:'HTML 조작',exact:true}).click();
+  await page.locator('.cv-show').focus();
   await page.keyboard.press('Escape');
   await workspace.locator('h1').filter({hasText:'바뀐 <제목> & 수업'}).waitFor();
   await page.reload(); await page.waitForFunction(() => window.ready);
