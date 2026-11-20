@@ -257,8 +257,10 @@ export function webFrame(web) {
     sandbox: uploaded ? HTML_FILE_SANDBOX : 'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads allow-presentation allow-pointer-lock',
     allowfullscreen: true,
   });
-  // 붙은 뒤(같은 차례의 다음 순간)에 자리 크기를 보고 맞춘다.
-  queueMicrotask(() => fitWebFrame(frame));
+  // 웹사이트: 붙은 뒤(같은 차례의 다음 순간)에 자리 크기를 보고 맞춘다(좁으면 컴퓨터 너비로 그려 줄인다).
+  // 올린 HTML 은 실제 자리 크기 그대로 그린다: 컴퓨터 너비로 그리면 화면 비율(devicePixelRatio)로 해상도를 정하는 발표가
+  // 휴대폰에서 몇 배 큰 그림을 만들어 아이폰 사파리가 탭을 끈다(K-EDU27 발표 보기 링크, 2026-11-21). HTML 작업 칸과 같다.
+  if (!uploaded) queueMicrotask(() => fitWebFrame(frame));
   return frame;
 }
 
