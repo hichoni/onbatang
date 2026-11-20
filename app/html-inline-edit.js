@@ -2,23 +2,23 @@
 function inlineTextRuntime(channel, fonts) {
   const prefix = `onba-text-${channel}:`, fields = new Map(), byNode = new WeakMap(), edits = new Map(), styles = new Map(), holders = new Map();
   const paragraphAttribute = `data-onba-paragraph-${channel}`, paragraphs = new Map();
-  const decorationResets = new Map();
+  const decorationResets = new Map(), highlights = new Map();
   let editing = null, selected = null, outline;
   const send = data => parent.postMessage({channel, ...data}, '*');
   const value = () => editing.element.innerText.replace(/\r\n/g, '\n');
   const changed = () => { if (editing) { const text = value(); edits.set(editing.id, text); send({type: 'change', id: editing.id, text}); } };
-  function underlines(element) {
+  function decorationOrigins(element, line) {
     const origins = [];
     for (; element; element = element.parentElement) {
       const css = getComputedStyle(element);
-      if (css.textDecorationLine.split(' ').includes('underline')) origins.push(element);
+      if (css.textDecorationLine.split(' ').includes(line)) origins.push(element);
       // Decorations do not propagate into atomic or out-of-flow descendants.
       if (['inline-block', 'inline-flex', 'inline-grid', 'inline-table'].includes(css.display) || css.float !== 'none' || ['absolute','fixed'].includes(css.position)) break;
     }
     return origins;
   }
   function decorationInfo() {
-    return {italic: !!editing && getComputedStyle(editing.element).fontStyle !== 'normal', underline: !!editing && underlines(editing.element).length > 0};
+    return {italic: !!editing && getComputedStyle(editing.element).fontStyle !== 'normal', underline: !!editing && decorationOrigins(editing.element, 'underline').length > 0, strike: !!editing && decorationOrigins(editing.element, 'line-through').length > 0};
   }
   function holderFor(id) {
     let holder = holders.get(id);
@@ -32,8 +32,64 @@ function inlineTextRuntime(channel, fonts) {
     }
     return holder;
   }
+  function inlineBackgrounds(element) {
+    const origins = [];
+    for (; element && getComputedStyle(element).display === 'inline'; element = element.parentElement) {
+      const color = getComputedStyle(element).backgroundColor;
+      if (color !== 'transparent' && color !== 'rgba(0, 0, 0, 0)') origins.push(element);
+    }
+    return origins;
+  }
+  function highlightInfo() {
+    // The temporary editing span stays transparent. Only inline text
+    // backgrounds count; a card, button or page fill is never a highlight.
+    const origin = editing && inlineBackgrounds(editing.element.parentElement)[0];
+    if (!origin) return {backgroundColor: null};
+    const canvas = document.createElement('canvas'); canvas.width = canvas.height = 1;
+    const context = canvas.getContext('2d'); context.fillStyle = getComputedStyle(origin).backgroundColor; context.fillRect(0, 0, 1, 1);
+    return {backgroundColor: '#' + [...context.getImageData(0, 0, 1, 1).data].slice(0, 3).map(n => n.toString(16).padStart(2, '0')).join('')};
+  }
+  function highlightFor(id) {
+    let target = highlights.get(id);
+    if (!target) {
+      const holder = holderFor(id);
+      if (getComputedStyle(holder).display === 'inline') target = holder;
+      else {
+        const leaf = editing?.id === id ? editing.element : fields.get(id);
+        target = document.createElement('span'); target.style.setProperty('display', 'inline', 'important'); leaf.replaceWith(target); target.append(leaf);
+      }
+      highlights.set(id, target);
+    }
+    return target;
+  }
+  function highlightText(data) {
+    if (data.id !== selected || !editing || typeof data.color !== 'string' || (data.color !== 'transparent' && !/^#[\da-f]{6}$/i.test(data.color))) return;
+    const target = highlightFor(selected);
+    if (data.color === 'transparent') {
+      const ancestors = inlineBackgrounds(target).filter(element => element !== target && element.hasAttribute(paragraphAttribute));
+      const preserve = [];
+      for (const [id, node] of fields) {
+        if (id === selected) continue;
+        const origins = inlineBackgrounds(node.parentElement);
+        if (origins.some(element => ancestors.includes(element))) preserve.push([id, getComputedStyle(origins[0]).backgroundColor]);
+      }
+      for (const element of ancestors) {
+        const elementId = element.getAttribute(paragraphAttribute), record = {...decorationResets.get(elementId), id: selected, backgroundColor: 'transparent'};
+        decorationResets.set(elementId, record); element.style.setProperty('background-color', 'transparent', 'important');
+        send({type: 'decoration-reset', elementId, record});
+      }
+      for (const [id, color] of preserve) paintStyle(id, {backgroundColor: color});
+    }
+    paintStyle(selected, {backgroundColor: data.color});
+    send({type: 'highlight-info', id: selected, ...highlightInfo()});
+  }
   function paintStyle(id, patch) {
     const style = {...styles.get(id), ...patch}, holder = holderFor(id);
+    if (style.backgroundColor !== undefined) {
+      const target = highlightFor(id);
+      style.backgroundInline = target === holder;
+      target.style.setProperty('background-color', style.backgroundColor, 'important');
+    }
     styles.set(id, style);
     if (style.fontSize !== undefined) holder.style.setProperty('font-size', style.fontSize + 'px', 'important');
     if (style.color !== undefined) holder.style.setProperty('color', style.color, 'important');
@@ -42,33 +98,32 @@ function inlineTextRuntime(channel, fonts) {
     for (const [key, css] of [['fontStyle','font-style'],['textDecorationLine','text-decoration-line'],['textDecorationStyle','text-decoration-style'],['textDecorationColor','text-decoration-color'],['textDecorationThickness','text-decoration-thickness']]) if (style[key] !== undefined) holder.style.setProperty(css, style[key], 'important');
     send({type: 'style-change', id, style});
   }
-  function toggleUnderline(data) {
+  function toggleDecoration(data, line) {
     if (data.id !== selected || !editing || typeof data.enabled !== 'boolean') return;
     const holder = holderFor(selected);
     if (!data.enabled) {
-      const ancestors = underlines(editing.element).filter(element => element !== holder && element.hasAttribute(paragraphAttribute));
-      // CSS cannot cancel an ancestor's underline on one inline child. Move
-      // only those underlines onto their text runs before clearing this run.
-      // This preserves wrapping, sibling text and unrelated strike-throughs.
+      const ancestors = decorationOrigins(editing.element, line).filter(element => element !== holder && element.hasAttribute(paragraphAttribute));
+      // CSS cannot cancel an ancestor decoration on one inline child. Move
+      // that line onto its text runs before clearing only the selected run.
       const preserve = [];
       for (const [id, node] of fields) {
         if (id === selected) continue;
-        const leaf = editing?.id === id ? editing.element : node.parentElement, origins = underlines(leaf);
+        const leaf = editing?.id === id ? editing.element : node.parentElement, origins = decorationOrigins(leaf, line);
         if (!origins.some(element => ancestors.includes(element))) continue;
         const origin = getComputedStyle(origins[0]), own = getComputedStyle(holderFor(id));
-        preserve.push([id, {textDecorationLine: [...new Set([...own.textDecorationLine.split(' ').filter(line => line !== 'none'), 'underline'])].join(' '),
+        preserve.push([id, {textDecorationLine: [...new Set([...own.textDecorationLine.split(' ').filter(item => item !== 'none'), line])].join(' '),
           textDecorationColor: origin.textDecorationColor, textDecorationStyle: origin.textDecorationStyle, textDecorationThickness: origin.textDecorationThickness}]);
       }
       for (const element of ancestors) {
-        const elementId = element.getAttribute(paragraphAttribute), line = getComputedStyle(element).textDecorationLine.split(' ').filter(line => line !== 'underline').join(' ') || 'none';
-        const record = {id: selected, line}; decorationResets.set(elementId, record);
-        element.style.setProperty('text-decoration-line', line, 'important');
+        const elementId = element.getAttribute(paragraphAttribute), remaining = getComputedStyle(element).textDecorationLine.split(' ').filter(item => item !== line).join(' ') || 'none';
+        const record = {...decorationResets.get(elementId), id: selected, line: remaining}; decorationResets.set(elementId, record);
+        element.style.setProperty('text-decoration-line', record.line, 'important');
         send({type: 'decoration-reset', elementId, record});
       }
       for (const [id, patch] of preserve) paintStyle(id, patch);
     }
-    const lines = getComputedStyle(holder).textDecorationLine.split(' ').filter(line => line !== 'none' && line !== 'underline');
-    if (data.enabled) lines.push('underline');
+    const lines = getComputedStyle(holder).textDecorationLine.split(' ').filter(item => item !== 'none' && item !== line);
+    if (data.enabled) lines.push(line);
     paintStyle(selected, {textDecorationLine: lines.join(' ') || 'none'});
     send({type: 'decoration-info', id: selected, ...decorationInfo()});
   }
@@ -133,7 +188,7 @@ function inlineTextRuntime(channel, fonts) {
     const color = '#' + [...rgb].slice(0, 3).map(n => n.toString(16).padStart(2, '0')).join('');
     const family = computed.fontFamily.split(',')[0].trim().replace(/^["']|["']$/g, '');
     send({type: 'selected', id: editing.id, fontSize: parseFloat(computed.fontSize), color,
-      fontId: fonts.find(font => font.family === family)?.id || '', fontFamily: family.slice(0, 100), fontWeight: Number(computed.fontWeight), ...decorationInfo(), ...paragraphInfo()});
+      fontId: fonts.find(font => font.family === family)?.id || '', fontFamily: family.slice(0, 100), fontWeight: Number(computed.fontWeight), ...decorationInfo(), ...highlightInfo(), ...paragraphInfo()});
   }
   function format(data) {
     if (data.id !== selected || !fields.has(data.id) || !data.style || typeof data.style !== 'object') return;
@@ -180,7 +235,7 @@ function inlineTextRuntime(channel, fonts) {
     element.setAttribute('contenteditable', 'plaintext-only');
     element.setAttribute('role', 'textbox'); element.setAttribute('aria-label', '화면의 글 수정');
     element.setAttribute('spellcheck', 'false'); element.dataset.onbaEditing = '';
-    element.style.cssText = 'display:inline!important;min-width:1ch;margin:0!important;padding:0!important;border:0!important;outline:2px solid #286f62!important;outline-offset:3px!important;font:inherit!important;color:inherit!important;background:#fff8d080!important;white-space:pre-wrap!important;cursor:text!important';
+    element.style.cssText = 'display:inline!important;min-width:1ch;margin:0!important;padding:0!important;border:0!important;outline:2px solid #286f62!important;outline-offset:3px!important;font:inherit!important;color:inherit!important;background:transparent!important;white-space:pre-wrap!important;cursor:text!important';
     element.textContent = node.data;
     node.replaceWith(element); editing = {id, element}; selected = id;
     element.addEventListener('input', changed);
@@ -228,7 +283,9 @@ function inlineTextRuntime(channel, fonts) {
   addEventListener('message', event => {
     if (event.source !== parent || event.data?.channel !== channel) return;
     if (event.data.type === 'format') {format(event.data); return;}
-    if (event.data.type === 'underline') {toggleUnderline(event.data); return;}
+    if (event.data.type === 'underline') {toggleDecoration(event.data, 'underline'); return;}
+    if (event.data.type === 'strike') {toggleDecoration(event.data, 'line-through'); return;}
+    if (event.data.type === 'highlight') {highlightText(event.data); return;}
     if (event.data.type === 'format-paragraph') {formatParagraph(event.data); return;}
     if (event.data.type !== 'commit') return;
     finish(); send({type: 'committed', request: event.data.request, edits: [...edits], styles: [...styles], paragraphs: [...paragraphs], decorationResets: [...decorationResets]});
