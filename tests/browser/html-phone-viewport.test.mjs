@@ -18,17 +18,20 @@ const slides = [
   {id: 'phtmlphone1', web: {html: deck, filename: 'deck.html'}, items: []},
   {id: 'psitephone1', web: {url: 'https://example.com/'}, items: []},
 ];
-const html = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/src/editor.css"><link rel="stylesheet" href="/app/player.css">
+const page = viewport => `<!doctype html><meta charset="utf-8"><meta name="viewport" content="${viewport}"><link rel="stylesheet" href="/src/editor.css"><link rel="stylesheet" href="/app/player.css">
 <body style="margin:0;background:#222"><main id="stage"></main><script type="module">
 import {mountPlayer} from '/app/player.js';
 window.player=mountPlayer(document.getElementById('stage'),{slides:${JSON.stringify(slides).replaceAll('</', '<\\/')},aspect:16/9});window.ready=true;
 </script>`;
+const html = page('width=device-width,initial-scale=1');
+// 아이폰 보기 링크처럼 페이지 자체를 1920 너비로 넓혀 축소해 보이는 경우(GAI onbatang-html-viewport.js).
+const wideScale = 390 / 1920, wideHtml = page(`width=1920,initial-scale=${wideScale},minimum-scale=${wideScale}`);
 
 test('player: uploaded HTML draws at 1920 and scales down with the real sharpness; wide slots and websites keep their sizes', options, async t => {
   const server = createServer(async (req, res) => {
     try {
       const path = new URL(req.url, 'http://x').pathname;
-      if (path === '/fixture.html') { res.setHeader('Content-Type', 'text/html'); return res.end(html); }
+      if (path === '/fixture.html' || path === '/fixture-wide.html') { res.setHeader('Content-Type', 'text/html'); return res.end(path === '/fixture.html' ? html : wideHtml); }
       const f = resolve(root, '.' + decodeURIComponent(path));
       if (!f.startsWith(root + sep)) throw Error('path');
       res.setHeader('Content-Type', ({'.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2'})[extname(f)] || 'application/octet-stream');
@@ -40,11 +43,11 @@ test('player: uploaded HTML draws at 1920 and scales down with the real sharpnes
   const {chromium} = await import(pathToFileURL(process.env.MINICAN_PLAYWRIGHT_PATH).href);
   const browser = await chromium.launch({channel: process.env.MINICAN_BROWSER || 'msedge', headless: true});
   t.after(() => browser.close());
-  const open = async (options) => {
+  const open = async (options, fixture = 'fixture') => {
     const page = await browser.newPage(options);
     await page.route('https://example.com/**', route => route.fulfill({contentType: 'text/html', body: '<!doctype html><p>site</p>'}));
     const errors = []; page.on('pageerror', e => errors.push(e.message));
-    await page.goto(`http://127.0.0.1:${server.address().port}/fixture.html`);
+    await page.goto(`http://127.0.0.1:${server.address().port}/${fixture}.html`);
     await page.waitForFunction(() => window.ready);
     const frame = () => page.locator('#stage > .fe-card:last-child > .fe-web-frame');
     await frame().waitFor();
@@ -83,4 +86,16 @@ test('player: uploaded HTML draws at 1920 and scales down with the real sharpnes
   assert.equal(await wideDoc.evaluate(() => innerWidth), full.host[0]);
   assert.equal(await wideDoc.evaluate(() => window.firstDpr), 1);
   assert.deepEqual(wide.errors, []);
+
+  // 페이지를 1920 너비로 넓혀 축소해 보이면(페이지 배율 약 0.2): 자리가 이미 1920 이라 줄이지 않고, 선명도는 3 × 페이지 배율.
+  const widened = await open({viewport: {width: 390, height: 844}, deviceScaleFactor: 3, isMobile: true, hasTouch: true}, 'fixture-wide');
+  const widenedDoc = await widened.inside();
+  const fill = await widened.look();
+  const scale = await widened.page.evaluate(() => visualViewport.scale);
+  assert.ok(Math.abs(scale - wideScale) < 0.002, `the page is zoomed out (${scale})`);
+  assert.ok(fill.host[0] >= 1920, `the slide is 1920 wide in page pixels (${fill.host})`);
+  assert.equal(fill.scaled, false, 'no transform: the page scale already shrinks it');
+  assert.equal(await widenedDoc.evaluate(() => innerWidth), fill.host[0]);
+  assert.equal(await widenedDoc.evaluate(() => window.firstDpr), Math.round(3 * scale * 1000) / 1000, 'the HTML sees the sharpness of the zoomed-out page');
+  assert.deepEqual(widened.errors, []);
 });
