@@ -11,6 +11,10 @@ const validTextStyle = style => !!style && typeof style === 'object' && !Array.i
   (!('fontId' in style) || !!textFont(style.fontId)) &&
   (!('fontWeight' in style) || [400, 700].includes(style.fontWeight)) &&
   (!('color' in style) || (typeof style.color === 'string' && /^#[\da-f]{6}$/i.test(style.color)));
+const validParagraphStyle = style => !!style && typeof style === 'object' && !Array.isArray(style) &&
+  Object.keys(style).length > 0 && Object.keys(style).every(key => ['textAlign', 'lineHeight'].includes(key)) &&
+  (!('textAlign' in style) || ['left', 'center', 'right', 'justify'].includes(style.textAlign)) &&
+  (!('lineHeight' in style) || style.lineHeight === 'normal' || (Number.isFinite(style.lineHeight) && style.lineHeight >= 0.8 && style.lineHeight <= 3));
 
 // Only the opened document runs. Covers, thumbnails and exports stay inert.
 export function createHtmlWorkspace(host) {
@@ -55,17 +59,24 @@ export function createHtmlWorkspace(host) {
 export function htmlTextDraft(source) {
   const doc = new DOMParser().parseFromString(source, 'text/html');
   const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT), nodes = [], fields = [];
+  const elements = [doc.body, ...doc.body.querySelectorAll('*')], elementIds = new Map(elements.map((element, id) => [element, String(id)]));
   const excluded = 'script,style,noscript,template,textarea,select,iframe,object,embed,svg,canvas,[hidden],[aria-hidden="true"]';
   for (let node; (node = walker.nextNode());) {
     if (!node.data.trim() || node.parentElement.closest(excluded)) continue;
-    fields.push({id: String(nodes.length), text: node.data, tag: node.parentElement.localName});
+    const paragraphIds = [];
+    for (let element = node.parentElement; element && elementIds.has(element); element = element.parentElement) paragraphIds.push(elementIds.get(element));
+    fields.push({id: String(nodes.length), text: node.data, tag: node.parentElement.localName, paragraphIds});
     nodes.push(node);
   }
+  const validParagraph = (id, paragraphId, style) => typeof id === 'string' && fields[Number(id)]?.id === id && typeof paragraphId === 'string' && fields[Number(id)].paragraphIds.includes(paragraphId) && validParagraphStyle(style);
   return {
     fields,
+    validParagraph,
     preview(channel) {
       // Annotate a separate copy with invisible markers; never save preview markup.
       const copy = doc.cloneNode(true), texts = copy.createTreeWalker(copy.body, NodeFilter.SHOW_TEXT);
+      const copies = [copy.body, ...copy.body.querySelectorAll('*')];
+      for (const id of new Set(fields.flatMap(field => field.paragraphIds))) copies[Number(id)].setAttribute(`data-onba-paragraph-${channel}`, id);
       const editable = [];
       for (let node; (node = texts.nextNode());) if (node.data.trim() && !node.parentElement.closest(excluded)) editable.push(node);
       editable.forEach((node, id) => node.before(copy.createComment(`onba-text-${channel}:${id}`)));
@@ -83,15 +94,17 @@ export function htmlTextDraft(source) {
       copy.head.prepend(charset, csp, base, runtime);
       return '<!doctype html>' + copy.documentElement.outerHTML;
     },
-    apply(changes, styles = new Map(), fontAssets = new Map()) {
+    apply(changes, styles = new Map(), fontAssets = new Map(), paragraphs = new Map()) {
       const edits = [...changes].filter(([id, text]) => {
         if (!fields[Number(id)] || fields[Number(id)].id !== id || typeof text !== 'string') throw Error('수정할 글을 다시 골라 주세요.');
         return text !== fields[Number(id)].text;
       });
       for (const [id, style] of styles) if (typeof id !== 'string' || fields[Number(id)]?.id !== id || !validTextStyle(style)) throw Error('글자 모양을 확인해 주세요.');
-      if (!edits.length && !styles.size) return source;
+      for (const [paragraphId, record] of paragraphs) if (!record || !validParagraph(record.id, paragraphId, record.style)) throw Error('문단 정렬과 줄간격을 확인해 주세요.');
+      if (!edits.length && !styles.size && !paragraphs.size) return source;
       // Work on a fresh copy: repeated saves cannot accumulate formatting wrappers.
       const output = doc.cloneNode(true), texts = output.createTreeWalker(output.body, NodeFilter.SHOW_TEXT), targets = [];
+      const paragraphTargets = [output.body, ...output.body.querySelectorAll('*')];
       for (let node; (node = texts.nextNode());) if (node.data.trim() && !node.parentElement.closest(excluded)) targets.push(node);
       for (const [id, text] of edits) targets[Number(id)].data = text;
       for (const [id, style] of styles) {
@@ -111,6 +124,17 @@ export function htmlTextDraft(source) {
           const face = output.createElement('style'); face.dataset.onbaHtmlFont = font.id; face.textContent = css; output.head.append(face);
         }
       }
+      for (const [paragraphId, {style}] of paragraphs) {
+        const block = paragraphTargets[Number(paragraphId)];
+        if (style.textAlign !== undefined) block.style.setProperty('text-align', style.textAlign, 'important');
+        if (style.lineHeight !== undefined) {
+          block.style.setProperty('line-height', String(style.lineHeight), 'important');
+          for (const node of targets) {
+            if (!block.contains(node)) continue;
+            for (let element = node.parentElement; element && element !== block; element = element.parentElement) element.style.setProperty('line-height', String(style.lineHeight), 'important');
+          }
+        }
+      }
       const xml = new XMLSerializer();
       return [...output.childNodes].map(node => node.nodeType === Node.ELEMENT_NODE ? node.outerHTML : xml.serializeToString(node)).join('');
     },
@@ -118,11 +142,11 @@ export function htmlTextDraft(source) {
 }
 
 export function editHtmlText(source, apply, onClose) {
-  const draft = htmlTextDraft(source), changes = new Map(), styles = new Map(), fontAssets = new Map(), channel = crypto.randomUUID().replaceAll('-', '');
+  const draft = htmlTextDraft(source), changes = new Map(), styles = new Map(), paragraphs = new Map(), fontAssets = new Map(), channel = crypto.randomUUID().replaceAll('-', '');
   const frame = el('iframe', {title: 'HTML 화면에서 글 수정', sandbox: 'allow-scripts', referrerpolicy: 'no-referrer', srcdoc: draft.preview(channel), dataset: {htmlTextFrame: ''}});
   const status = el('p', {role: 'status', text: '글을 불러오는 중…'});
-  let pending = '', timeout = 0, selected = null, fontRequest = 0, fontLoading = false, closed = false;
-  const countChanges = () => new Set([...changes.keys(), ...styles.keys()]).size;
+  let pending = '', timeout = 0, selected = null, selectedParagraph = null, fontRequest = 0, fontLoading = false, closed = false;
+  const countChanges = () => new Set([...changes.keys(), ...styles.keys()]).size + paragraphs.size;
   const sendStyle = style => {
     if (selected === null || pending || fontLoading || !validTextStyle(style)) return;
     frame.contentWindow.postMessage({channel, type: 'format', id: selected, style}, '*');
@@ -150,6 +174,23 @@ export function editHtmlText(source, apply, onClose) {
   const weight = el('select', {disabled: true, 'aria-label': '글자 굵기', onChange: event => sendStyle({fontWeight: Number(event.target.value)})},
     originalWeight, el('option', {value: '400', text: '보통'}), el('option', {value: '700', text: '굵게'}));
   const weightNote = el('span', {class: 'cv-html-font-note', hidden: true, text: '이 글꼴은 한 가지 굵기로 제공돼요.'});
+  const sendParagraph = style => {
+    if (pending || fontLoading || !draft.validParagraph(selected, selectedParagraph, style)) return;
+    frame.contentWindow.postMessage({channel, type: 'format-paragraph', id: selected, paragraphId: selectedParagraph, style}, '*');
+  };
+  const originalAlign = el('option', {value: '', disabled: true, text: '현재 정렬'});
+  const align = el('select', {disabled: true, 'aria-label': '문단 정렬', onChange: event => sendParagraph({textAlign: event.target.value})}, originalAlign,
+    ...[['left','왼쪽'],['center','가운데'],['right','오른쪽'],['justify','양쪽']].map(([value,text]) => el('option', {value,text})));
+  const originalSpacing = el('option', {value: '', disabled: true, text: '현재 줄간격'});
+  const spacing = el('select', {disabled: true, 'aria-label': '문단 줄간격', onChange: event => sendParagraph({lineHeight: event.target.value === 'normal' ? 'normal' : Number(event.target.value)})}, originalSpacing,
+    el('option', {value: 'normal', text: '기본'}), ...[1,1.15,1.2,1.5,1.8,2,2.5,3].map(value => el('option', {value: String(value), text: `${value}배`})));
+  const paragraphNote = el('span', {class: 'cv-html-paragraph-note', text: '정렬·줄간격은 선택한 문단 전체에 적용돼요.'});
+  const updateParagraphInfo = data => {
+    selectedParagraph = draft.validParagraph(selected, data.paragraphId, {textAlign: 'left'}) ? data.paragraphId : null;
+    align.value = ['left','center','right','justify'].includes(data.textAlign) ? data.textAlign : '';
+    spacing.value = data.lineHeight === 'normal' || [1,1.15,1.2,1.5,1.8,2,2.5,3].includes(data.lineHeight) ? String(data.lineHeight) : '';
+    originalSpacing.textContent = Number.isFinite(data.lineHeight) ? `현재 (${data.lineHeight}배)` : '현재 줄간격';
+  };
   const selectedLabel = el('span', {class: 'cv-html-text-selected', text: '화면의 글을 먼저 눌러 주세요.'});
   const save = el('button', {type: 'button', class: 'btn btn-primary', disabled: true, onClick: () => {
     if (pending || fontLoading) return;
@@ -163,6 +204,8 @@ export function editHtmlText(source, apply, onClose) {
     const count = countChanges(), unavailable = !!pending || selected === null;
     save.disabled = !!pending || fontLoading || !count;
     size.disabled = color.disabled = unavailable || fontLoading; family.disabled = unavailable;
+    align.disabled = spacing.disabled = unavailable || fontLoading || selectedParagraph === null;
+    paragraphNote.textContent = selected !== null && selectedParagraph === null ? '이 글에서는 문단 정렬·줄간격을 사용할 수 없어요.' : '정렬·줄간격은 선택한 문단 전체에 적용돼요.';
     const fixedWeight = !!textFont(family.value)?.noFakeBold;
     weight.disabled = unavailable || fontLoading || fixedWeight; weightNote.hidden = selected === null || !fixedWeight;
     status.textContent = fontLoading ? '글꼴을 불러오는 중…' : count ? `${count}곳 수정됨 · 저장하면 HTML을 다시 열어요.` : '화면의 글을 눌러 내용과 글자 모양을 바꾸세요.';
@@ -172,7 +215,7 @@ export function editHtmlText(source, apply, onClose) {
     if (event.source !== frame.contentWindow || !data || data.channel !== channel) return;
     if (data.type === 'ready') { status.textContent = draft.fields.length ? '화면의 글을 눌러 내용과 글자 모양을 바꾸세요. 수정 중에는 버튼 동작을 멈춰요.' : '직접 수정할 원본 글이 없어요. 코드로 생성되는 글과 이미지 속 글은 지원하지 않아요.'; return; }
     if (data.type === 'selected') {
-      if (data.id === null) { fontRequest++; fontLoading = false; selected = null; selectedLabel.textContent = '화면의 글을 먼저 눌러 주세요.'; refresh(); return; }
+      if (data.id === null) { fontRequest++; fontLoading = false; selected = null; selectedParagraph = null; selectedLabel.textContent = '화면의 글을 먼저 눌러 주세요.'; refresh(); return; }
       if (!valid(data.id, draft.fields[Number(data.id)]?.text) || !Number.isFinite(data.fontSize) || data.fontSize <= 0 || !validTextStyle({color: data.color})) return;
       fontRequest++; fontLoading = false;
       selected = data.id; size.value = String(Math.round(data.fontSize * 100) / 100); color.value = data.color;
@@ -180,6 +223,7 @@ export function editHtmlText(source, apply, onClose) {
       originalFont.textContent = `현재: ${typeof data.fontFamily === 'string' ? data.fontFamily.slice(0, 40) : '원본 글꼴'}`;
       weight.value = [400, 700].includes(data.fontWeight) ? String(data.fontWeight) : '';
       originalWeight.textContent = Number.isFinite(data.fontWeight) ? `현재 (${data.fontWeight})` : '현재 굵기';
+      updateParagraphInfo(data);
       selectedLabel.textContent = (changes.get(selected) ?? draft.fields[Number(selected)].text).trim().slice(0, 100);
       refresh(); return;
     }
@@ -187,15 +231,25 @@ export function editHtmlText(source, apply, onClose) {
       if (!valid(data.id, draft.fields[Number(data.id)]?.text) || !validTextStyle(data.style)) return;
       styles.set(data.id, data.style); refresh(); return;
     }
+    if (data.type === 'paragraph-info') {
+      if (data.id !== selected) return;
+      updateParagraphInfo(data); refresh(); return;
+    }
+    if (data.type === 'paragraph-change') {
+      if (!draft.validParagraph(data.id, data.paragraphId, data.style)) return;
+      paragraphs.set(data.paragraphId, {id: data.id, style: data.style}); refresh(); return;
+    }
     if (data.type === 'committed') {
       if (!pending || data.request !== pending) return;
       clearTimeout(timeout); pending = '';
       try {
         if (!Array.isArray(data.edits) || data.edits.length > draft.fields.length || !data.edits.every(row => Array.isArray(row) && row.length === 2 && valid(...row))) throw Error('수정한 글을 확인할 수 없어요. 다시 열어 주세요.');
         if (!Array.isArray(data.styles) || data.styles.length > draft.fields.length || !data.styles.every(row => Array.isArray(row) && row.length === 2 && valid(row[0], draft.fields[Number(row[0])]?.text) && validTextStyle(row[1]))) throw Error('글자 모양을 확인할 수 없어요. 다시 열어 주세요.');
+        if (!Array.isArray(data.paragraphs) || data.paragraphs.length > draft.fields.length || !data.paragraphs.every(row => Array.isArray(row) && row.length === 2 && row[1] && draft.validParagraph(row[1].id, row[0], row[1].style))) throw Error('문단 정렬과 줄간격을 확인할 수 없어요. 다시 열어 주세요.');
         changes.clear(); for (const [id, text] of data.edits) update(id, text);
         styles.clear(); for (const [id, style] of data.styles) styles.set(id, style);
-        if (!countChanges() || apply(draft.apply(changes, styles, fontAssets)) !== false) closeModal();
+        paragraphs.clear(); for (const [id, record] of data.paragraphs) paragraphs.set(id, {id: record.id, style: record.style});
+        if (!countChanges() || apply(draft.apply(changes, styles, fontAssets, paragraphs)) !== false) closeModal();
       } catch (error) { toast(error.message || '글을 저장하지 못했어요.', 4500); }
       refresh(); return;
     }
@@ -209,6 +263,8 @@ export function editHtmlText(source, apply, onClose) {
     el('header', {class: 'cv-html-edit-bar'}, el('div', {}, el('h2', {text: '화면에서 글 수정'}), status),
       el('div', {class: 'row'}, el('button', {type: 'button', class: 'btn btn-ghost', onClick: closeModal}, '취소'), save)),
     el('div', {class: 'cv-html-text-format', role: 'group', 'aria-label': '글자 모양'},
-      selectedLabel, el('label', {}, '글꼴', family), el('label', {}, '굵기', weight), el('label', {}, '크기', size, el('span', {text: 'px'})), el('label', {}, '색깔', color), weightNote), frame),
+      selectedLabel, el('label', {}, '글꼴', family), el('label', {}, '굵기', weight), el('label', {}, '크기', size, el('span', {text: 'px'})), el('label', {}, '색깔', color), weightNote),
+    el('div', {class: 'cv-html-paragraph-format', role: 'group', 'aria-label': '문단 모양'}, paragraphNote,
+      el('label', {}, '정렬', align), el('label', {}, '줄간격', spacing)), frame),
   {wide: true, onClose: () => { closed = true; fontRequest++; clearTimeout(timeout); window.removeEventListener('message', receive); onClose?.(); }});
 }
