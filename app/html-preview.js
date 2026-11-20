@@ -89,7 +89,9 @@ function captureFirstScreen(channel, width, height) {
       const serialized=new XMLSerializer().serializeToString(svg);if(serialized.length>24000000)throw Error('preview size');
       const image=new Image();image.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(serialized);await image.decode();
       const canvas=document.createElement('canvas');canvas.width=960;canvas.height=Math.round(960*height/width);
-      const ctx=canvas.getContext('2d');ctx.fillStyle=getComputedStyle(document.documentElement).backgroundColor;ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(image,0,0,canvas.width,canvas.height);
+      const ctx=canvas.getContext('2d');ctx.fillStyle='#ffffff';ctx.fillRect(0,0,canvas.width,canvas.height);
+      for(const node of [document.body,document.documentElement]){ctx.fillStyle=getComputedStyle(node).backgroundColor;ctx.fillRect(0,0,canvas.width,canvas.height);}
+      ctx.drawImage(image,0,0,canvas.width,canvas.height);
       for(const quality of [.8,.65,.45]){const poster=canvas.toDataURL('image/jpeg',quality);if(poster.length<=400000){send({channel,poster},'*');return;}}
     }catch{}
     send({channel,poster:''},'*');
