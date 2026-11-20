@@ -164,8 +164,11 @@ test('편집기 자체에는 인증·서버 API가 없고 GBE-AI Lab 연결 주�
     // writes or other network APIs are allowed; keep every other app file under the old rule.
     // 온바탕 파일(file-fonts.js)은 글꼴 목록에 적힌 같은 곳의 글꼴 파일 · 사용 허락 글(또는 blob:)만 읽는다. 인증 정보는 싣지 않는다.
     if (f === 'file-fonts.js') assert.match(src, /if \(u\.protocol !== 'blob:' && u\.origin !== location\.origin\) throw Error\('font_origin'\);/);
+    // HTML 첫 화면(html-preview.js)은 계정 출처와 떨어진 임시 틀(sandbox, allow-same-origin 없음) 안에서만 그 HTML 의 글꼴 파일을 인증 정보 없이 읽는다.
     const networkSource = f === 'pptx.js' ? src.replace("fetch(item.url, {signal, method: 'GET', credentials: 'omit', referrerPolicy: 'no-referrer'})", 'readExistingPhoto()')
-      : f === 'file-fonts.js' ? src.replace("fetch(u.href, { credentials: 'omit', referrerPolicy: 'no-referrer' })", 'readSameOriginAsset()') : src;
+      : f === 'file-fonts.js' ? src.replace("fetch(u.href, { credentials: 'omit', referrerPolicy: 'no-referrer' })", 'readSameOriginAsset()')
+      : f === 'html-preview.js' ? src.replace("fetch(url,{credentials:'omit',signal:AbortSignal.timeout(2000)})", 'readFontInsideSandbox()') : src;
+    if (f === 'html-preview.js') assert.match(src, /frame\.sandbox='allow-scripts';/);
     assert.doesNotMatch(networkSource, /\bfetch\(|XMLHttpRequest|WebSocket|sendBeacon|EventSource/, f);
     const addresses = f === 'pptx.js' ? src.replaceAll(/http:\/\/schemas\.openxmlformats\.org\/(?:drawingml\/2006\/main|presentationml\/2006\/main|officeDocument\/2006\/(?:relationships|extended-properties)|package\/2006\/(?:relationships(?:\/metadata\/core-properties)?|content-types|metadata\/core-properties))/g, '').replaceAll('http://purl.org/dc/elements/1.1/', '').replaceAll('http://schemas.microsoft.com/office/powerpoint/2010/main', '').replaceAll('http://schemas.openxmlformats.org/markup-compatibility/2006', '').replaceAll('http://schemas.microsoft.com/office/drawing/2010/main', '') : src;
     // 링크 미리보기 태그(og:* · twitter:*)는 공용 온바탕의 주소를 절대 주소로 적어야 미리보기가 그림을 읽는다(앱이 보내는 요청이 아니다).
@@ -178,7 +181,8 @@ test('편집기 자체에는 인증·서버 API가 없고 GBE-AI Lab 연결 주�
       assert.deepEqual([...src.matchAll(/rpc\('(\w+)'/g)].map((m) => m[1]), ['onbatang_copy_info', 'onbatang_copy_part', 'onbatang_guest_copy_publish', 'onbatang_guest_copy_put', 'onbatang_guest_copy_card', 'onbatang_guest_copy_get', 'onbatang_guest_copy_remove']);
       assert.equal(src.match(/credentials: 'omit'/g)?.length, 2, 'copy-link.js: 쿠키 · 인증을 싣지 않는다');
     }
-    assert.doesNotMatch(allowed.replaceAll('http://www.w3.org/2000/svg', ''), /https?:\/\//, `${f}: 바깥 주소`);
+    // SVG · XHTML 이름표(namespace)는 주소가 아니다(요청을 보내지 않는다).
+    assert.doesNotMatch(allowed.replaceAll('http://www.w3.org/2000/svg', '').replaceAll('http://www.w3.org/1999/xhtml', ''), /https?:\/\//, `${f}: 바깥 주소`);
     assert.doesNotMatch(src, /firebase|firestore|tinkerlab|틴커랩|signInWithPassword|access_token|service_role/i, f);
     for (const [, from] of src.matchAll(/from '([^']+)'/g)) assert.match(from, /^\.\/(?:pptx-import\/)?[\w-]+\.js$|^\.\.\/src\/[\w-]+\.js$/, `${f}: ${from}`);
   }
