@@ -8,7 +8,7 @@ import {createHtmlLesson} from '../../app/html-lesson.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const options = {skip: !process.env.MINICAN_PLAYWRIGHT_PATH, timeout: 120000};
-const html = `<!doctype html><meta charset="utf-8"><style>body{background:#e6f4ef;font:24px sans-serif}button{font:inherit;padding:20px}</style><h1>HTML 수업</h1><button id="count">눌러요</button><p id="status"></p><p id="duplicate-a">같은 글</p><p id="duplicate-b">같은 글</p><p id="mixed">앞 <strong>강조</strong> 뒤</p><p id="paragraph">첫 줄 <strong style="line-height:3">굵은 글</strong><br><a href="#keep">둘째 줄</a></p><p id="neighbor">다른 문단</p><div id="flex-label" style="display:flex">별도 레이아웃</div><p id="decorated" style="font-style:italic;text-decoration:underline line-through wavy rgb(190, 30, 50) 2px">앞쪽 <strong style="text-decoration:overline">선택할 글</strong> 뒤쪽 <span id="atomic" style="display:inline-block">독립 글</span></p><script>
+const html = `<!doctype html><meta charset="utf-8"><style>body{background:#e6f4ef;font:24px sans-serif}button{font:inherit;padding:20px}</style><h1>HTML 수업</h1><button id="count">눌러요</button><p id="status"></p><p id="duplicate-a">같은 글</p><p id="duplicate-b">같은 글</p><p id="mixed">앞 <strong>강조</strong> 뒤</p><p id="paragraph">첫 줄 <strong style="line-height:3">굵은 글</strong><br><a href="#keep">둘째 줄</a></p><p id="neighbor">다른 문단</p><div id="flex-label" style="display:flex">별도 레이아웃</div><p id="decorated" style="font-style:italic;text-decoration:underline line-through wavy rgb(190, 30, 50) 2px">앞쪽 <strong style="text-decoration:overline">선택할 글</strong> 뒤쪽 <span id="atomic" style="display:inline-block">독립 글</span></p><p id="highlight-block" style="background:#224466;color:white">글자 배경 테스트</p><p id="marked"><mark style="background:#f5d76e;text-decoration:underline line-through">주변 앞 <strong>장식 해제</strong> 주변 뒤</mark></p><script>
 count.onclick=()=>count.textContent='완료';
 try{parent.document.body.dataset.compromised='yes';status.textContent='unsafe';}catch{document.getElementById('status').textContent='isolated';}
 try{localStorage.setItem('html-import-secret','stolen');}catch{}
@@ -51,7 +51,7 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
     const first = draft.apply(new Map(),styles), parsed = new DOMParser().parseFromString(first,'text/html');
     const second = draft.apply(new Map(),new Map([['0',{color:'#abcdef'}]]));
     const repeated = htmlTextDraft(first).apply(new Map(),styles);
-    const invalid = [{fontSize:0},{fontSize:301},{color:'red;position:fixed'},{background:'url(https://bad.test)'},{fontId:'Arial;position:fixed'},{fontWeight:999},{fontWeight:'700'},{fontStyle:'oblique;position:fixed'},{textDecorationLine:'blink'},{textDecorationColor:'url(https://bad.test)'},{textDecorationThickness:'-1px'},{fontId:'noto-sans-kr'}].every(style=>{try{draft.apply(new Map(),new Map([['0',style]]));return false;}catch{return true;}});
+    const invalid = [{fontSize:0},{fontSize:301},{color:'red;position:fixed'},{background:'url(https://bad.test)'},{fontId:'Arial;position:fixed'},{fontWeight:999},{fontWeight:'700'},{fontStyle:'oblique;position:fixed'},{textDecorationLine:'blink'},{textDecorationColor:'url(https://bad.test)'},{textDecorationThickness:'-1px'},{backgroundColor:'url(https://bad.test)',backgroundInline:true},{backgroundColor:'#ffcc00'},{backgroundInline:true},{fontId:'noto-sans-kr'}].every(style=>{try{draft.apply(new Map(),new Map([['0',style]]));return false;}catch{return true;}});
     return {size:parsed.querySelector('p span').style.fontSize,color:parsed.querySelector('p span').style.color,
       sibling:parsed.querySelector('strong').outerHTML,last:parsed.querySelector('p').lastChild.data,
       repeatSpans:new DOMParser().parseFromString(repeated,'text/html').querySelectorAll('span').length,
@@ -75,7 +75,7 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
     const draft = htmlTextDraft('<p><u>A</u></p><p>B</p>');
     return [draft.validDecorationReset(draft.fields[0].paragraphIds[0],{id:'0',line:'none'}),
       draft.validDecorationReset(draft.fields[1].paragraphIds[0],{id:'0',line:'none'}),
-      draft.validDecorationReset(draft.fields[0].paragraphIds[0],{id:'0',line:'underline'}),
+      draft.validDecorationReset(draft.fields[0].paragraphIds[0],{id:'0',line:'underline line-through'}),
       draft.validDecorationReset(draft.fields[0].paragraphIds[0],{id:'0',line:'none;display:none'})];
   });
   assert.deepEqual(resetChecks,[true,false,false,false],'underline resets are limited to the selected text ancestors and safe line values');
@@ -116,6 +116,19 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   const underlineControl = edit.getByRole('button',{name:'밑줄',exact:true});
   assert.equal(await italicControl.isDisabled(),true);
   assert.equal(await underlineControl.isDisabled(),true);
+  const strikeControl = edit.getByRole('button',{name:'취소선',exact:true});
+  const highlightControl = edit.getByLabel('글자 배경색',{exact:true});
+  const clearHighlight = edit.getByRole('button',{name:'글자 배경색 없애기',exact:true});
+  const setHighlight = async color => {
+    await highlightControl.evaluate((input,value)=>{input.value=value;input.dispatchEvent(new Event('input',{bubbles:true}));},color);
+    await editFrame.locator('[data-onba-editing]').evaluate((element,color)=>new Promise(resolve=>{
+      const expected='rgb('+color.slice(1).match(/../g).map(hex=>parseInt(hex,16)).join(', ')+')';
+      const check=()=>{if(getComputedStyle(element.parentElement).backgroundColor===expected)resolve();else requestAnimationFrame(check);};check();
+    }),color);
+    await page.waitForFunction(()=>document.querySelector('[aria-label="글자 배경색 없애기"]')?.getAttribute('aria-pressed')==='false');
+  };
+  assert.equal(await strikeControl.isDisabled(),true);
+  assert.equal(await highlightControl.isDisabled(),true);
   const alignControl = edit.getByRole('combobox',{name:'문단 정렬',exact:true});
   const spacingControl = edit.getByRole('combobox',{name:'문단 줄간격',exact:true});
   assert.equal(await fontControl.isDisabled(),true);
@@ -205,6 +218,27 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   await editFrame.locator('#mixed strong').click();
   assert.equal(await italicControl.getAttribute('aria-pressed'),'true');
   assert.equal(await underlineControl.getAttribute('aria-pressed'),'true');
+  await editFrame.locator('#highlight-block').click();
+  assert.equal(await clearHighlight.getAttribute('aria-pressed'),'true','a block background is not text highlighting');
+  await strikeControl.click(); await setHighlight('#ffee66');
+  assert.equal(await clearHighlight.getAttribute('aria-pressed'),'false');
+  assert.equal(await editFrame.locator('#highlight-block').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(34, 68, 102)','the block fill is unchanged');
+  assert.equal(await editFrame.locator('#highlight-block > span').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(255, 238, 102)');
+  assert.equal(await editFrame.locator('[data-onba-editing]').evaluate(e=>getComputedStyle(e).backgroundColor),'rgba(0, 0, 0, 0)','selection tint never obscures the actual highlight');
+  assert.ok(await editFrame.locator('#highlight-block').evaluate(e=>e.firstElementChild.getBoundingClientRect().width<e.getBoundingClientRect().width/2),'only the text is highlighted');
+  await editFrame.locator('#marked strong').click();
+  assert.equal(await highlightControl.inputValue(),'#f5d76e','original inline highlighting is detected');
+  assert.equal(await strikeControl.getAttribute('aria-pressed'),'true','ancestor strike-through is detected');
+  await clearHighlight.click(); await strikeControl.click();
+  assert.equal(await underlineControl.getAttribute('aria-pressed'),'true','removing strike-through preserves underline');
+  assert.equal(await strikeControl.getAttribute('aria-pressed'),'false');
+  await underlineControl.click();
+  assert.equal(await clearHighlight.getAttribute('aria-pressed'),'true');
+  assert.equal(await editFrame.locator('#marked mark').evaluate(e=>getComputedStyle(e).textDecorationLine),'none');
+  assert.deepEqual(await editFrame.locator('#marked mark > span').evaluateAll(es=>es.map(e=>[getComputedStyle(e).backgroundColor,getComputedStyle(e).textDecorationLine])),[['rgb(245, 215, 110)','underline line-through'],['rgb(245, 215, 110)','underline line-through']],'neighboring highlights and both lines are preserved');
+  await editFrame.locator('#highlight-block').click();
+  assert.equal(await strikeControl.getAttribute('aria-pressed'),'true');
+  assert.equal(await highlightControl.inputValue(),'#ffee66');
   await page.screenshot({path:resolve(root,'work/html-text-editor.png')});
   await edit.getByRole('button',{name:'저장',exact:true}).click();
   await workspace.locator('h1').filter({hasText:'바뀐 <제목> & 수업'}).waitFor();
@@ -215,6 +249,9 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   assert.deepEqual(await workspace.locator('#mixed strong').evaluate(e=>({italic:getComputedStyle(e).fontStyle,line:getComputedStyle(e).textDecorationLine})),{italic:'italic',line:'underline'});
   assert.deepEqual(await workspace.locator('#decorated strong').evaluate(e=>({italic:getComputedStyle(e).fontStyle,line:getComputedStyle(e).textDecorationLine})),{italic:'normal',line:'overline'});
   assert.equal(await workspace.locator('#decorated').evaluate(e=>getComputedStyle(e).textDecorationLine),'line-through');
+  assert.deepEqual(await workspace.locator('#highlight-block').evaluate(e=>[getComputedStyle(e).backgroundColor,getComputedStyle(e).textDecorationLine,getComputedStyle(e.firstElementChild).backgroundColor]),['rgb(34, 68, 102)','line-through','rgb(255, 238, 102)']);
+  assert.deepEqual(await workspace.locator('#marked mark').evaluate(e=>[getComputedStyle(e).backgroundColor,getComputedStyle(e).textDecorationLine]),['rgba(0, 0, 0, 0)','none'],'combined background and decoration resets survive save');
+  assert.deepEqual(await workspace.locator('#marked mark > span').evaluateAll(es=>es.map(e=>[getComputedStyle(e).backgroundColor,getComputedStyle(e).textDecorationLine])),[['rgb(245, 215, 110)','underline line-through'],['rgb(245, 215, 110)','underline line-through']]);
   assert.equal(await workspace.locator('#atomic').evaluate(e=>e.style.textDecorationLine),'','atomic sibling is unchanged');
   assert.deepEqual(await workspace.locator('#decorated > span:not(#atomic)').evaluateAll(es=>es.map(e=>getComputedStyle(e).textDecorationLine)),['underline','underline'],'neighboring underlines survive save');
   assert.equal(await workspace.locator('#mixed strong').textContent(),'바뀐 강조','nested formatting survives');
@@ -237,6 +274,8 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   assert.equal(await workspace.locator('#mixed strong').evaluate(e=>getComputedStyle(e).fontSize),'24px','undo restores formatting');
   assert.equal(await workspace.locator('#mixed strong').evaluate(e=>getComputedStyle(e).fontWeight),'700','undo restores original bold');
   assert.equal(await workspace.locator('#mixed strong').evaluate(e=>getComputedStyle(e).fontStyle),'normal','undo restores italic');
+  assert.equal(await workspace.locator('#highlight-block > span').count(),0,'undo removes only the added text highlight');
+  assert.equal(await workspace.locator('#marked mark').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(245, 215, 110)','undo restores the original highlight');
   assert.equal(await workspace.locator('#decorated').evaluate(e=>getComputedStyle(e).textDecorationLine),'underline line-through','undo restores underline source');
   assert.equal(await workspace.locator('style[data-onba-html-font]').count(),0,'undo removes added font assets');
   assert.equal(await workspace.locator('#paragraph').evaluate(e=>e.style.textAlign),'','undo restores paragraph alignment');
@@ -274,23 +313,41 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   await italicControl.click(); await underlineControl.click();
   assert.equal(await italicControl.getAttribute('aria-pressed'),'false');
   assert.equal(await underlineControl.getAttribute('aria-pressed'),'false');
+  await editFrame.locator('#highlight-block').click();
+  assert.equal(await strikeControl.getAttribute('aria-pressed'),'true');
+  assert.equal(await highlightControl.inputValue(),'#ffee66');
+  await strikeControl.click(); await clearHighlight.click();
   await edit.getByRole('button',{name:'취소',exact:true}).click();
+  assert.deepEqual(await workspace.locator('#highlight-block').evaluate(e=>[getComputedStyle(e).textDecorationLine,getComputedStyle(e.firstElementChild).backgroundColor]),['line-through','rgb(255, 238, 102)'],'cancel discards strike and highlight changes');
   assert.deepEqual(await workspace.locator('#mixed strong').evaluate(e=>[getComputedStyle(e).fontStyle,getComputedStyle(e).textDecorationLine]),['italic','underline'],'cancel discards both toggles');
   await page.getByRole('button',{name:'글 수정',exact:true}).click();
   await edit.getByRole('status').filter({hasText:'화면의 글을 눌러'}).waitFor();
   await editFrame.locator('#duplicate-a').click();
   await italicControl.click(); await underlineControl.click();
+  await edit.getByRole('button',{name:'글자 배경색 적용',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('[aria-label="글자 배경색 없애기"]')?.getAttribute('aria-pressed')==='false');
+  assert.equal(await editFrame.locator('#duplicate-a > span').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(255, 242, 154)','apply uses the displayed default swatch without changing the picker');
+  await strikeControl.click(); await setHighlight('#ccffdd');
   await sizeControl.fill('31');
   await weightControl.selectOption('400');
   await edit.getByRole('button',{name:'저장',exact:true}).click();
   await workspace.locator('#duplicate-a').evaluate(e=>new Promise(resolve=>{
     const check=()=>{if(getComputedStyle(e).fontSize==='31px')resolve();else requestAnimationFrame(check);};check();
   }));
-  assert.deepEqual(await workspace.locator('#duplicate-a').evaluate(e=>[getComputedStyle(e).fontStyle,getComputedStyle(e).textDecorationLine]),['italic','underline']);
+  assert.deepEqual(await workspace.locator('#duplicate-a').evaluate(e=>[getComputedStyle(e).fontStyle,getComputedStyle(e).textDecorationLine]),['italic','underline line-through']);
+  assert.equal(await workspace.locator('#duplicate-a > span').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(204, 255, 221)');
   await page.locator('.fe-history-tools .undo').click();
   assert.deepEqual(await workspace.locator('#duplicate-a').evaluate(e=>[getComputedStyle(e).fontStyle,getComputedStyle(e).textDecorationLine]),['normal','none'],'format-only undo restores both decorations');
   assert.equal(await workspace.locator('#duplicate-a').evaluate(e=>getComputedStyle(e).fontSize),'30px','a formatting-only save has its own undo step');
   assert.equal(await workspace.locator('#duplicate-a').evaluate(e=>getComputedStyle(e).fontWeight),'700','format-only undo restores weight');
+  await page.getByRole('button',{name:'글 수정',exact:true}).click();
+  await edit.getByRole('status').filter({hasText:'화면의 글을 눌러'}).waitFor();
+  await editFrame.locator('#highlight-block').click();
+  await strikeControl.click(); await clearHighlight.click();
+  await edit.getByRole('button',{name:'저장',exact:true}).click();
+  assert.deepEqual(await workspace.locator('#highlight-block').evaluate(e=>[getComputedStyle(e).textDecorationLine,getComputedStyle(e.firstElementChild).backgroundColor,getComputedStyle(e).backgroundColor]),['none','rgba(0, 0, 0, 0)','rgb(34, 68, 102)'],'clearing saved text styles preserves the block fill');
+  await page.locator('.fe-history-tools .undo').click();
+  assert.deepEqual(await workspace.locator('#highlight-block').evaluate(e=>[getComputedStyle(e).textDecorationLine,getComputedStyle(e.firstElementChild).backgroundColor]),['line-through','rgb(255, 238, 102)'],'clearing has its own undo step');
   await page.getByRole('button',{name:'글 수정',exact:true}).click();
   await edit.getByRole('status').filter({hasText:'화면의 글을 눌러'}).waitFor();
   await editFrame.locator('#paragraph a').click();
@@ -321,6 +378,7 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   await page.locator('.cv-item .cv-thumb').first().click();
   await workspace.locator('h1').filter({hasText:'바뀐 <제목> & 수업'}).waitFor();
   assert.equal(await workspace.locator('#mixed strong').evaluate(e=>getComputedStyle(e).fontSize),'40px','formatting survives reopen');
+  assert.deepEqual(await workspace.locator('#highlight-block').evaluate(e=>[getComputedStyle(e).textDecorationLine,getComputedStyle(e.firstElementChild).backgroundColor]),['line-through','rgb(255, 238, 102)'],'strike and highlight survive reopen');
   await workspace.locator('#count').click();
   await page.locator('.cv-slide[data-slide="1"]').click();
   await page.locator('.cv-canvas').waitFor();
@@ -328,6 +386,7 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   assert.equal(await workspace.locator('#count').textContent(),'완료','kept workspace HTML retains its state across slides');
   await page.locator('.cv-show-btn').click();
   const frame = page.frameLocator('[data-show-web] iframe');
+  await page.locator('[data-html-workspace] iframe').waitFor({state:'detached'});
   assert.equal(await page.locator('[data-html-workspace] iframe').count(),0,'presentation stops duplicate background execution');
   await frame.locator('#status').filter({hasText: 'isolated'}).waitFor();
   assert.ok(!(await page.locator('[data-show-web] iframe').getAttribute('sandbox')).includes('allow-same-origin'));
@@ -366,6 +425,7 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   await fontControl.selectOption('noto-sans-kr');
   await weightControl.selectOption('400');
   await italicControl.tap(); await underlineControl.tap();
+  await strikeControl.tap(); await setHighlight('#ffeeb0');
   await sizeControl.fill('28');
   await edit.getByLabel('글자 색깔',{exact:true}).evaluate(input=>{input.value='#7040c0';input.dispatchEvent(new Event('input',{bubbles:true}));});
   await page.screenshot({path:resolve(root,'work/html-inline-mobile.png'),fullPage:true});
@@ -376,7 +436,8 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   assert.equal(await workspace.locator('h1').evaluate(e=>getComputedStyle(e).fontWeight),'400');
   assert.ok(await workspace.locator('h1').evaluate(e=>getComputedStyle(e).fontFamily.includes('Onbatang HTML noto-sans-kr')));
   assert.deepEqual(await workspace.locator('h1').evaluate(e=>({align:getComputedStyle(e).textAlign,line:getComputedStyle(e).lineHeight})),{align:'center',line:'56px'});
-  assert.deepEqual(await workspace.locator('h1').evaluate(e=>[getComputedStyle(e).fontStyle,getComputedStyle(e).textDecorationLine]),['italic','underline'],'mobile decoration controls work');
+  assert.deepEqual(await workspace.locator('h1').evaluate(e=>[getComputedStyle(e).fontStyle,getComputedStyle(e).textDecorationLine]),['italic','underline line-through'],'mobile decoration controls work');
+  assert.equal(await workspace.locator('h1 > span').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(255, 238, 176)','mobile highlighting works');
   assert.equal(await page.locator('[data-html-workspace] iframe').getAttribute('data-scaled'),null,'HTML uses the real mobile viewport');
   await page.screenshot({path:resolve(root,'work/html-workspace-mobile.png'),fullPage:true});
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
@@ -399,6 +460,7 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   assert.equal(await offline.locator('h1').textContent(),'바뀐 <제목> & 수업','edited text survives offline export');
   assert.deepEqual(await offline.locator('#mixed strong').evaluate(e=>[getComputedStyle(e).fontStyle,getComputedStyle(e).textDecorationLine]),['italic','underline'],'decorations survive offline export');
   assert.equal(await offline.locator('#decorated').evaluate(e=>getComputedStyle(e).textDecorationLine),'line-through');
+  assert.deepEqual(await offline.locator('#highlight-block').evaluate(e=>[getComputedStyle(e).textDecorationLine,getComputedStyle(e.firstElementChild).backgroundColor]),['line-through','rgb(255, 238, 102)'],'strike and highlight survive offline export');
   assert.equal(await offline.locator('#mixed strong').evaluate(e=>getComputedStyle(e).fontSize),'40px','formatting survives offline export');
   assert.deepEqual(await offline.locator('#paragraph').evaluate(e=>({align:getComputedStyle(e).textAlign,line:getComputedStyle(e).lineHeight})),{align:'right',line:'48px'},'paragraph formatting survives offline export');
   assert.equal(await offline.locator('#mixed strong').evaluate(async e=>{

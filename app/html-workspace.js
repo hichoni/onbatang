@@ -6,12 +6,15 @@ import {HTML_TEXT_FONTS, embeddedHtmlFont} from './html-text-fonts.js';
 
 const textFont = id => HTML_TEXT_FONTS.find(font => font.id === id);
 const validDecorationLine = value => typeof value === 'string' && /^(none|(?:underline|overline|line-through)(?: (?:underline|overline|line-through))*)$/.test(value);
+const validHighlight = value => typeof value === 'string' && /^(transparent|#[\da-f]{6}|rgba?\([\d.,%\s]+\))$/i.test(value);
 const validTextStyle = style => !!style && typeof style === 'object' && !Array.isArray(style) &&
-  Object.keys(style).length > 0 && Object.keys(style).every(key => ['fontSize', 'color', 'fontId', 'fontWeight', 'fontStyle', 'textDecorationLine', 'textDecorationStyle', 'textDecorationColor', 'textDecorationThickness'].includes(key)) &&
+  Object.keys(style).length > 0 && Object.keys(style).every(key => ['fontSize', 'color', 'fontId', 'fontWeight', 'fontStyle', 'textDecorationLine', 'textDecorationStyle', 'textDecorationColor', 'textDecorationThickness', 'backgroundColor', 'backgroundInline'].includes(key)) &&
   (!('fontSize' in style) || (Number.isFinite(style.fontSize) && style.fontSize >= 6 && style.fontSize <= 300)) &&
   (!('fontId' in style) || !!textFont(style.fontId)) &&
   (!('fontWeight' in style) || [400, 700].includes(style.fontWeight)) &&
   (!('fontStyle' in style) || ['normal', 'italic'].includes(style.fontStyle)) &&
+  (!('backgroundColor' in style) || (validHighlight(style.backgroundColor) && typeof style.backgroundInline === 'boolean')) &&
+  (!('backgroundInline' in style) || 'backgroundColor' in style) &&
   (!('textDecorationLine' in style) || validDecorationLine(style.textDecorationLine)) &&
   (!('textDecorationStyle' in style) || ['solid', 'double', 'dotted', 'dashed', 'wavy'].includes(style.textDecorationStyle)) &&
   (!('textDecorationColor' in style) || /^(#[\da-f]{6}|rgba?\([\d.,%\s]+\))$/i.test(style.textDecorationColor)) &&
@@ -75,7 +78,10 @@ export function htmlTextDraft(source) {
     nodes.push(node);
   }
   const validParagraph = (id, paragraphId, style) => typeof id === 'string' && fields[Number(id)]?.id === id && typeof paragraphId === 'string' && fields[Number(id)].paragraphIds.includes(paragraphId) && validParagraphStyle(style);
-  const validDecorationReset = (elementId, record) => !!record && typeof record.id === 'string' && fields[Number(record.id)]?.id === record.id && fields[Number(record.id)].paragraphIds.includes(elementId) && validDecorationLine(record.line) && !record.line.includes('underline');
+  const validDecorationReset = (elementId, record) => !!record && typeof record.id === 'string' && fields[Number(record.id)]?.id === record.id && fields[Number(record.id)].paragraphIds.includes(elementId) &&
+    Object.keys(record).every(key => ['id','line','backgroundColor'].includes(key)) && ('line' in record || 'backgroundColor' in record) &&
+    (!('line' in record) || (validDecorationLine(record.line) && !(record.line.includes('underline') && record.line.includes('line-through')))) &&
+    (!('backgroundColor' in record) || record.backgroundColor === 'transparent');
   return {
     fields,
     validParagraph,
@@ -109,20 +115,30 @@ export function htmlTextDraft(source) {
       });
       for (const [id, style] of styles) if (typeof id !== 'string' || fields[Number(id)]?.id !== id || !validTextStyle(style)) throw Error('글자 모양을 확인해 주세요.');
       for (const [paragraphId, record] of paragraphs) if (!record || !validParagraph(record.id, paragraphId, record.style)) throw Error('문단 정렬과 줄간격을 확인해 주세요.');
-      for (const [elementId, record] of decorationResets) if (!validDecorationReset(elementId, record)) throw Error('밑줄 모양을 확인해 주세요.');
+      for (const [elementId, record] of decorationResets) if (!validDecorationReset(elementId, record)) throw Error('글자 장식을 확인해 주세요.');
       if (!edits.length && !styles.size && !paragraphs.size && !decorationResets.size) return source;
       // Work on a fresh copy: repeated saves cannot accumulate formatting wrappers.
       const output = doc.cloneNode(true), texts = output.createTreeWalker(output.body, NodeFilter.SHOW_TEXT), targets = [];
       const paragraphTargets = [output.documentElement, output.body, ...output.body.querySelectorAll('*')];
       for (let node; (node = texts.nextNode());) if (node.data.trim() && !node.parentElement.closest(excluded)) targets.push(node);
       for (const [id, text] of edits) targets[Number(id)].data = text;
-      for (const [elementId, record] of decorationResets) paragraphTargets[Number(elementId)].style.setProperty('text-decoration-line', record.line, 'important');
+      for (const [elementId, record] of decorationResets) {
+        const target = paragraphTargets[Number(elementId)];
+        if (record.line !== undefined) target.style.setProperty('text-decoration-line', record.line, 'important');
+        if (record.backgroundColor !== undefined) target.style.setProperty('background-color', record.backgroundColor, 'important');
+      }
       for (const [id, style] of styles) {
         const node = targets[Number(id)];
         let target = node.parentElement;
         // A sole text child can use its own element. Mixed content needs a span
         // around only the chosen text, so sibling words keep their formatting.
         if (target.childNodes.length !== 1) { target = output.createElement('span'); node.replaceWith(target); target.append(node); }
+        if (style.backgroundColor !== undefined) {
+          let highlight = target;
+          // Blocks keep their original fill. Highlight only the selected text.
+          if (!style.backgroundInline) { highlight = output.createElement('span'); highlight.style.setProperty('display', 'inline', 'important'); node.replaceWith(highlight); highlight.append(node); }
+          highlight.style.setProperty('background-color', style.backgroundColor, 'important');
+        }
         if (style.fontSize !== undefined) target.style.setProperty('font-size', style.fontSize + 'px', 'important');
         if (style.color !== undefined) target.style.setProperty('color', style.color, 'important');
         if (style.fontWeight !== undefined) target.style.setProperty('font-weight', String(style.fontWeight), 'important');
@@ -189,6 +205,23 @@ export function editHtmlText(source, apply, onClose) {
   const underline = el('button', {type: 'button', class: 'cv-html-style-toggle', disabled: true, 'aria-label': '밑줄', 'aria-pressed': 'false', onClick: () => {
     if (selected !== null && !pending && !fontLoading) frame.contentWindow.postMessage({channel, type: 'underline', id: selected, enabled: underline.getAttribute('aria-pressed') !== 'true'}, '*');
   }}, '밑줄');
+  const strike = el('button', {type: 'button', class: 'cv-html-style-toggle', disabled: true, 'aria-label': '취소선', 'aria-pressed': 'false', onClick: () => {
+    if (selected !== null && !pending && !fontLoading) frame.contentWindow.postMessage({channel, type: 'strike', id: selected, enabled: strike.getAttribute('aria-pressed') !== 'true'}, '*');
+  }}, '취소선');
+  const sendHighlight = color => {
+    if (selected !== null && !pending && !fontLoading) frame.contentWindow.postMessage({channel, type: 'highlight', id: selected, color}, '*');
+  };
+  const highlight = el('input', {type: 'color', value: '#fff29a', disabled: true, 'aria-label': '글자 배경색', onInput: event => sendHighlight(event.target.value)});
+  const applyHighlight = el('button', {type: 'button', class: 'cv-html-style-toggle', disabled: true, 'aria-label': '글자 배경색 적용', title: '고른 색을 글자 뒤에 칠해요.', onClick: () => sendHighlight(highlight.value)}, '배경색');
+  const clearHighlight = el('button', {type: 'button', class: 'cv-html-style-toggle', disabled: true, 'aria-label': '글자 배경색 없애기', 'aria-pressed': 'true', onClick: () => sendHighlight('transparent')}, '없음');
+  const updateHighlightInfo = data => {
+    const hasColor = typeof data.backgroundColor === 'string' && /^#[\da-f]{6}$/i.test(data.backgroundColor);
+    highlight.value = hasColor ? data.backgroundColor : '#fff29a';
+    clearHighlight.setAttribute('aria-pressed', String(!hasColor));
+  };
+  const updateDecorationInfo = data => {
+    italic.setAttribute('aria-pressed', String(data.italic === true)); underline.setAttribute('aria-pressed', String(data.underline === true)); strike.setAttribute('aria-pressed', String(data.strike === true));
+  };
   const sendParagraph = style => {
     if (pending || fontLoading || !draft.validParagraph(selected, selectedParagraph, style)) return;
     frame.contentWindow.postMessage({channel, type: 'format-paragraph', id: selected, paragraphId: selectedParagraph, style}, '*');
@@ -219,8 +252,8 @@ export function editHtmlText(source, apply, onClose) {
     const count = countChanges(), unavailable = !!pending || selected === null;
     save.disabled = !!pending || fontLoading || !count;
     size.disabled = color.disabled = unavailable || fontLoading; family.disabled = unavailable;
-    italic.disabled = underline.disabled = unavailable || fontLoading;
-    if (selected === null) { italic.setAttribute('aria-pressed', 'false'); underline.setAttribute('aria-pressed', 'false'); }
+    italic.disabled = underline.disabled = strike.disabled = highlight.disabled = applyHighlight.disabled = clearHighlight.disabled = unavailable || fontLoading;
+    if (selected === null) { updateDecorationInfo({}); updateHighlightInfo({}); }
     align.disabled = spacing.disabled = unavailable || fontLoading || selectedParagraph === null;
     paragraphNote.textContent = selected !== null && selectedParagraph === null ? '이 글에서는 문단 정렬·줄간격을 사용할 수 없어요.' : '정렬·줄간격은 선택한 문단 전체에 적용돼요.';
     const fixedWeight = !!textFont(family.value)?.noFakeBold;
@@ -240,7 +273,7 @@ export function editHtmlText(source, apply, onClose) {
       originalFont.textContent = `현재: ${typeof data.fontFamily === 'string' ? data.fontFamily.slice(0, 40) : '원본 글꼴'}`;
       weight.value = [400, 700].includes(data.fontWeight) ? String(data.fontWeight) : '';
       originalWeight.textContent = Number.isFinite(data.fontWeight) ? `현재 (${data.fontWeight})` : '현재 굵기';
-      italic.setAttribute('aria-pressed', String(data.italic === true)); underline.setAttribute('aria-pressed', String(data.underline === true));
+      updateDecorationInfo(data); updateHighlightInfo(data);
       updateParagraphInfo(data);
       selectedLabel.textContent = (changes.get(selected) ?? draft.fields[Number(selected)].text).trim().slice(0, 100);
       refresh(); return;
@@ -250,7 +283,10 @@ export function editHtmlText(source, apply, onClose) {
       styles.set(data.id, data.style); refresh(); return;
     }
     if (data.type === 'decoration-info' && data.id === selected) {
-      italic.setAttribute('aria-pressed', String(data.italic === true)); underline.setAttribute('aria-pressed', String(data.underline === true)); return;
+      updateDecorationInfo(data); return;
+    }
+    if (data.type === 'highlight-info' && data.id === selected) {
+      updateHighlightInfo(data); return;
     }
     if (data.type === 'decoration-reset') {
       if (draft.validDecorationReset(data.elementId, data.record)) decorationResets.set(data.elementId, data.record);
@@ -271,11 +307,11 @@ export function editHtmlText(source, apply, onClose) {
         if (!Array.isArray(data.edits) || data.edits.length > draft.fields.length || !data.edits.every(row => Array.isArray(row) && row.length === 2 && valid(...row))) throw Error('수정한 글을 확인할 수 없어요. 다시 열어 주세요.');
         if (!Array.isArray(data.styles) || data.styles.length > draft.fields.length || !data.styles.every(row => Array.isArray(row) && row.length === 2 && valid(row[0], draft.fields[Number(row[0])]?.text) && validTextStyle(row[1]))) throw Error('글자 모양을 확인할 수 없어요. 다시 열어 주세요.');
         if (!Array.isArray(data.paragraphs) || data.paragraphs.length > draft.fields.length || !data.paragraphs.every(row => Array.isArray(row) && row.length === 2 && row[1] && draft.validParagraph(row[1].id, row[0], row[1].style))) throw Error('문단 정렬과 줄간격을 확인할 수 없어요. 다시 열어 주세요.');
-        if (!Array.isArray(data.decorationResets) || !data.decorationResets.every(row => Array.isArray(row) && row.length === 2 && draft.validDecorationReset(row[0], row[1]))) throw Error('밑줄 모양을 확인할 수 없어요. 다시 열어 주세요.');
+        if (!Array.isArray(data.decorationResets) || !data.decorationResets.every(row => Array.isArray(row) && row.length === 2 && draft.validDecorationReset(row[0], row[1]))) throw Error('글자 장식을 확인할 수 없어요. 다시 열어 주세요.');
         changes.clear(); for (const [id, text] of data.edits) update(id, text);
         styles.clear(); for (const [id, style] of data.styles) styles.set(id, style);
         paragraphs.clear(); for (const [id, record] of data.paragraphs) paragraphs.set(id, {id: record.id, style: record.style});
-        decorationResets.clear(); for (const [id, record] of data.decorationResets) decorationResets.set(id, {id: record.id, line: record.line});
+        decorationResets.clear(); for (const [id, record] of data.decorationResets) decorationResets.set(id, {...record});
         if (!countChanges() || apply(draft.apply(changes, styles, fontAssets, paragraphs, decorationResets)) !== false) closeModal();
       } catch (error) { toast(error.message || '글을 저장하지 못했어요.', 4500); }
       refresh(); return;
@@ -290,7 +326,8 @@ export function editHtmlText(source, apply, onClose) {
     el('header', {class: 'cv-html-edit-bar'}, el('div', {}, el('h2', {text: '화면에서 글 수정'}), status),
       el('div', {class: 'row'}, el('button', {type: 'button', class: 'btn btn-ghost', onClick: closeModal}, '취소'), save)),
     el('div', {class: 'cv-html-text-format', role: 'group', 'aria-label': '글자 모양'},
-      selectedLabel, el('label', {}, '글꼴', family), el('label', {}, '굵기', weight), italic, underline, el('label', {}, '크기', size, el('span', {text: 'px'})), el('label', {}, '색깔', color), weightNote),
+      selectedLabel, el('label', {}, '글꼴', family), el('label', {}, '굵기', weight), italic, underline, strike, el('label', {}, '크기', size, el('span', {text: 'px'})), el('label', {}, '색깔', color),
+      el('div', {class: 'cv-html-highlight-control', role: 'group', 'aria-label': '글자 배경'}, applyHighlight, highlight, clearHighlight), weightNote),
     el('div', {class: 'cv-html-paragraph-format', role: 'group', 'aria-label': '문단 모양'}, paragraphNote,
       el('label', {}, '정렬', align), el('label', {}, '줄간격', spacing)), frame),
   {wide: true, onClose: () => { closed = true; fontRequest++; clearTimeout(timeout); window.removeEventListener('message', receive); onClose?.(); }});

@@ -1424,6 +1424,8 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero{overflow:visible;z
 .cv-html-style-toggle{min-height:36px;padding:5px 10px;border:1px solid var(--cv-line);border-radius:7px;font:inherit;font-size:13px;background:white;color:inherit;cursor:pointer}
 .cv-html-style-toggle[aria-label="기울임"]{font-style:italic}
 .cv-html-style-toggle[aria-label="밑줄"]{text-decoration:underline}
+.cv-html-style-toggle[aria-label="취소선"]{text-decoration:line-through}
+.cv-html-highlight-control{display:flex;align-items:center;gap:6px;flex:none}
 .cv-html-style-toggle[aria-pressed="true"]{background:#286f62;color:white;border-color:#286f62}
 .cv-html-style-toggle:disabled{opacity:.45;cursor:default}
 .cv-html-style-toggle:focus-visible{outline:2px solid #286f62;outline-offset:2px}
