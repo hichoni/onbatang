@@ -2,10 +2,76 @@
 function inlineTextRuntime(channel, fonts) {
   const prefix = `onba-text-${channel}:`, fields = new Map(), byNode = new WeakMap(), edits = new Map(), styles = new Map(), holders = new Map();
   const paragraphAttribute = `data-onba-paragraph-${channel}`, paragraphs = new Map();
+  const decorationResets = new Map();
   let editing = null, selected = null, outline;
   const send = data => parent.postMessage({channel, ...data}, '*');
   const value = () => editing.element.innerText.replace(/\r\n/g, '\n');
   const changed = () => { if (editing) { const text = value(); edits.set(editing.id, text); send({type: 'change', id: editing.id, text}); } };
+  function underlines(element) {
+    const origins = [];
+    for (; element; element = element.parentElement) {
+      const css = getComputedStyle(element);
+      if (css.textDecorationLine.split(' ').includes('underline')) origins.push(element);
+      // Decorations do not propagate into atomic or out-of-flow descendants.
+      if (['inline-block', 'inline-flex', 'inline-grid', 'inline-table'].includes(css.display) || css.float !== 'none' || ['absolute','fixed'].includes(css.position)) break;
+    }
+    return origins;
+  }
+  function decorationInfo() {
+    return {italic: !!editing && getComputedStyle(editing.element).fontStyle !== 'normal', underline: !!editing && underlines(editing.element).length > 0};
+  }
+  function holderFor(id) {
+    let holder = holders.get(id);
+    if (!holder) {
+      const target = editing?.id === id ? editing.element : fields.get(id), parentElement = target.parentElement;
+      // Ignore only our markers: use exactly the same target as saved source.
+      const siblings = [...parentElement.childNodes].filter(node => !(node.nodeType === Node.COMMENT_NODE && node.data.startsWith(prefix)));
+      if (siblings.length === 1) holder = parentElement;
+      else { holder = document.createElement('span'); target.replaceWith(holder); holder.append(target); }
+      holders.set(id, holder);
+    }
+    return holder;
+  }
+  function paintStyle(id, patch) {
+    const style = {...styles.get(id), ...patch}, holder = holderFor(id);
+    styles.set(id, style);
+    if (style.fontSize !== undefined) holder.style.setProperty('font-size', style.fontSize + 'px', 'important');
+    if (style.color !== undefined) holder.style.setProperty('color', style.color, 'important');
+    if (style.fontId !== undefined) holder.style.setProperty('font-family', `"${fonts.find(item => item.id === style.fontId).family}"`, 'important');
+    if (style.fontWeight !== undefined) holder.style.setProperty('font-weight', String(style.fontWeight), 'important');
+    for (const [key, css] of [['fontStyle','font-style'],['textDecorationLine','text-decoration-line'],['textDecorationStyle','text-decoration-style'],['textDecorationColor','text-decoration-color'],['textDecorationThickness','text-decoration-thickness']]) if (style[key] !== undefined) holder.style.setProperty(css, style[key], 'important');
+    send({type: 'style-change', id, style});
+  }
+  function toggleUnderline(data) {
+    if (data.id !== selected || !editing || typeof data.enabled !== 'boolean') return;
+    const holder = holderFor(selected);
+    if (!data.enabled) {
+      const ancestors = underlines(editing.element).filter(element => element !== holder && element.hasAttribute(paragraphAttribute));
+      // CSS cannot cancel an ancestor's underline on one inline child. Move
+      // only those underlines onto their text runs before clearing this run.
+      // This preserves wrapping, sibling text and unrelated strike-throughs.
+      const preserve = [];
+      for (const [id, node] of fields) {
+        if (id === selected) continue;
+        const leaf = editing?.id === id ? editing.element : node.parentElement, origins = underlines(leaf);
+        if (!origins.some(element => ancestors.includes(element))) continue;
+        const origin = getComputedStyle(origins[0]), own = getComputedStyle(holderFor(id));
+        preserve.push([id, {textDecorationLine: [...new Set([...own.textDecorationLine.split(' ').filter(line => line !== 'none'), 'underline'])].join(' '),
+          textDecorationColor: origin.textDecorationColor, textDecorationStyle: origin.textDecorationStyle, textDecorationThickness: origin.textDecorationThickness}]);
+      }
+      for (const element of ancestors) {
+        const elementId = element.getAttribute(paragraphAttribute), line = getComputedStyle(element).textDecorationLine.split(' ').filter(line => line !== 'underline').join(' ') || 'none';
+        const record = {id: selected, line}; decorationResets.set(elementId, record);
+        element.style.setProperty('text-decoration-line', line, 'important');
+        send({type: 'decoration-reset', elementId, record});
+      }
+      for (const [id, patch] of preserve) paintStyle(id, patch);
+    }
+    const lines = getComputedStyle(holder).textDecorationLine.split(' ').filter(line => line !== 'none' && line !== 'underline');
+    if (data.enabled) lines.push('underline');
+    paintStyle(selected, {textDecorationLine: lines.join(' ') || 'none'});
+    send({type: 'decoration-info', id: selected, ...decorationInfo()});
+  }
   const isTextBlock = display => ['block', 'flow-root', 'list-item', 'table-cell', 'inline-block'].includes(display);
   function paragraphFor(node) {
     for (let element = node.parentElement; element; element = element.parentElement) {
@@ -67,42 +133,28 @@ function inlineTextRuntime(channel, fonts) {
     const color = '#' + [...rgb].slice(0, 3).map(n => n.toString(16).padStart(2, '0')).join('');
     const family = computed.fontFamily.split(',')[0].trim().replace(/^["']|["']$/g, '');
     send({type: 'selected', id: editing.id, fontSize: parseFloat(computed.fontSize), color,
-      fontId: fonts.find(font => font.family === family)?.id || '', fontFamily: family.slice(0, 100), fontWeight: Number(computed.fontWeight), ...paragraphInfo()});
+      fontId: fonts.find(font => font.family === family)?.id || '', fontFamily: family.slice(0, 100), fontWeight: Number(computed.fontWeight), ...decorationInfo(), ...paragraphInfo()});
   }
   function format(data) {
     if (data.id !== selected || !fields.has(data.id) || !data.style || typeof data.style !== 'object') return;
     const patch = data.style, keys = Object.keys(patch);
-    if (!keys.length || keys.some(key => !['fontSize', 'color', 'fontId', 'fontWeight'].includes(key))) return;
+    if (!keys.length || keys.some(key => !['fontSize', 'color', 'fontId', 'fontWeight', 'fontStyle'].includes(key))) return;
     if ('fontSize' in patch && (!Number.isFinite(patch.fontSize) || patch.fontSize < 6 || patch.fontSize > 300)) return;
     if ('color' in patch && (typeof patch.color !== 'string' || !/^#[\da-f]{6}$/i.test(patch.color))) return;
     const font = fonts.find(item => item.id === patch.fontId);
     if ('fontId' in patch && !font) return;
     if ('fontWeight' in patch && ![400, 700].includes(patch.fontWeight)) return;
+    if ('fontStyle' in patch && !['normal', 'italic'].includes(patch.fontStyle)) return;
     if (font) {
       if (typeof data.fontCss !== 'string' || data.fontCss.length > 8 * 1024 * 1024) return;
       let face = document.querySelector(`style[data-onba-html-font="${font.id}"]`);
       if (!face) { face = document.createElement('style'); face.dataset.onbaHtmlFont = font.id; document.head.append(face); }
       face.textContent = data.fontCss;
     }
-    const style = {...styles.get(data.id), ...patch}; styles.set(data.id, style);
-    let holder = holders.get(data.id);
-    if (!holder) {
-      const target = editing?.id === data.id ? editing.element : fields.get(data.id);
-      // Match the saved source's target, including em-based spacing on the
-      // original element. Only our temporary marker comments are ignored.
-      const parentElement = target.parentElement;
-      const siblings = [...parentElement.childNodes].filter(node => !(node.nodeType === Node.COMMENT_NODE && node.data.startsWith(prefix)));
-      if (siblings.length === 1) holder = parentElement;
-      else { holder = document.createElement('span'); target.replaceWith(holder); holder.append(target); }
-      holders.set(data.id, holder);
-    }
-    if (style.fontSize !== undefined) holder.style.setProperty('font-size', style.fontSize + 'px', 'important');
-    if (style.color !== undefined) holder.style.setProperty('color', style.color, 'important');
-    if (style.fontId !== undefined) holder.style.setProperty('font-family', `"${fonts.find(item => item.id === style.fontId).family}"`, 'important');
-    if (style.fontWeight !== undefined) holder.style.setProperty('font-weight', String(style.fontWeight), 'important');
+    paintStyle(data.id, patch);
     const block = editing && paragraphFor(editing.element), paragraphStyle = block && paragraphs.get(block.getAttribute(paragraphAttribute))?.style;
     if (paragraphStyle) paintParagraph(block, paragraphStyle);
-    send({type: 'style-change', id: data.id, style});
+    send({type: 'decoration-info', id: selected, ...decorationInfo()});
     send({type: 'paragraph-info', id: selected, ...paragraphInfo()});
   }
   function finish() {
@@ -176,9 +228,10 @@ function inlineTextRuntime(channel, fonts) {
   addEventListener('message', event => {
     if (event.source !== parent || event.data?.channel !== channel) return;
     if (event.data.type === 'format') {format(event.data); return;}
+    if (event.data.type === 'underline') {toggleUnderline(event.data); return;}
     if (event.data.type === 'format-paragraph') {formatParagraph(event.data); return;}
     if (event.data.type !== 'commit') return;
-    finish(); send({type: 'committed', request: event.data.request, edits: [...edits], styles: [...styles], paragraphs: [...paragraphs]});
+    finish(); send({type: 'committed', request: event.data.request, edits: [...edits], styles: [...styles], paragraphs: [...paragraphs], decorationResets: [...decorationResets]});
   });
   document.addEventListener('DOMContentLoaded', () => {
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_COMMENT);
