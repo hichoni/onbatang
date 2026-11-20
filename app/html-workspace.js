@@ -2,10 +2,14 @@ import {el, openModal, closeModal, toast} from './ui.js';
 import {webFrame} from '../src/render.js';
 import {HTML_FILE_MAX_BYTES} from '../src/html-file.js';
 import {inlineTextScript} from './html-inline-edit.js';
+import {HTML_TEXT_FONTS, embeddedHtmlFont} from './html-text-fonts.js';
 
+const textFont = id => HTML_TEXT_FONTS.find(font => font.id === id);
 const validTextStyle = style => !!style && typeof style === 'object' && !Array.isArray(style) &&
-  Object.keys(style).length > 0 && Object.keys(style).every(key => ['fontSize', 'color'].includes(key)) &&
+  Object.keys(style).length > 0 && Object.keys(style).every(key => ['fontSize', 'color', 'fontId', 'fontWeight'].includes(key)) &&
   (!('fontSize' in style) || (Number.isFinite(style.fontSize) && style.fontSize >= 6 && style.fontSize <= 300)) &&
+  (!('fontId' in style) || !!textFont(style.fontId)) &&
+  (!('fontWeight' in style) || [400, 700].includes(style.fontWeight)) &&
   (!('color' in style) || (typeof style.color === 'string' && /^#[\da-f]{6}$/i.test(style.color)));
 
 // Only the opened document runs. Covers, thumbnails and exports stay inert.
@@ -75,16 +79,16 @@ export function htmlTextDraft(source) {
       csp.content = `default-src 'none'; script-src 'nonce-${channel}'; style-src 'unsafe-inline' https: data:; img-src https: data: blob:; font-src https: data:; media-src https: data: blob:; connect-src 'none'; frame-src 'none'; object-src 'none'; form-action 'none'`;
       const base = copy.createElement('base'); base.href = 'about:blank';
       const charset = copy.createElement('meta'); charset.charset = 'utf-8';
-      const runtime = copy.createElement('script'); runtime.setAttribute('nonce', channel); runtime.textContent = inlineTextScript(channel);
+      const runtime = copy.createElement('script'); runtime.setAttribute('nonce', channel); runtime.textContent = inlineTextScript(channel, HTML_TEXT_FONTS.map(({id, family}) => ({id, family})));
       copy.head.prepend(charset, csp, base, runtime);
       return '<!doctype html>' + copy.documentElement.outerHTML;
     },
-    apply(changes, styles = new Map()) {
+    apply(changes, styles = new Map(), fontAssets = new Map()) {
       const edits = [...changes].filter(([id, text]) => {
         if (!fields[Number(id)] || fields[Number(id)].id !== id || typeof text !== 'string') throw Error('수정할 글을 다시 골라 주세요.');
         return text !== fields[Number(id)].text;
       });
-      for (const [id, style] of styles) if (typeof id !== 'string' || fields[Number(id)]?.id !== id || !validTextStyle(style)) throw Error('글자 크기와 색깔을 확인해 주세요.');
+      for (const [id, style] of styles) if (typeof id !== 'string' || fields[Number(id)]?.id !== id || !validTextStyle(style)) throw Error('글자 모양을 확인해 주세요.');
       if (!edits.length && !styles.size) return source;
       // Work on a fresh copy: repeated saves cannot accumulate formatting wrappers.
       const output = doc.cloneNode(true), texts = output.createTreeWalker(output.body, NodeFilter.SHOW_TEXT), targets = [];
@@ -98,6 +102,14 @@ export function htmlTextDraft(source) {
         if (target.childNodes.length !== 1) { target = output.createElement('span'); node.replaceWith(target); target.append(node); }
         if (style.fontSize !== undefined) target.style.setProperty('font-size', style.fontSize + 'px', 'important');
         if (style.color !== undefined) target.style.setProperty('color', style.color, 'important');
+        if (style.fontWeight !== undefined) target.style.setProperty('font-weight', String(style.fontWeight), 'important');
+        if (style.fontId !== undefined) {
+          const font = textFont(style.fontId), css = fontAssets.get(style.fontId);
+          if (typeof css !== 'string') throw Error('글꼴을 불러온 뒤 다시 저장해 주세요.');
+          target.style.setProperty('font-family', `"${font.family}"`, 'important');
+          output.querySelectorAll(`style[data-onba-html-font="${font.id}"]`).forEach(node => node.remove());
+          const face = output.createElement('style'); face.dataset.onbaHtmlFont = font.id; face.textContent = css; output.head.append(face);
+        }
       }
       const xml = new XMLSerializer();
       return [...output.childNodes].map(node => node.nodeType === Node.ELEMENT_NODE ? node.outerHTML : xml.serializeToString(node)).join('');
@@ -106,41 +118,68 @@ export function htmlTextDraft(source) {
 }
 
 export function editHtmlText(source, apply, onClose) {
-  const draft = htmlTextDraft(source), changes = new Map(), styles = new Map(), channel = crypto.randomUUID().replaceAll('-', '');
+  const draft = htmlTextDraft(source), changes = new Map(), styles = new Map(), fontAssets = new Map(), channel = crypto.randomUUID().replaceAll('-', '');
   const frame = el('iframe', {title: 'HTML 화면에서 글 수정', sandbox: 'allow-scripts', referrerpolicy: 'no-referrer', srcdoc: draft.preview(channel), dataset: {htmlTextFrame: ''}});
   const status = el('p', {role: 'status', text: '글을 불러오는 중…'});
-  let pending = '', timeout = 0, selected = null;
+  let pending = '', timeout = 0, selected = null, fontRequest = 0, fontLoading = false, closed = false;
   const countChanges = () => new Set([...changes.keys(), ...styles.keys()]).size;
   const sendStyle = style => {
-    if (selected === null || pending || !validTextStyle(style)) return;
+    if (selected === null || pending || fontLoading || !validTextStyle(style)) return;
     frame.contentWindow.postMessage({channel, type: 'format', id: selected, style}, '*');
   };
   const size = el('input', {type: 'number', min: 6, max: 300, step: 1, disabled: true, 'aria-label': '글자 크기 (px)', onInput: event => {
     if (event.target.value !== '') sendStyle({fontSize: Number(event.target.value)});
   }});
   const color = el('input', {type: 'color', value: '#000000', disabled: true, 'aria-label': '글자 색깔', onInput: event => sendStyle({color: event.target.value})});
+  const originalFont = el('option', {value: '', disabled: true, text: '현재 글꼴'});
+  const family = el('select', {disabled: true, 'aria-label': '글꼴', onChange: async event => {
+    const id = selected, fontId = event.target.value, request = ++fontRequest;
+    if (id === null || pending || !textFont(fontId)) return;
+    const previous = styles.get(id)?.fontId || family.dataset.current || '';
+    fontLoading = true; refresh();
+    try {
+      const css = await embeddedHtmlFont(fontId);
+      if (closed || request !== fontRequest || selected !== id) return;
+      fontAssets.set(fontId, css);
+      frame.contentWindow.postMessage({channel, type: 'format', id, style: {fontId}, fontCss: css}, '*');
+    } catch {
+      if (!closed && request === fontRequest) { family.value = previous; toast('글꼴을 불러오지 못했어요. 다시 골라 주세요.'); }
+    } finally { if (!closed && request === fontRequest) { fontLoading = false; refresh(); } }
+  }}, originalFont, ...HTML_TEXT_FONTS.map(font => el('option', {value: font.id, text: font.name})));
+  const originalWeight = el('option', {value: '', disabled: true, text: '현재 굵기'});
+  const weight = el('select', {disabled: true, 'aria-label': '글자 굵기', onChange: event => sendStyle({fontWeight: Number(event.target.value)})},
+    originalWeight, el('option', {value: '400', text: '보통'}), el('option', {value: '700', text: '굵게'}));
+  const weightNote = el('span', {class: 'cv-html-font-note', hidden: true, text: '이 글꼴은 한 가지 굵기로 제공돼요.'});
   const selectedLabel = el('span', {class: 'cv-html-text-selected', text: '화면의 글을 먼저 눌러 주세요.'});
   const save = el('button', {type: 'button', class: 'btn btn-primary', disabled: true, onClick: () => {
-    if (pending) return;
-    pending = crypto.randomUUID(); save.disabled = true; size.disabled = color.disabled = true;
+    if (pending || fontLoading) return;
+    pending = crypto.randomUUID(); refresh();
     frame.contentWindow.postMessage({channel, type: 'commit', request: pending}, '*');
     timeout = setTimeout(() => { pending = ''; refresh(); toast('수정한 글을 받지 못했어요. 다시 저장해 주세요.'); }, 5000);
   }}, '저장');
   const valid = (id, text) => typeof id === 'string' && draft.fields[Number(id)]?.id === id && typeof text === 'string' && text.length <= HTML_FILE_MAX_BYTES && !text.includes('\0');
   const update = (id, text) => { if (text === draft.fields[Number(id)].text) changes.delete(id); else changes.set(id, text); };
   const refresh = () => {
-    const count = countChanges(); save.disabled = !!pending || !count;
-    size.disabled = color.disabled = !!pending || selected === null;
-    status.textContent = count ? `${count}곳 수정됨 · 저장하면 HTML을 다시 열어요.` : '화면의 글을 눌러 내용·크기·색깔을 바꾸세요.';
+    const count = countChanges(), unavailable = !!pending || selected === null;
+    save.disabled = !!pending || fontLoading || !count;
+    size.disabled = color.disabled = unavailable || fontLoading; family.disabled = unavailable;
+    const fixedWeight = !!textFont(family.value)?.noFakeBold;
+    weight.disabled = unavailable || fontLoading || fixedWeight; weightNote.hidden = selected === null || !fixedWeight;
+    status.textContent = fontLoading ? '글꼴을 불러오는 중…' : count ? `${count}곳 수정됨 · 저장하면 HTML을 다시 열어요.` : '화면의 글을 눌러 내용과 글자 모양을 바꾸세요.';
   };
   const receive = event => {
     const data = event.data;
     if (event.source !== frame.contentWindow || !data || data.channel !== channel) return;
-    if (data.type === 'ready') { status.textContent = draft.fields.length ? '화면의 글을 눌러 내용·크기·색깔을 바꾸세요. 수정 중에는 버튼 동작을 멈춰요.' : '직접 수정할 원본 글이 없어요. 코드로 생성되는 글과 이미지 속 글은 지원하지 않아요.'; return; }
+    if (data.type === 'ready') { status.textContent = draft.fields.length ? '화면의 글을 눌러 내용과 글자 모양을 바꾸세요. 수정 중에는 버튼 동작을 멈춰요.' : '직접 수정할 원본 글이 없어요. 코드로 생성되는 글과 이미지 속 글은 지원하지 않아요.'; return; }
     if (data.type === 'selected') {
-      if (data.id === null) { selected = null; selectedLabel.textContent = '화면의 글을 먼저 눌러 주세요.'; refresh(); return; }
+      if (data.id === null) { fontRequest++; fontLoading = false; selected = null; selectedLabel.textContent = '화면의 글을 먼저 눌러 주세요.'; refresh(); return; }
       if (!valid(data.id, draft.fields[Number(data.id)]?.text) || !Number.isFinite(data.fontSize) || data.fontSize <= 0 || !validTextStyle({color: data.color})) return;
+      fontRequest++; fontLoading = false;
       selected = data.id; size.value = String(Math.round(data.fontSize * 100) / 100); color.value = data.color;
+      family.value = textFont(data.fontId) ? data.fontId : ''; family.dataset.current = family.value;
+      originalFont.textContent = `현재: ${typeof data.fontFamily === 'string' ? data.fontFamily.slice(0, 40) : '원본 글꼴'}`;
+      weight.value = [400, 700].includes(data.fontWeight) ? String(data.fontWeight) : '';
+      originalWeight.textContent = Number.isFinite(data.fontWeight) ? `현재 (${data.fontWeight})` : '현재 굵기';
       selectedLabel.textContent = (changes.get(selected) ?? draft.fields[Number(selected)].text).trim().slice(0, 100);
       refresh(); return;
     }
@@ -153,10 +192,10 @@ export function editHtmlText(source, apply, onClose) {
       clearTimeout(timeout); pending = '';
       try {
         if (!Array.isArray(data.edits) || data.edits.length > draft.fields.length || !data.edits.every(row => Array.isArray(row) && row.length === 2 && valid(...row))) throw Error('수정한 글을 확인할 수 없어요. 다시 열어 주세요.');
-        if (!Array.isArray(data.styles) || data.styles.length > draft.fields.length || !data.styles.every(row => Array.isArray(row) && row.length === 2 && valid(row[0], draft.fields[Number(row[0])]?.text) && validTextStyle(row[1]))) throw Error('글자 크기와 색깔을 확인할 수 없어요. 다시 열어 주세요.');
+        if (!Array.isArray(data.styles) || data.styles.length > draft.fields.length || !data.styles.every(row => Array.isArray(row) && row.length === 2 && valid(row[0], draft.fields[Number(row[0])]?.text) && validTextStyle(row[1]))) throw Error('글자 모양을 확인할 수 없어요. 다시 열어 주세요.');
         changes.clear(); for (const [id, text] of data.edits) update(id, text);
         styles.clear(); for (const [id, style] of data.styles) styles.set(id, style);
-        if (!countChanges() || apply(draft.apply(changes, styles)) !== false) closeModal();
+        if (!countChanges() || apply(draft.apply(changes, styles, fontAssets)) !== false) closeModal();
       } catch (error) { toast(error.message || '글을 저장하지 못했어요.', 4500); }
       refresh(); return;
     }
@@ -170,6 +209,6 @@ export function editHtmlText(source, apply, onClose) {
     el('header', {class: 'cv-html-edit-bar'}, el('div', {}, el('h2', {text: '화면에서 글 수정'}), status),
       el('div', {class: 'row'}, el('button', {type: 'button', class: 'btn btn-ghost', onClick: closeModal}, '취소'), save)),
     el('div', {class: 'cv-html-text-format', role: 'group', 'aria-label': '글자 모양'},
-      selectedLabel, el('label', {}, '크기', size, el('span', {text: 'px'})), el('label', {}, '색깔', color)), frame),
-  {wide: true, onClose: () => { clearTimeout(timeout); window.removeEventListener('message', receive); onClose?.(); }});
+      selectedLabel, el('label', {}, '글꼴', family), el('label', {}, '굵기', weight), el('label', {}, '크기', size, el('span', {text: 'px'})), el('label', {}, '색깔', color), weightNote), frame),
+  {wide: true, onClose: () => { closed = true; fontRequest++; clearTimeout(timeout); window.removeEventListener('message', receive); onClose?.(); }});
 }
