@@ -1077,9 +1077,11 @@ function syncHtmlWorkspace(O) {
   O.shell.querySelector('.cv-canvas-label').textContent = html ? 'HTML 원본' : '편집 캔버스';
   if (changed) O.workspace.showCanvas();
   O.htmlWorkspace.show(design);
-  if(html&&!design.web.poster&&O.htmlPosterSource!==design.web.html){
+  if(html&&O.htmlPosterSource!==design.web.html){
     O.htmlPosterSource=design.web.html;
-    import('./html-preview.js').then(({htmlFirstScreen})=>htmlFirstScreen(design.web.html,{aspect:aspectOf(O.record)})).then(poster=>{
+    // 저장된 첫 화면이 없거나 한 가지 색뿐이면(움직이는 첫 장면이 나타나기 전에 찍힌 것) 다시 만든다.
+    const saved=design.web.poster;
+    import('./html-preview.js').then(async({htmlFirstScreen,blankPoster})=>saved&&!(await blankPoster(saved))?'':htmlFirstScreen(design.web.html,{aspect:aspectOf(O.record)})).then(poster=>{
       if(poster&&!O.closed&&!O.leaving&&O.editor.getDesign().id===design.id)O.editor.setHtmlPoster(design.web.html,poster);
     }).catch(console.warn);
   }
