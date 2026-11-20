@@ -58,7 +58,7 @@ export async function linkCard(records, { render } = {}) {
   const draw = render || (await import('../src/index.js')).designToCanvas;
   const width = Math.min(CARD_WIDTH, Math.round(CARD_HEIGHT * pick.aspect));
   let slide=pick.slide;
-  if(slide.web?.html&&!slide.web.poster){const {htmlFirstScreen}=await import('./html-preview.js');const poster=await htmlFirstScreen(slide.web.html,{aspect:pick.aspect});if(poster)slide={...slide,web:{...slide.web,poster}};}
+  if(slide.web?.html){const {htmlFirstScreen,blankPoster}=await import('./html-preview.js');if(!slide.web.poster||await blankPoster(slide.web.poster)){const poster=await htmlFirstScreen(slide.web.html,{aspect:pick.aspect});if(poster)slide={...slide,web:{...slide.web,poster}};}}
   const made = await draw(slide, { width, aspect: pick.aspect });
   const canvas = document.createElement('canvas');
   canvas.width = CARD_WIDTH; canvas.height = CARD_HEIGHT;

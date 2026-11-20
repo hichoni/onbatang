@@ -4,6 +4,9 @@ import {cleanHtmlPoster} from '../src/html-file.js';
 function captureFirstScreen(channel, width, height) {
   const send = parent.postMessage.bind(parent);
   const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+  // Scripted intros (GSAP, three.js decks) rewrite the document on every frame until the first scene settles.
+  let changed = performance.now();
+  new MutationObserver(() => { changed = performance.now(); }).observe(document, {subtree:true, childList:true, attributes:true, characterData:true});
   const dataUrl = blob => new Promise((resolve,reject) => { const reader=new FileReader(); reader.onload=()=>resolve(reader.result); reader.onerror=reject; reader.readAsDataURL(blob); });
   const resources = new Map(); let count=0;
   const raster = image => {
@@ -66,9 +69,11 @@ function captureFirstScreen(channel, width, height) {
   };
   async function capture(){
     try {
+      const loaded=performance.now();
       await Promise.race([document.fonts?.ready,pause(1800)]);
       await Promise.race([Promise.allSettled([...document.images].map(image=>image.decode())),pause(1800)]);
       await pause(350);
+      while(performance.now()-changed<400&&performance.now()-loaded<3500)await pause(100);
       for(const animation of document.getAnimations()){try{if(Number.isFinite(animation.effect?.getComputedTiming().endTime))animation.finish();}catch{}}
       let fonts='';
       for(const sheet of document.styleSheets){try{for(const rule of sheet.cssRules)if(rule.type===CSSRule.FONT_FACE_RULE){
@@ -99,6 +104,19 @@ function captureFirstScreen(channel, width, height) {
   addEventListener('load',capture,{once:true});
 }
 
+/** A poster of one flat colour shows no first screen (0.156.0 saved such posters for animated decks), so it is made again. */
+export async function blankPoster(poster) {
+  if(!cleanHtmlPoster(poster))return true;
+  try {
+    const image=new Image();image.src=poster;await image.decode();
+    const canvas=document.createElement('canvas');canvas.width=96;canvas.height=54;
+    const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.drawImage(image,0,0,canvas.width,canvas.height);
+    const d=ctx.getImageData(0,0,canvas.width,canvas.height).data;
+    for(let i=4;i<d.length;i+=4)if(Math.abs(d[i]-d[0])+Math.abs(d[i+1]-d[1])+Math.abs(d[i+2]-d[2])>24)return false;
+    return true;
+  }catch{return true;}
+}
+
 let last=null;
 export function htmlFirstScreen(html,{aspect=16/9}={}) {
   if(!html||typeof document==='undefined')return Promise.resolve('');
@@ -108,8 +126,10 @@ export function htmlFirstScreen(html,{aspect=16/9}={}) {
   let cancel;
   const job=new Promise(resolve=>{
     const width=1280,height=Math.round(width/ratio),channel=crypto.randomUUID();
-    const frame=document.createElement('iframe');frame.sandbox='allow-scripts';frame.referrerPolicy='no-referrer';frame.setAttribute('aria-hidden','true');frame.tabIndex=-1;
-    frame.style.cssText=`position:fixed;left:-20000px;top:0;width:${width}px;height:${height}px;border:0;pointer-events:none`;
+    const frame=document.createElement('iframe');frame.sandbox='allow-scripts';frame.referrerPolicy='no-referrer';frame.setAttribute('aria-hidden','true');frame.tabIndex=-1;frame.inert=true;
+    // Browsers stop requestAnimationFrame in frames that are off-screen or fully transparent (opacity 0 drops it to 1 frame a second),
+    // so animated first scenes would be captured blank. Keep the frame inside the viewport, practically invisible and untouchable.
+    frame.style.cssText=`position:fixed;left:0;top:0;width:${width}px;height:${height}px;border:0;opacity:.001;pointer-events:none`;
     const finish=poster=>{clearTimeout(timer);window.removeEventListener('message',receive);frame.remove();resolve(cleanHtmlPoster(poster));};
     cancel=()=>finish('');
     const receive=event=>{if(event.source===frame.contentWindow&&event.data?.channel===channel)finish(event.data.poster);};
