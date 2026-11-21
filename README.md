@@ -1,3 +1,8 @@
+## 0.158.0 · 2026-11-21
+
+- 장면 단위로 넘기는 HTML 발표(`window.onbatangPresentation = {getState, go}`, 장면이 바뀌면 `onbatang:change`)를 재생기가 이어 받습니다. 보기 링크·공유 링크의 다음·이전·리모컨이 HTML 안의 장면부터 넘기고, 끝 장면에서 다음 장으로 갑니다. 장면 번호는 재생기의 `onChange`에 `cue`로 옵니다. HTML 안을 눌러 넘기거나 그 안에서 키를 눌러도 같은 번호가 됩니다. 연결은 다른 출처 sandbox 그대로 메시지로만 주고받고(`src/html-presentation.js`, Codex의 html-native-stage 작업에서 가져옴), 규약이 없는 HTML은 예전처럼 장 하나입니다.
+- 0.157.1의 아이폰 canvas 순서 고침(SVG 안 2D canvas를 가속 없이 그리기)을 뺐습니다. 글자 순서는 맞았지만 아이폰에서 같은 장면이 60fps에서 17fps로 떨어졌습니다. 온바탕은 canvas를 건드리지 않고, 순서가 중요한 canvas만 작성자가 `getContext('2d', {willReadFrequently: true})`로 열거나 글자를 canvas 위 다른 층으로 올리면 됩니다.
+
 ## 0.157.1 · 2026-11-21
 
 - 발표·보기 링크·공유 링크에서 올린 HTML 장을 온바탕 장처럼 1920 너비 화면으로 그려 장 크기에 맞게 줄입니다(자리가 1920 이상이면 그대로). 1920×1080으로 짠 HTML 발표가 SVG 안의 canvas를 스스로 줄일 필요가 없어져, 아이폰 사파리에서 일부 장면이 크게 확대돼 보이던 문제를 막습니다.
