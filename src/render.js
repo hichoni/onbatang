@@ -11,7 +11,7 @@ import { linkSvg } from './links.js';
 import { runPieces } from './runs.js';
 import { webHost, blockedSite } from './web.js';
 import {htmlFileSource, HTML_FILE_SANDBOX} from './html-file.js';
-import { fitWebFrame } from './web-fit.js';
+import { fitWebFrame, fitHtmlFrame } from './web-fit.js';
 import { chartView } from './chart.js';
 import { mathView } from './math.js';
 // 장의 기본 글꼴(src/editor.css 의 .fe-card 와 같다): 고른 글꼴이 없거나 아직 받는 중일 때 이것으로 보인다.
@@ -252,13 +252,15 @@ export function liveWebBoxes(root) {
 export function webFrame(web) {
   const uploaded = typeof web.html === 'string';
   const frame = el('iframe', {
-    class: 'fe-web-frame', ...(uploaded ? {srcdoc: htmlFileSource(web.html)} : {src: web.url}), title: uploaded ? `HTML: ${web.filename}` : `웹사이트: ${webHost(web.url)}`, loading: 'eager', referrerpolicy: uploaded ? 'no-referrer' : 'strict-origin-when-cross-origin',
+    class: 'fe-web-frame', ...(uploaded ? {} : {src: web.url}), title: uploaded ? `HTML: ${web.filename}` : `웹사이트: ${webHost(web.url)}`, loading: 'eager', referrerpolicy: uploaded ? 'no-referrer' : 'strict-origin-when-cross-origin',
     allow: 'fullscreen; autoplay; encrypted-media; picture-in-picture; clipboard-write',
     sandbox: uploaded ? HTML_FILE_SANDBOX : 'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads allow-presentation allow-pointer-lock',
     allowfullscreen: true,
   });
-  // 붙은 뒤(같은 차례의 다음 순간)에 자리 크기를 보고 맞춘다.
-  queueMicrotask(() => fitWebFrame(frame));
+  // 붙은 뒤(같은 차례의 다음 순간)에 자리 크기를 보고 맞춘다. 웹사이트는 좁으면 컴퓨터 너비(1024)로 그려 줄인다.
+  // 올린 HTML 은 온바탕 장처럼 1920 너비로 그려 줄이고, 줄인 만큼의 실제 선명도를 문서에 알려 준 뒤 연다(web-fit.js fitHtmlFrame).
+  if (uploaded) queueMicrotask(() => fitHtmlFrame(frame, (dpr) => { frame.srcdoc = htmlFileSource(web.html, {dpr}); }));
+  else queueMicrotask(() => fitWebFrame(frame));
   return frame;
 }
 

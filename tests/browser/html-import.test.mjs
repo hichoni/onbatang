@@ -386,12 +386,20 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   assert.equal(await workspace.locator('#count').textContent(),'완료','kept workspace HTML retains its state across slides');
   await page.locator('.cv-show-btn').click();
   const frame = page.frameLocator('[data-show-web] iframe');
+  // 발표의 HTML 은 1920 너비로 그려 장에 맞게 줄인다(web-fit.js fitHtmlFrame). Playwright 의 iframe 안 누르기는 줄인 비율을 셈하지 않으므로
+  // 보이는 자리(안쪽 위치 × 줄인 비율 + iframe 자리)를 직접 눌러 실제 사용자의 누르기를 확인한다.
+  const tapShown = async selector => {
+    const host = page.locator('[data-show-web] iframe'), box = await host.boundingBox(), k = box.width / await host.evaluate(f => f.offsetWidth);
+    const r = await frame.locator(selector).evaluate(e => { const b = e.getBoundingClientRect(); return {x: b.x + b.width / 2, y: b.y + b.height / 2}; });
+    await page.mouse.click(box.x + r.x * k, box.y + r.y * k);
+  };
   await page.locator('[data-html-workspace] iframe').waitFor({state:'detached'});
   assert.equal(await page.locator('[data-html-workspace] iframe').count(),0,'presentation stops duplicate background execution');
   await frame.locator('#status').filter({hasText: 'isolated'}).waitFor();
   assert.ok(!(await page.locator('[data-show-web] iframe').getAttribute('sandbox')).includes('allow-same-origin'));
   assert.equal(await page.getByRole('switch', {name: 'HTML 조작', exact: true}).count(), 0);
-  await frame.locator('#count').click();
+  assert.equal(await page.locator('[data-show-web] iframe').evaluate(f => [f.style.width, 'scaled' in f.dataset]).then(String), '1920px,true', 'presentation HTML is drawn at 1920 and scaled');
+  await tapShown('#count');
   assert.equal(await frame.locator('#count').textContent(), '완료');
   // Parent navigation remains available without an HTML interaction switch.
   await page.locator('.cv-show').focus();
@@ -401,7 +409,7 @@ test('HTML runs on open, supports text edits and undo, preserves isolation and e
   await page.waitForFunction(() => document.querySelector('.cv-show-count')?.textContent.startsWith('1 /'));
   assert.equal(await page.getByRole('switch', {name: 'HTML 조작', exact: true}).count(), 0);
   assert.equal(await frame.locator('#count').textContent(), '완료', 'kept HTML retains its state');
-  await frame.locator('#count').click();
+  await tapShown('#count');
   assert.equal(await page.evaluate(() => localStorage.getItem('html-import-secret')), null);
   await mkdir(resolve(root, 'work'), {recursive: true});
   await page.screenshot({path: resolve(root, 'work/html-import-presentation.png')});
