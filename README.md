@@ -1,3 +1,7 @@
+## 0.158.1 · 2026-11-22
+
+- HTML 발표에서 받은 현재 장면의 원고와 다음 장면 제목을 재생기 `onChange().cue.notes/nextTitle`로 함께 전달합니다. 보기 링크의 발표자 노트와 휴대폰 리모컨이 HTML에 들어 있는 원고를 장면 넘김에 맞춰 표시할 수 있습니다. 원고는 HTML의 기존 장면 규약에서만 받으며, 별도 HTML 창을 만들거나 장면을 다시 로드하지 않습니다.
+
 ## 0.158.0 · 2026-11-21
 
 - 장면 단위로 넘기는 HTML 발표(`window.onbatangPresentation = {getState, go}`, 장면이 바뀌면 `onbatang:change`)를 재생기가 이어 받습니다. 보기 링크·공유 링크의 다음·이전·리모컨이 HTML 안의 장면부터 넘기고, 끝 장면에서 다음 장으로 갑니다. 장면 번호는 재생기의 `onChange`에 `cue`로 옵니다. HTML 안을 눌러 넘기거나 그 안에서 키를 눌러도 같은 번호가 됩니다. 연결은 다른 출처 sandbox 그대로 메시지로만 주고받고(`src/html-presentation.js`, Codex의 html-native-stage 작업에서 가져옴), 규약이 없는 HTML은 예전처럼 장 하나입니다.

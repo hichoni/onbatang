@@ -10,9 +10,9 @@ import {resolve, extname, sep} from 'node:path';
 
 const root = resolve(fileURLToPath(new URL('../../', import.meta.url)));
 const deck = `<!doctype html><meta charset="utf-8"><style>html,body{margin:0;height:100%;background:#123;color:#fff}</style><button id="advance">다음</button><p id="cue"></p><script>
-let index=0;const cues=Array.from({length:5},(_,i)=>({title:'장면 '+(i+1),notes:''}));
+let index=0;const cues=Array.from({length:5},(_,i)=>({title:'장면 '+(i+1),notes:'원고 '+(i+1)+'\\n지금 말씀'}));
 function go(i){index=Math.max(0,Math.min(4,i));document.getElementById('cue').textContent=cues[index].title;dispatchEvent(new Event('onbatang:change'));}
-window.onbatangPresentation={getState:()=>({index,total:5,title:cues[index].title,notes:'',cues}),go};
+window.onbatangPresentation={getState:()=>({index,total:5,title:cues[index].title,notes:cues[index].notes,cues}),go};
 document.getElementById('advance').onclick=()=>go(index+1);
 document.addEventListener('keydown',e=>{if(e.key==='ArrowRight'){window.ownKeys=(window.ownKeys||0)+1;go(index+1);}});go(0);
 </script>`;
@@ -52,19 +52,22 @@ test('player steps through an HTML deck\'s scenes before the next slide and repo
   await page.waitForFunction(() => window.ready);
   const last = () => page.evaluate(() => { const c = window.changes.at(-1); return {at: c.at, cue: c.cue && [c.cue.index, c.cue.total, c.cue.title]}; });
   const waitCue = index => page.waitForFunction(i => window.changes.at(-1)?.cue?.index === i, index);
-  const inside = () => page.frames().find(f => f.url() === 'about:srcdoc' && f !== page.mainFrame());
+  const inside = async () => (await page.locator('#stage > .fe-card:last-child .fe-web-frame').elementHandle()).contentFrame();
 
   await waitCue(0);
   assert.deepEqual(await last(), {at: 0, cue: [0, 5, '장면 1']});
-  const frame = inside();
+  assert.deepEqual(await page.evaluate(()=>[changes.at(-1).cue.notes,changes.at(-1).cue.nextTitle]),['원고 1\n지금 말씀','장면 2']);
+  const frame = await inside();
   assert.equal(await frame.evaluate(() => document.documentElement.dataset.onbatangPresentation), 'connected', 'the HTML knows Onbatang drives it');
 
   assert.equal(await page.evaluate(() => window.player.next()), true);
   assert.equal(await page.evaluate(() => window.player.next()), true);
   await waitCue(2);
+  assert.equal(await page.evaluate(()=>changes.at(-1).cue.notes),'원고 3\n지금 말씀');
   assert.equal(await frame.locator('#cue').textContent(), '장면 3');
   await page.evaluate(() => window.player.prev());
   await waitCue(1);
+  assert.equal(await page.evaluate(()=>changes.at(-1).cue.notes),'원고 2\n지금 말씀');
 
   // HTML 안을 누르거나 그 안에서 키를 눌러도 같은 번호가 된다(키는 한 번만 넘긴다).
   // 재생기만 띄운 이 시험에서는 웹 장 위에 덮개가 있어(보기 링크는 덮개를 걷는다) HTML 안에서 직접 누른다.
