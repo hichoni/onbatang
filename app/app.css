@@ -272,7 +272,7 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"], body.mc-app :is(#app,.cv-a
 .cv-card-copy-btn{flex:none;font-weight:700;cursor:pointer}.cv-card-copy-select[hidden]+.cv-card-copy-btn{width:100%}
 .cv-card-copy-address{width:100%;font-size:16px}.cv-card-copy-message{font-size:.75rem;color:#52635a;overflow-wrap:anywhere}.cv-card-copy-message:empty{display:none}
 .cv-card-copy :is(button,select,input):focus-visible{outline:3px solid var(--primary);outline-offset:2px}.cv-card-copy-btn:disabled{opacity:.55;cursor:wait}
-@media(max-width:520px){.cv-card-copy-select,.cv-card-copy-btn{min-height:44px}.cv-card-copy-select{font-size:16px}}
+@media(max-width:520px){.cv-card-copy-row{flex-direction:column}.cv-card-copy-select,.cv-card-copy-btn{min-height:44px;width:100%;flex:auto}.cv-card-copy-select{font-size:16px}}
 .cv-item-del {
   display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-height: 34px; padding: 4px 9px; border: 0; border-radius: var(--cv-r-m);
   background: transparent; font: inherit; font-size: var(--cv-fs-s); font-weight: 700; color: var(--muted); cursor: pointer;
