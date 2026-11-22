@@ -85,6 +85,7 @@ let materialAction = null;
 let lessonAction = null;
 let accountAction = null;
 let shareAction = null;
+let linkManagerAction = null;      // 계정의 모든 공유 링크를 첫 화면에서 관리한다(자료를 열거나 다시 올리지 않는다).
 let copyAction = null;             // 내보내기의 "링크 공유": 받은 사람이 링크를 열어 자기 브라우저에 사본을 받아 고친다(GBE-AI Lab 회원만 만든다). 호스트가 맡는다.
 let copyLink = null;               // 공용 온바탕: 복사 링크(?copy=코드)를 받는 곳(app/copy-link.js). 없으면 링크를 열지 않는다.
 let showRemote = null;             // 발표의 휴대폰 리모컨(호스트가 연결 · QR 을 맡는다). 없으면 단추도 없다.
@@ -548,7 +549,13 @@ function render() {
     el('div', { class: 'cv-hero-text' },
       el('div', { class: 'cv-home-heading' }, title),
       el('p', { class: 'cv-hero-lead', text: '카드와 포스터, 수업 발표 자료를 만들어요.' }),
-      el('div', { class: 'cv-start-paths', role: 'group', 'aria-label': '자료 시작' }, start, imports, tools),
+      el('div', { class: 'cv-start-paths', role: 'group', 'aria-label': '자료 시작' }, start, imports,
+        linkManagerAction ? el('button', { class: 'btn cv-link-manager-btn', type: 'button', dataset: { linkManager: '' }, onClick: async event => {
+          const button = event.currentTarget; button.disabled = true;
+          try { await linkManagerAction.open({opener:button}); }
+          catch (error) { console.warn(error); toast('링크 관리를 열지 못했어요. 잠시 뒤 다시 시도해 주세요.'); }
+          finally { button.disabled = false; }
+        } }, ...face('link', '링크 관리')) : null, tools),
       full ? el('p', { class: 'cv-hero-full', text: `그림은 ${MAX_DESIGNS}개까지 저장돼요(PPT 하나는 파트가 여럿이어도 1개). 안 쓰는 그림을 지워 주세요.` }) : null),
     heroShowcase()));
 
@@ -5176,9 +5183,10 @@ function readOpen() {
  * - accountBridge: {url?}; 공용 온바탕 첫 화면의 "GBE-AI Lab 계정으로 이어 쓰기"(GBE-AI Lab 연결 창으로 그림을 올리고 가져온다). sync 가 있으면 숨김.
  * - copyAction: {open({designId,title,records()})}; 내보내기 창의 "링크 공유"(받은 사람이 링크를 열어 자기 브라우저에 사본을 받아 고친다). 없으면 그 칸은 "GBE-AI Lab 회원만"이라고 알리고 막힌다.
  * - copyLink: {url?,key?}; 공용 온바탕이 켠다. 주소의 ?copy=코드를 열면 그 자료를 이 기기에 사본으로 받아 바로 연다(app/copy-link.js).
+ * - linkManagerAction: {open()}; 첫 화면의 링크 관리. 계정의 링크 목록·켬/끔·삭제는 호스트가 맡는다.
  * - shareAction: {label,title?,open({designId,flush(),goTo(slideIndex,{upload})}),saved?(record)}; 편집기 위 막대의 공유 단추(GBE-AI Lab의 보기 전용 링크). saved 는 이 기기에 저장할 때마다 불린다(링크에 반영은 호스트가 모아서). 기본값은 숨김.
  */
-export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, resyncGap: resyncWait = 30000, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, accountAction: accountLibrary = null, cloudAction: cloudLibrary = null, shareAction: sharing = null, copyAction: copying = null, copyLink: copyIntake = null, accountBridge: bridging = null, showRemote: remoting = null, phoneRemote: phoning = null, coEdit: coing = null, coRelay: relaying = null, showAudience: audiencing = null, wallAction: walling = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false, resume = false, embed = null, syncDelay = null } = {}) {
+export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, resyncGap: resyncWait = 30000, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, accountAction: accountLibrary = null, cloudAction: cloudLibrary = null, shareAction: sharing = null, linkManagerAction: managingLinks = null, copyAction: copying = null, copyLink: copyIntake = null, accountBridge: bridging = null, showRemote: remoting = null, phoneRemote: phoning = null, coEdit: coing = null, coRelay: relaying = null, showAudience: audiencing = null, wallAction: walling = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false, resume = false, embed = null, syncDelay = null } = {}) {
   if (app) throw new Error('minican already started');
   if (!root) throw new Error('minican root');
   app = root;
@@ -5192,6 +5200,7 @@ export function startMinican({ root = document.getElementById('app'), fonts = []
   if(accountLibrary&&typeof accountLibrary.open==='function'&&typeof accountLibrary.label==='string'&&accountLibrary.label.trim())accountAction=accountLibrary;
   if(cloudLibrary&&typeof cloudLibrary.open==='function'&&typeof cloudLibrary.label==='string'&&cloudLibrary.label.trim())cloudAction=cloudLibrary;
   if(navigation&&typeof navigation.load==='function')materialNavigation=navigation;
+  if(managingLinks&&typeof managingLinks.open==='function')linkManagerAction=managingLinks;
   if(sharing&&typeof sharing.open==='function'&&typeof sharing.label==='string'&&sharing.label.trim())shareAction=sharing;
   if(copying&&typeof copying.open==='function')copyAction=copying;
   if(copyIntake&&typeof copyIntake==='object'&&!embed)copyLink={...(typeof copyIntake.url==='string'?{url:copyIntake.url}:{}),...(typeof copyIntake.key==='string'?{key:copyIntake.key}:{})};
