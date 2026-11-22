@@ -703,6 +703,40 @@ function paintCardLinks(button){
   button.querySelector('.cv-card-links-label').textContent=label;
   button.title=value.detail+(create?' 눌러서 보기·고치기 링크를 만들어요.':' 눌러서 이 자료의 링크를 관리해요.');
   button.setAttribute('aria-label',`${button.linkTitle}: ${label}. ${value.detail}${create?'':' 링크 관리'}`);
+  button.linkCopyControls?.paint();
+}
+// Copy synchronously from the shared snapshot so Safari keeps the click's clipboard permission.
+// Clipboard denial exposes a selected address here, without opening link management.
+function cardLinkCopy(designIds,title){
+  if(typeof linkManagerAction?.links!=='function')return null;
+  let signature='',selectedKey='',busy=false;
+  const status=el('span',{class:'cv-card-copy-message',role:'status','aria-live':'polite'});
+  const address=el('input',{class:'cv-card-copy-address',type:'text',readonly:true,hidden:true,'aria-label':`${title} 복사할 공유 주소`,onClick:()=>address.select()});
+  const select=el('select',{class:'cv-card-copy-select','aria-label':`${title} 복사할 링크`,onChange:()=>{selectedKey=select.value;status.textContent='';address.hidden=true;}});
+  const copy=el('button',{class:'cv-card-copy-btn',type:'button',dataset:{cardCopy:''},'aria-label':`${title} 링크 복사`,onClick:async()=>{
+    if(busy)return;
+    const chosen=linkManagerAction.links(designIds).find(link=>link.key===select.value);
+    if(!chosen){paint();return;}
+    busy=true;copy.disabled=true;select.disabled=true;
+    try{
+      await navigator.clipboard.writeText(chosen.url);
+      address.hidden=true;status.textContent=chosen.enabled?'링크를 복사했어요.':'꺼진 링크를 복사했어요. 사용하려면 공유를 켜 주세요.';
+    }catch{
+      address.value=chosen.url;address.hidden=false;address.focus();address.select();
+      status.textContent='주소를 선택했어요. 길게 누르거나 복사 단축키로 복사해 주세요.'+(chosen.enabled?'':' 현재 꺼진 링크예요.');
+    }finally{busy=false;copy.disabled=false;select.disabled=false;}
+  }},'링크 복사');
+  const row=el('div',{class:'cv-card-copy',hidden:true,dataset:{cardCopyRow:''}},el('div',{class:'cv-card-copy-row'},select,copy),address,status);
+  function paint(){
+    const links=linkManagerAction.links(designIds),next=JSON.stringify(links);
+    row.hidden=!links.length;select.hidden=links.length<2;
+    if(next===signature)return;
+    signature=next;status.textContent='';address.hidden=true;
+    select.replaceChildren(...links.map(link=>el('option',{value:link.key},link.label)));
+    if(links.length){selectedKey=links.some(link=>link.key===selectedKey)?selectedKey:links[0].key;select.value=selectedKey;}
+    copy.title=links.length===1?links[0].label:'선택한 링크 주소 복사';
+  }
+  return {row,paint};
 }
 async function openCopyFromCard(button){
   if(!copyAction||S.open||S.phase!=='home')return;
@@ -737,7 +771,9 @@ function cardLinks(designIds,title){
     catch(error){console.warn(error);toast('링크 관리를 열지 못했어요. 잠시 뒤 다시 시도해 주세요.');}
     finally{button.disabled=false;}
   }},el('span',{class:'cv-card-links-label'}),ic('right'));
-  button.linkDesignIds=designIds;button.linkTitle=title;paintCardLinks(button);return button;
+  button.linkDesignIds=designIds;button.linkTitle=title;
+  button.linkCopyControls=cardLinkCopy(designIds,title);
+  paintCardLinks(button);return el('div',{class:'cv-card-sharing'},button,button.linkCopyControls?.row);
 }
 // ---------- 내 그림 목록: 묶기 · 거르기 · 찾기 · 늘어놓기 ----------
 const HOME_VIEW_KEY = 'onbatang-home-view-v1';
@@ -5237,7 +5273,7 @@ function readOpen() {
  * - accountBridge: {url?}; 공용 온바탕 첫 화면의 "GBE-AI Lab 계정으로 이어 쓰기"(GBE-AI Lab 연결 창으로 그림을 올리고 가져온다). sync 가 있으면 숨김.
  * - copyAction: {open({designId,title,records(),autoRefresh?,onChange?}) → {closed?}}; 링크 공유. 카드에서는 autoRefresh:false로 기존 링크를 자동 갱신하지 않으며 onChange로 상태를 다시 읽고 closed 약속으로 초점을 복귀한다.
  * - copyLink: {url?,key?}; 공용 온바탕이 켠다. 주소의 ?copy=코드를 열면 그 자료를 이 기기에 사본으로 받아 바로 연다(app/copy-link.js).
- * - linkManagerAction: {open({opener,designIds?,title?,onCreate?}),status?(designIds),subscribe?(listener),refresh?({force})}; 계정 링크 관리. status는 {state,label,detail}, subscribe는 상태가 바뀔 때 알린다. 자료 카드는 묶음의 모든 id를 넘긴다.
+ * - linkManagerAction: {open({opener,designIds?,title?,onCreate?}),status?(designIds),links?(designIds),subscribe?(listener),refresh?({force})}; 계정 링크 관리. status는 {state,label,detail}, links는 복사할 {key,url,label,enabled} 목록, subscribe는 상태가 바뀔 때 알린다. 자료 카드는 묶음의 모든 id를 넘긴다.
  * - shareAction: {label,title?,open({designId,flush(),goTo(slideIndex,{upload})}),saved?(record)}; 편집기 위 막대의 공유 단추(GBE-AI Lab의 보기 전용 링크). saved 는 이 기기에 저장할 때마다 불린다(링크에 반영은 호스트가 모아서). 기본값은 숨김.
  */
 export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, resyncGap: resyncWait = 30000, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, accountAction: accountLibrary = null, cloudAction: cloudLibrary = null, shareAction: sharing = null, linkManagerAction: managingLinks = null, copyAction: copying = null, copyLink: copyIntake = null, accountBridge: bridging = null, showRemote: remoting = null, phoneRemote: phoning = null, coEdit: coing = null, coRelay: relaying = null, showAudience: audiencing = null, wallAction: walling = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false, resume = false, embed = null, syncDelay = null } = {}) {
