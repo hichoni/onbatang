@@ -235,8 +235,13 @@ async function refresh() {
       forgetOpen();
     }
   }
+  refreshHomeLinks(true);
   render();
   syncAccount();
+}
+function refreshHomeLinks(force=false){
+  if(!linkManagerAction?.refresh)return;
+  Promise.resolve().then(()=>linkManagerAction.refresh({force})).catch(error=>console.warn(error));
 }
 /** 계정이 있으면 이 기기의 그림과 계정의 그림을 맞춘다(sync.js). 첫 화면에 있을 때만 목록을 다시 그린다. */
 // 한 번에 하나만 돈다(도는 중에 또 부르면 그 약속을 그대로 돌려준다).
@@ -684,8 +689,27 @@ function itemCard(record) {
     el('div', { class: 'cv-item-body' },
       el('span', { class: 'cv-item-name', text: record.name }),
       el('span', { class: 'cv-item-when' }, el('span', { text: ratioOf(record.ratio).name }), whenText(record.updatedAt || createdOf(record)) ? el('span', { text: whenText(record.updatedAt || createdOf(record)) }) : null),
+      cardLinks([record.id],record.name),
       el('div', { class: 'cv-item-row' }, edit, copy, del)));
   return card;
+}
+// 한 번 읽은 계정 링크 상태를 모든 카드가 나눠 쓴다. 상태 변경 시 단추만 갱신해 초점을 유지한다.
+function paintCardLinks(button){
+  const value=linkManagerAction.status(button.linkDesignIds);
+  button.dataset.linkState=value.state;
+  button.querySelector('.cv-card-links-label').textContent=value.label;
+  button.title=value.detail+' 눌러서 이 자료의 링크를 관리해요.';
+  button.setAttribute('aria-label',`${button.linkTitle}: ${value.label}. ${value.detail} 링크 관리`);
+}
+function cardLinks(designIds,title){
+  if(typeof linkManagerAction?.status!=='function')return null;
+  const button=el('button',{class:'cv-card-links',type:'button',dataset:{cardLinks:''},onClick:async()=>{
+    button.disabled=true;
+    try{await linkManagerAction.open({opener:button,designIds,title});}
+    catch(error){console.warn(error);toast('링크 관리를 열지 못했어요. 잠시 뒤 다시 시도해 주세요.');}
+    finally{button.disabled=false;}
+  }},el('span',{class:'cv-card-links-label'}),ic('right'));
+  button.linkDesignIds=designIds;button.linkTitle=title;paintCardLinks(button);return button;
 }
 // ---------- 내 그림 목록: 묶기 · 거르기 · 찾기 · 늘어놓기 ----------
 const HOME_VIEW_KEY = 'onbatang-home-view-v1';
@@ -814,6 +838,7 @@ function deckCards(entry, paint) {
     el('div', { class: 'cv-item-body' },
       el('span', { class: 'cv-item-name', text: entry.name, title: entry.name }),
       el('span', { class: 'cv-item-when' }, el('span', { text: `파트 ${entry.records.length}개` }), when ? el('span', { text: when }) : null),
+      cardLinks(entry.records.map(record=>record.id),entry.name),
       el('div', { class: 'cv-item-row' }, edit, parts, del)));
   if (!open) return [card];
   return [card, el('div', { class: 'cv-deck-open', role: 'group', 'aria-label': `${entry.name} 파트` }, ...entry.records.map((r) => itemCard(r)))];
@@ -4053,6 +4078,7 @@ async function closeDesign(O, btn = null) {
   // 꾸미던 그림이 작아지면서 목록의 그 그림 자리로 돌아간다(저장되지 않은 빈 그림이면 그냥 사라진다).
   const returnToShelf = () => {
     render();
+    refreshHomeLinks(true);
     queueMicrotask(resync);                       // 꾸미는 동안 다른 기기에서 바뀐 것이 있으면 이제 받는다
     window.scrollTo({ top: 0 });
     return app.querySelector(`.cv-item[data-id="${O.record.id}"] .cv-thumb .fe-card`);
@@ -5183,7 +5209,7 @@ function readOpen() {
  * - accountBridge: {url?}; 공용 온바탕 첫 화면의 "GBE-AI Lab 계정으로 이어 쓰기"(GBE-AI Lab 연결 창으로 그림을 올리고 가져온다). sync 가 있으면 숨김.
  * - copyAction: {open({designId,title,records()})}; 내보내기 창의 "링크 공유"(받은 사람이 링크를 열어 자기 브라우저에 사본을 받아 고친다). 없으면 그 칸은 "GBE-AI Lab 회원만"이라고 알리고 막힌다.
  * - copyLink: {url?,key?}; 공용 온바탕이 켠다. 주소의 ?copy=코드를 열면 그 자료를 이 기기에 사본으로 받아 바로 연다(app/copy-link.js).
- * - linkManagerAction: {open()}; 첫 화면의 링크 관리. 계정의 링크 목록·켬/끔·삭제는 호스트가 맡는다.
+ * - linkManagerAction: {open({opener,designIds?,title?}),status?(designIds),subscribe?(listener),refresh?({force})}; 계정 링크 관리. status는 {state,label,detail}, subscribe는 상태가 바뀔 때 알린다. 자료 카드는 묶음의 모든 id를 넘긴다.
  * - shareAction: {label,title?,open({designId,flush(),goTo(slideIndex,{upload})}),saved?(record)}; 편집기 위 막대의 공유 단추(GBE-AI Lab의 보기 전용 링크). saved 는 이 기기에 저장할 때마다 불린다(링크에 반영은 호스트가 모아서). 기본값은 숨김.
  */
 export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, resyncGap: resyncWait = 30000, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, accountAction: accountLibrary = null, cloudAction: cloudLibrary = null, shareAction: sharing = null, linkManagerAction: managingLinks = null, copyAction: copying = null, copyLink: copyIntake = null, accountBridge: bridging = null, showRemote: remoting = null, phoneRemote: phoning = null, coEdit: coing = null, coRelay: relaying = null, showAudience: audiencing = null, wallAction: walling = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false, resume = false, embed = null, syncDelay = null } = {}) {
@@ -5200,7 +5226,17 @@ export function startMinican({ root = document.getElementById('app'), fonts = []
   if(accountLibrary&&typeof accountLibrary.open==='function'&&typeof accountLibrary.label==='string'&&accountLibrary.label.trim())accountAction=accountLibrary;
   if(cloudLibrary&&typeof cloudLibrary.open==='function'&&typeof cloudLibrary.label==='string'&&cloudLibrary.label.trim())cloudAction=cloudLibrary;
   if(navigation&&typeof navigation.load==='function')materialNavigation=navigation;
-  if(managingLinks&&typeof managingLinks.open==='function')linkManagerAction=managingLinks;
+  if(managingLinks&&typeof managingLinks.open==='function'){
+    linkManagerAction=managingLinks;
+    if(typeof managingLinks.subscribe==='function'&&typeof managingLinks.status==='function')managingLinks.subscribe(()=>{
+      for(const button of app.querySelectorAll('[data-card-links]'))paintCardLinks(button);
+    });
+    const refreshLinksOnFocus=()=>{
+      if(S.phase==='home'&&!S.open&&!document.querySelector('dialog[open]'))refreshHomeLinks();
+    };
+    window.addEventListener('focus',refreshLinksOnFocus);
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshLinksOnFocus();});
+  }
   if(sharing&&typeof sharing.open==='function'&&typeof sharing.label==='string'&&sharing.label.trim())shareAction=sharing;
   if(copying&&typeof copying.open==='function')copyAction=copying;
   if(copyIntake&&typeof copyIntake==='object'&&!embed)copyLink={...(typeof copyIntake.url==='string'?{url:copyIntake.url}:{}),...(typeof copyIntake.key==='string'?{key:copyIntake.key}:{})};
