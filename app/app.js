@@ -552,7 +552,7 @@ function render() {
       el('div', { class: 'cv-start-paths', role: 'group', 'aria-label': '자료 시작' }, start, imports,
         linkManagerAction ? el('button', { class: 'btn cv-link-manager-btn', type: 'button', dataset: { linkManager: '' }, onClick: async event => {
           const button = event.currentTarget; button.disabled = true;
-          try { await linkManagerAction.open(); }
+          try { await linkManagerAction.open({opener:button}); }
           catch (error) { console.warn(error); toast('링크 관리를 열지 못했어요. 잠시 뒤 다시 시도해 주세요.'); }
           finally { button.disabled = false; }
         } }, ...face('link', '링크 관리')) : null, tools),
