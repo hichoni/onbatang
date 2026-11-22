@@ -235,8 +235,8 @@ async function refresh() {
       forgetOpen();
     }
   }
-  render();
   refreshHomeLinks(true);
+  render();
   syncAccount();
 }
 function refreshHomeLinks(force=false){
