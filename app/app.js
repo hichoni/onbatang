@@ -712,29 +712,53 @@ function cardLinkCopy(designIds,title){
   let signature='',selectedKey='',busy=false;
   const status=el('span',{class:'cv-card-copy-message',role:'status','aria-live':'polite'});
   const address=el('input',{class:'cv-card-copy-address',type:'text',readonly:true,hidden:true,'aria-label':`${title} 복사할 공유 주소`,onClick:()=>address.select()});
-  const select=el('select',{class:'cv-card-copy-select','aria-label':`${title} 복사할 링크`,onChange:()=>{selectedKey=select.value;status.textContent='';address.hidden=true;}});
+  const select=el('select',{class:'cv-card-copy-select','aria-label':`${title} 공유 링크 선택`,onChange:()=>{selectedKey=select.value;status.textContent='';address.hidden=true;lock();}});
+  const chosenLink=()=>linkManagerAction.links(designIds).find(link=>link.key===select.value);
   const copy=el('button',{class:'cv-card-copy-btn',type:'button',dataset:{cardCopy:''},'aria-label':`${title} 링크 복사`,onClick:async()=>{
     if(busy)return;
-    const chosen=linkManagerAction.links(designIds).find(link=>link.key===select.value);
+    const chosen=chosenLink();
     if(!chosen){paint();return;}
-    busy=true;copy.disabled=true;select.disabled=true;
+    if(chosen.pending)return;
+    busy='copy';lock();
     try{
       await navigator.clipboard.writeText(chosen.url);
       address.hidden=true;status.textContent=chosen.enabled?'링크를 복사했어요.':'꺼진 링크를 복사했어요. 사용하려면 공유를 켜 주세요.';
     }catch{
       address.value=chosen.url;address.hidden=false;address.focus();address.select();
       status.textContent='주소를 선택했어요. 길게 누르거나 복사 단축키로 복사해 주세요.'+(chosen.enabled?'':' 현재 꺼진 링크예요.');
-    }finally{busy=false;copy.disabled=false;select.disabled=false;}
+    }finally{busy=false;lock();}
   }},'링크 복사');
-  const row=el('div',{class:'cv-card-copy',hidden:true,dataset:{cardCopyRow:''}},el('div',{class:'cv-card-copy-row'},select,copy),address,status);
+  const toggle=el('button',{class:'cv-card-copy-btn cv-card-link-toggle',type:'button',role:'switch',dataset:{cardLinkToggle:''},onClick:async()=>{
+    const chosen=chosenLink();
+    if(busy||!chosen||chosen.pending)return;
+    const enabled=!chosen.enabled;
+    busy='toggle';address.hidden=true;status.textContent='';lock();
+    try{
+      await linkManagerAction.setEnabled({designIds,key:chosen.key,enabled});
+      status.textContent=enabled?'같은 주소로 공유를 켰어요.':'공유를 껐어요. 이 링크로는 열 수 없어요.';
+    }catch(error){status.textContent=String(error?.message||'공유 상태를 바꾸지 못했어요. 다시 시도해 주세요.');toast(status.textContent,4500);}
+    finally{busy=false;paint();if(row.isConnected)(row.hidden?row.parentNode.querySelector('[data-card-links]'):toggle)?.focus({preventScroll:true});}
+  }});
+  const row=el('div',{class:'cv-card-copy',hidden:true,dataset:{cardCopyRow:''}},el('div',{class:'cv-card-copy-row'},select,copy),toggle,address,status);
+  function lock(){
+    const chosen=chosenLink(),disabled=!!busy||!chosen||!!chosen.pending;
+    copy.disabled=select.disabled=toggle.disabled=disabled;
+    toggle.hidden=typeof linkManagerAction.setEnabled!=='function';
+    if(chosen){toggle.setAttribute('aria-checked',String(chosen.enabled));toggle.setAttribute('aria-label',`${title} ${chosen.label.replace(/ · 끔$/,'')} 켬/끔`);toggle.title=chosen.enabled?'누르면 선택한 링크를 꺼요.':'누르면 선택한 링크를 켜요.';}
+    toggle.textContent=busy==='toggle'||chosen?.pending?'변경 중…':chosen?.enabled?'공유 켬':'공유 끔';
+    toggle.setAttribute('aria-busy',String(busy==='toggle'||!!chosen?.pending));
+  }
   function paint(){
     const links=linkManagerAction.links(designIds),next=JSON.stringify(links);
-    row.hidden=!links.length;select.hidden=links.length<2;
-    if(next===signature)return;
-    signature=next;status.textContent='';address.hidden=true;
-    select.replaceChildren(...links.map(link=>el('option',{value:link.key},link.label)));
-    if(links.length){selectedKey=links.some(link=>link.key===selectedKey)?selectedKey:links[0].key;select.value=selectedKey;}
-    copy.title=links.length===1?links[0].label:'선택한 링크 주소 복사';
+    row.hidden=!links.length&&!busy;
+    if(!busy||links.length)select.hidden=links.length<2;
+    if(next!==signature&&(!busy||links.length)){
+      signature=next;if(!busy)status.textContent='';address.hidden=true;
+      select.replaceChildren(...links.map(link=>el('option',{value:link.key},link.label)));
+      if(links.length){selectedKey=links.some(link=>link.key===selectedKey)?selectedKey:links[0].key;select.value=selectedKey;}
+      copy.title=links.length===1?links[0].label:'선택한 링크 주소 복사';
+    }
+    lock();
   }
   return {row,paint};
 }
@@ -5273,7 +5297,7 @@ function readOpen() {
  * - accountBridge: {url?}; 공용 온바탕 첫 화면의 "GBE-AI Lab 계정으로 이어 쓰기"(GBE-AI Lab 연결 창으로 그림을 올리고 가져온다). sync 가 있으면 숨김.
  * - copyAction: {open({designId,title,records(),autoRefresh?,onChange?}) → {closed?}}; 링크 공유. 카드에서는 autoRefresh:false로 기존 링크를 자동 갱신하지 않으며 onChange로 상태를 다시 읽고 closed 약속으로 초점을 복귀한다.
  * - copyLink: {url?,key?}; 공용 온바탕이 켠다. 주소의 ?copy=코드를 열면 그 자료를 이 기기에 사본으로 받아 바로 연다(app/copy-link.js).
- * - linkManagerAction: {open({opener,designIds?,title?,onCreate?}),status?(designIds),links?(designIds),subscribe?(listener),refresh?({force})}; 계정 링크 관리. status는 {state,label,detail}, links는 복사할 {key,url,label,enabled} 목록, subscribe는 상태가 바뀔 때 알린다. 자료 카드는 묶음의 모든 id를 넘긴다.
+ * - linkManagerAction: {open({opener,designIds?,title?,onCreate?}),status?(designIds),links?(designIds),setEnabled?({designIds,key,enabled}),subscribe?(listener),refresh?({force})}; 계정 링크 관리. status는 {state,label,detail}, links는 {key,url,label,enabled,pending?} 목록이다. setEnabled는 선택한 링크만 변경하며 결과·실패 재조회 후 알린다. 자료 카드는 묶음의 모든 id를 넘긴다.
  * - shareAction: {label,title?,open({designId,flush(),goTo(slideIndex,{upload})}),saved?(record)}; 편집기 위 막대의 공유 단추(GBE-AI Lab의 보기 전용 링크). saved 는 이 기기에 저장할 때마다 불린다(링크에 반영은 호스트가 모아서). 기본값은 숨김.
  */
 export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, resyncGap: resyncWait = 30000, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, accountAction: accountLibrary = null, cloudAction: cloudLibrary = null, shareAction: sharing = null, linkManagerAction: managingLinks = null, copyAction: copying = null, copyLink: copyIntake = null, accountBridge: bridging = null, showRemote: remoting = null, phoneRemote: phoning = null, coEdit: coing = null, coRelay: relaying = null, showAudience: audiencing = null, wallAction: walling = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false, resume = false, embed = null, syncDelay = null } = {}) {
