@@ -261,6 +261,7 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"], body.mc-app :is(#app,.cv-a
 .cv-card-links{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-height:40px;margin-top:7px;padding:7px 10px;border:1px solid #d9e3de;border-radius:10px;background:#f5f7f6;color:#52635a;font:inherit;font-size:.82rem;font-weight:700;text-align:left;cursor:pointer}
 .cv-card-links-label{min-width:0;overflow-wrap:anywhere}.cv-card-links>svg{flex:none;width:16px;height:16px}
 .cv-card-links[data-link-state=on]{color:#20644e;background:#eaf6ef;border-color:#a3cdb7}
+.cv-card-links[data-link-create=true]{color:#20644e;background:#f0f8f3;border-color:#a3cdb7;border-style:dashed}
 .cv-card-links[data-link-state=mixed],.cv-card-links[data-link-state=incomplete],.cv-card-links[data-link-state=unknown]{color:#80500c;background:#fff5e6;border-color:#e9c998}
 .cv-card-links[data-link-state=loading]{color:#687870}.cv-card-links:disabled{opacity:.55;cursor:wait}
 .cv-card-links:hover:not(:disabled){border-color:var(--primary)}.cv-card-links:focus-visible{outline:3px solid var(--primary);outline-offset:2px}

@@ -696,16 +696,44 @@ function itemCard(record) {
 // 한 번 읽은 계정 링크 상태를 모든 카드가 나눠 쓴다. 상태 변경 시 단추만 갱신해 초점을 유지한다.
 function paintCardLinks(button){
   const value=linkManagerAction.status(button.linkDesignIds);
+  const create=value.state==='none'&&copyAction;
+  const label=create?'공유 링크 만들기':value.label;
   button.dataset.linkState=value.state;
-  button.querySelector('.cv-card-links-label').textContent=value.label;
-  button.title=value.detail+' 눌러서 이 자료의 링크를 관리해요.';
-  button.setAttribute('aria-label',`${button.linkTitle}: ${value.label}. ${value.detail} 링크 관리`);
+  button.dataset.linkCreate=String(!!create);
+  button.querySelector('.cv-card-links-label').textContent=label;
+  button.title=value.detail+(create?' 눌러서 보기·고치기 링크를 만들어요.':' 눌러서 이 자료의 링크를 관리해요.');
+  button.setAttribute('aria-label',`${button.linkTitle}: ${label}. ${value.detail}${create?'':' 링크 관리'}`);
+}
+async function openCopyFromCard(button){
+  if(!copyAction||S.open||S.phase!=='home')return;
+  button.disabled=true;
+  try{
+    const ids=button.linkDesignIds;
+    const session=await copyAction.open({designId:ids[0],title:button.linkTitle,autoRefresh:false,
+      records:async()=>{
+        // Always read the saved contents at upload time, including every PPT part.
+        // A missing/unreadable part must stop the whole upload, never publish a subset.
+        const records=[];
+        for(const id of ids){
+          const record=await getDesign(id);
+          if(!record)throw Error('자료가 삭제되었거나 바뀌었어요. 목록을 새로 고친 뒤 다시 만들어 주세요.');
+          records.push(record);
+        }
+        return records;
+      },onChange:()=>refreshHomeLinks(true)});
+    if(session?.closed)await session.closed;
+  }catch(error){console.warn(error);toast(String(error?.message||'링크 만들기를 열지 못했어요. 잠시 뒤 다시 시도해 주세요.').slice(0,200),4500);}
+  finally{button.disabled=false;refreshHomeLinks(true);if(button.isConnected)button.focus({preventScroll:true});}
 }
 function cardLinks(designIds,title){
   if(typeof linkManagerAction?.status!=='function')return null;
   const button=el('button',{class:'cv-card-links',type:'button',dataset:{cardLinks:''},onClick:async()=>{
     button.disabled=true;
-    try{await linkManagerAction.open({opener:button,designIds,title});}
+    try{
+      const onCreate=copyAction?()=>openCopyFromCard(button):null;
+      if(onCreate&&linkManagerAction.status(designIds).state==='none')await onCreate();
+      else await linkManagerAction.open({opener:button,designIds,title,onCreate});
+    }
     catch(error){console.warn(error);toast('링크 관리를 열지 못했어요. 잠시 뒤 다시 시도해 주세요.');}
     finally{button.disabled=false;}
   }},el('span',{class:'cv-card-links-label'}),ic('right'));
@@ -5207,9 +5235,9 @@ function readOpen() {
  *   code 는 40자리 무작위 값이다. link 가 없으면 이 주소에 ?co=코드 를 붙인다. 주소의 ?co=코드 를 열면 그 모임에 들어간다. 기본값은 숨김.
  * - coRelay: {url?}; 공용 온바탕이 켠다. coEdit 이 없으면 GBE-AI Lab의 다리(onbatang-co-relay.html)를 보이지 않는 작은 창으로 띄워 통로로 쓴다(app/co-relay.js).
  * - accountBridge: {url?}; 공용 온바탕 첫 화면의 "GBE-AI Lab 계정으로 이어 쓰기"(GBE-AI Lab 연결 창으로 그림을 올리고 가져온다). sync 가 있으면 숨김.
- * - copyAction: {open({designId,title,records()})}; 내보내기 창의 "링크 공유"(받은 사람이 링크를 열어 자기 브라우저에 사본을 받아 고친다). 없으면 그 칸은 "GBE-AI Lab 회원만"이라고 알리고 막힌다.
+ * - copyAction: {open({designId,title,records(),autoRefresh?,onChange?}) → {closed?}}; 링크 공유. 카드에서는 autoRefresh:false로 기존 링크를 자동 갱신하지 않으며 onChange로 상태를 다시 읽고 closed 약속으로 초점을 복귀한다.
  * - copyLink: {url?,key?}; 공용 온바탕이 켠다. 주소의 ?copy=코드를 열면 그 자료를 이 기기에 사본으로 받아 바로 연다(app/copy-link.js).
- * - linkManagerAction: {open({opener,designIds?,title?}),status?(designIds),subscribe?(listener),refresh?({force})}; 계정 링크 관리. status는 {state,label,detail}, subscribe는 상태가 바뀔 때 알린다. 자료 카드는 묶음의 모든 id를 넘긴다.
+ * - linkManagerAction: {open({opener,designIds?,title?,onCreate?}),status?(designIds),subscribe?(listener),refresh?({force})}; 계정 링크 관리. status는 {state,label,detail}, subscribe는 상태가 바뀔 때 알린다. 자료 카드는 묶음의 모든 id를 넘긴다.
  * - shareAction: {label,title?,open({designId,flush(),goTo(slideIndex,{upload})}),saved?(record)}; 편집기 위 막대의 공유 단추(GBE-AI Lab의 보기 전용 링크). saved 는 이 기기에 저장할 때마다 불린다(링크에 반영은 호스트가 모아서). 기본값은 숨김.
  */
 export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, resyncGap: resyncWait = 30000, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, accountAction: accountLibrary = null, cloudAction: cloudLibrary = null, shareAction: sharing = null, linkManagerAction: managingLinks = null, copyAction: copying = null, copyLink: copyIntake = null, accountBridge: bridging = null, showRemote: remoting = null, phoneRemote: phoning = null, coEdit: coing = null, coRelay: relaying = null, showAudience: audiencing = null, wallAction: walling = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false, resume = false, embed = null, syncDelay = null } = {}) {
