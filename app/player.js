@@ -13,7 +13,7 @@ import { connectHtmlPresentation } from '../src/html-presentation.js';
 /**
  * stage: 장을 그릴 자리(비워 두고 넘긴다) · slides: 장들(그림 기록의 slides, 보일 것만) · aspect: 가로 ÷ 세로.
  * onChange({ at, total, left, cue }): 장이 바뀌거나 누를 때 나오는 것이 나올 때마다(left: 이 장에 남은 누를 것).
- *   cue: 지금 장이 장면 단위로 넘기는 HTML 발표(src/html-presentation.js)면 { index, total, title }, 아니면 null.
+ *   cue: HTML 발표면 { index, total, title, notes, nextTitle }, 아니면 null.
  * onKey({ key, code }): HTML 발표 안에서 누른 넘기기 키(연결된 뒤에는 HTML 이 아니라 여기로 온다). 없으면 next · prev 로 넘긴다.
  * 돌려주는 것: { at, total, next(), prev(), go(n), destroy() } · next() · prev() 는 움직였으면 true.
  * HTML 발표 장에서는 next() · prev() 가 장면부터 넘기고, 첫 · 끝 장면에서 장을 넘긴다. 불러오는 동안(최대 15초)은 장을 넘기지 않는다.
@@ -58,7 +58,7 @@ export function mountPlayer(stage, { slides = [], aspect = 16 / 9, onChange = ()
   const settle = () => { turning?.finish(); turning = null; if (leaving) drop(leaving); leaving = null; };
   // left: 이 장에 남은 누를 것(누를 때 나오는 요소 + 기다리는 바탕 영상).
   const tell = () => {
-    const s = decks.get(cards().at(-1))?.state, cue = s ? { index: s.index, total: s.total, title: s.title } : null;
+    const s = decks.get(cards().at(-1))?.state, cue = s ? { index: s.index, total: s.total, title: s.title, notes: s.notes || s.cues[s.index]?.notes || '', nextTitle: s.cues[s.index + 1]?.title || '' } : null;
     try { onChange({ at, total: pages.length, left: (parts?.left?.() || 0) + (waiting ? 1 : 0), cue }); } catch (error) { console.warn(error); }
   };
   // 지금 장의 HTML 발표 장면을 넘긴다. 넘겼거나(불러오는 중이면 기다리며) 장을 넘기지 말아야 하면 true.
