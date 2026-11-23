@@ -40,6 +40,7 @@ import {ONBATANG_VERSION} from './version.js';
 import {createGaiMaker,gaiLessonContext} from './gai-maker.js';
 import {createAiHelper} from './ai-helper.js';
 import {createStoryAuthor,storyAuditView} from './story-author.js';
+import {createStoryPhotoManager} from './story-photos.js';
 import {editCost} from './ai-edits.js';
 import {
   createEditor, designView, designToBlob, designToCanvas, configure, settings, reshapeItems, layoutList, layoutItems, icon, cleanDesign, hasMotion, playDesign, playTransition,
@@ -1093,7 +1094,7 @@ function openDesign(record, isNew) {
     el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' }),
     el('div', { class: 'cv-document-name' }, name, O.status),
     documentMenu([
-      ['자료 관리', historyButton(O), material, lesson, accountLibrary, share, co],
+      ['자료 관리', historyButton(O), O.record.story&&el('button',{class:'btn',type:'button',dataset:{storyPhotos:''},onClick:()=>openStoryPhotos(O)},'이야기 사진'), material, lesson, accountLibrary, share, co],
       ['화면 비율', shapes],
       ['도움말', tourButton('editor', O)],
     ]), el('span', { class: 'cv-bar-gap' }),
@@ -1830,6 +1831,11 @@ function openStoryMaker(){
   closeModal();openDesign(saved,false);toast('발화를 원문 그대로 연결했어요. 글·배치·사진을 고치고 발표해 보세요.',4500);
  }});
  openModal(maker.node,{wide:true,onClose:()=>maker.destroy()});maker.focus();
+}
+function openStoryPhotos(O){
+ if(!O.record.story||O.closed)return;
+ const host=assistHost(O),manager=createStoryPhotoManager({...host,slides:()=>currentSlides(O)});
+ openModal(manager.node,{wide:true,onClose:()=>manager.destroy()});
 }
 
 function openOutline(O) {
