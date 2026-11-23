@@ -1096,7 +1096,8 @@ function openDesign(record, isNew) {
       ['자료 관리', historyButton(O), material, lesson, accountLibrary, share, co],
       ['화면 비율', shapes],
       ['도움말', tourButton('editor', O)],
-    ]), el('span', { class: 'cv-bar-gap' }), show, down);
+    ]), el('span', { class: 'cv-bar-gap' }),
+    O.record.story&&el('button',{class:'btn cv-story-audit',type:'button',dataset:{storyAudit:''},onClick:()=>openModal(storyAuditView(O.record.story,currentSlides(O)),{wide:true})},'원고 대조'), show, down);
   // 들여쓰기 막대는 보통 막대 뒤에 만든다(이름 칸 · 저장 상태는 한 곳에만 놓일 수 있다).
   const embedHeader = embedBar ? el('header', { class: 'cv-bar cv-embed-bar' },
     el('span', { class: 'onba-editor-logo' }, onbatangLogo()), ...(embedBar.close ? [embedBar.close, el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' })] : []),
@@ -1442,7 +1443,6 @@ function renderStrip(O) {
       activityAuthoring&&appMaker&&el('button',{class:'btn cv-activity-add',type:'button',dataset:{addGaiApp:''},onClick:()=>configureGaiActivity(O)},gaiOwl(),'AI-G로 앱 만들기'),
       // AI-G 에게 개요를 부탁해 꾸민 장 여러 장을 만든다(개요로 장 만들기 창이 부탁 칸부터 열린다)
       activityAuthoring&&appMaker&&el('button',{class:'btn cv-activity-add',type:'button',dataset:{addGaiSlides:''},onClick:()=>openOutline(O)},gaiOwl(),'AI-G로 장 만들기'),
-      O.record.story&&el('button',{class:'btn cv-activity-add',type:'button',dataset:{storyAudit:''},onClick:()=>openModal(storyAuditView(O.record.story,currentSlides(O)),{wide:true})},'원고 대조'),
       el('button',{class:'btn cv-activity-add',type:'button',dataset:{importLessonResults:''},onClick:()=>importLessonResults(O)},'HTML 수업 결과 가져오기'),
       el('button',{class:'btn cv-activity-edit',type:'button',dataset:{editActivity:''},onClick:()=>configureActivity(O,true)},'활동 설정')));
   updateActivityTools(O);

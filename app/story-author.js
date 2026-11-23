@@ -9,7 +9,10 @@ export function createStoryAuthor({provider=null,draftKey,view,onCreate,onClose}
  const script=el('textarea',{'aria-label':'발표 원고',rows:7,maxLength:60000,placeholder:'읽을 원고를 붙여 넣어 주세요. 줄마다 한 발화로 연결합니다.'});
  const prompt=el('textarea',{'aria-label':'이야기 제작 의도',rows:2,maxLength:600,placeholder:'예: 교육가족에게 사람 중심 교육의 약속을 따뜻하고 품격 있게 전하고 싶어요.'});
  const selected=el('div',{class:'story-source-list'}),scenes=el('div',{class:'story-scene-list'});
- const selection=el('details',{},el('summary',{text:'읽을 문단 선택 · 제목·목차 제외'}),selected);
+ const selectRows=mode=>{if(!source)return;source.paragraphs.forEach((p,i)=>p.spoken=mode==='all'||(mode==='first'&&i<24));plan=null;before=null;render();save();};
+ const selection=el('details',{},el('summary',{text:'읽을 문단 선택 · 제목·목차 제외'}),el('div',{class:'story-actions'},
+  el('button',{class:'btn',type:'button',onClick:()=>selectRows('first')},'앞 24문단 선택'),
+  el('button',{class:'btn',type:'button',onClick:()=>selectRows('none')},'모두 제외')),selected);
  const count=el('p',{class:'cv-down-note'}),changes=el('div',{class:'story-changes'});
  const file=el('input',{type:'file',accept:'.hwpx,.txt,.md','aria-label':'원고 파일'});
  const fields=el('fieldset',{class:'story-fields'});

@@ -28,7 +28,7 @@ async function setup(t,engine){
  const pw=await import(pathToFileURL(process.env.MINICAN_PLAYWRIGHT_PATH).href),browser=await pw[engine].launch({...(engine==='chromium'?{channel:'msedge'}:{}),headless:true});t.after(()=>browser.close());
  const context=await browser.newContext({viewport:{width:1280,height:900},reducedMotion:'reduce'}),origin='http://127.0.0.1:'+server.address().port;
  await context.route('**/*',route=>route.request().url().startsWith(origin+'/')?route.continue():route.abort());
- await context.addInitScript(()=>localStorage.setItem('onbatang-tour-seen-v1:editor','1'));
+ await context.addInitScript(()=>{localStorage.setItem('onbatang-tour-seen-v1:editor','1');localStorage.setItem('onbatang-tour-seen-v1:news-0.45','1');});
  const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto(origin);await page.waitForFunction(()=>window.ready);
  return {page,errors};
 }
@@ -51,13 +51,20 @@ for(const engine of ['chromium','webkit'])test('story authoring → preserved sp
  await page.screenshot({path:fileURLToPath(new URL('../../qa-story/'+engine+'-desktop.png',import.meta.url))});
  for(const width of [390,320]){await page.setViewportSize({width,height:844});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));}
  await page.screenshot({path:fileURLToPath(new URL('../../qa-story/'+engine+'-mobile.png',import.meta.url))});await page.setViewportSize({width:1280,height:900});
- await page.locator('[data-story-create]').click();await page.locator('.cv-canvas .fe-stage').waitFor();
+ await page.locator('[data-story-create]').click();await page.locator('.cv-canvas .fe-stage').waitFor();await page.screenshot({path:fileURLToPath(new URL('../../qa-story/'+engine+'-editor.png',import.meta.url))});
  const saved=(await page.evaluate(()=>window.readSaved()))[0];assert.deepEqual(saved.slides.map(s=>s.notes),['첫 발화를 읽습니다.','둘째 발화입니다.','마지막 말씀입니다.']);assert.equal(saved.story.scenes[0].purpose,'검수용 제작 메모');
  await page.locator('[data-story-audit]').click();await page.getByText('선택한 원고와 발화·순서가 일치해요.',{exact:true}).waitFor();await page.locator('.modal-close').click();
  await page.locator('[data-assist-toggle]').click();assert.equal(await page.locator('[data-assist-want="notes"]').count(),0);
+ await page.locator('.cv-show-btn').click();await page.locator('.cv-show-stage .fe-card').waitFor();
+ assert.doesNotMatch(await page.locator('.cv-show-stage').innerText(),/검수용 제작 메모|첫 발화를 읽습니다/);
+ await page.keyboard.press('ArrowRight');await page.waitForFunction(()=>document.querySelector('.cv-show-count')?.textContent.includes('2'));
+ await page.keyboard.press('ArrowLeft');await page.waitForFunction(()=>document.querySelector('.cv-show-count')?.textContent.startsWith('1'));
+ await page.setViewportSize({width:390,height:844});assert.ok(await page.locator('.cv-show-stage').evaluate(el=>el.getBoundingClientRect().width<=innerWidth+1));
+ await page.screenshot({path:fileURLToPath(new URL('../../qa-story/'+engine+'-presentation.png',import.meta.url))});await page.keyboard.press('Escape');
  await page.reload();await page.waitForFunction(()=>window.ready);assert.deepEqual((await page.evaluate(()=>window.readSaved()))[0].story,saved.story);
  // Browser XML parser and ZIP reader preserve nested table paragraphs without duplication.
  const xml='<hs:sec xmlns:hs="hs" xmlns:hp="hp"><hp:p><hp:run><hp:t>첫 발화</hp:t><hp:tbl><hp:p><hp:run><hp:t>표 안의 발화</hp:t></hp:run></hp:p></hp:tbl></hp:run></hp:p></hs:sec>';
  const bytes=Array.from(zipSync({'Contents/section0.xml':strToU8(xml)}));assert.equal(await page.evaluate(async bytes=>window.readStoryFile(new File([new Uint8Array(bytes)],'test.hwpx')),bytes),'첫 발화\n표 안의 발화');
+ if(process.env.STORY_HWPX_PATH){const real=Array.from(await readFile(process.env.STORY_HWPX_PATH));const count=await page.evaluate(async bytes=>(await window.readStoryFile(new File([new Uint8Array(bytes)],'원고.hwpx'))).split('\n').length,real);assert.ok(count>=106);t.diagnostic('Provided HWPX: '+count+' nonempty paragraphs parsed. Spoken selection is an author decision.');}
  assert.deepEqual(errors,[]);
 });
