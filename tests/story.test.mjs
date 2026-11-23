@@ -34,6 +34,9 @@ test('audit catches authored note changes, missing cues, duplicated pages and or
  const changed=structuredClone(slides);changed[0].notes='다르게 읽기';assert.equal(auditStory(story,changed).changed.length,1);
  assert.equal(auditStory(story,slides.slice(1)).missing.length,1);
  assert.equal(auditStory(story,[...slides,slides[0]]).duplicate.length,1);
+ assert.equal(auditStory(story,[...slides,{...slides[0],id:'pcopied'}]).duplicate.length,1);
+ assert.equal(auditStory(story,[...slides,{id:'pnew',notes:'새로 쓴 발화',items:[]}]).unlinked.length,1);
+ const hidden=structuredClone(slides);hidden[0].hidden=true;assert.equal(auditStory(story,hidden).hidden.length,1);assert.equal(auditStory(story,hidden).passed,false);
  assert.equal(auditStory(story,slides.toReversed()).inOrder,false);
  assert.deepEqual(slides,original);
  const broken=structuredClone(story);broken.scenes[0].cues[0].pageId=broken.scenes[1].cues[0].pageId;assert.throws(()=>cleanStory(broken));

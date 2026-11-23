@@ -94,9 +94,9 @@ export function createStoryAuthor({provider=null,draftKey,view,onCreate,onClose}
 
 export function storyAuditView(story,slides){
  const audit=auditStory(story,slides),out=el('section',{class:'story-author','aria-label':'원고 대조'},el('h2',{text:'원고 대조 · 질문권 차감 없음'}));
- out.append(el('p',{text:`${audit.scenes}개 장면 · ${audit.cues}개 발화 · 기준 ${audit.paragraphs}문단`}),el('p',{role:'status',text:audit.passed?'선택한 원고와 발화·순서가 일치해요.':`누락 ${audit.missing.length} · 중복 ${audit.duplicate.length} · 원문과 다른 발화 ${audit.changed.length} · 순서 ${audit.inOrder?'일치':'확인 필요'}`}));
+ out.append(el('p',{text:`${audit.scenes}개 장면 · ${audit.cues}개 발화 · 기준 ${audit.paragraphs}문단`}),el('p',{role:'status',text:audit.passed?'선택한 원고와 발화·순서가 일치해요.':`누락 ${audit.missing.length} · 중복 ${audit.duplicate.length} · 원문과 다른 발화 ${audit.changed.length} · 원고 연결 없는 발화 ${audit.unlinked.length} · 숨긴 발화 ${audit.hidden.length} · 순서 ${audit.inOrder?'일치':'확인 필요'}`}));
  const names=new Map(story.scenes.flatMap(s=>s.cues.map((c,i)=>[c.pageId,`${s.title} / ${i+1}발화`])));
- for(const [label,ids]of [['누락',audit.missing],['중복',audit.duplicate],['원문과 다른 발화',audit.changed]])for(const id of ids)out.append(el('p',{text:`${label}: ${names.get(id)}`}));
+ for(const [label,ids]of [['누락',audit.missing],['중복',audit.duplicate],['원문과 다른 발화',audit.changed],['원고 연결 없는 발화',audit.unlinked],['숨긴 발화',audit.hidden]])for(const id of ids)out.append(el('p',{text:`${label}: ${names.get(id)||`${slides.findIndex(p=>p.id===id)+1}번째 장`}`}));
  out.append(el('details',{},el('summary',{text:'기준 원고와 장면 목적'}),...story.scenes.map(s=>el('section',{},el('h3',{text:s.title}),el('p',{text:s.purpose}),...s.paragraphs.map(id=>el('p',{class:'story-spoken',text:story.source.paragraphs.find(p=>p.id===id).text}))))));
  return out;
 }

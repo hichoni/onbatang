@@ -86,8 +86,10 @@ export function auditStory(raw,slides){
  const actual=slides.flatMap((p,index)=>byPage.has(p.id)?[{page:p,index,cue:byPage.get(p.id)}]:[]);
  const missing=expected.filter(c=>!actual.some(a=>a.cue.id===c.id)),duplicate=expected.filter(c=>actual.filter(a=>a.cue.id===c.id).length>1);
  const changed=actual.filter(a=>a.page.notes!==rows.find(p=>p.id===a.cue.paragraph).text);
+ const sourceText=new Set(rows.map(p=>p.text)),unbound=slides.filter(p=>!byPage.has(p.id)&&typeof p.notes==='string'&&p.notes.trim());
+ const repeated=unbound.filter(p=>sourceText.has(p.notes)),unlinked=unbound.filter(p=>!sourceText.has(p.notes)),hidden=actual.filter(a=>a.page.hidden);
  const ordered=actual.map(a=>a.cue.id),inOrder=ordered.length===expected.length&&ordered.every((id,i)=>id===expected[i].id);
- return {passed:!missing.length&&!duplicate.length&&!changed.length&&inOrder,paragraphs:rows.length,scenes:story.scenes.length,cues:expected.length,missing:missing.map(c=>c.pageId),duplicate:duplicate.map(c=>c.pageId),changed:changed.map(a=>a.page.id),inOrder};
+ return {passed:!missing.length&&!duplicate.length&&!changed.length&&!unbound.length&&!hidden.length&&inOrder,paragraphs:rows.length,scenes:story.scenes.length,cues:expected.length,missing:missing.map(c=>c.pageId),duplicate:[...duplicate.map(c=>c.pageId),...repeated.map(p=>p.id)],changed:changed.map(a=>a.page.id),unlinked:unlinked.map(p=>p.id),hidden:hidden.map(a=>a.page.id),inOrder};
 }
 export function copyStoryBindings(raw,pageIds){
  const story=cleanStory(raw);
