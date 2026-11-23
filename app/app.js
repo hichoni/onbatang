@@ -39,6 +39,7 @@ import { pollResultPage } from './poll-result.js';
 import {ONBATANG_VERSION} from './version.js';
 import {createGaiMaker,gaiLessonContext} from './gai-maker.js';
 import {createAiHelper} from './ai-helper.js';
+import {createStoryAuthor,storyAuditView} from './story-author.js';
 import {editCost} from './ai-edits.js';
 import {
   createEditor, designView, designToBlob, designToCanvas, configure, settings, reshapeItems, layoutList, layoutItems, icon, cleanDesign, hasMotion, playDesign, playTransition,
@@ -554,7 +555,8 @@ function render() {
     el('div', { class: 'cv-hero-text' },
       el('div', { class: 'cv-home-heading' }, title),
       el('p', { class: 'cv-hero-lead', text: '카드와 포스터, 수업 발표 자료를 만들어요.' }),
-      el('div', { class: 'cv-start-paths', role: 'group', 'aria-label': '자료 시작' }, start, imports,
+      el('div', { class: 'cv-start-paths', role: 'group', 'aria-label': '자료 시작' }, start,
+        el('button',{class:'btn',type:'button',disabled:loading||full,dataset:{storyStart:''},onClick:openStoryMaker},'원고로 이야기 만들기'), imports,
         linkManagerAction ? el('button', { class: 'btn cv-link-manager-btn', type: 'button', dataset: { linkManager: '' }, onClick: async event => {
           const button = event.currentTarget; button.disabled = true;
           try { await linkManagerAction.open({opener:button}); }
@@ -1238,6 +1240,7 @@ function toggleAssist(O, open = !O.shell.classList.contains('assist-open')) {
 function assistHost(O) {
   return {
     provider: appMaker,
+    preserveSpeech: !!O.record.story,
     // 여러 파트로 나뉜 자료(PPT 전체 자료 · 온바탕 파일의 묶음)는 모든 파트의 장을 쪽 차례대로 보여 준다(장 목록 띠와 같다)
     slides: () => assistPages(O)?.map((row) => row.page) || currentSlides(O),
     at: () => { const pages = assistPages(O); return pages ? Math.max(0, pages.findIndex((row) => row.record.id === O.record.id && row.index === O.at)) : O.at; },
@@ -1439,6 +1442,7 @@ function renderStrip(O) {
       activityAuthoring&&appMaker&&el('button',{class:'btn cv-activity-add',type:'button',dataset:{addGaiApp:''},onClick:()=>configureGaiActivity(O)},gaiOwl(),'AI-G로 앱 만들기'),
       // AI-G 에게 개요를 부탁해 꾸민 장 여러 장을 만든다(개요로 장 만들기 창이 부탁 칸부터 열린다)
       activityAuthoring&&appMaker&&el('button',{class:'btn cv-activity-add',type:'button',dataset:{addGaiSlides:''},onClick:()=>openOutline(O)},gaiOwl(),'AI-G로 장 만들기'),
+      O.record.story&&el('button',{class:'btn cv-activity-add',type:'button',dataset:{storyAudit:''},onClick:()=>openModal(storyAuditView(O.record.story,currentSlides(O)),{wide:true})},'원고 대조'),
       el('button',{class:'btn cv-activity-add',type:'button',dataset:{importLessonResults:''},onClick:()=>importLessonResults(O)},'HTML 수업 결과 가져오기'),
       el('button',{class:'btn cv-activity-edit',type:'button',dataset:{editActivity:''},onClick:()=>configureActivity(O,true)},'활동 설정')));
   updateActivityTools(O);
@@ -1816,6 +1820,18 @@ function openFindReplace(O) {
 // 개요로 장 만들기: 줄글 개요(제목 줄 · 들여 쓴 내용 줄 · > 노트)를 적으면 장마다 제목과 내용을 놓아 한꺼번에 만든다(outline.js).
 // 지금 장이 비어 있으면 그 장부터 채우고, 아니면 지금 장 뒤에 넣는다. 바탕 · 글꼴 · 움직임은 지금 장을 따른다.
 const OUTLINE_SAMPLE = '식물의 한살이\n  씨앗이 싹 터요\n  잎과 줄기가 자라요\n    햇빛을 받아 양분을 만들어요\n  꽃이 피고 열매를 맺어요\n> 씨앗을 직접 보여 주며 시작하기\n물의 순환\n  - 증발\n  - 구름\n  - 비\n정리해 볼까요?';
+function openStoryMaker(){
+ if(S.open||!S.list||moving||homeEntries(S.list).length>=MAX_DESIGNS)return;
+ setupApp('16:9');
+ const maker=createStoryAuthor({provider:activityAuthoring?appMaker:null,draftKey:storageName()+'.story-draft-v1',view:slide=>slideView(slide,16/9,360),onClose:closeModal,onCreate:async({title,story,slides})=>{
+  if(S.open||moving||homeEntries(S.list).length>=MAX_DESIGNS)throw Error('새 발표를 열 준비가 되지 않았어요. 잠시 뒤 다시 눌러 주세요.');
+  const record={...newRecord('16:9',nextNumber(S.list)),name:title,story,slides};
+  const saved=await putDesign(record);upsert(saved);if(accountFor(saved))pusher.queue(saved);
+  closeModal();openDesign(saved,false);toast('발화를 원문 그대로 연결했어요. 글·배치·사진을 고치고 발표해 보세요.',4500);
+ }});
+ openModal(maker.node,{wide:true,onClose:()=>maker.destroy()});maker.focus();
+}
+
 function openOutline(O) {
   if (O.closed || videoBusy(O) || O.inlineImport) return;
   const input = el('textarea', { class: 'cv-outline-input', rows: '11', 'aria-label': '개요', spellcheck: 'false', placeholder: `예)\n${OUTLINE_SAMPLE}` });

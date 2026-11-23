@@ -186,7 +186,7 @@ test('편집기 자체에는 인증·서버 API가 없고 GBE-AI Lab 연결 주�
     // SVG · XHTML 이름표(namespace)는 주소가 아니다(요청을 보내지 않는다).
     assert.doesNotMatch(allowed.replaceAll('http://www.w3.org/2000/svg', '').replaceAll('http://www.w3.org/1999/xhtml', ''), /https?:\/\//, `${f}: 바깥 주소`);
     assert.doesNotMatch(src, /firebase|firestore|tinkerlab|틴커랩|signInWithPassword|access_token|service_role/i, f);
-    for (const [, from] of src.matchAll(/from '([^']+)'/g)) assert.match(from, /^\.\/(?:pptx-import\/)?[\w-]+\.js$|^\.\.\/src\/[\w-]+\.js$/, `${f}: ${from}`);
+    for (const [, from] of src.matchAll(/from '([^']+)'/g)) assert.match(from, /^\.\/(?:pptx-import\/)?[\w-]+\.js$|^\.\.\/src\/[\w-]+\.js$|^\.\/vendor\/story-zip\.js$/, `${f}: ${from}`);
   }
   assert.doesNotMatch(readFileSync(APP + 'app.css', 'utf8'), /cv-team|cv-roster|cv-me\b|cv-adopt/);
 });

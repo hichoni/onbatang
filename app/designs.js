@@ -1,4 +1,5 @@
 import {flowFields,cleanMorphKey} from '../src/slide-flow.js';
+import {cleanStory,copyStoryBindings} from '../src/story.js';
 // 미니캔 앱의 규칙: 그림 한 편의 기록, 화면 비율, 이름, 차례, 내려받는 크기.
 // DOM·저장소를 쓰지 않는 순수 함수만 둔다. 디자인 그 자체({ bg, items })의 모양과 정리는 모듈(src/model.js)의 것을 쓴다.
 //
@@ -214,7 +215,7 @@ export function cleanRecord(raw) {
     source: { kind: 'local' }, ...metadata(r), assets: cleanAssets(r.assets), ...fileDeckOf(r.fileDeck),
     name: cleanName(r.name) || '이름 없는 그림',
     ratio: `${size.width}:${size.height}`,
-    slides,
+    slides, ...(r.story===undefined?{}:{story:cleanStory(r.story)}),
     uploads: libraryOf(r.uploads, slides),
     updatedAt: Number.isFinite(r.updatedAt) && r.updatedAt > 0 ? r.updatedAt : 0,
   };
@@ -236,9 +237,10 @@ export function migrateRecord(raw) {
 /** A copy has fresh identities; origin references describe where its content came from. */
 export function copyRecord(raw) {
   const r = migrateRecord(raw), id = newDesignId();
+  const pageIds=new Map(r.slides.map(p=>[p.id,newId('p')]));
   // 사본은 원래 묶음(fileDeck)에 끼지 않는다: 같은 파트 번호로 원본 묶음에 섞여 들어가지 않게.
-  return migrateRecord({ ...r, fileDeck: undefined, id, revision: 0, name: `${r.name} 복사`, origin: { documentId: r.id, revision: r.revision },
-    slides: r.slides.map(p => ({ ...p, id: newId('p'), ...(p.activity?{activity:{...p.activity,id:newId('a')}}:{}), origin: { documentId: r.id, pageId: p.id, revision: r.revision },
+  return migrateRecord({ ...r, ...(r.story?{story:copyStoryBindings(r.story,pageIds)}:{}),fileDeck: undefined, id, revision: 0, name: `${r.name} 복사`, origin: { documentId: r.id, revision: r.revision },
+    slides: r.slides.map(p => ({ ...p, id: pageIds.get(p.id), ...(p.activity?{activity:{...p.activity,id:newId('a')}}:{}), origin: { documentId: r.id, pageId: p.id, revision: r.revision },
       items: p.items.map(e => ({ ...e, id: newId(), origin: { documentId: r.id, pageId: p.id, elementId: e.id, revision: r.revision } })) })) });
 }
 

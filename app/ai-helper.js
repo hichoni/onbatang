@@ -20,9 +20,10 @@ const clip = (text, max) => { const all = Array.from(String(text ?? '')); return
 const message = (error, fallback) => (/\p{Script=Hangul}/u.test(error?.message || '') ? String(error.message).slice(0, 300) : fallback);
 
 export function createAiHelper(host) {
+  const choices = WANTS.filter(([id]) => !host.preserveSpeech || id !== 'notes');
   const provider = host.provider && typeof host.provider.connect === 'function' && typeof host.provider.generate === 'function' ? host.provider : null;
   const limit = EDIT_LIMITS.slides;
-  let scope = 'here', picked = new Set(), want = new Set(WANTS.map(([id]) => id)), asking = null, disposed = false, count = -1;
+  let scope = 'here', picked = new Set(), want = new Set(choices.map(([id]) => id)), asking = null, disposed = false, count = -1;
   const stops = new Set();
 
   // ---------- 범위 ----------
@@ -52,7 +53,7 @@ export function createAiHelper(host) {
   const chosen = () => (scope === 'pick' ? [...picked].sort((a, b) => a - b) : [host.at()]);
 
   // ---------- AI 부탁 ----------
-  const chips = el('div', { class: 'cv-assist-wants', role: 'group', 'aria-label': '다듬을 것' }, ...WANTS.map(([id, name]) => el('button', { class: 'btn chip', type: 'button', 'aria-pressed': 'true', dataset: { assistWant: id },
+  const chips = el('div', { class: 'cv-assist-wants', role: 'group', 'aria-label': '다듬을 것' }, ...choices.map(([id, name]) => el('button', { class: 'btn chip', type: 'button', 'aria-pressed': 'true', dataset: { assistWant: id },
     onClick: (e) => { if (want.has(id) && want.size > 1) want.delete(id); else want.add(id); for (const b of chips.children) b.setAttribute('aria-pressed', String(want.has(b.dataset.assistWant))); e.currentTarget.blur(); update(); } }, name)));
   const wish = el('textarea', { class: 'cv-assist-wish', rows: '2', maxlength: String(EDIT_LIMITS.prompt), 'aria-label': 'AI-G에게 덧붙일 말(쓰지 않아도 돼요)', placeholder: '덧붙일 말(쓰지 않아도 돼요). 예) 6학년이 읽기 쉽게, 움직임은 차분하게' });
   const shown = el('pre', { class: 'cv-assist-sent' });
@@ -243,7 +244,8 @@ export function createAiHelper(host) {
         { signal: controller.signal, onProgress: (progress) => { const text = typeof progress === 'string' ? progress : progress?.message; if (text && asking === controller) say(clip(text, 120)); } });
       if (controller.signal.aborted) throw new DOMException('', 'AbortError');
       if (answer?.kind !== 'slides' || !Array.isArray(answer.ops)) throw Error('AI-G의 답을 읽지 못했어요. 다시 부탁해 주세요.');
-      const checked = checkEdits(answer, ctx, { slides: base });
+      const safeAnswer = host.preserveSpeech ? {...answer, ops: answer.ops.map(op => {if(op?.op !== 'slide')return op;const {notes,...rest}=op;return rest;})} : answer;
+      const checked = checkEdits(safeAnswer, ctx, { slides: base });
       const note = [];
       if (ctx.cut.slides) note.push(`한 번에 ${limit}장까지라 ${ctx.cut.slides}장은 빼고 부탁했어요.`);
       if (ctx.cut.items) note.push(`조각이 많은 장은 꾸밈 ${ctx.cut.items}개를 빼고 보냈어요.`);

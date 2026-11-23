@@ -6,6 +6,7 @@
 import { zipBlob, readZip } from './zip.js';
 import { migrateRecord, isDesignId, newDesignId } from './designs.js';
 import { newId } from '../src/document.js';
+import {copyStoryBindings} from '../src/story.js';
 
 export const FILE_EXT = 'onbatang';
 export const FILE_TYPE = 'application/vnd.onbatang+zip';
@@ -121,7 +122,7 @@ export function freshCopy(file, { now = Date.now(), rand = Math.random } = {}) {
         ...(slide.activity ? { activity: { ...slide.activity, id: newId('a') } } : {}) };
     });
     // 사본은 파일 속 묶음(fileDeck)을 버린다: 이 기기의 원본 묶음에 섞이지 않게. 파일에 묶음(deck)이 있으면 연 쪽(app.js)이 새로 적는다.
-    return { ...input, id, slides, fileDeck: undefined, ...(fresh ? { source: { ...input.source, sourceDocumentId: fresh } } : {}) };
+    return { ...input, id, slides, ...(input.story?{story:copyStoryBindings(input.story,pages)}:{}), fileDeck: undefined, ...(fresh ? { source: { ...input.source, sourceDocumentId: fresh } } : {}) };
   });
   const deck = file.deck ? { ...file.deck, ...(file.deck.pageOrder ? { pageOrder: file.deck.pageOrder.map((id) => pages.get(id) || id) } : {}) } : null;
   return { ...file, records, deck };
