@@ -41,6 +41,7 @@ import {createGaiMaker,gaiLessonContext} from './gai-maker.js';
 import {createAiHelper} from './ai-helper.js';
 import {createStoryAuthor,storyAuditView} from './story-author.js';
 import {createStoryPhotoManager} from './story-photos.js';
+import {createStoryBoard} from './story-board.js';
 import {editCost} from './ai-edits.js';
 import {
   createEditor, designView, designToBlob, designToCanvas, configure, settings, reshapeItems, layoutList, layoutItems, icon, cleanDesign, hasMotion, playDesign, playTransition,
@@ -1098,6 +1099,7 @@ function openDesign(record, isNew) {
       ['화면 비율', shapes],
       ['도움말', tourButton('editor', O)],
     ]), el('span', { class: 'cv-bar-gap' }),
+    O.record.story&&el('button',{class:'btn',type:'button',dataset:{storyBoard:''},onClick:()=>openStoryBoard(O)},'이야기 작업실'),
     O.record.story&&el('button',{class:'btn cv-story-audit',type:'button',dataset:{storyAudit:''},onClick:()=>openModal(storyAuditView(O.record.story,currentSlides(O)),{wide:true})},'원고 대조'), show, down);
   // 들여쓰기 막대는 보통 막대 뒤에 만든다(이름 칸 · 저장 상태는 한 곳에만 놓일 수 있다).
   const embedHeader = embedBar ? el('header', { class: 'cv-bar cv-embed-bar' },
@@ -1836,6 +1838,15 @@ function openStoryPhotos(O){
  if(!O.record.story||O.closed)return;
  const host=assistHost(O),manager=createStoryPhotoManager({...host,slides:()=>currentSlides(O)});
  openModal(manager.node,{wide:true,onClose:()=>manager.destroy()});
+}
+function openStoryBoard(O){
+ if(!O.record.story||O.closed)return;
+ const host=assistHost(O),state=O.storyBoardState||={drafts:new Map()};
+ state.selected=O.record.story.scenes.flatMap(s=>s.cues).find(c=>c.pageId===O.slides[O.at]?.id)?.id||state.selected;
+ const board=createStoryBoard({...host,state,story:()=>O.record.story,slides:()=>currentSlides(O),
+  blocked:()=>host.blocked()||(O.materialDeck?'여러 파트로 나뉜 자료의 발화는 각 장의 발표자 노트에서 고쳐 주세요.':''),
+  edit:pageId=>{const i=O.slides.findIndex(p=>p.id===pageId);if(i<0)return;closeModal();goSlide(O,i);}});
+ openModal(board.node,{wide:true,onClose:()=>board.destroy()});
 }
 
 function openOutline(O) {

@@ -95,3 +95,59 @@ for(const engine of ['chromium','webkit'])test('story authoring → preserved sp
  if(process.env.STORY_HWPX_PATH){const real=Array.from(await readFile(process.env.STORY_HWPX_PATH));const count=await page.evaluate(async bytes=>(await window.readStoryFile(new File([new Uint8Array(bytes)],'원고.hwpx'))).split('\n').length,real);assert.ok(count>=106);t.diagnostic('Provided HWPX: '+count+' nonempty paragraphs parsed. Spoken selection is an author decision.');}
  assert.deepEqual(errors,[]);
 });
+
+for(const engine of ['chromium','webkit'])test('saved story workspace → compare speech → undo / '+engine,{skip:!process.env.MINICAN_PLAYWRIGHT_PATH,timeout:180000},async t=>{
+ const {page,errors}=await setup(t,engine);
+ await page.locator('[data-story-start]').click();await page.getByLabel('발표 원고',{exact:true}).fill('첫 발화를 읽습니다.\n둘째 발화입니다.\n마지막 말씀입니다.');
+ await page.locator('[data-story-read]').click();await page.getByRole('button',{name:'직접 구성 시작 · 차감 없음'}).click();
+ // Use a real image so preservation covers the photo path as well as text.
+ const png=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=80;c.height=60;const x=c.getContext('2d');x.fillStyle='#eba94c';x.fillRect(0,0,80,60);return c.toDataURL().split(',')[1];});
+ await page.getByLabel('2장면 사진 파일',{exact:true}).setInputFiles({name:'board.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});await page.locator('.story-photo-thumb').waitFor();
+ await page.locator('[data-story-create]').click();await page.locator('.cv-canvas .fe-stage').waitFor();
+ const saved=(await page.evaluate(()=>window.readSaved()))[0],original=saved.slides[1].notes;
+ const choose=async()=>{await page.locator('[data-story-board]').click();await page.locator('[data-story-cue]').nth(1).click();};
+ await choose();assert.equal(await page.locator('[data-story-cue]').count(),3);
+ assert.equal(await page.getByLabel('선택한 발화 수정',{exact:true}).inputValue(),original);await page.locator('.story-board-preview img').first().evaluate(img=>img.decode());
+ await page.locator('.modal-panel').evaluate(el=>el.scrollTop=0);await page.screenshot({path:fileURLToPath(new URL('../../qa-story/'+engine+'-board-overview.png',import.meta.url))});
+ await page.getByLabel('선택한 발화 수정',{exact:true}).fill('내가 직접 다듬은 둘째 발화입니다.');
+ await page.getByRole('button',{name:'수정 전후 비교',exact:true}).click();assert.equal((await page.evaluate(()=>window.readSaved()))[0].slides[1].notes,original);
+ await page.screenshot({path:fileURLToPath(new URL('../../qa-story/'+engine+'-board-desktop.png',import.meta.url))});
+ for(const width of [390,320]){await page.setViewportSize({width,height:844});const box=await page.locator('.modal-panel').evaluate(el=>({w:el.clientWidth,s:el.scrollWidth,l:el.getBoundingClientRect().left,r:el.getBoundingClientRect().right}));assert.ok(box.s<=box.w+1&&box.l>=0&&box.r<=width+1,JSON.stringify(box));await page.locator('.modal-panel').evaluate(el=>el.scrollTop=0);await page.screenshot({path:fileURLToPath(new URL('../../qa-story/'+engine+'-board-'+width+'.png',import.meta.url))});}
+ await page.setViewportSize({width:1280,height:900});
+ // Closing the dialog and changing cue must not lose in-editor drafts.
+ await page.locator('.modal-close').click();await choose();assert.equal(await page.getByLabel('선택한 발화 수정',{exact:true}).inputValue(),'내가 직접 다듬은 둘째 발화입니다.');
+ await page.getByRole('button',{name:'수정 전후 비교',exact:true}).click();await page.getByRole('button',{name:'이 발화에 적용 · 차감 없음',exact:true}).click();
+ let edited=await savedWhen(page,r=>r.slides[1].notes==='내가 직접 다듬은 둘째 발화입니다.');
+ const artwork=slides=>slides.map(s=>cleanDesign(s)).map(({notes,...rest})=>rest);assert.deepEqual(artwork(edited.slides),artwork(saved.slides));assert.deepEqual(edited.story,saved.story);
+ assert.match(await page.locator('[data-story-board-summary]').innerText(),/수정 1/);
+ await page.getByRole('button',{name:'마지막 발화 수정 되돌리기',exact:true}).click();await savedWhen(page,r=>r.slides[1].notes===original);assert.match(await page.locator('[data-story-board-summary]').innerText(),/원고와 발화·순서가 일치/);
+ // Empty cues are explicit and can be restored from the unchanged reference.
+ await page.getByLabel('선택한 발화 수정',{exact:true}).fill('');await page.getByRole('button',{name:'수정 전후 비교',exact:true}).click();await page.getByText('발화 없이 진행하는 단계로 바뀝니다. 비교한 뒤 적용해 주세요.',{exact:true}).waitFor();await page.getByRole('button',{name:'이 발화에 적용 · 차감 없음',exact:true}).click();await savedWhen(page,r=>!r.slides[1].notes);
+ await page.getByRole('button',{name:'기준 원고로 복원 준비',exact:true}).click();assert.equal((await page.evaluate(()=>window.readSaved()))[0].slides[1].notes,undefined);
+ await page.getByRole('button',{name:'수정 전후 비교',exact:true}).click();await page.getByRole('button',{name:'이 발화에 적용 · 차감 없음',exact:true}).click();await savedWhen(page,r=>r.slides[1].notes===original);
+ // Navigate to the bound native page, then return with that same cue selected.
+ await page.getByRole('button',{name:'이 화면의 글·사진·배치 편집',exact:true}).click();assert.equal(await page.getByLabel('발표자 노트',{exact:true}).inputValue(),original);
+ await page.locator('[data-story-board]').click();assert.equal(await page.getByLabel('선택한 발화 수정',{exact:true}).inputValue(),original);
+ await page.getByLabel('선택한 발화 수정',{exact:true}).fill('다시 열어도 남을 발화');await page.getByRole('button',{name:'수정 전후 비교',exact:true}).click();await page.getByRole('button',{name:'이 발화에 적용 · 차감 없음',exact:true}).click();await savedWhen(page,r=>r.slides[1].notes==='다시 열어도 남을 발화');await page.locator('.modal-close').click();
+ await page.reload();await page.waitForFunction(()=>window.ready);const reopened=(await page.evaluate(()=>window.readSaved()))[0];assert.equal(reopened.slides[1].notes,'다시 열어도 남을 발화');assert.deepEqual(reopened.story,saved.story);
+ await page.getByRole('button',{name:'나의 이야기 열기',exact:true}).click();await page.locator('[data-story-board]').click();await page.locator('[data-story-cue]').nth(1).click();assert.equal(await page.getByLabel('선택한 발화 수정',{exact:true}).inputValue(),'다시 열어도 남을 발화');
+ assert.equal((await page.evaluate(()=>window.requests||[])).length,0,'workspace edits never call AI');assert.deepEqual(errors,[]);
+});
+
+test('workspace refuses stale comparisons and out-of-order undo',{skip:!process.env.MINICAN_PLAYWRIGHT_PATH,timeout:90000},async t=>{
+ const {page,errors}=await setup(t,'chromium');
+ await page.evaluate(async()=>{
+  const {storySource,localStoryPlan,makeStory,storySlides}=await import('/src/story.js'),{createStoryBoard}=await import('/app/story-board.js');
+  const source=storySource('기준 원고'),story=makeStory(source,localStoryPlan(source));
+  const state=window.boardTest={story,slides:storySlides(story),calls:0,block:''};
+  const board=createStoryBoard({state:{drafts:new Map()},story:()=>state.story,slides:()=>state.slides,view:()=>document.createElement('div'),blocked:()=>state.block,apply:async next=>{state.calls++;state.slides=next;return {};},canUndo:()=>false,undo:()=>{throw Error('Out-of-order undo must not run');},edit:()=>{}});
+  document.body.replaceChildren(board.node);
+ });
+ await page.getByLabel('선택한 발화 수정',{exact:true}).fill('고칠 말');await page.getByRole('button',{name:'수정 전후 비교',exact:true}).click();
+ await page.evaluate(()=>window.boardTest.slides[0].notes='다른 편집의 발화');await page.getByRole('button',{name:'이 발화에 적용 · 차감 없음',exact:true}).click();await page.getByText('비교하는 동안 자료가 바뀌었어요. 다시 비교해 주세요.',{exact:true}).waitFor();assert.equal(await page.evaluate(()=>window.boardTest.calls),0);
+ await page.getByRole('button',{name:'수정 전후 비교',exact:true}).click();await page.getByText('수정 칸을 작성한 뒤 현재 발화가 바뀌었어요. 현재 발화 다시 읽기를 눌러 확인해 주세요.',{exact:true}).waitFor();
+ await page.getByRole('button',{name:'현재 발화 다시 읽기',exact:true}).click();assert.equal(await page.getByLabel('선택한 발화 수정',{exact:true}).inputValue(),'다른 편집의 발화');
+ await page.getByLabel('선택한 발화 수정',{exact:true}).fill('다시 비교한 말');await page.getByRole('button',{name:'수정 전후 비교',exact:true}).click();await page.evaluate(()=>window.boardTest.block='다른 작업이 진행 중입니다.');await page.getByRole('button',{name:'이 발화에 적용 · 차감 없음',exact:true}).click();await page.getByText('다른 작업이 진행 중입니다.',{exact:true}).waitFor();assert.equal(await page.evaluate(()=>window.boardTest.calls),0);
+ await page.evaluate(()=>window.boardTest.block='');await page.getByRole('button',{name:'수정 전후 비교',exact:true}).click();await page.getByRole('button',{name:'이 발화에 적용 · 차감 없음',exact:true}).click();assert.equal(await page.evaluate(()=>window.boardTest.calls),1);
+ await page.getByRole('button',{name:'마지막 발화 수정 되돌리기',exact:true}).click();await page.getByText('그 뒤에 편집한 내용이 있어요. 편집기의 실행 취소로 순서대로 되돌려 주세요.',{exact:true}).waitFor();assert.equal(await page.evaluate(()=>window.boardTest.slides[0].notes),'다시 비교한 말');assert.deepEqual(errors,[]);
+});
