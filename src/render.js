@@ -6,7 +6,7 @@ import { shapeAsset, shapeSvg } from './shapes.js';
 import { artSvg, loadArt, artReady } from './art.js';
 import { sceneView } from './scene.js';
 import { liveView, liveSeed, slideLook, itemLook, lookText, LIVE_STILL } from './live.js';
-import { ytThumb, ytEmbed, YT_ORIGIN } from './youtube.js';
+import { ytThumb, ytEmbed, ytCaptionsOff, YT_ORIGIN } from './youtube.js';
 import { linkSvg } from './links.js';
 import { runPieces } from './runs.js';
 import { webHost, blockedSite } from './web.js';
@@ -286,6 +286,31 @@ export function webCard(web) {
 export function youTubePlayers(root, { onState = () => {} } = {}) {
   return [...root.querySelectorAll('.fi-yt')].map((node) => ytPlayer(node, onState));
 }
+/**
+ * 조종기 없이 트는 유튜브 틀(꾸미기 판의 미리 보기)도 자막 '끄기'를 지키게 한다.
+ * 틀은 ytEmbed(…, { api: true }) 의 주소로 만든 것이어야 한다. 틀이 화면에서 사라지면 스스로 그만 듣는다.
+ */
+export function ytKeepCaptionsOff(frame) {
+  let heard = false, tries = 0, poll = 0;
+  const tell = (msg) => frame.contentWindow?.postMessage(JSON.stringify(msg), YT_ORIGIN);
+  const listen = () => tell({ event: 'listening', id: 1, channel: 'widget' });
+  const onMessage = (e) => {
+    if (!frame.isConnected) { clearInterval(poll); removeEventListener('message', onMessage); return; }
+    if (e.source !== frame.contentWindow || e.origin !== YT_ORIGIN) return;
+    let data = null;
+    try { data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; } catch { return; }
+    heard = true;
+    const off = ytCaptionsOff('', data?.event);
+    if (off) tell({ event: 'command', ...off });
+  };
+  frame.addEventListener('load', () => {
+    clearInterval(poll);
+    tries = 0;
+    listen();
+    poll = setInterval(() => { if (heard || ++tries > 40 || !frame.isConnected) clearInterval(poll); else listen(); }, 250);
+  });
+  addEventListener('message', onMessage);
+}
 function ytPlayer(node, onState) {
   const origin = /^https?:$/.test(location.protocol) ? location.origin : '';
   const frame = el('iframe', {
@@ -319,6 +344,9 @@ function ytPlayer(node, onState) {
     try { data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; } catch { return; }
     if (!data || typeof data !== 'object') return;
     if (!ready) { ready = true; clearInterval(poll); if (wanted) send(wanted); wanted = ''; }
+    // 자막 '끄기'(기본): 유튜브가 기억해 둔 자막을 알아서 켜지 않게 끈다.
+    const off = ytCaptionsOff(node.dataset.cc, data.event);
+    if (off) send(off.func, off.args);
     const next = data.info?.playerState ?? (data.event === 'onStateChange' ? data.info : undefined);
     if (typeof next === 'number' && next !== state) {
       state = next;

@@ -14,7 +14,7 @@ import {
 import { ENTERS, COMBOS, TRANSITIONS, EMPHASES, IDLES, EXITS, SPEEDS, DELAYS, STILL, planMotion, playEnter, playEmphasis, playExit, playIdle, playDesign, playTransition, morphs, enterTime, emphasisTime, exitTime } from './motion.js';
 import { searchStickers } from './stickers.js';
 import { ART_PACKS, artSvg, artColorable, artReady, loadArt, searchArt } from './art.js';
-import { designView, itemView, placeItem, paintCard, shapeThumb, webCard } from './render.js';
+import { designView, itemView, placeItem, paintCard, shapeThumb, webCard, ytKeepCaptionsOff } from './render.js';
 import { designWeb, embedOf, blockedSite, isYouTubePage, webHost } from './web.js';
 import { styleRuns, runsAll, dropRunKey, shiftRuns } from './runs.js';
 import { CHART_KINDS } from './chart.js';
@@ -4612,10 +4612,16 @@ export function createEditor({
     url.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); swap(); } });
     // 여기서 미리 보기: 고른 시작 · 끝 · 자막으로 이 칸 안에서 틀어 본다(누를 때만 유튜브를 부른다).
     const preview = el('div', { class: 'fe-yt-preview' });
-    const showPreview = () => preview.replaceChildren(el('iframe', {
-      class: 'fe-yt-preview-frame', title: '유튜브 미리 보기', src: `${ytEmbed(it.yt, { start: it.start || 0, end: it.end || 0, cc: it.cc || '' })}&autoplay=1`,
-      allow: 'autoplay; encrypted-media; picture-in-picture; fullscreen', allowfullscreen: true, referrerpolicy: 'strict-origin-when-cross-origin',
-    }), pbtn('미리 보기 닫기', () => preview.replaceChildren(), { class: 'fe-btn fe-yt-preview-close' }));
+    const showPreview = () => {
+      // 자막 '끄기'면 유튜브가 기억해 둔 자막을 알아서 켜지 않게 끄는 신호를 보낸다(그래서 신호를 받는 주소로 연다).
+      const frame = el('iframe', {
+        class: 'fe-yt-preview-frame', title: '유튜브 미리 보기',
+        src: `${ytEmbed(it.yt, { start: it.start || 0, end: it.end || 0, cc: it.cc || '', api: !it.cc, origin: /^https?:$/.test(location.protocol) ? location.origin : '' })}&autoplay=1`,
+        allow: 'autoplay; encrypted-media; picture-in-picture; fullscreen', allowfullscreen: true, referrerpolicy: 'strict-origin-when-cross-origin',
+      });
+      if (!it.cc) ytKeepCaptionsOff(frame);
+      preview.replaceChildren(frame, pbtn('미리 보기 닫기', () => preview.replaceChildren(), { class: 'fe-btn fe-yt-preview-close' }));
+    };
     const input = el('input', { class: 'fe-search fe-yt-start', type: 'text', inputmode: 'numeric', value: it.start ? ytTime(it.start) : '', placeholder: '0:00', 'aria-label': '시작 시각' });
     const endInput = el('input', { class: 'fe-search fe-yt-end', type: 'text', inputmode: 'numeric', value: it.end ? ytTime(it.end) : '', placeholder: '끝까지', 'aria-label': '끝 시각' });
     const apply = () => change({ start: ytStart(input.value) });
