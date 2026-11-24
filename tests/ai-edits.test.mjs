@@ -41,8 +41,8 @@ test('the request carries text, layout and current motion under short keys, neve
   const [page] = ctx.request.slides;
   assert.deepEqual([page.key, page.no, page.topic, page.dark, page.tr, page.notes], ['p1', 1, '1부', false, 'slide', '먼저 물어봅니다.']);
   assert.deepEqual(page.items.map(it => it.key), ['p1.1', 'p1.2', 'p1.3', 'p1.4', 'p1.5', 'p1.6', 'p1.7', 'p1.8', 'p1.9']);
-  assert.deepEqual(page.items[1], {key: 'p1.2', t: 'text', role: 'title', x: 50, y: 17, w: 86, text: '검색, 검색, 검색', size: 4.4, align: 'l'});
-  assert.deepEqual(page.items[6], {key: 'p1.7', t: 'image', role: 'photo', x: 72, y: 55, w: 30, h: 34, alt: '특허 검색 화면'});
+  assert.deepEqual(page.items[1], {key: 'p1.2', t: 'text', role: 'title', x: 50, y: 17, w: 86, text: '검색, 검색, 검색', size: 4.4, align: 'l',color:'#121a3a',rot:0,op:100});
+  assert.deepEqual(page.items[6], {key: 'p1.7', t: 'image', role: 'photo', x: 72, y: 55, w: 30, h: 34, alt: '특허 검색 화면',rot:0,op:100});
   assert.deepEqual(ctx.request.around, [{no: 2, title: '다음 장의 제목'}]);
   assert.deepEqual(ctx.find('p1.4'), {slide: 0, item: 3});
   assert.deepEqual(ctx.find('p1'), {slide: 0});

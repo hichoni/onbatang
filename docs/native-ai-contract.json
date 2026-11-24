@@ -1,0 +1,23 @@
+{
+  "version": "0.166.0",
+  "date": "2026-11-25",
+  "engine": "온바",
+  "entry": "Existing editor AI-G sidebar (createAiHelper). The home shortcut opens a blank native editor and this same panel.",
+  "hostRequirement": "activityAuthoring=true and an authorized appMaker; public standalone does not enable AI",
+  "result": "task:compose returns exactly 1–24 page operations, converted to ordinary native slides; no HTML or web item",
+  "elements": [
+    "editable text",
+    "native shapes",
+    "up to 3 supplied photo references"
+  ],
+  "coordinates": "x/w percent of width; y/h percent of height; text size percent of width. Composition requests use the current document aspect, including portrait.",
+  "editing": "Create 1–24 slides in the same sidebar; fill an empty page or insert after content. Add/remove native text/shapes/supplied photos; replace supplied photos while retaining identity/motion; style including local font and background; text/motion/speech edits. Preview, per-operation selection, single-step undo, save/reopen, stale and account guards.",
+  "privacy": "AI receives photo descriptions/aspects, not photo pixels. Speech notes contain speech only. Host owns auth, queue, quota and account sync.",
+  "verification": "Native unit and Chromium/WebKit mock-provider browser tests cover integrated 17-page creation, draft resume with no second call, generation undo/redo, additions/deletions, selected edits, manual text, save/reopen and 17-page presentation.",
+  "notVerified": [
+    "actual AI-generated design quality",
+    "live account sync on new native flow",
+    "physical iPhone Safari"
+  ],
+  "hostActivation": "Deploy matching composition/style/element contracts to the actual AI worker and Edge before enabling GAILAB_ONBA_NATIVE_AUTHORING. Real AI quality, paid live account flow and iPhone device verification remain pending."
+}

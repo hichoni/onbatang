@@ -117,7 +117,7 @@ test('AI-G polishes the current slide: text and layout go out, the answer is pre
   assert.equal(asked.length, 1);
   const sent = JSON.stringify(asked[0]);
   assert.ok(!sent.includes('base64') && !sent.includes('data:image'), 'no picture data in the request');
-  assert.deepEqual([asked[0].kind, asked[0].task, asked[0].want, asked[0].prompt, asked[0].slides.length, asked[0].deck.count], ['slides', 'polish', ['text', 'motion', 'notes'], '6학년이 읽기 쉽게', 1, 3]);
+  assert.deepEqual([asked[0].kind, asked[0].task, asked[0].want, asked[0].prompt, asked[0].slides.length, asked[0].deck.count], ['slides', 'polish', ['text', 'layout', 'elements', 'motion', 'notes'], '6학년이 읽기 쉽게', 1, 3]);
   assert.deepEqual(asked[0].slides[0].items.map(i => i.role), ['title', 'number', 'arrow', 'photo', 'closing']);
   assert.deepEqual(asked[0].around, [{no: 2, title: '둘째 장'}]);
   assert.ok(asked[0].catalog.enter.some(([id]) => id === 'stomp'));
@@ -133,7 +133,7 @@ test('AI-G polishes the current slide: text and layout go out, the answer is pre
   assert.match(await card.locator('.cv-assist-note').textContent(), /지시 3개는 온바탕이 쓸 수 없는 것이라 뺐어요/);
   assert.match(await card.locator('.cv-assist-tail').textContent(), /질문권 1회 사용/);
   assert.equal(await card.locator('.cv-assist-actions').textContent(), '움직임 보기적용버리기질문권 1회 사용 · 오늘 9회 남음');
-  assert.equal(await panel.locator('.cv-assist-bubble.me').textContent(), '1장 · 글 · 움직임 · 발표자 노트\n6학년이 읽기 쉽게');
+  assert.equal(await panel.locator('.cv-assist-bubble.me').textContent(), '1장 · 글 · 배치·디자인 · 요소 추가·삭제 · 움직임 · 발표자 노트\n6학년이 읽기 쉽게');
   await shot(page, 'preview');
   await page.waitForTimeout(1200);
   assert.deepEqual(core(await page.evaluate(() => window.readSaved())), core(before), 'only a preview so far');
@@ -178,7 +178,7 @@ test('several chosen slides go in one request and come back as one undo step; a 
   const card = panel.locator('[data-assist-card]').last();
   await card.waitFor();
   const asked = await page.evaluate(() => window.asked);
-  assert.deepEqual([asked[0].slides.map(s => s.no), asked[0].want, asked[0].around], [[1, 2, 3], ['motion', 'notes'], []]);
+  assert.deepEqual([asked[0].slides.map(s => s.no), asked[0].want, asked[0].around], [[1, 2, 3], ['layout', 'elements', 'motion', 'notes'], []]);
   assert.equal(await card.locator('.cv-assist-count').textContent(), '바꿀 것 6가지 · 3장');
   await card.locator('[data-assist-apply]').click();
   await saved(page, r => r.slides[2].tr === 'zoomblur' && r.slides[0].items[1].an === 'stomp');
