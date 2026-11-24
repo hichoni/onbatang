@@ -1666,3 +1666,21 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero{overflow:visible;z
 .onba-compose-photo{display:grid;grid-template-columns:64px 1fr auto;gap:8px;align-items:center;margin:10px 0}
 .onba-compose-photo img{width:64px;height:64px;object-fit:contain}
 @media(max-width:760px){.onba-compose-columns{grid-template-columns:1fr}.onba-compose-previews{max-height:none;grid-template-columns:1fr}.onba-compose-photo{grid-template-columns:48px 1fr}.onba-compose-photo img{width:48px;height:48px}}
+
+/* The native AI-G sidebar owns creation and editing; no separate studio surface. */
+.cv-assist-modes{display:flex;gap:8px;position:sticky;top:0;z-index:2;background:var(--cv-paper,#fffdf7);padding:6px 0 12px}
+.cv-assist-modes .btn{flex:1;white-space:normal}
+.cv-assist-modes [aria-pressed=true]{background:var(--cv-accent,#28786a);color:#fff}
+.onba-compose-inline{margin:0;min-width:0}
+.onba-compose-inline h2{font-size:1.15em;margin:4px 0 12px}
+.onba-compose-inline .onba-compose-columns{display:flex;flex-direction:column;gap:18px}
+.onba-compose-inline .onba-compose-columns>*,.onba-compose-inline .story-actions{width:100%;min-width:0}
+.onba-compose-inline .onba-compose-previews{grid-template-columns:1fr;max-height:55vh}
+.onba-compose-inline .story-actions{display:grid;gap:8px;margin-top:12px}
+.cv-assist-photos input{font:inherit;max-width:100%;min-width:0}
+.cv-assist-photos summary{cursor:pointer;padding:8px 0}
+.cv-assist-photos .onba-compose-photo{grid-template-columns:48px minmax(0,1fr) auto}
+.cv-assist-photos .onba-compose-photo img{width:48px;height:48px}
+.cv-assist-body [hidden]{display:none!important}
+
+.onba-compose-inline .story-actions{position:sticky;bottom:0;z-index:1;background:var(--cv-paper,#fffdf7);padding:12px 0 4px;border-top:1px solid var(--cv-line,#d9e2dd)}

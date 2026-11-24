@@ -22,19 +22,13 @@ export function cleanComposeRequest(input){
  if(new Set(fontRows.map(f=>f[0])).size!==fontRows.length)bad('글꼴 이름이 겹쳐요.');
  const photos=(input.photos??[]);if(!Array.isArray(photos)||photos.length>COMPOSE_LIMITS.photos)bad('사진은 세 장까지 골라주세요.');
  const seen=new Set(),photoRows=photos.map(p=>{if(!obj(p)||!/^photo[1-3]$/.test(p.id)||seen.has(p.id))bad('사진 연결을 확인해주세요.');seen.add(p.id);return {id:p.id,alt:word(p.alt,160,'사진 설명'),aspect:number(p.aspect,.1,10,'사진 비율')};});
- return {kind:'slides',task:'compose',prompt,count,reference,fonts:fontRows,photos:photoRows};
+ const rawAspect=input.aspect??16/9;if(!Number.isFinite(rawAspect)||rawAspect<.3||rawAspect>3)bad('화면 비율을 확인해주세요.');const aspect=Math.round(rawAspect*100000)/100000;
+ return {kind:'slides',task:'compose',prompt,count,reference,fonts:fontRows,photos:photoRows,aspect};
 }
 function effect(raw,key){if(raw[key]===undefined)return {};if(raw[key]==='none'&&['an','lp'].includes(key))return {[key]:'none'};if(!motion[key].some(m=>m.id===raw[key]))bad('온바탕에 없는 움직임이에요.');return {[key]:raw[key]};}
-export function validateComposition(value,input){
- const request=cleanComposeRequest(input);
- if(!obj(value)||!Array.isArray(value.ops)||value.ops.length!==request.count)bad(`요청한 ${request.count}장이 모두 있어야 해요. 기존 발표는 그대로 유지됩니다.`);
- if(new TextEncoder().encode(JSON.stringify(value)).length>COMPOSE_LIMITS.bytes)bad('만든 발표 데이터가 너무 커요.');
- const say=word(value.say,600,'제작 설명',true),title=word(value.title,60,'발표 제목'),fonts=new Set(request.fonts.map(f=>f[0])),photos=new Set(request.photos.map(p=>p.id));
- const ops=value.ops.map((page,index)=>{
-  if(!obj(page)||page.op!=='page'||!hex(page.bg)||!Array.isArray(page.items)||page.items.length<1||page.items.length>COMPOSE_LIMITS.items)bad(`${index+1}장의 요소를 확인해주세요.`);
-  const topic=word(page.title,60,'장 제목'),notes=word(page.notes,COMPOSE_LIMITS.notes,'발표자 원고',true);
-  const shares=new Set();
-  const items=page.items.map(raw=>{
+/** Shared whitelist for complete decks and individual element additions. */
+export function validateNativeItem(raw,request,shares=new Set()){
+ const fonts=new Set((request.fonts||[['gothic','기본']]).map(f=>f[0])),photos=new Set((request.photos||[]).map(p=>p.id));
    if(!obj(raw)||!['text','shape','image'].includes(raw.t))bad('온바탕의 글·도형·사진으로 구성해주세요.');
    const it={t:raw.t,x:number(raw.x,0,100,'가로 위치'),y:number(raw.y,0,100,'세로 위치'),w:number(raw.w,raw.t==='text'?10:raw.t==='image'?5:2,100,'너비')};
    if(raw.rot!==undefined)it.rot=number(raw.rot,-180,180,'회전');
@@ -48,7 +42,7 @@ export function validateComposition(value,input){
     it.text=word(raw.text,COMPOSE_LIMITS.text,'화면 글');it.size=number(raw.size,1.8,18,'글자 크기');
     if(!hex(raw.color))bad('글자 색을 확인해주세요.');it.color=raw.color;
     it.align=raw.align??'l';if(!['l','c','r'].includes(it.align))bad('글자 정렬을 확인해주세요.');
-    it.font=raw.font??request.fonts[0][0];if(!fonts.has(it.font))bad('온바탕에 없는 글꼴이에요.');
+    it.font=raw.font??(request.fonts?.[0]?.[0]||'gothic');if(!fonts.has(it.font))bad('온바탕에 없는 글꼴이에요.');
     if(raw.bold!==undefined){if(typeof raw.bold!=='boolean')bad('글자 굵기를 확인해주세요.');it.bold=raw.bold;}
     it.lh=raw.lh===undefined?1.2:number(raw.lh,1,1.6,'줄 간격');
     if(it.x-it.w/2<-.01||it.x+it.w/2>100.01)bad('글상자가 장의 가로 범위를 벗어났어요.');
@@ -63,6 +57,18 @@ export function validateComposition(value,input){
     }else{if(!photos.has(raw.asset))bad('첨부하지 않은 사진은 만들 수 없어요.');it.asset=raw.asset;}
    }
    return it;
+}
+export function validateComposition(value,input){
+ const request=cleanComposeRequest(input);
+ if(!obj(value)||!Array.isArray(value.ops)||value.ops.length!==request.count)bad(`요청한 ${request.count}장이 모두 있어야 해요. 기존 발표는 그대로 유지됩니다.`);
+ if(new TextEncoder().encode(JSON.stringify(value)).length>COMPOSE_LIMITS.bytes)bad('만든 발표 데이터가 너무 커요.');
+ const say=word(value.say,600,'제작 설명',true),title=word(value.title,60,'발표 제목');
+ const ops=value.ops.map((page,index)=>{
+  if(!obj(page)||page.op!=='page'||!hex(page.bg)||!Array.isArray(page.items)||page.items.length<1||page.items.length>COMPOSE_LIMITS.items)bad(`${index+1}장의 요소를 확인해주세요.`);
+  const topic=word(page.title,60,'장 제목'),notes=word(page.notes,COMPOSE_LIMITS.notes,'발표자 원고',true);
+  const shares=new Set();
+  const items=page.items.map(raw=>{
+   return validateNativeItem(raw,request,shares);
   });
   if(!items.some(it=>it.t==='text'&&it.text.trim()))bad(`${index+1}장에 읽을 수 있는 제목이나 문구가 없어요.`);
   if(!items.some(it=>it.t==='text'&&!it.aw))bad(`${index+1}장의 모든 글이 클릭 뒤에 숨겨져 있어요. 첫 문구는 바로 보여야 해요.`);

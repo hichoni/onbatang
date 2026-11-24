@@ -41,7 +41,7 @@ import {ONBATANG_VERSION} from './version.js';
 import {createGaiMaker,gaiLessonContext} from './gai-maker.js';
 import {createAiHelper} from './ai-helper.js';
 import {createStoryAuthor,storyAuditView} from './story-author.js';
-import {createAiCompose} from './ai-compose.js';
+import {emptyAiPage,insertAiPages} from './ai-insert.js';
 import {createStoryPhotoManager} from './story-photos.js';
 import {createStoryBoard} from './story-board.js';
 import {editCost} from './ai-edits.js';
@@ -1249,8 +1249,9 @@ function toggleAssist(O, open = !O.shell.classList.contains('assist-open')) {
   if (open) O.assist.focus(); else if (O.assistBox.contains(document.activeElement)) button?.focus({ preventScroll: true });
 }
 function assistHost(O) {
-  return {
+  const host = {
     provider: appMaker,
+    draftKey:storageName()+'.native-helper-v1.'+O.record.id,
     selectedId:()=>O.editor.selectedId(),
     preserveSpeech: !!O.record.story,
     // 여러 파트로 나뉜 자료(PPT 전체 자료 · 온바탕 파일의 묶음)는 모든 파트의 장을 쪽 차례대로 보여 준다(장 목록 띠와 같다)
@@ -1273,6 +1274,20 @@ function assistHost(O) {
     cost: (count) => `질문권 ${editCost(count)}회`,
     close: () => toggleAssist(O, false),
   };
+  if(activityAuthoring&&appMaker)host.compose={
+    draftChanged:()=>{O.aiDraft=true;touched(O);},
+    blocked:()=>host.blocked()||(O.materialDeck?'여러 파트로 된 자료는 새 발표에서 장을 만든 뒤 가져와 주세요.':O.record.story?'원고와 발화가 연결된 발표는 장을 자동 추가할 수 없어요. 요소 추가·수정은 그대로 쓸 수 있어요.':''),
+    destination:()=>emptyAiPage(currentSlides(O)[O.at])?`비어 있는 ${O.at+1}장부터 채워요. 적용 뒤에도 글·도형·사진을 직접 고칠 수 있어요.`:`지금 ${O.at+1}장 뒤에 새 장을 넣어요. 기존 장과 원고는 그대로 두어요.`,
+    capture:request=>{const base=structuredClone(currentSlides(O));if(base.length+request.count-(emptyAiPage(base[O.at])?1:0)>MAX_SLIDES)throw Error(`한 발표에는 ${MAX_SLIDES}장까지 넣을 수 있어요.`);return {base,at:O.at,doc:O.record.id,storage:storageName(),ratio:O.record.ratio};},
+    apply:async({title,slides,context})=>{
+      const why=host.compose.blocked();if(why)throw Error(why);
+      if(!context||context.doc!==O.record.id||context.storage!==storageName()||context.ratio!==O.record.ratio)throw Error('생성할 때의 발표와 계정을 다시 확인해 주세요.');
+      const before=deckState(O),after=insertAiPages(before.slides,context.base,context.at,slides,MAX_SLIDES);
+      if(before.slides.length===1&&emptyAiPage(before.slides[0])){before.name=O.record.name;after.name=title.slice(0,MAX_NAME);}
+      const entry={t:'deck',doc:O.record.id,before,after};noteUndo(O,entry);applyDeck(O,after);return entry;
+    }
+  };
+  return host;
 }
 /** 도우미가 보는 장들: 여러 파트로 나뉜 자료이면 모든 파트의 쪽(쪽 차례대로. { record, page, index }), 아니면 null(지금 그림의 장들). */
 function assistPages(O) {
@@ -1833,14 +1848,8 @@ function openFindReplace(O) {
 const OUTLINE_SAMPLE = '식물의 한살이\n  씨앗이 싹 터요\n  잎과 줄기가 자라요\n    햇빛을 받아 양분을 만들어요\n  꽃이 피고 열매를 맺어요\n> 씨앗을 직접 보여 주며 시작하기\n물의 순환\n  - 증발\n  - 구름\n  - 비\n정리해 볼까요?';
 function openNativeCompose(){
  if(!activityAuthoring||!appMaker||S.open||!S.list||moving||homeEntries(S.list).length>=MAX_DESIGNS)return;
- setupApp('16:9');const storage=storageName();
- const maker=createAiCompose({provider:appMaker,draftKey:storage+'.native-compose-v1',view:slide=>slideView(slide,16/9,360),onClose:closeModal,onCreate:async({title,slides})=>{
-  if(storageName()!==storage||S.open||moving||homeEntries(S.list).length>=MAX_DESIGNS)throw Error('저장할 계정과 발표 목록을 다시 확인해 주세요.');
-  const record={...newRecord('16:9',nextNumber(S.list)),name:title,slides};
-  const saved=await putDesign(record);upsert(saved);if(accountFor(saved))pusher.queue(saved);
-  closeModal();openDesign(saved,false);toast('각 장의 글·사진·도형을 눌러 고쳐 보세요. AI 도우미로 배치와 움직임도 다듬을 수 있어요.',4500);
- }});
- openModal(maker.node,{wide:true,onClose:()=>maker.destroy()});maker.focus();
+ openDesign(newRecord('16:9',nextNumber(S.list)),true);
+ if(S.open)toggleAssist(S.open,true);
 }
 function openStoryMaker(){
  if(S.open||!S.list||moving||homeEntries(S.list).length>=MAX_DESIGNS)return;
@@ -2148,6 +2157,7 @@ function patchSlideKept(O, patch) {
 }
 function applyDeck(O, state) {
   keepStack(O);
+  if(state.name!==undefined){O.record.name=state.name;O.nameInput.value=state.name;}
   O.slides = state.slides.slice();
   O.at = Math.max(0, Math.min(state.at, O.slides.length - 1));
   showSlide(O);
@@ -3304,7 +3314,7 @@ async function save(O, { preserveBlank = false, leaving = false } = {}) {
   // 올린 파일 목록도 함께 적는다(편집기가 들고 있는 목록 + 다른 장에서 쓰는 사진).
   const record = { ...O.record, revision: ++O.record.revision, slides, uploads: libraryOf(O.editor.getUploads().map((u) => u.url), slides), updatedAt: Date.now(), synced: false };
   // 아직 아무것도 놓지 않은 새 그림은 저장하지 않는다(빈 그림이 목록에 쌓이지 않게).
-  if (!preserveBlank && !O.saved && isBlank(record)) { O.dirty = false; setStatus(O, '꾸미기 시작하면 저절로 저장돼요'); return true; }
+  if (!preserveBlank && !O.aiDraft && !O.saved && isBlank(record)) { O.dirty = false; setStatus(O, '꾸미기 시작하면 저절로 저장돼요'); return true; }
   O.dirty = false;
   // 창을 떠나는 중이면 이 기기의 저장소(IndexedDB)가 쓰기를 마치기 전에 창이 사라질 수 있다.
   // 그래서 곧바로 적히는 localStorage 에도 임시본을 남기고, 다음에 열 때 더 새것이면 되살린다(recoverDrafts).

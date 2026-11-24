@@ -9,11 +9,12 @@
 //   { op: 'move',  items: [...], step?, … }                  여러 조각을 같은 움직임으로, 차례대로 step 초씩 늦춰서(한 줄의 카드 · 사진)
 //   { op: 'slide', slide, tr?, pa?, topic?, notes? }         장의 전환 · 조합 효과 · 주제 · 발표자 노트
 // item · slide 는 요청마다 새로 붙이는 짧은 이름표(p1, p1.3)다. 저장된 이름표가 없는 그림에서도 쓸 수 있다.
-import { cleanItem, itemLabel, textLimit } from '../src/model.js';
+import { cleanItem, itemLabel, textLimit, settings } from '../src/model.js';
 import { ENTERS, IDLES, EMPHASES, EXITS, TRANSITIONS, COMBOS, SPEEDS, STILL, DELAY_MAX } from '../src/motion.js';
-import { cleanNotes, cleanTopic } from '../src/document.js';
+import { cleanNotes, cleanTopic, newId } from '../src/document.js';
 import { cleanRuns } from '../src/runs.js';
 import {stylePatch} from '../src/ai-style.js';
+import {validateNativeItem} from '../src/ai-compose.js';
 
 /** 한 번의 부탁이 감당하는 크기. slides(한 번에 다듬는 장 수)는 질문권 1회(중앙 제작 서버의 작업 1건)의 한계를 재서 정한 값이다(docs/ai-helper-2026-11-11.md §3).
  * ops 는 여러 조각을 묶은 지시를 조각마다로 편 뒤의 수다(24장에 550개쯤 나온다). */
@@ -141,7 +142,7 @@ const WEIGHT = { title: 0, kicker: 0, number: 0, 'section-number': 0, closing: 0
  * 돌려주는 것: { request: { deck, slides, around }, picks(실제로 담긴 장 번호), find(key) → { slide, item? }, keyOf(slide, item?) → key,
  *               stale(slides) → 그 사이 바뀐 장 번호들, locked(key) → 글을 못 바꾸는 조각인지, cut: { slides, items } }
  */
-export function editContext(slides, picks, { title = '', aspect = 16 / 9, limits = EDIT_LIMITS, selectedIds = null } = {}) {
+export function editContext(slides, picks, { title = '', aspect = 16 / 9, limits = EDIT_LIMITS, selectedIds = null, fonts=null, photos=[] } = {}) {
   const list = Array.isArray(slides) ? slides : [];
   let chosen = [...new Set((Array.isArray(picks) ? picks : [picks]).filter((i) => Number.isInteger(i) && list[i]))].sort((a, b) => a - b);
   const cut = { slides: Math.max(0, chosen.length - limits.slides), items: 0 };
@@ -186,8 +187,11 @@ export function editContext(slides, picks, { title = '', aspect = 16 / 9, limits
   while (chosen.length > 1 && JSON.stringify(made.request).length > limits.bytes) { chosen = chosen.slice(0, -1); cut.slides++; made = build(chosen); }
   cut.items = made.dropped;
   const { request, map, keys, stamps, frozen } = made;
+  if(fonts){request.fonts=fonts;request.photos=photos.map(p=>({id:p.id,alt:p.alt,aspect:p.ratio}));}
+  const assets=new Map(photos.map(p=>[p.id,{...p}]));
   return {
     request, picks: chosen, cut,
+    photo:key=>assets.get(key),
     find: (key) => map.get(key) || null,
     keyOf: (slide, item) => (item === undefined ? keys.get(slide)?.key : keys.get(slide)?.items[item]) || '',
     locked: (key) => frozen.has(key),
@@ -220,11 +224,19 @@ export function checkEdits(answer, ctx, { limits = EDIT_LIMITS, slides = [] } = 
   for (const o of raw.slice(0, limits.ops)) {
     if (!o || typeof o !== 'object') { drop('모양이 다른 지시'); continue; }
     const why = line(o.why, limits.why);
+    if(o.op==='add'){
+      const at=ctx.find(o.slide);
+      if(ctx.request.scope==='selection'||!at||at.item!==undefined||kindOf(at.slide)){drop('요소를 추가할 수 없는 장');continue;}
+      try{const value=validateNativeItem(o.element,ctx.request),{asset,...it}=value;if(it.t==='image'){const photo=ctx.photo?.(asset);if(!photo?.url)throw Error('사진 원본 없음');it.url=photo.url;it.alt=photo.alt;}
+        const element=cleanItem({id:newId('e'),...it},{keepSpaces:true});if(!element)throw Error('요소 없음');ops.push({op:'add',slide:o.slide,element,...(why?{why}:{})});
+      }catch{drop('온바탕에 추가할 수 없는 요소');}continue;
+    }
     if (o.op === 'slide') {
       if(ctx.request.scope==='selection'){drop('선택한 요소 밖의 지시');continue;}
       const at = ctx.find(o.slide);
       if (!at || at.item !== undefined) { drop('보내지 않은 장'); continue; }
       const out = { op: 'slide', slide: o.slide };
+      if(typeof o.bg==='string'&&/^#[0-9a-f]{6}$/i.test(o.bg))out.bg=o.bg;
       if (o.tr === null || pickId(o.tr, TRANS)) out.tr = o.tr;
       if (o.pa === null || pickId(o.pa, COMBO)) out.pa = o.pa;
       if (typeof o.topic === 'string') out.topic = cleanTopic(o.topic);
@@ -233,12 +245,19 @@ export function checkEdits(answer, ctx, { limits = EDIT_LIMITS, slides = [] } = 
       ops.push(why ? { ...out, why } : out);
       continue;
     }
-    if (!['text', 'mark', 'move','style'].includes(o.op)) { drop('온바탕이 모르는 지시'); continue; }
+    if (!['text', 'mark', 'move','style','remove','photo'].includes(o.op)) { drop('온바탕이 모르는 지시'); continue; }
     const at = ctx.find(o.item);
     if (!at || at.item === undefined) { drop('보내지 않은 조각'); continue; }
     if (NO_ITEMS.has(kindOf(at.slide)) || (o.op !== 'move' && NO_WORDS.has(kindOf(at.slide)))) { drop('활동 장의 조각'); continue; }
-    if(o.op==='style'){
-      const patch=ctx.locked(o.item)?null:stylePatch(o.style,slides[at.slide]?.items[at.item],ctx.request.deck.aspect);
+    if(o.op==='photo'){
+      const original=slides[at.slide]?.items[at.item],photo=ctx.photo?.(o.asset);
+      if(ctx.locked(o.item)||kindOf(at.slide)||original?.t!=='image'||!photo?.url){drop('교체할 수 없는 사진');continue;}
+      ops.push({op:'photo',item:o.item,url:photo.url,alt:photo.alt,...(why?{why}:{})});
+    }else if(o.op==='remove'){
+      if(ctx.locked(o.item)||kindOf(at.slide)){drop('지울 수 없는 요소');continue;}
+      ops.push({op:'remove',item:o.item,...(why?{why}:{})});
+    }else if(o.op==='style'){
+      const patch=ctx.locked(o.item)?null:stylePatch(o.style,slides[at.slide]?.items[at.item],ctx.request.deck.aspect,ctx.request.fonts||[]);
       if(!patch||kindOf(at.slide)){drop('적용할 수 없는 배치');continue;}
       ops.push({op:'style',item:o.item,style:patch,...(why?{why}:{})});
     }else if (o.op === 'text') {
@@ -305,7 +324,7 @@ const CLEAR_WORDS = { an: '나타나기 없앰', lp: '계속 움직이기 없앰
 export function applyEdits(slides, ops, ctx, { limits = EDIT_LIMITS, skip = null } = {}) {
   const list = Array.isArray(slides) ? slides : [];
   const stale = new Set(ctx.stale(list)), dropped = [];
-  const next = new Map(), lines = new Map(), fresh = new Map();   // fresh: 이번에 계속 움직이기를 새로 단 조각(한도를 넘으면 뒤부터 뗀다)
+  const next = new Map(), lines = new Map(), fresh = new Map(), removed = new Map();   // fresh: 이번에 계속 움직이기를 새로 단 조각(한도를 넘으면 뒤부터 뗀다)
   const open = (index) => {
     if (!next.has(index)) { next.set(index, { ...list[index], items: (list[index].items || []).map((it) => ({ ...it })) }); lines.set(index, []); fresh.set(index, []); }
     return next.get(index);
@@ -313,12 +332,20 @@ export function applyEdits(slides, ops, ctx, { limits = EDIT_LIMITS, skip = null
   const say = (index, n, label, parts, why) => lines.get(index).push({ op: n, label, parts, ...(why ? { why } : {}) });
   (Array.isArray(ops) ? ops : []).forEach((o, n) => {
     if (skip?.has?.(n)) return;
-    const at = ctx.find(o.op === 'slide' ? o.slide : o.item);
+    const at = ctx.find(['slide','add'].includes(o.op) ? o.slide : o.item);
     if (!at) { dropped.push('보내지 않은 이름표'); return; }
     if (stale.has(at.slide)) return;
+    if(o.op==='add'){
+      const slide=open(at.slide);
+      if(slide.items.length-(removed.get(at.slide)?.size||0)>=settings().maxItems){dropped.push('한 장에 넣을 수 있는 요소 수를 넘었어요');return;}
+      const item=cleanItem(o.element,{keepSpaces:true});if(!item){dropped.push('추가할 수 없는 요소');return;}
+      slide.items.push(item);if(item.lp&&item.lp!==STILL)fresh.get(at.slide).push({at:slide.items.length-1,n,part:''});
+      say(at.slide,n,'요소 추가',[itemName(item)],o.why);return;
+    }
     if (o.op === 'slide') {
       const before = list[at.slide], parts = [];
       const patch = {};
+      if(o.bg&&o.bg!==before.bg){patch.bg=o.bg;parts.push('바탕색: '+o.bg);}
       for (const key of ['tr', 'pa']) {
         if (!Object.hasOwn(o, key) || (o[key] ?? undefined) === (before[key] ?? undefined)) continue;
         patch[key] = o[key];
@@ -334,13 +361,22 @@ export function applyEdits(slides, ops, ctx, { limits = EDIT_LIMITS, skip = null
     }
     const origin = list[at.slide].items?.[at.item];
     if (!origin) { dropped.push('없는 조각'); return; }
+    if(removed.get(at.slide)?.has(at.item))return;
     const slide = open(at.slide), item = slide.items[at.item];
-    if(o.op==='style'){
-      const patch=stylePatch(o.style,item,ctx.request.deck.aspect);
+    if(o.op==='photo'){
+      if(item.t!=='image'||item.lock||!o.url)return;
+      const clean=cleanItem({...item,url:o.url,alt:o.alt},{keepSpaces:true});if(!clean)return;
+      slide.items[at.item]=clean;say(at.slide,n,'사진 교체',[o.alt||'첨부 사진'],o.why);
+    }else if(o.op==='remove'){
+      if(item.lock){dropped.push('잠긴 요소');return;}
+      if(!removed.has(at.slide))removed.set(at.slide,new Set());removed.get(at.slide).add(at.item);
+      say(at.slide,n,'요소 삭제',[itemName(item)],o.why);
+    }else if(o.op==='style'){
+      const patch=stylePatch(o.style,item,ctx.request.deck.aspect,ctx.request.fonts||[]);
       if(!patch||ctx.locked(o.item)){dropped.push('적용할 수 없는 배치');return;}
       const clean=cleanItem({...item,...patch},{keepSpaces:true});if(!clean||JSON.stringify(clean)===JSON.stringify(item))return;
       slide.items[at.item]=clean;
-      const names={x:'가로 위치',y:'세로 위치',w:'너비',h:'높이',size:'글자 크기',color:'색',align:'정렬',bold:'굵게',rot:'회전',op:'불투명도'};
+      const names={x:'가로 위치',y:'세로 위치',w:'너비',h:'높이',size:'글자 크기',color:'색',align:'정렬',bold:'굵게',rot:'회전',op:'불투명도',font:'글꼴'};
       say(at.slide,n,'배치·디자인',Object.entries(patch).map(([k,v])=>`${names[k]}: ${item[k]??'기본'} → ${v}`),o.why);
     }else if (o.op === 'text') {
       if (item.t !== 'text' || item.lock) { dropped.push('글상자가 아니거나 잠긴 조각'); return; }
@@ -386,12 +422,12 @@ export function applyEdits(slides, ops, ctx, { limits = EDIT_LIMITS, skip = null
   });
   // 한 장에서 계속 움직이는 조각은 limits.idles 개까지: 이번에 새로 단 것을 뒤에서부터 뗀다
   for (const [index, slide] of next) {
-    let moving = slide.items.filter((it) => it.lp && it.lp !== STILL).length;
+    let moving = slide.items.filter((it,i) => !removed.get(index)?.has(i)&&it.lp && it.lp !== STILL).length;
     const added = fresh.get(index), rows = lines.get(index);
     while (moving > limits.idles && added.length) {
       const { at, n, part } = added.pop(), item = slide.items[at];
-      if (!item.lp || item.lp === STILL) continue;
-      const before = list[index].items[at].lp;
+      if (removed.get(index)?.has(at)||!item.lp || item.lp === STILL) continue;
+      const before = list[index].items[at]?.lp;
       if (before === undefined) delete item.lp; else item.lp = before;
       moving--;
       const row = rows.find((l) => l.op === n);
@@ -401,6 +437,7 @@ export function applyEdits(slides, ops, ctx, { limits = EDIT_LIMITS, skip = null
   }
   const out = list.slice(), changes = [];
   for (const [index, slide] of [...next].sort((a, b) => a[0] - b[0])) {
+    if(removed.has(index))slide.items=slide.items.filter((_,i)=>!removed.get(index).has(i));
     const rows = lines.get(index);
     if (!rows.length || JSON.stringify(slide) === JSON.stringify(list[index])) continue;
     out[index] = slide;
