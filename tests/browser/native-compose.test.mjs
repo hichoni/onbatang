@@ -27,6 +27,7 @@ for(const engine of ['chromium','webkit'])test(engine+' native generation → se
  await page.locator('[data-presentation-start]').click();await page.getByLabel('만들 발표',{exact:true}).fill('선생님께 질문이 수업을 바꾸는 방법을 설명하는 발표');await page.getByLabel('발표 장 수',{exact:true}).fill('17');
  await page.evaluate(()=>window.shortAnswer=true);await page.locator('[data-compose-ask]').click();await page.getByText(/요청한 17장이 모두 있어야/).waitFor();assert.equal(await page.locator('[data-compose-apply]').isDisabled(),true);
  await page.evaluate(()=>window.shortAnswer=false);await page.locator('[data-compose-ask]').click();await page.waitForFunction(()=>document.querySelectorAll('.onba-compose-previews article').length===17);
+ assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('native-fixture.native-compose-v1')).proposal.slides),undefined,'draft stores asset references, not repeated photos in every rendered slide');
  if(process.env.NATIVE_COMPOSE_SHOT)await page.screenshot({path:process.env.NATIVE_COMPOSE_SHOT+'-'+engine+'-proposal.png'});
  assert.equal(await page.locator('iframe').count(),0);await page.locator('[data-compose-apply]').click();await page.locator('.cv-canvas .fe-stage').waitFor();await page.evaluate(async()=>{(await import('/app/tour.js')).stopTour();});
  await page.locator('.cv-canvas .fi-text').first().click();await page.locator('[data-assist-toggle]').click();await page.getByLabel('선택한 요소만',{exact:true}).check();await page.locator('.cv-assist-wish').fill('이 제목만 더 크게 하고 주황색으로 바꿔');await page.locator('[data-assist-ask]').click();await page.locator('[data-assist-apply]').waitFor();
@@ -36,6 +37,11 @@ for(const engine of ['chromium','webkit'])test(engine+' native generation → se
  await page.reload();await page.waitForFunction(()=>window.ready);await page.getByRole('button',{name:'질문에서 시작하는 수업 열기',exact:true}).click();await page.locator('.cv-show-btn').click();
  for(let i=0;i<17;i++){await page.waitForFunction(i=>document.querySelector('.cv-show-count')?.textContent.replace(/\s/g,'')===(i+1)+'/17',i);assert.ok(await page.locator('.cv-show-stage .fi-text').count()>0);const text=await page.locator('.cv-show-stage').textContent();assert.ok(text.includes(i===0?'질문 하나로 시작하는 수업':(i+1)+'. 질문에서 꿈으로'));if(i<16)await page.getByRole('button',{name:'다음 장',exact:true}).click();}
  if(process.env.NATIVE_COMPOSE_SHOT)await page.screenshot({path:process.env.NATIVE_COMPOSE_SHOT+'-'+engine+'-finale.png'});
+ await page.getByRole('button',{name:'앞 장',exact:true}).click();await page.waitForFunction(()=>document.querySelector('.cv-show-count')?.textContent.replace(/\s/g,'')==='16/17');
+ await page.setViewportSize({width:390,height:844});assert.ok(await page.locator('.cv-show-stage .fi-text').first().isVisible());
+ await page.getByRole('button',{name:'다음 장',exact:true}).click();await page.waitForFunction(()=>document.querySelector('.cv-show-count')?.textContent.replace(/\s/g,'')==='17/17');
+ if(process.env.NATIVE_COMPOSE_SHOT)await page.screenshot({path:process.env.NATIVE_COMPOSE_SHOT+'-'+engine+'-mobile.png'});
+ await page.setViewportSize({width:1440,height:1000});
  await page.keyboard.press('Escape');assert.equal((await page.evaluate(()=>window.readSaved()))[0].id,id);assert.deepEqual(errors,[]);
  const publicPage=await context.newPage();await publicPage.goto(origin+'/app/index.html');await publicPage.locator('.cv-home-title').waitFor();assert.equal(await publicPage.locator('[data-presentation-start]').count(),0);
 });
