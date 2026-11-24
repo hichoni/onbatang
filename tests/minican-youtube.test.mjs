@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { parseYouTube, ytStart, ytEmbed, ytWatch, ytTime, isYouTubeId } from '../src/youtube.js';
+import { parseYouTube, ytStart, ytEmbed, ytWatch, ytTime, isYouTubeId, ytCaptionsOff } from '../src/youtube.js';
 import { cleanItem, newYouTube, itemLabel, configure, settings } from '../src/model.js';
 
 const ID = 'dQw4w9WgXcQ';
@@ -45,6 +45,17 @@ test('트는 주소는 개인 정보 보호 모드이고, 조종 신호를 받�
   assert.equal(ytEmbed(ID, { start: 30, end: 90, cc: 'ko' }), `https://www.youtube-nocookie.com/embed/${ID}?rel=0&playsinline=1&start=30&end=90&cc_load_policy=1&cc_lang_pref=ko&hl=ko`);
   assert.equal(ytEmbed(ID, { start: 30, end: 20, cc: 'on' }), `https://www.youtube-nocookie.com/embed/${ID}?rel=0&playsinline=1&start=30&cc_load_policy=1`);
   assert.equal(ytEmbed(ID, { cc: 'xx<' }), `https://www.youtube-nocookie.com/embed/${ID}?rel=0&playsinline=1`);
+});
+
+test("자막 '끄기'(기본): 유튜브가 자막 기능을 불러왔다고 알리면 자막을 끄는 신호를 보낸다. 자막을 고른 영상에는 보내지 않는다", () => {
+  const off = { func: 'setOption', args: ['captions', 'track', {}] };
+  // 이 브라우저에서 전에 자막을 켠 적이 있으면 유튜브가 알아서 자막을 켠다. 그래서 '끄기'는 직접 꺼야 한다.
+  assert.deepEqual(ytCaptionsOff('', 'apiInfoDelivery'), off);
+  assert.deepEqual(ytCaptionsOff(undefined, 'onApiChange'), off);
+  assert.deepEqual(ytCaptionsOff('fr', 'apiInfoDelivery'), off, '모르는 값은 끄기로 본다');
+  for (const cc of ['ko', 'en', 'on']) assert.equal(ytCaptionsOff(cc, 'apiInfoDelivery'), null, cc);
+  // 틀기 · 멈추기 같은 다른 알림에는 보내지 않는다(틀면서 CC 단추로 켠 자막을 다시 끄지 않는다).
+  for (const event of ['infoDelivery', 'initialDelivery', 'onReady', 'onStateChange', '', undefined]) assert.equal(ytCaptionsOff('', event), null, String(event));
 });
 
 test('저장하는 모양: 이름표 · 시작 시각 · 바로 틀기만 남기고, 모르는 이름표나 주소는 버린다', () => {

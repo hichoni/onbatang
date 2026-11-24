@@ -52,8 +52,16 @@ export const ytThumb = (id) => `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
 export const ytWatch = (id, start = 0) => `https://www.youtube.com/watch?v=${id}${start ? `&t=${start}s` : ''}`;
 /** 영상을 트는 곳(개인 정보 보호 모드)의 주소 앞부분. 조종 신호는 이곳에만 보낸다. */
 export const YT_ORIGIN = 'https://www.youtube-nocookie.com';
-/** 자막: 'ko' 한국어 · 'en' 영어 · 'on' 영상에 있는 자막(언어는 유튜브가 고른다). 없으면 유튜브 설정대로(보통 꺼짐). */
+/** 자막: 'ko' 한국어 · 'en' 영어 · 'on' 영상에 있는 자막(언어는 유튜브가 고른다). 없으면 끈다(ytCaptionsOff). */
 export const YT_CC = Object.freeze(['ko', 'en', 'on']);
+/**
+ * 자막 '끄기'(기본)인 영상에 보낼 끄기 신호. 보낼 때가 아니면 null.
+ * 주소에 자막을 적지 않으면 유튜브는 이 브라우저에서 전에 켠 자막을 기억했다가 알아서 켠다. 그래서 직접 꺼야 한다.
+ * 끄기 신호는 유튜브가 자막 기능을 불러온 뒤에만 듣는다(틀기 전에 보내면 버린다). 불러왔다는 알림(apiInfoDelivery · onApiChange)에 맞춰 보낸다.
+ * 이 알림은 영상을 불러올 때만 온다. 틀면서 CC 단추로 켠 자막은 다시 끄지 않는다.
+ */
+export const ytCaptionsOff = (cc, event) =>
+  (!YT_CC.includes(cc) && (event === 'apiInfoDelivery' || event === 'onApiChange')) ? { func: 'setOption', args: ['captions', 'track', {}] } : null;
 /**
  * 카드 안에서 트는 주소. api: 바깥에서 틀기·멈추기 신호를 받는다(origin 은 신호를 보내는 쪽 주소).
  * 영상이 끝나도 다른 영상을 권하지 않게(rel=0) 하고, 휴대폰에서도 카드 안에서 튼다(playsinline).
