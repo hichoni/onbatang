@@ -104,6 +104,7 @@ let appMaker = null;
 // 들여쓰기(embed.html): 다른 앱이 부른 온바탕. { done(id), close() } — 위 막대가 "닫기" · "다 했어요"가 되고, 첫 화면 · 모양 바꾸기 · 발표 · 내려받기 · 영상 · 카메라가 없다.
 let embedMode = null;
 let activityAuthoring = false; // Host opt-in; playback/result saving never depends on this.
+let presentationAction = null; // Authenticated host owns AI, billing and Studio.
 let colorPalettes=null;
 let brand = null;                // 들여 쓰는 곳의 표시 { name, logo } (없으면 표시하지 않는다)
 let sync = null;                 // 들여 쓰는 곳의 계정 저장(sync.js). 없으면 이 기기에만 저장한다
@@ -558,6 +559,7 @@ function render() {
       el('div', { class: 'cv-home-heading' }, title),
       el('p', { class: 'cv-hero-lead', text: '카드와 포스터, 수업 발표 자료를 만들어요.' }),
       el('div', { class: 'cv-start-paths', role: 'group', 'aria-label': '자료 시작' }, start,
+        presentationAction&&el('button',{class:'btn',type:'button',disabled:loading||full,dataset:{presentationStart:''},onClick:()=>openPresentationMaker()},'AI로 발표 만들기'),
         el('button',{class:'btn',type:'button',disabled:loading||full,dataset:{storyStart:''},onClick:openStoryMaker},'원고로 이야기 만들기'), imports,
         linkManagerAction ? el('button', { class: 'btn cv-link-manager-btn', type: 'button', dataset: { linkManager: '' }, onClick: async event => {
           const button = event.currentTarget; button.disabled = true;
@@ -1174,6 +1176,7 @@ function editorShell(O, bar) {
       O.editor.historyTools,
       el('span', { class: 'cv-canvas-label', text: '편집 캔버스' }),
       el('button', {class: 'btn cv-html-action', type: 'button', onClick: () => openHtmlTextEditor(O)}, '글 수정'),
+      presentationAction&&el('button',{class:'btn cv-html-action',type:'button',dataset:{presentationEdit:''},onClick:()=>openPresentationMaker(O)},'AI로 이어 만들기'),
       el('button', {class: 'btn cv-html-action', type: 'button', onClick: () => { O.editor.openTab('upload'); O.workspace.openTools(); }}, 'HTML 설정'),
       // AI-G 도우미: 장을 다듬어 달라고 부탁하거나(AI-G 를 이어 준 곳), AI 없이 움직임을 자동으로 다듬는다. 오른쪽 속성 칸 자리에 열린다.
       el('button', { class: 'cv-assist-toggle', type: 'button', 'aria-expanded': 'false', dataset: { assistToggle: '' }, title: 'AI-G 도우미: 장을 다듬고 움직임을 입혀요', onClick: () => toggleAssist(O) }, gaiOwl(), el('span', { class: 'cv-lbl', text: 'AI-G 도우미' })),
@@ -4858,6 +4861,27 @@ function htmlOpenButton(loading) {
   return [button, input];
 }
 let importingHtml = false;
+let makingPresentation = false;
+async function openPresentationMaker(O=null) {
+ if(!presentationAction||makingPresentation||moving||importingHtml||O&&(O.closed||O.co||O.inlineImport||O.activityBusy||videoBusy(O)))return;
+ makingPresentation=true;const namespace=storageName();let created=null;
+ try {
+  await presentationAction.open({html:O?.editor.getDesign().web?.html||'',onCreate:async({html,title})=>{
+   if(namespace!==storageName())throw Error('보관함이 바뀌었어요. 다시 열어주세요.');
+   const all=await listDesigns();if(homeEntries(all,homeGroups(all)).length>=MAX_DESIGNS)throw Error('보관함이 가득 찼어요. 공간을 비운 뒤 다시 저장해주세요.');
+   const {readHtmlFile}=await import('./html-import.js');
+   const record=await readHtmlFile(new File([html],(String(title||'AI 발표').replace(/[\\/:*?"<>|]/g,'').slice(0,80)||'AI 발표')+'.html',{type:'text/html'}));
+   if(namespace!==storageName())throw Error('보관함이 바뀌었어요. 다시 열어주세요.');
+   created=await putDesign(record);upsert(created);if(accountFor(created))pusher.queue(created);return created.id;
+  }});
+  if(created){
+   if(O&&S.open===O&&!await leaveEditor(O,{requireSaved:true})){toast('새 발표는 내 그림에 저장했어요. 현재 편집 내용의 저장을 먼저 확인해주세요.',6000);return;}
+   if(!S.open)openDesign(created,false);
+   toast('새 발표로 저장했어요. 발표하기에서 장면과 발화를 함께 넘길 수 있어요.',5000);
+  }
+ } catch(error){toast(error.message||'AI 발표 작업실을 열지 못했어요.',6000);}
+ finally{makingPresentation=false;}
+}
 async function importHtml(file) {
   if (S.open || moving || importingHtml || !file) return false;
   if (homeEntries(S.list || [], homeGroups(S.list || [])).length >= MAX_DESIGNS) { toast(`이 브라우저에는 그림을 ${MAX_DESIGNS}개까지 둘 수 있어요. 안 쓰는 그림을 지우고 다시 가져와 주세요.`, 7000); return false; }
@@ -5333,7 +5357,7 @@ function readOpen() {
  * - linkManagerAction: {open({opener,designIds?,title?,onCreate?}),status?(designIds),links?(designIds),setEnabled?({designIds,key,enabled}),subscribe?(listener),refresh?({force})}; 계정 링크 관리. status는 {state,label,detail}, links는 {key,url,label,enabled,pending?} 목록이다. setEnabled는 선택한 링크만 변경하며 결과·실패 재조회 후 알린다. 자료 카드는 묶음의 모든 id를 넘긴다.
  * - shareAction: {label,title?,open({designId,flush(),goTo(slideIndex,{upload})}),saved?(record)}; 편집기 위 막대의 공유 단추(GBE-AI Lab의 보기 전용 링크). saved 는 이 기기에 저장할 때마다 불린다(링크에 반영은 호스트가 모아서). 기본값은 숨김.
  */
-export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, resyncGap: resyncWait = 30000, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, accountAction: accountLibrary = null, cloudAction: cloudLibrary = null, shareAction: sharing = null, linkManagerAction: managingLinks = null, copyAction: copying = null, copyLink: copyIntake = null, accountBridge: bridging = null, showRemote: remoting = null, phoneRemote: phoning = null, coEdit: coing = null, coRelay: relaying = null, showAudience: audiencing = null, wallAction: walling = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false, resume = false, embed = null, syncDelay = null } = {}) {
+export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, resyncGap: resyncWait = 30000, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, accountAction: accountLibrary = null, cloudAction: cloudLibrary = null, shareAction: sharing = null, linkManagerAction: managingLinks = null, copyAction: copying = null, copyLink: copyIntake = null, accountBridge: bridging = null, showRemote: remoting = null, phoneRemote: phoning = null, coEdit: coing = null, coRelay: relaying = null, showAudience: audiencing = null, wallAction: walling = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false, presentationAction: presenting = null, resume = false, embed = null, syncDelay = null } = {}) {
   if (app) throw new Error('minican already started');
   if (!root) throw new Error('minican root');
   app = root;
@@ -5371,6 +5395,7 @@ export function startMinican({ root = document.getElementById('app'), fonts = []
   else if (relaying && typeof relaying === 'object' && !embed) { const opts = typeof relaying.url === 'string' ? { url: relaying.url } : {}; coEdit = { open: async (code) => (await import('./co-relay.js')).openCoRelay(code, opts) }; }
   if (bridging && typeof bridging === 'object' && !embed) accountBridge = { ...(typeof bridging.url === 'string' ? { url: bridging.url } : {}) };
   activityAuthoring=authoring===true;
+  if(activityAuthoring&&typeof presenting?.open==='function')presentationAction=presenting;
   resumeOpen=resume===true;
   if (embed && typeof embed.done === 'function' && (embed.close == null || typeof embed.close === 'function')) {
     const label = (v) => (typeof v === 'string' && v.trim() ? Array.from(v.trim()).slice(0, 16).join('') : '');
