@@ -1,0 +1,15 @@
+{
+  "version": "0.165.0",
+  "date": "2026-11-25",
+  "engine": "온바",
+  "entry": "app/app.js:openNativeCompose",
+  "hostRequirement": "activityAuthoring=true and an authorized appMaker; public standalone does not enable AI",
+  "result": "task:compose returns exactly 1–24 page operations, converted to ordinary native slides; no HTML or web item",
+  "elements": ["editable text", "native shapes", "up to 3 supplied photo references"],
+  "coordinates": "x and w are percent of width; y and h are percent of height; text size is percent of width. 16:9 circle w=20 h=35.56.",
+  "editing": "AI-G helper supports selected item/current page/chosen pages; whitelisted style patches; before/after preview; existing apply/undo and stale-document guards",
+  "privacy": "AI receives photo descriptions/aspects, not photo pixels. Speech notes contain speech only. Host owns auth, queue, quota and account sync.",
+  "verification": "492 native core tests; Chromium/WebKit mock-provider 17-page creation, native edit/undo, manual text, save/reopen, all-page presentation. Public standalone has no AI creation entry.",
+  "notVerified": ["actual AI-generated design quality", "live account sync on new native flow", "physical iPhone Safari"],
+  "hostActivation": "The host must deploy the native composition/style contracts to its actual AI worker before accepting paid requests. Native code contains no service credentials or host network calls."
+}

@@ -1648,3 +1648,21 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero{overflow:visible;z
 /* 공용 온바탕: 같이 고치기의 다리(GBE-AI Lab)는 보이지 않는 작은 창 */
 .cv-co-relay { position: fixed; left: 0; top: 0; width: 1px; height: 1px; border: 0; opacity: 0; pointer-events: none; }
 @media (max-width: 860px) { .cv-co-btn:not(.on) .cv-lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; } }
+/* AI composes native slides in the same workspace as manual authoring. */
+.onba-compose{max-width:1180px;margin:auto}
+.onba-compose-columns{display:grid;grid-template-columns:minmax(270px,.85fr) minmax(350px,1.5fr);gap:28px;align-items:start}
+.onba-compose-fields{display:grid;gap:16px;min-width:0;border:0;padding:0;margin:0}
+.onba-compose label{display:grid;gap:7px;font-weight:600}
+.onba-compose input,.onba-compose textarea{font:inherit;padding:10px;border:1px solid #cbd5d1;border-radius:10px;box-sizing:border-box;max-width:100%}
+.onba-compose textarea{width:100%;resize:vertical}
+.onba-compose input[type=number]{width:100px}
+.onba-compose details{margin:10px 0}
+.onba-compose summary{cursor:pointer;padding:8px 0}
+.onba-compose-previews{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;max-height:65vh;overflow:auto;padding:4px}
+.onba-compose-previews article{min-width:0;border:1px solid #d9e2dd;border-radius:12px;overflow:hidden;padding:10px;background:#f7faf8}
+.onba-compose-previews article>svg{display:block;max-width:100%;height:auto}
+.onba-compose-previews b{display:block;margin-top:10px}
+.onba-compose-previews p{white-space:pre-wrap;overflow-wrap:anywhere}
+.onba-compose-photo{display:grid;grid-template-columns:64px 1fr auto;gap:8px;align-items:center;margin:10px 0}
+.onba-compose-photo img{width:64px;height:64px;object-fit:contain}
+@media(max-width:760px){.onba-compose-columns{grid-template-columns:1fr}.onba-compose-previews{max-height:none;grid-template-columns:1fr}.onba-compose-photo{grid-template-columns:48px 1fr}.onba-compose-photo img{width:48px;height:48px}}

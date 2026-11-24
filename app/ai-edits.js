@@ -13,6 +13,7 @@ import { cleanItem, itemLabel, textLimit } from '../src/model.js';
 import { ENTERS, IDLES, EMPHASES, EXITS, TRANSITIONS, COMBOS, SPEEDS, STILL, DELAY_MAX } from '../src/motion.js';
 import { cleanNotes, cleanTopic } from '../src/document.js';
 import { cleanRuns } from '../src/runs.js';
+import {stylePatch} from '../src/ai-style.js';
 
 /** 한 번의 부탁이 감당하는 크기. slides(한 번에 다듬는 장 수)는 질문권 1회(중앙 제작 서버의 작업 1건)의 한계를 재서 정한 값이다(docs/ai-helper-2026-11-11.md §3).
  * ops 는 여러 조각을 묶은 지시를 조각마다로 편 뒤의 수다(24장에 550개쯤 나온다). */
@@ -129,6 +130,7 @@ function itemEntry(it, role, key, limits) {
   if (it.aw === true) out.aw = true;
   if (it.dl) out.dl = it.dl;
   if (it.lock) out.lock = true;
+  for(const k of ['color','rot','op'])if(it[k]!==undefined)out[k]=it[k];
   return { entry: out, cut };
 }
 // 한 장에서 먼저 덜어 낼 조각(글이 없는 꾸밈부터): 숫자가 작을수록 먼저 보낸다
@@ -139,7 +141,7 @@ const WEIGHT = { title: 0, kicker: 0, number: 0, 'section-number': 0, closing: 0
  * 돌려주는 것: { request: { deck, slides, around }, picks(실제로 담긴 장 번호), find(key) → { slide, item? }, keyOf(slide, item?) → key,
  *               stale(slides) → 그 사이 바뀐 장 번호들, locked(key) → 글을 못 바꾸는 조각인지, cut: { slides, items } }
  */
-export function editContext(slides, picks, { title = '', aspect = 16 / 9, limits = EDIT_LIMITS } = {}) {
+export function editContext(slides, picks, { title = '', aspect = 16 / 9, limits = EDIT_LIMITS, selectedIds = null } = {}) {
   const list = Array.isArray(slides) ? slides : [];
   let chosen = [...new Set((Array.isArray(picks) ? picks : [picks]).filter((i) => Number.isInteger(i) && list[i]))].sort((a, b) => a - b);
   const cut = { slides: Math.max(0, chosen.length - limits.slides), items: 0 };
@@ -155,7 +157,7 @@ export function editContext(slides, picks, { title = '', aspect = 16 / 9, limits
       keys.set(index, { key, items: itemKeys });
       const roles = rolesOf(slide);
       // 조각이 너무 많으면 꾸밈부터 덜어 낸다(자리 순서는 그대로 둔다)
-      let keep = items.map((_, i) => i);
+      let keep = items.map((_, i) => i).filter(i=>!selectedIds||selectedIds.includes(items[i].id));
       if (keep.length > limits.items) {
         const order = keep.slice().sort((a, b) => (WEIGHT[roles[a]] ?? 2) - (WEIGHT[roles[b]] ?? 2) || a - b).slice(0, limits.items);
         dropped += keep.length - order.length;
@@ -170,14 +172,14 @@ export function editContext(slides, picks, { title = '', aspect = 16 / 9, limits
         return entry;
       });
       const kind = slideKind(slide), notes = cleanNotes(slide.notes).replace(/\s+/g, ' ').trim();
-      out.push({ key, no: index + 1, ...(cleanTopic(slide.topic) ? { topic: cleanTopic(slide.topic) } : {}), dark: isDark(slide),
+      out.push({ key, no: index + 1, ...(cleanTopic(slide.topic) ? { topic: cleanTopic(slide.topic) } : {}), dark: isDark(slide),...(slide.bg?{bg:slide.bg}:{}),
         ...(slide.tr ? { tr: slide.tr } : {}), ...(slide.pa ? { pa: slide.pa } : {}), ...(kind ? { kind } : {}), ...(slide.hidden ? { hidden: true } : {}),
         ...(notes ? { notes: clipText(notes, limits.notes).text } : {}), items: entries });
     });
     const inSet = new Set(indexes);
     const around = [...new Set(indexes.flatMap((i) => [i - 1, i + 1]))].filter((i) => list[i] && !inSet.has(i)).sort((a, b) => a - b)
       .map((i) => ({ no: i + 1, title: titleOf(list[i]) })).filter((v) => v.title);
-    return { request: { deck: { ...(String(title || '').trim() ? { title: String(title).trim().slice(0, 60) } : {}), count: list.length, aspect: Math.round(aspect * 100) / 100 }, slides: out, around }, map, keys, stamps, frozen, dropped };
+    return { request: { ...(selectedIds?{scope:'selection'}:{}),deck: { ...(String(title || '').trim() ? { title: String(title).trim().slice(0, 60) } : {}), count: list.length, aspect: Math.round(aspect * 100) / 100 }, slides: out, around }, map, keys, stamps, frozen, dropped };
   };
   let made = build(chosen);
   // 요청이 너무 크면 뒤의 장부터 뺀다(한 장은 늘 남긴다)
@@ -219,6 +221,7 @@ export function checkEdits(answer, ctx, { limits = EDIT_LIMITS, slides = [] } = 
     if (!o || typeof o !== 'object') { drop('모양이 다른 지시'); continue; }
     const why = line(o.why, limits.why);
     if (o.op === 'slide') {
+      if(ctx.request.scope==='selection'){drop('선택한 요소 밖의 지시');continue;}
       const at = ctx.find(o.slide);
       if (!at || at.item !== undefined) { drop('보내지 않은 장'); continue; }
       const out = { op: 'slide', slide: o.slide };
@@ -230,11 +233,15 @@ export function checkEdits(answer, ctx, { limits = EDIT_LIMITS, slides = [] } = 
       ops.push(why ? { ...out, why } : out);
       continue;
     }
-    if (!['text', 'mark', 'move'].includes(o.op)) { drop('온바탕이 모르는 지시'); continue; }
+    if (!['text', 'mark', 'move','style'].includes(o.op)) { drop('온바탕이 모르는 지시'); continue; }
     const at = ctx.find(o.item);
     if (!at || at.item === undefined) { drop('보내지 않은 조각'); continue; }
     if (NO_ITEMS.has(kindOf(at.slide)) || (o.op !== 'move' && NO_WORDS.has(kindOf(at.slide)))) { drop('활동 장의 조각'); continue; }
-    if (o.op === 'text') {
+    if(o.op==='style'){
+      const patch=ctx.locked(o.item)?null:stylePatch(o.style,slides[at.slide]?.items[at.item],ctx.request.deck.aspect);
+      if(!patch||kindOf(at.slide)){drop('적용할 수 없는 배치');continue;}
+      ops.push({op:'style',item:o.item,style:patch,...(why?{why}:{})});
+    }else if (o.op === 'text') {
       if (typeof o.text !== 'string' || !o.text.trim()) { drop('빈 글'); continue; }
       if (ctx.locked(o.item)) { drop('잠겼거나 잘려 보낸 글'); continue; }
       ops.push({ op: 'text', item: o.item, text: o.text.replace(/\r\n?/g, '\n'), ...(why ? { why } : {}) });
@@ -328,7 +335,14 @@ export function applyEdits(slides, ops, ctx, { limits = EDIT_LIMITS, skip = null
     const origin = list[at.slide].items?.[at.item];
     if (!origin) { dropped.push('없는 조각'); return; }
     const slide = open(at.slide), item = slide.items[at.item];
-    if (o.op === 'text') {
+    if(o.op==='style'){
+      const patch=stylePatch(o.style,item,ctx.request.deck.aspect);
+      if(!patch||ctx.locked(o.item)){dropped.push('적용할 수 없는 배치');return;}
+      const clean=cleanItem({...item,...patch},{keepSpaces:true});if(!clean||JSON.stringify(clean)===JSON.stringify(item))return;
+      slide.items[at.item]=clean;
+      const names={x:'가로 위치',y:'세로 위치',w:'너비',h:'높이',size:'글자 크기',color:'색',align:'정렬',bold:'굵게',rot:'회전',op:'불투명도'};
+      say(at.slide,n,'배치·디자인',Object.entries(patch).map(([k,v])=>`${names[k]}: ${item[k]??'기본'} → ${v}`),o.why);
+    }else if (o.op === 'text') {
       if (item.t !== 'text' || item.lock) { dropped.push('글상자가 아니거나 잠긴 조각'); return; }
       const text = Array.from(o.text).slice(0, textLimit(item)).join('');
       if (text === item.text) return;

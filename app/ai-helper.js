@@ -15,7 +15,7 @@ import { cleanTopic } from '../src/document.js';
 import { editContext, checkEdits, applyEdits, motionCatalog, titleOf, EDIT_LIMITS, LOCAL_LIMITS } from './ai-edits.js';
 import { polishMotion } from './motion-polish.js';
 
-const WANTS = [['text', '글'], ['motion', '움직임'], ['notes', '발표자 노트']];
+const WANTS = [['text', '글'], ['layout','배치·디자인'], ['motion', '움직임'], ['notes', '발표자 노트']];
 const clip = (text, max) => { const all = Array.from(String(text ?? '')); return all.length > max ? `${all.slice(0, max).join('')}…` : all.join(''); };
 const message = (error, fallback) => (/\p{Script=Hangul}/u.test(error?.message || '') ? String(error.message).slice(0, 300) : fallback);
 
@@ -57,7 +57,7 @@ export function createAiHelper(host) {
     onClick: (e) => { if (want.has(id) && want.size > 1) want.delete(id); else want.add(id); for (const b of chips.children) b.setAttribute('aria-pressed', String(want.has(b.dataset.assistWant))); e.currentTarget.blur(); update(); } }, name)));
   const wish = el('textarea', { class: 'cv-assist-wish', rows: '2', maxlength: String(EDIT_LIMITS.prompt), 'aria-label': 'AI-G에게 덧붙일 말(쓰지 않아도 돼요)', placeholder: '덧붙일 말(쓰지 않아도 돼요). 예) 6학년이 읽기 쉽게, 움직임은 차분하게' });
   const shown = el('pre', { class: 'cv-assist-sent' });
-  const sent = () => editContext(host.slides(), chosen(), { title: host.title(), aspect: host.aspect() });
+  const sent = () => editContext(host.slides(), chosen(), { title: host.title(), aspect: host.aspect(),...(scope==='selection'?{selectedIds:[host.selectedId?.()||'']}: {}) });
   const peekText = () => { const ctx = sent(); return JSON.stringify({ want: [...want], prompt: wish.value.trim(), ...ctx.request }, null, 1); };
   const peek = el('details', { class: 'cv-assist-peek', onToggle: () => { if (peek.open) shown.textContent = peekText(); } }, el('summary', { text: '보낼 내용 보기(글과 배치만, 사진은 보내지 않아요)' }), shown);
   const askLabel = el('span'), askCost = el('small', { class: 'cv-assist-cost' });
@@ -81,7 +81,7 @@ export function createAiHelper(host) {
   const body = el('div', { class: 'cv-assist-body' },
     el('div', { class: 'cv-assist-form' },
       el('b', { text: '무엇을 다듬을까요?' }),
-      el('div', { class: 'cv-assist-scopes', role: 'radiogroup', 'aria-label': '다듬을 범위' }, radio('here', hereLabel), radio('pick', el('span', { text: '장 고르기' }))),
+      el('div', { class: 'cv-assist-scopes', role: 'radiogroup', 'aria-label': '다듬을 범위' }, radio('here', hereLabel), radio('pick', el('span', { text: '장 고르기' })),host.selectedId?radio('selection',el('span',{text:'선택한 요소만'})):null),
       picker, aiPart, polishPart),
     log);
   const close = el('button', { class: 'cv-assist-close', type: 'button', 'aria-label': 'AI-G 도우미 닫기', onClick: () => host.close?.() }, '×');
@@ -226,11 +226,12 @@ export function createAiHelper(host) {
     const picks = chosen();
     if (!picks.length) { say('다듬을 장을 골라 주세요.'); return; }
     const base = host.slides();
-    const ctx = editContext(base, picks, { title: host.title(), aspect: host.aspect() });
+    const ctx = sent();
+    if(scope==='selection'&&!ctx.request.slides.some(s=>s.items.length)){say('캔버스에서 고칠 글·도형·사진을 먼저 골라 주세요.');return;}
     // 연결 창은 누른 그 순간에 열어야 막히지 않는다: 기다리기 전에 connect 를 부른다.
     let task; try { task = provider.connect(); } catch (error) { task = Promise.reject(error); }
     const controller = asking = new AbortController();
-    const wants = WANTS.filter(([id]) => want.has(id)), prompt = wish.value.trim();
+    const wants = choices.filter(([id]) => want.has(id)&&(scope!=='selection'||id!=='notes')), prompt = wish.value.trim();
     bubble('me', `${rangeText(ctx.picks)} · ${wants.map(([, name]) => name).join(' · ')}${prompt ? `\n${prompt}` : ''}`);
     wish.disabled = true;
     update();
