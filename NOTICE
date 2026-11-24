@@ -63,6 +63,7 @@ The approved B Onbatang symbol, custom wordmark contours and application brandin
    원본과 미리보기는 브라우저 안에서 처리하며 아래 라이브러리를 고정 버전으로 묶습니다.
    도구: tools/build-pptx-import.mjs · 버전/입력/출력 SHA-256: app/pptx-import/vendor/BUILD.json.
    정적 호스팅에서 npm이나 CDN 없이 실행할 수 있도록 worker와 격리된 미리보기 HTML을 함께 배포합니다.
+   HWPX 본문 가져오기의 app/vendor/story-zip.js도 같은 fflate 0.8.3과 아래 사용 허락을 사용합니다.
    - fflate 0.8.3 — Copyright (c) 2020 Arjun Barrett — MIT License
      https://github.com/101arrowz/fflate · 전문: vendor/licenses/fflate-MIT.txt
    - @xmldom/xmldom 0.8.15 — MIT License

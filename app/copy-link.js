@@ -203,7 +203,7 @@ export function joinParts(parts) {
 export function guestRecords(records) {
   let videos = 0;
   const out = (Array.isArray(records) ? records : []).map((record) => {
-    const { uploads, ...rest } = record || {};
+    const { uploads, story, ...rest } = record || {};
     return { ...rest, slides: (rest.slides || []).map((slide) => { if (!slide?.video) return slide; videos++; const { video, ...plain } = slide; return plain; }) };
   });
   const ranges = pieceRanges(out, { maxParts: GUEST_MAX_PARTS, cap: GUEST_PART_MAX_BYTES });

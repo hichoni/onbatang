@@ -30,6 +30,7 @@ import {startVoice,canRecordVoice,voiceSlides} from './voice-record.js';
 import {spokenNotes} from './show-keys.js';
 import {webFrame, liveWebBoxes} from '../src/render.js';
 import {createHtmlWorkspace, editHtmlText} from './html-workspace.js';
+import {connectHtmlPresentation} from '../src/html-presentation.js';
 import {blockedSite, webHost} from '../src/web.js';
 import {PRINT_LAYOUTS,printHtml} from './print.js';
 import {encodeGif,GIF_LIMITS} from './gif.js';
@@ -39,6 +40,9 @@ import { pollResultPage } from './poll-result.js';
 import {ONBATANG_VERSION} from './version.js';
 import {createGaiMaker,gaiLessonContext} from './gai-maker.js';
 import {createAiHelper} from './ai-helper.js';
+import {createStoryAuthor,storyAuditView} from './story-author.js';
+import {createStoryPhotoManager} from './story-photos.js';
+import {createStoryBoard} from './story-board.js';
 import {editCost} from './ai-edits.js';
 import {
   createEditor, designView, designToBlob, designToCanvas, configure, settings, reshapeItems, layoutList, layoutItems, icon, cleanDesign, hasMotion, playDesign, playTransition,
@@ -101,6 +105,7 @@ let appMaker = null;
 // 들여쓰기(embed.html): 다른 앱이 부른 온바탕. { done(id), close() } — 위 막대가 "닫기" · "다 했어요"가 되고, 첫 화면 · 모양 바꾸기 · 발표 · 내려받기 · 영상 · 카메라가 없다.
 let embedMode = null;
 let activityAuthoring = false; // Host opt-in; playback/result saving never depends on this.
+let presentationAction = null; // Authenticated host owns AI, billing and Studio.
 let colorPalettes=null;
 let brand = null;                // 들여 쓰는 곳의 표시 { name, logo } (없으면 표시하지 않는다)
 let sync = null;                 // 들여 쓰는 곳의 계정 저장(sync.js). 없으면 이 기기에만 저장한다
@@ -554,7 +559,9 @@ function render() {
     el('div', { class: 'cv-hero-text' },
       el('div', { class: 'cv-home-heading' }, title),
       el('p', { class: 'cv-hero-lead', text: '카드와 포스터, 수업 발표 자료를 만들어요.' }),
-      el('div', { class: 'cv-start-paths', role: 'group', 'aria-label': '자료 시작' }, start, imports,
+      el('div', { class: 'cv-start-paths', role: 'group', 'aria-label': '자료 시작' }, start,
+        presentationAction&&el('button',{class:'btn',type:'button',disabled:loading||full,dataset:{presentationStart:''},onClick:()=>openPresentationMaker()},'AI로 발표 만들기'),
+        el('button',{class:'btn',type:'button',disabled:loading||full,dataset:{storyStart:''},onClick:openStoryMaker},'원고로 이야기 만들기'), imports,
         linkManagerAction ? el('button', { class: 'btn cv-link-manager-btn', type: 'button', dataset: { linkManager: '' }, onClick: async event => {
           const button = event.currentTarget; button.disabled = true;
           try { await linkManagerAction.open({opener:button}); }
@@ -1091,10 +1098,12 @@ function openDesign(record, isNew) {
     el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' }),
     el('div', { class: 'cv-document-name' }, name, O.status),
     documentMenu([
-      ['자료 관리', historyButton(O), material, lesson, accountLibrary, share, co],
+      ['자료 관리', historyButton(O), O.record.story&&el('button',{class:'btn',type:'button',dataset:{storyPhotos:''},onClick:()=>openStoryPhotos(O)},'이야기 사진'), material, lesson, accountLibrary, share, co],
       ['화면 비율', shapes],
       ['도움말', tourButton('editor', O)],
-    ]), el('span', { class: 'cv-bar-gap' }), show, down);
+    ]), el('span', { class: 'cv-bar-gap' }),
+    O.record.story&&el('button',{class:'btn',type:'button',dataset:{storyBoard:''},onClick:()=>openStoryBoard(O)},'이야기 작업실'),
+    O.record.story&&el('button',{class:'btn cv-story-audit',type:'button',dataset:{storyAudit:''},onClick:()=>openModal(storyAuditView(O.record.story,currentSlides(O)),{wide:true})},'원고 대조'), show, down);
   // 들여쓰기 막대는 보통 막대 뒤에 만든다(이름 칸 · 저장 상태는 한 곳에만 놓일 수 있다).
   const embedHeader = embedBar ? el('header', { class: 'cv-bar cv-embed-bar' },
     el('span', { class: 'onba-editor-logo' }, onbatangLogo()), ...(embedBar.close ? [embedBar.close, el('span', { class: 'cv-bar-sep', 'aria-hidden': 'true' })] : []),
@@ -1168,6 +1177,7 @@ function editorShell(O, bar) {
       O.editor.historyTools,
       el('span', { class: 'cv-canvas-label', text: '편집 캔버스' }),
       el('button', {class: 'btn cv-html-action', type: 'button', onClick: () => openHtmlTextEditor(O)}, '글 수정'),
+      presentationAction&&el('button',{class:'btn cv-html-action',type:'button',dataset:{presentationEdit:''},onClick:()=>openPresentationMaker(O)},'AI로 이어 만들기'),
       el('button', {class: 'btn cv-html-action', type: 'button', onClick: () => { O.editor.openTab('upload'); O.workspace.openTools(); }}, 'HTML 설정'),
       // AI-G 도우미: 장을 다듬어 달라고 부탁하거나(AI-G 를 이어 준 곳), AI 없이 움직임을 자동으로 다듬는다. 오른쪽 속성 칸 자리에 열린다.
       el('button', { class: 'cv-assist-toggle', type: 'button', 'aria-expanded': 'false', dataset: { assistToggle: '' }, title: 'AI-G 도우미: 장을 다듬고 움직임을 입혀요', onClick: () => toggleAssist(O) }, gaiOwl(), el('span', { class: 'cv-lbl', text: 'AI-G 도우미' })),
@@ -1238,6 +1248,7 @@ function toggleAssist(O, open = !O.shell.classList.contains('assist-open')) {
 function assistHost(O) {
   return {
     provider: appMaker,
+    preserveSpeech: !!O.record.story,
     // 여러 파트로 나뉜 자료(PPT 전체 자료 · 온바탕 파일의 묶음)는 모든 파트의 장을 쪽 차례대로 보여 준다(장 목록 띠와 같다)
     slides: () => assistPages(O)?.map((row) => row.page) || currentSlides(O),
     at: () => { const pages = assistPages(O); return pages ? Math.max(0, pages.findIndex((row) => row.record.id === O.record.id && row.index === O.at)) : O.at; },
@@ -1816,6 +1827,32 @@ function openFindReplace(O) {
 // 개요로 장 만들기: 줄글 개요(제목 줄 · 들여 쓴 내용 줄 · > 노트)를 적으면 장마다 제목과 내용을 놓아 한꺼번에 만든다(outline.js).
 // 지금 장이 비어 있으면 그 장부터 채우고, 아니면 지금 장 뒤에 넣는다. 바탕 · 글꼴 · 움직임은 지금 장을 따른다.
 const OUTLINE_SAMPLE = '식물의 한살이\n  씨앗이 싹 터요\n  잎과 줄기가 자라요\n    햇빛을 받아 양분을 만들어요\n  꽃이 피고 열매를 맺어요\n> 씨앗을 직접 보여 주며 시작하기\n물의 순환\n  - 증발\n  - 구름\n  - 비\n정리해 볼까요?';
+function openStoryMaker(){
+ if(S.open||!S.list||moving||homeEntries(S.list).length>=MAX_DESIGNS)return;
+ setupApp('16:9');
+ const maker=createStoryAuthor({provider:activityAuthoring?appMaker:null,draftKey:storageName()+'.story-draft-v1',view:slide=>slideView(slide,16/9,360),onClose:closeModal,onCreate:async({title,story,slides})=>{
+  if(S.open||moving||homeEntries(S.list).length>=MAX_DESIGNS)throw Error('새 발표를 열 준비가 되지 않았어요. 잠시 뒤 다시 눌러 주세요.');
+  const record={...newRecord('16:9',nextNumber(S.list)),name:title,story,slides};
+  const saved=await putDesign(record);upsert(saved);if(accountFor(saved))pusher.queue(saved);
+  closeModal();openDesign(saved,false);toast('발화를 원문 그대로 연결했어요. 글·배치·사진을 고치고 발표해 보세요.',4500);
+ }});
+ openModal(maker.node,{wide:true,onClose:()=>maker.destroy()});maker.focus();
+}
+function openStoryPhotos(O){
+ if(!O.record.story||O.closed)return;
+ const host=assistHost(O),manager=createStoryPhotoManager({...host,slides:()=>currentSlides(O)});
+ openModal(manager.node,{wide:true,onClose:()=>manager.destroy()});
+}
+function openStoryBoard(O){
+ if(!O.record.story||O.closed)return;
+ const host=assistHost(O),state=O.storyBoardState||={drafts:new Map()};
+ state.selected=O.record.story.scenes.flatMap(s=>s.cues).find(c=>c.pageId===O.slides[O.at]?.id)?.id||state.selected;
+ const board=createStoryBoard({...host,state,story:()=>O.record.story,slides:()=>currentSlides(O),
+  blocked:()=>host.blocked()||(O.materialDeck?'여러 파트로 나뉜 자료의 발화는 각 장의 발표자 노트에서 고쳐 주세요.':''),
+  edit:pageId=>{const i=O.slides.findIndex(p=>p.id===pageId);if(i<0)return;closeModal();goSlide(O,i);}});
+ openModal(board.node,{wide:true,onClose:()=>board.destroy()});
+}
+
 function openOutline(O) {
   if (O.closed || videoBusy(O) || O.inlineImport) return;
   const input = el('textarea', { class: 'cv-outline-input', rows: '11', 'aria-label': '개요', spellcheck: 'false', placeholder: `예)\n${OUTLINE_SAMPLE}` });
@@ -2612,6 +2649,8 @@ async function present(O) {
   const tubeNow = () => tube.find((p) => p.started) || null;
   const stage = el('div', { class: 'cv-show-stage' });
   const count = el('span', { class: 'cv-show-count' });
+  const htmlDeck=slides.length===1&&!!slides[0].web?.html;
+  let htmlPresentation=null;
   // 휴대폰 리모컨(호스트 · GBE-AI Lab): 휴대폰에서 다음 · 앞 · 그 장으로 · 검은 화면을 보내고, 발표는 지금 장 · 발표자 노트를 알려 준다.
   let remote = null, remoteJob = null,remoteCueView=null;
   const pageTitle = (k) => { const t = (slides[k]?.items || []).filter((it) => it.t === 'text' && String(it.text || '').trim()).sort((a, b) => (Number(a.y) || 0) - (Number(b.y) || 0))[0]; return t ? Array.from(String(t.text).replace(/\s+/g, ' ').trim()).slice(0, 60).join('') : ''; };
@@ -2629,7 +2668,7 @@ async function present(O) {
         .catch(() => { /* A text-only remote remains usable if a page cannot be rasterized. */ });
     }
   };
-  const remoteState = () => ({ at: i, total: slides.length, title: O.record.name, page: pageTitle(i), next: i + 1 < slides.length ? pageTitle(i + 1) : '', notes: spokenNotes(slides[i]?.notes).slice(0, 2000),
+  const remoteState = () => htmlPresentation?.state ? ({at:htmlPresentation.state.index,total:htmlPresentation.state.total,title:O.record.name,page:htmlPresentation.state.title,next:htmlPresentation.state.cues[htmlPresentation.state.index+1]?.title||'',notes:spokenNotes(htmlPresentation.state.notes).slice(0,2000),cue:null,preview:'',nextPreview:'',black:tools?.curtain?.()==='black',activity:false}) : ({ at: i, total: slides.length, title: O.record.name, page: pageTitle(i), next: i + 1 < slides.length ? pageTitle(i + 1) : '', notes: spokenNotes(slides[i]?.notes).slice(0, 2000),
     cue:remoteCueView?.isConnected?cinemaRemoteState(remoteCueView):null,
     preview: remoteThumbs.get(slides[i]) || '', nextPreview: remoteThumbs.get(slides[i + 1]) || '', black: tools?.curtain?.() === 'black', activity: !!slides[i]?.activity });
   const tellRemote = () => { if (!remote || closed) return; warmRemotePreviews(); try { remote.update?.(remoteState()); } catch (error) { console.warn(error); } };
@@ -2805,6 +2844,7 @@ async function present(O) {
   // 돌아오면 숨긴 것을 다시 보인다. 안의 일(스튜디오의 앱 만들기 등)은 숨긴 동안에도 이어진다. 발표를 끝내면 모두 닫는다.
   const keptWeb = new Map(), KEEP_WEB_MAX = 6;
   const dropWeb = () => {
+    htmlPresentation?.destroy();htmlPresentation=null;
     if (web?.keep) { web.host.dataset.away = ''; web.host.inert = true; if (web.mode === 'use') { web.mode = 'view'; web.host.dataset.mode = 'view'; } }
     else { clearTimeout(web?.slow); web?.host.remove(); }
     web = null;
@@ -2853,6 +2893,7 @@ async function present(O) {
     const pill = el('div', { class: 'cv-web-pill', role: 'group', 'aria-label': html ? 'HTML 자료' : '웹사이트' });
     const status = el('div', { class: 'cv-web-status', role: 'status' });
     const frame = blocked ? null : webFrame(site);
+    if(htmlDeck&&html&&frame)htmlPresentation=connectHtmlPresentation(frame,{onState:state=>{if(closed)return;count.textContent=state?`${state.index+1} / ${state.total}`:`${i+1} / ${slides.length}`;tools?.changed();tellRemote();},onKey:key=>tools?.handle(key)});
     const host = el('section', { class: 'cv-show-web', dataset: { mode, showWeb: '' } }, ...(frame ? [frame] : []), status, pill);
     web = { url, html, host, frame, pill, mode, slow: 0, keep: !blocked && site.keep === true };
     if (web.keep) {
@@ -2959,6 +3000,7 @@ async function present(O) {
   };
   let wheeling = false;   // 휠로 넘기는 중(마지막 장에서 휠을 더 굴려도 발표를 끝내지 않는다)
   const go = (step) => {
+    if(htmlPresentation?.step(step,true))return;
     if(savingActivity)return;
     if(stepOpenQuestion(stage,step))return;
     if (step > 0 && pixel?.step?.()) return;   // 퀴즈 장: 시작 → 정답 공개 → 순위
@@ -2989,6 +3031,7 @@ async function present(O) {
   };
   // 번호·처음·끝·전체 보기로 그 쪽에 바로 간다(앞으로 가면 그 장의 전환으로, 뒤로 가면 거꾸로).
   const jump = (to) => {
+    if(htmlPresentation?.go(to))return;
     if (savingActivity) return;
     if (leavingLooks) { clearTimeout(leavingLooks); leavingLooks = 0; }
     to = Math.max(0, Math.min(slides.length - 1, to));
@@ -3075,6 +3118,10 @@ async function present(O) {
     waitForTeacher: k=>!!slides[k]?.activity?.photoStudy || slides[k]?.items?.some(it=>questionEffect(it.effect)||steppedEffect(it.effect)),
     saveTimes: (seconds) => { rehearsed = entries.map((v, k) => [v.page.id, seconds[k]]).filter(([, s]) => s != null); },
     title: O.record.name, notify: toast, keyClass: 'cv-show-key', stateChanged: tellRemote,
+    ...(htmlDeck?{total:()=>htmlPresentation?.state?.total||1,index:()=>htmlPresentation?.state?.index||0,
+      ratio:()=>aspectOf(entries[0].record),thumb:()=>slideView(slides[0],aspectOf(entries[0].record),480),preview:()=>slideView(slides[0],aspectOf(entries[0].record),960),
+      pageId:k=>slides[0].id+':'+k,sourcePage:()=>undefined,notes:k=>htmlPresentation?.state?.cues[k]?.notes??(k===htmlPresentation?.state?.index?htmlPresentation.state.notes:''),
+      topic:()=>'',label:()=>'',dwell:()=>undefined,steps:()=>0,waitForTeacher:()=>true,compareAllowed:()=>false}:{}),
   });
   // 좁은 화면(휴대폰)에서는 막대가 여러 줄로 커져 장을 가리지 않게 이 단추들의 글자를 숨기고 그림만 둔다(app.css 의 .cv-show-word).
   const word = (text) => el('span', { class: 'cv-show-word', text });
@@ -4825,6 +4872,27 @@ function htmlOpenButton(loading) {
   return [button, input];
 }
 let importingHtml = false;
+let makingPresentation = false;
+async function openPresentationMaker(O=null) {
+ if(!presentationAction||makingPresentation||moving||importingHtml||O&&(O.closed||O.co||O.inlineImport||O.activityBusy||videoBusy(O)))return;
+ makingPresentation=true;const namespace=storageName();let created=null;
+ try {
+  await presentationAction.open({html:O?.editor.getDesign().web?.html||'',onCreate:async({html,title})=>{
+   if(namespace!==storageName())throw Error('보관함이 바뀌었어요. 다시 열어주세요.');
+   const all=await listDesigns();if(homeEntries(all,homeGroups(all)).length>=MAX_DESIGNS)throw Error('보관함이 가득 찼어요. 공간을 비운 뒤 다시 저장해주세요.');
+   const {readHtmlFile}=await import('./html-import.js');
+   const record=await readHtmlFile(new File([html],(String(title||'AI 발표').replace(/[\\/:*?"<>|]/g,'').slice(0,80)||'AI 발표')+'.html',{type:'text/html'}));
+   if(namespace!==storageName())throw Error('보관함이 바뀌었어요. 다시 열어주세요.');
+   created=await putDesign(record);upsert(created);if(accountFor(created))pusher.queue(created);return created.id;
+  }});
+  if(created){
+   if(O&&S.open===O&&!await leaveEditor(O,{requireSaved:true})){toast('새 발표는 내 그림에 저장했어요. 현재 편집 내용의 저장을 먼저 확인해주세요.',6000);return;}
+   if(!S.open)openDesign(created,false);
+   toast('새 발표로 저장했어요. 발표하기에서 장면과 발화를 함께 넘길 수 있어요.',5000);
+  }
+ } catch(error){toast(error.message||'AI 발표 작업실을 열지 못했어요.',6000);}
+ finally{makingPresentation=false;}
+}
 async function importHtml(file) {
   if (S.open || moving || importingHtml || !file) return false;
   if (homeEntries(S.list || [], homeGroups(S.list || [])).length >= MAX_DESIGNS) { toast(`이 브라우저에는 그림을 ${MAX_DESIGNS}개까지 둘 수 있어요. 안 쓰는 그림을 지우고 다시 가져와 주세요.`, 7000); return false; }
@@ -5300,7 +5368,7 @@ function readOpen() {
  * - linkManagerAction: {open({opener,designIds?,title?,onCreate?}),status?(designIds),links?(designIds),setEnabled?({designIds,key,enabled}),subscribe?(listener),refresh?({force})}; 계정 링크 관리. status는 {state,label,detail}, links는 {key,url,label,enabled,pending?} 목록이다. setEnabled는 선택한 링크만 변경하며 결과·실패 재조회 후 알린다. 자료 카드는 묶음의 모든 id를 넘긴다.
  * - shareAction: {label,title?,open({designId,flush(),goTo(slideIndex,{upload})}),saved?(record)}; 편집기 위 막대의 공유 단추(GBE-AI Lab의 보기 전용 링크). saved 는 이 기기에 저장할 때마다 불린다(링크에 반영은 호스트가 모아서). 기본값은 숨김.
  */
-export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, resyncGap: resyncWait = 30000, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, accountAction: accountLibrary = null, cloudAction: cloudLibrary = null, shareAction: sharing = null, linkManagerAction: managingLinks = null, copyAction: copying = null, copyLink: copyIntake = null, accountBridge: bridging = null, showRemote: remoting = null, phoneRemote: phoning = null, coEdit: coing = null, coRelay: relaying = null, showAudience: audiencing = null, wallAction: walling = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false, resume = false, embed = null, syncDelay = null } = {}) {
+export function startMinican({ root = document.getElementById('app'), fonts = [], titleFont = '', storage = 'minican', onView: view = null, brand: mark = null, onBrandClick: hostHome = null, sync: account = null, resyncGap: resyncWait = 30000, importAction: importing = null, materialAction: material = null, lessonAction: lesson = null, accountAction: accountLibrary = null, cloudAction: cloudLibrary = null, shareAction: sharing = null, linkManagerAction: managingLinks = null, copyAction: copying = null, copyLink: copyIntake = null, accountBridge: bridging = null, showRemote: remoting = null, phoneRemote: phoning = null, coEdit: coing = null, coRelay: relaying = null, showAudience: audiencing = null, wallAction: walling = null, materialNavigation: navigation = null, appMaker: maker = null, activityAuthoring: authoring = false, presentationAction: presenting = null, resume = false, embed = null, syncDelay = null } = {}) {
   if (app) throw new Error('minican already started');
   if (!root) throw new Error('minican root');
   app = root;
@@ -5338,6 +5406,7 @@ export function startMinican({ root = document.getElementById('app'), fonts = []
   else if (relaying && typeof relaying === 'object' && !embed) { const opts = typeof relaying.url === 'string' ? { url: relaying.url } : {}; coEdit = { open: async (code) => (await import('./co-relay.js')).openCoRelay(code, opts) }; }
   if (bridging && typeof bridging === 'object' && !embed) accountBridge = { ...(typeof bridging.url === 'string' ? { url: bridging.url } : {}) };
   activityAuthoring=authoring===true;
+  if(activityAuthoring&&typeof presenting?.open==='function')presentationAction=presenting;
   resumeOpen=resume===true;
   if (embed && typeof embed.done === 'function' && (embed.close == null || typeof embed.close === 'function')) {
     const label = (v) => (typeof v === 'string' && v.trim() ? Array.from(v.trim()).slice(0, 16).join('') : '');
