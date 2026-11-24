@@ -30,6 +30,7 @@ import {startVoice,canRecordVoice,voiceSlides} from './voice-record.js';
 import {spokenNotes} from './show-keys.js';
 import {webFrame, liveWebBoxes} from '../src/render.js';
 import {createHtmlWorkspace, editHtmlText} from './html-workspace.js';
+import {connectHtmlPresentation} from '../src/html-presentation.js';
 import {blockedSite, webHost} from '../src/web.js';
 import {PRINT_LAYOUTS,printHtml} from './print.js';
 import {encodeGif,GIF_LIMITS} from './gif.js';
@@ -2648,6 +2649,8 @@ async function present(O) {
   const tubeNow = () => tube.find((p) => p.started) || null;
   const stage = el('div', { class: 'cv-show-stage' });
   const count = el('span', { class: 'cv-show-count' });
+  const htmlDeck=slides.length===1&&!!slides[0].web?.html;
+  let htmlPresentation=null;
   // 휴대폰 리모컨(호스트 · GBE-AI Lab): 휴대폰에서 다음 · 앞 · 그 장으로 · 검은 화면을 보내고, 발표는 지금 장 · 발표자 노트를 알려 준다.
   let remote = null, remoteJob = null,remoteCueView=null;
   const pageTitle = (k) => { const t = (slides[k]?.items || []).filter((it) => it.t === 'text' && String(it.text || '').trim()).sort((a, b) => (Number(a.y) || 0) - (Number(b.y) || 0))[0]; return t ? Array.from(String(t.text).replace(/\s+/g, ' ').trim()).slice(0, 60).join('') : ''; };
@@ -2665,7 +2668,7 @@ async function present(O) {
         .catch(() => { /* A text-only remote remains usable if a page cannot be rasterized. */ });
     }
   };
-  const remoteState = () => ({ at: i, total: slides.length, title: O.record.name, page: pageTitle(i), next: i + 1 < slides.length ? pageTitle(i + 1) : '', notes: spokenNotes(slides[i]?.notes).slice(0, 2000),
+  const remoteState = () => htmlPresentation?.state ? ({at:htmlPresentation.state.index,total:htmlPresentation.state.total,title:O.record.name,page:htmlPresentation.state.title,next:htmlPresentation.state.cues[htmlPresentation.state.index+1]?.title||'',notes:spokenNotes(htmlPresentation.state.notes).slice(0,2000),cue:null,preview:'',nextPreview:'',black:tools?.curtain?.()==='black',activity:false}) : ({ at: i, total: slides.length, title: O.record.name, page: pageTitle(i), next: i + 1 < slides.length ? pageTitle(i + 1) : '', notes: spokenNotes(slides[i]?.notes).slice(0, 2000),
     cue:remoteCueView?.isConnected?cinemaRemoteState(remoteCueView):null,
     preview: remoteThumbs.get(slides[i]) || '', nextPreview: remoteThumbs.get(slides[i + 1]) || '', black: tools?.curtain?.() === 'black', activity: !!slides[i]?.activity });
   const tellRemote = () => { if (!remote || closed) return; warmRemotePreviews(); try { remote.update?.(remoteState()); } catch (error) { console.warn(error); } };
@@ -2841,6 +2844,7 @@ async function present(O) {
   // 돌아오면 숨긴 것을 다시 보인다. 안의 일(스튜디오의 앱 만들기 등)은 숨긴 동안에도 이어진다. 발표를 끝내면 모두 닫는다.
   const keptWeb = new Map(), KEEP_WEB_MAX = 6;
   const dropWeb = () => {
+    htmlPresentation?.destroy();htmlPresentation=null;
     if (web?.keep) { web.host.dataset.away = ''; web.host.inert = true; if (web.mode === 'use') { web.mode = 'view'; web.host.dataset.mode = 'view'; } }
     else { clearTimeout(web?.slow); web?.host.remove(); }
     web = null;
@@ -2889,6 +2893,7 @@ async function present(O) {
     const pill = el('div', { class: 'cv-web-pill', role: 'group', 'aria-label': html ? 'HTML 자료' : '웹사이트' });
     const status = el('div', { class: 'cv-web-status', role: 'status' });
     const frame = blocked ? null : webFrame(site);
+    if(htmlDeck&&html&&frame)htmlPresentation=connectHtmlPresentation(frame,{onState:state=>{if(closed)return;count.textContent=state?`${state.index+1} / ${state.total}`:`${i+1} / ${slides.length}`;tools?.changed();tellRemote();},onKey:key=>tools?.handle(key)});
     const host = el('section', { class: 'cv-show-web', dataset: { mode, showWeb: '' } }, ...(frame ? [frame] : []), status, pill);
     web = { url, html, host, frame, pill, mode, slow: 0, keep: !blocked && site.keep === true };
     if (web.keep) {
@@ -2995,6 +3000,7 @@ async function present(O) {
   };
   let wheeling = false;   // 휠로 넘기는 중(마지막 장에서 휠을 더 굴려도 발표를 끝내지 않는다)
   const go = (step) => {
+    if(htmlPresentation?.step(step,true))return;
     if(savingActivity)return;
     if(stepOpenQuestion(stage,step))return;
     if (step > 0 && pixel?.step?.()) return;   // 퀴즈 장: 시작 → 정답 공개 → 순위
@@ -3025,6 +3031,7 @@ async function present(O) {
   };
   // 번호·처음·끝·전체 보기로 그 쪽에 바로 간다(앞으로 가면 그 장의 전환으로, 뒤로 가면 거꾸로).
   const jump = (to) => {
+    if(htmlPresentation?.go(to))return;
     if (savingActivity) return;
     if (leavingLooks) { clearTimeout(leavingLooks); leavingLooks = 0; }
     to = Math.max(0, Math.min(slides.length - 1, to));
@@ -3111,6 +3118,10 @@ async function present(O) {
     waitForTeacher: k=>!!slides[k]?.activity?.photoStudy || slides[k]?.items?.some(it=>questionEffect(it.effect)||steppedEffect(it.effect)),
     saveTimes: (seconds) => { rehearsed = entries.map((v, k) => [v.page.id, seconds[k]]).filter(([, s]) => s != null); },
     title: O.record.name, notify: toast, keyClass: 'cv-show-key', stateChanged: tellRemote,
+    ...(htmlDeck?{total:()=>htmlPresentation?.state?.total||1,index:()=>htmlPresentation?.state?.index||0,
+      ratio:()=>aspectOf(entries[0].record),thumb:()=>slideView(slides[0],aspectOf(entries[0].record),480),preview:()=>slideView(slides[0],aspectOf(entries[0].record),960),
+      pageId:k=>slides[0].id+':'+k,sourcePage:()=>undefined,notes:k=>htmlPresentation?.state?.cues[k]?.notes??(k===htmlPresentation?.state?.index?htmlPresentation.state.notes:''),
+      topic:()=>'',label:()=>'',dwell:()=>undefined,steps:()=>0,waitForTeacher:()=>true,compareAllowed:()=>false}:{}),
   });
   // 좁은 화면(휴대폰)에서는 막대가 여러 줄로 커져 장을 가리지 않게 이 단추들의 글자를 숨기고 그림만 둔다(app.css 의 .cv-show-word).
   const word = (text) => el('span', { class: 'cv-show-word', text });
