@@ -1177,6 +1177,7 @@ function editorShell(O, bar) {
       O.editor.historyTools,
       el('span', { class: 'cv-canvas-label', text: '편집 캔버스' }),
       el('button', {class: 'btn cv-html-action', type: 'button', onClick: () => openHtmlTextEditor(O)}, '글 수정'),
+      presentationAction&&el('button',{class:'btn cv-html-action',type:'button',dataset:{presentationDesign:''},onClick:()=>openPresentationMaker(O,'design')},'화면 편집'),
       presentationAction&&el('button',{class:'btn cv-html-action',type:'button',dataset:{presentationEdit:''},onClick:()=>openPresentationMaker(O)},'AI로 이어 만들기'),
       el('button', {class: 'btn cv-html-action', type: 'button', onClick: () => { O.editor.openTab('upload'); O.workspace.openTools(); }}, 'HTML 설정'),
       // AI-G 도우미: 장을 다듬어 달라고 부탁하거나(AI-G 를 이어 준 곳), AI 없이 움직임을 자동으로 다듬는다. 오른쪽 속성 칸 자리에 열린다.
@@ -1220,6 +1221,7 @@ function openHtmlTextEditor(O) {
   if (O.closed || O.leaving || O.recoveryRequired || O.inlineImport || videoBusy(O)) return;
   const design = O.editor.getDesign(), source = design.web?.html;
   if (!source) return;
+  if(presentationAction&&source.includes('id="gai-app-data"')){void openPresentationMaker(O,'design');return;}
   const trigger = document.activeElement;
   O.htmlEditing = true; O.htmlWorkspace.pause();
   editHtmlText(source, html => {
@@ -4873,11 +4875,11 @@ function htmlOpenButton(loading) {
 }
 let importingHtml = false;
 let makingPresentation = false;
-async function openPresentationMaker(O=null) {
+async function openPresentationMaker(O=null,mode='ai') {
  if(!presentationAction||makingPresentation||moving||importingHtml||O&&(O.closed||O.co||O.inlineImport||O.activityBusy||videoBusy(O)))return;
  makingPresentation=true;const namespace=storageName();let created=null;
  try {
-  await presentationAction.open({html:O?.editor.getDesign().web?.html||'',onCreate:async({html,title})=>{
+  await presentationAction.open({mode,html:O?.editor.getDesign().web?.html||'',onCreate:async({html,title})=>{
    if(namespace!==storageName())throw Error('보관함이 바뀌었어요. 다시 열어주세요.');
    const all=await listDesigns();if(homeEntries(all,homeGroups(all)).length>=MAX_DESIGNS)throw Error('보관함이 가득 찼어요. 공간을 비운 뒤 다시 저장해주세요.');
    const {readHtmlFile}=await import('./html-import.js');

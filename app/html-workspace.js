@@ -67,6 +67,14 @@ export function createHtmlWorkspace(host) {
 // Editing a Text node escapes markup and leaves script/style content untouched.
 export function htmlTextDraft(source) {
   const doc = new DOMParser().parseFromString(source, 'text/html');
+  const payload=doc.querySelector('script#gai-app-data[type="application/json"]');
+  if(payload){
+    let app;try{app=JSON.parse(payload.textContent);}catch{throw Error('발표의 편집 원본을 읽지 못했어요.');}
+    if(app.version!==1||typeof app.html!=='string'||typeof app.css!=='string')throw Error('발표의 편집 원본 형식을 확인해주세요.');
+    const inner='<!doctype html><html><head><style data-onba-source-css>'+app.css.replace(/<\/style/gi,'<\\/style')+'</style></head><body>'+app.html+'</body></html>';
+    const draft=htmlTextDraft(inner);
+    return {...draft,apply(...args){const changed=draft.apply(...args);if(changed===inner)return source;const edited=new DOMParser().parseFromString(changed,'text/html');edited.querySelector('style[data-onba-source-css]')?.remove();app.html=edited.head.innerHTML+edited.body.innerHTML;payload.textContent=JSON.stringify(app).replaceAll('<','\\u003c');return '<!doctype html>'+doc.documentElement.outerHTML;}};
+  }
   const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT), nodes = [], fields = [];
   const elements = [doc.documentElement, doc.body, ...doc.body.querySelectorAll('*')], elementIds = new Map(elements.map((element, id) => [element, String(id)]));
   const excluded = 'script,style,noscript,template,textarea,select,iframe,object,embed,svg,canvas,[hidden],[aria-hidden="true"]';
