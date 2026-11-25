@@ -40,6 +40,8 @@ import { pollResultPage } from './poll-result.js';
 import {ONBATANG_VERSION} from './version.js';
 import {createGaiMaker,gaiLessonContext} from './gai-maker.js';
 import {createAiHelper} from './ai-helper.js';
+import {listAiTasks} from './ai-draft-store.js';
+import {aiProgress} from './ai-progress.js';
 import {createStoryAuthor,storyAuditView} from './story-author.js';
 import {emptyAiPage,insertAiPages} from './ai-insert.js';
 import {createStoryPhotoManager} from './story-photos.js';
@@ -642,6 +644,15 @@ function render() {
     // 지금 쓰는 온바탕의 버전: 맨 아래에 작고 옅게(새 배포가 들어왔는지 알 수 있게).
     el('p', { class: 'cv-version', dataset: { onbatangVersion: ONBATANG_VERSION }, text: `온바탕 v${ONBATANG_VERSION}` })));
   homeRail = mountStartRail(track, previous, next);
+  if(activityAuthoring&&appMaker){
+    const prefix=storageName()+'.native-helper-v1.';
+    void listAiTasks(prefix).then(rows=>{if(!hero.isConnected)return;
+      const jobs=el('section',{class:'onba-ai-home','aria-label':'AI-G 제작 중인 발표'});
+      for(const {key,task} of rows){const id=key.slice(prefix.length,-5),record=S.list?.find(r=>r.id===id);if(!record)continue;
+        jobs.append(el('button',{class:'btn',type:'button',onClick:()=>{if(!S.open)openDesign(record,false);}},`${task.state==='ready'?'AI-G 결과 확인':'AI-G 작업 이어보기'} · ${record.name||'새 발표'}`));
+      }if(jobs.childElementCount)hero.append(jobs);
+    }).catch(()=>{});
+  }
   if (focusedLayout) track.querySelector(`[data-layout="${CSS.escape(focusedLayout)}"]`)?.focus({ preventScroll: true });
   else if (focusedSelector) templates.querySelector(focusedSelector)?.focus({ preventScroll: true });
 }
@@ -1125,6 +1136,7 @@ function openDesign(record, isNew) {
   app.replaceChildren(shell);
   O.editor.refresh();                    // 화면에 놓은 뒤에 다시 그려서 테두리·손잡이의 자리를 맞춘다
   renderStrip(O);
+  if(activityAuthoring&&appMaker){O.assist=createAiHelper(assistHost(O));O.assistBox.replaceChildren(O.assist.node);}
   O.materialLoadingPromise=loadMaterialNavigation(O);
   // 처음 꾸미는 화면을 열면 사용법 안내를 한 번 보여 준다(이 기기에서 한 번). 언제든 ? 단추로 다시 본다.
   // 안내를 이미 본 기기에는 새 기능이 들어온 뒤 처음 열 때 새 기능 안내를 한 번 보여 준다(처음 온 기기의 안내에는 이미 들어 있다).
@@ -1249,9 +1261,12 @@ function toggleAssist(O, open = !O.shell.classList.contains('assist-open')) {
   if (open) O.assist.focus(); else if (O.assistBox.contains(document.activeElement)) button?.focus({ preventScroll: true });
 }
 function assistHost(O) {
+  O.aiProgress??=aiProgress(O,{leave:e=>closeDesign(O,e.currentTarget),home:onBrandClick?e=>closeToHost(O,e.currentTarget):null});
   const host = {
     provider: appMaker,
     draftKey:storageName()+'.native-helper-v1.'+O.record.id,
+    prepareAi:async()=>{O.aiDraft=true;touched(O);if(!await save(O))throw Error('발표 저장을 확인해 주세요.');},
+    aiState:(state,retry)=>{if(O.closed)return;O.aiProgress.update(state,retry);if(state)toggleAssist(O,true);},
     selectedId:()=>O.editor.selectedId(),
     preserveSpeech: !!O.record.story,
     // 여러 파트로 나뉜 자료(PPT 전체 자료 · 온바탕 파일의 묶음)는 모든 파트의 장을 쪽 차례대로 보여 준다(장 목록 띠와 같다)
@@ -1267,7 +1282,7 @@ function assistHost(O) {
       return () => { clearInterval(timer); control.restore(); };
     },
     blocked: () => (O.closed || S.open !== O ? '편집 화면을 다시 열어 주세요.' : O.co ? '같이 고치기를 마친 뒤에 쓸 수 있어요.' : O.inlineImport ? '가져오기를 마친 뒤에 쓸 수 있어요.'
-      : O.editor.busy() ? '영상을 찍거나 넣는 일을 마친 뒤에 쓸 수 있어요.' : O.undoBusy || O.motionAll || O.assistBusy || O.leaving ? '앞의 일을 마친 뒤에 다시 눌러 주세요.' : ''),
+      : O.aiWorking?'AI-G가 만드는 동안에는 편집할 수 없어요.':O.editor.busy() ? '영상을 찍거나 넣는 일을 마친 뒤에 쓸 수 있어요.' : O.undoBusy || O.motionAll || O.assistBusy || O.leaving ? '앞의 일을 마친 뒤에 다시 눌러 주세요.' : ''),
     apply: (slides, base) => applyAssist(O, slides, base),
     canUndo: (entry) => !!entry && !O.closed && O.undo?.past[O.undo.past.length - 1] === entry,
     undo: async (entry) => { if (O.closed || O.undo?.past[O.undo.past.length - 1] !== entry) return false; await stepUndo(O, true); return O.undo?.future[O.undo.future.length - 1] === entry; },
@@ -2166,7 +2181,7 @@ function applyDeck(O, state) {
 }
 /** 한 걸음 되돌린다(back) · 다시 한다. 맨 뒤의 일이 다른 장 · 다른 파트의 것이면 그리로 먼저 간다. */
 async function stepUndo(O, back) {
-  if (!O || O.closed || S.open !== O || O.leaving || O.inlineImport || app.inert || O.undoBusy || videoBusy(O)) return;
+  if (!O || O.aiWorking || O.closed || S.open !== O || O.leaving || O.inlineImport || app.inert || O.undoBusy || videoBusy(O)) return;
   if (!undoOn(O)) { if (back) O.editor.undoLocal(); else O.editor.redoLocal(); return; }
   const U = undoOf(O), from = back ? U.past : U.future, to = back ? U.future : U.past;
   O.undoBusy = true;
@@ -2216,7 +2231,7 @@ function removeSlideByKey(O) {
 // 그림판과 옆 칸은 제 글쇠를 먼저 듣는다(defaultPrevented). 글을 쓰는 칸 · 창(모달) · 발표 화면 · 가져오기 화면은 건드리지 않는다.
 function onEditorKeys(e) {
   const O = S.open;
-  if (!O || O.closed || O.inlineImport || e.defaultPrevented || e.isComposing || !O.editor || !O.shell?.isConnected || app.inert) return;
+  if (!O || O.aiWorking || O.closed || O.inlineImport || e.defaultPrevented || e.isComposing || !O.editor || !O.shell?.isConnected || app.inert) return;
   if (document.querySelector('.modal-backdrop, .cv-show') || document.body.classList.contains('modal-open')) return;
   const t = e.target instanceof Element ? e.target : null;
   if (!t || O.editor.stage.contains(t)) return;
@@ -2236,7 +2251,7 @@ function onEditorPress(e) {
   if (O) O.stripPicked = !!(t && O.strip?.contains(t) && t.closest('.cv-slide:not(.add)'));
 }
 function goSlide(O, i) {
-  if (O.closed || i === O.at || !O.slides[i] || videoBusy(O)) return;
+  if (O.aiWorking || O.closed || i === O.at || !O.slides[i] || videoBusy(O)) return;
   keepStack(O);
   const from = O.at;
   O.slides[O.at] = O.editor.getDesign();
@@ -2247,7 +2262,7 @@ function goSlide(O, i) {
 }
 /** 슬라이드 목록을 바꾼다(더하기·복제·지우기·옮기기). change(slides, at) 는 [새 목록, 이어서 꾸밀 번호] 를 돌려준다. */
 function changeSlides(O, change) {
-  if (O.closed || videoBusy(O)) return;
+  if (O.aiWorking || O.closed || videoBusy(O)) return;
   keepStack(O);
   O.slides[O.at] = O.editor.getDesign();
   const before = O.slides;
@@ -3372,6 +3387,7 @@ async function leaveEditor(O, { requireSaved = false, waitForSync = false, tidy 
   O.workspace?.destroy();
   O.htmlWorkspace?.destroy();
   O.assist?.destroy();O.assist=null;
+  O.aiProgress?.destroy();
   if (accountFor(O.record)) {
     const uploading = pusher.flush(O.record.id);
     if (waitForSync) await uploading;            // 바깥 화면으로 가면 이 앱이 닫히므로 올리기까지 기다린다
