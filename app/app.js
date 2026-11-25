@@ -387,7 +387,7 @@ async function startCollection(id) {
   if (S.open || !S.list || moving) return;
   const collection = COLLECTIONS.find(value => value.id === id);
   if (!collection) return;
-  if (homeEntries(S.list).length >= MAX_DESIGNS) { toast('새 그림을 둘 공간이 없어요. 내 그림 목록을 확인해 주세요.'); return; }
+  if (homeEntries(S.list, homeGroups(S.list)).length >= MAX_DESIGNS) { toast('새 그림을 둘 공간이 없어요. 내 그림 목록을 확인해 주세요.'); return; }
   app.inert = true;
   try {
     const record = newRecord('16:9', nextNumber(S.list));
@@ -1862,15 +1862,15 @@ function openFindReplace(O) {
 // 지금 장이 비어 있으면 그 장부터 채우고, 아니면 지금 장 뒤에 넣는다. 바탕 · 글꼴 · 움직임은 지금 장을 따른다.
 const OUTLINE_SAMPLE = '식물의 한살이\n  씨앗이 싹 터요\n  잎과 줄기가 자라요\n    햇빛을 받아 양분을 만들어요\n  꽃이 피고 열매를 맺어요\n> 씨앗을 직접 보여 주며 시작하기\n물의 순환\n  - 증발\n  - 구름\n  - 비\n정리해 볼까요?';
 function openNativeCompose(){
- if(!activityAuthoring||!appMaker||S.open||!S.list||moving||homeEntries(S.list).length>=MAX_DESIGNS)return;
+ if(!activityAuthoring||!appMaker||S.open||!S.list||moving||homeEntries(S.list,homeGroups(S.list)).length>=MAX_DESIGNS)return;
  openDesign(newRecord('16:9',nextNumber(S.list)),true);
  if(S.open)toggleAssist(S.open,true);
 }
 function openStoryMaker(){
- if(S.open||!S.list||moving||homeEntries(S.list).length>=MAX_DESIGNS)return;
+ if(S.open||!S.list||moving||homeEntries(S.list,homeGroups(S.list)).length>=MAX_DESIGNS)return;
  setupApp('16:9');
  const maker=createStoryAuthor({provider:activityAuthoring?appMaker:null,draftKey:storageName()+'.story-draft-v1',view:slide=>slideView(slide,16/9,360),onClose:closeModal,onCreate:async({title,story,slides})=>{
-  if(S.open||moving||homeEntries(S.list).length>=MAX_DESIGNS)throw Error('새 발표를 열 준비가 되지 않았어요. 잠시 뒤 다시 눌러 주세요.');
+  if(S.open||moving||homeEntries(S.list,homeGroups(S.list)).length>=MAX_DESIGNS)throw Error('새 발표를 열 준비가 되지 않았어요. 잠시 뒤 다시 눌러 주세요.');
   const record={...newRecord('16:9',nextNumber(S.list)),name:title,story,slides};
   const saved=await putDesign(record);upsert(saved);if(accountFor(saved))pusher.queue(saved);
   closeModal();openDesign(saved,false);toast('발화를 원문 그대로 연결했어요. 글·배치·사진을 고치고 발표해 보세요.',4500);
@@ -2336,7 +2336,7 @@ function offerMotionSets(O) {
     },
     onCreate: async (id, options) => {
       if (O.closed || S.open !== O || videoBusy(O)) throw Error('편집 화면에서 다시 열어 주세요.');
-      if (homeEntries(S.list || []).length >= MAX_DESIGNS) throw Error('새 그림을 둘 공간이 없어요. 내 그림 목록을 확인해 주세요.');
+      if (homeEntries(S.list || [], homeGroups(S.list || [])).length >= MAX_DESIGNS) throw Error('새 그림을 둘 공간이 없어요. 내 그림 목록을 확인해 주세요.');
       // The old PPT keeps every page/asset. The editable motion story starts as
       // a separate document after the existing draft is safely saved.
       const slides = createMotionSequence(id, { ...options, aspect: 16 / 9 });
