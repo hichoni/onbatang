@@ -8,7 +8,12 @@ import {resolve,extname,sep} from 'node:path';
 const root=fileURLToPath(new URL('../../',import.meta.url));
 const fixture=`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><link rel="stylesheet" href="/src/editor.css"><link rel="stylesheet" href="/app/app.css"><link rel="stylesheet" href="/app/brand.css"><body class="mc-app"><main id="app"></main><script type="module">
 import {startMinican} from '/app/app.js';
-await startMinican({storage:'progress-fixture',resume:true,activityAuthoring:true,brand:{name:'연구소',logo:'/app/brand/app-icon.svg'},onBrandClick:()=>location.href='/playground',appMaker:{connect:async()=>{},generate:async(input,{signal,onProgress,requestId,jobId})=>{
+import {setStorageName,listDesigns,putDesign} from '/app/store.js';import {newRecord} from '/app/designs.js';
+// 61 internal parts occupy one visible PPT slot. AI entry and apply must use
+// the same grouped capacity as the home screen, including after a reload.
+setStorageName('progress-fixture');const parts=Array.from({length:61},(_,i)=>'dpart'+String(i).padStart(3,'0'));
+const existing=new Set((await listDesigns()).map(r=>r.id));for(const [i,id]of parts.entries())if(!existing.has(id))await putDesign({...newRecord('16:9',i+1),id,name:'묶음 조각 '+i});
+await startMinican({storage:'progress-fixture',resume:true,activityAuthoring:true,materialNavigation:{load:async()=>null,groups:async()=>[{id:'dgrouped',title:'한 번 가져온 PPT',documents:parts}]},brand:{name:'연구소',logo:'/app/brand/app-icon.svg'},onBrandClick:()=>location.href='/playground',appMaker:{connect:async()=>{},generate:async(input,{signal,onProgress,requestId,jobId})=>{
  let payload=jobId?{jobId}:{input,requestId};for(;;){const r=await fetch('/job',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),signal});const v=await r.json();if(v.kind==='slides')return v;onProgress(v);payload={jobId:v.jobId};await new Promise((ok,no)=>{const timer=setTimeout(ok,50);signal.addEventListener('abort',()=>{clearTimeout(timer);no(signal.reason);},{once:true});});}
 }}});window.ready=true;
 </script>`;
