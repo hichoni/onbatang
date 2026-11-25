@@ -25,15 +25,24 @@ for(const engine of ['chromium','webkit'])test(engine+' native generation → se
  await context.addInitScript(()=>{try{localStorage.setItem('onbatang-tour-seen-v1:editor','1');localStorage.setItem('onbatang-tour-seen-v1:news-0.45','1');}catch{}});
  await context.route('**/*',route=>route.request().url().startsWith(origin)?route.continue():route.abort());
  await page.goto(origin+'/fixture.html');await page.waitForFunction(()=>window.ready);
+ // 실제 운영 장애: 기존 미저장 자료로 localStorage가 가득 차도 새 발표 초안은 보존한다.
+ await page.evaluate(()=>{localStorage.setItem('unsaved-user-data','preserve me');let size=1<<20,i=0;while(size>=1){try{localStorage.setItem('quota-filler-'+i,'x'.repeat(size));i++;}catch{size=Math.floor(size/2);}}});
  await page.locator('[data-presentation-start]').click();await page.locator('.cv-canvas .fe-stage').waitFor();assert.equal(await page.locator('.cv-assist-box .onba-compose').count(),1);await page.getByLabel('만들 발표',{exact:true}).fill('선생님께 질문이 수업을 바꾸는 방법을 설명하는 발표');await page.getByLabel('발표 장 수',{exact:true}).fill('17');
  await page.evaluate(()=>window.shortAnswer=true);await page.locator('[data-compose-ask]').click();await page.getByText(/요청한 17장이 모두 있어야/).waitFor();assert.equal(await page.locator('[data-compose-apply]').isDisabled(),true);
  await page.evaluate(()=>window.shortAnswer=false);await page.locator('[data-compose-ask]').click();await page.waitForFunction(()=>document.querySelectorAll('.onba-compose-previews article').length===17);
- assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k=>k.includes('.native-helper-v1.')))).proposal.slides),undefined,'draft stores asset references, not repeated photos in every rendered slide');
+ await page.waitForFunction(async()=>{const q=indexedDB.open('onbatang-native-ai-drafts-v1',1);return new Promise(ok=>{q.onsuccess=()=>{const db=q.result,r=db.transaction('drafts').objectStore('drafts').getAll();r.onsuccess=()=>{db.close();ok(r.result.some(d=>d?.proposal?.result?.ops?.length===17));};};});});
+ const draft=await page.evaluate(()=>new Promise(ok=>{const q=indexedDB.open('onbatang-native-ai-drafts-v1',1);q.onsuccess=()=>{const db=q.result,r=db.transaction('drafts').objectStore('drafts').getAll();r.onsuccess=()=>{db.close();ok(r.result.find(d=>d?.proposal));};};}));
+ assert.equal(draft.proposal.slides,undefined,'draft stores asset references, not repeated photos in every rendered slide');
+ assert.equal(await page.evaluate(()=>localStorage.getItem('unsaved-user-data')),'preserve me');
+ assert.equal(await page.getByRole('alert').filter({visible:true}).count(),0,'a full localStorage does not fail the new draft store');
+ // 같은 키의 쓰기는 순서를 지키고, 다시 열면 마지막 값이 남는다. 옛 localStorage 초안은 옮긴 후에만 비운다.
+ await page.evaluate(async()=>{for(const k of Object.keys(localStorage))if(k.startsWith('quota-filler-'))localStorage.removeItem(k);localStorage.setItem('legacy-draft',JSON.stringify({prompt:'이전 초안',proposal:null}));});
+ assert.deepEqual(await page.evaluate(async()=>{const {aiDraftStore}=await import('/app/ai-draft-store.js'),first=aiDraftStore('legacy-draft');const migrated=await first.read();const a=first.write({prompt:'첫 수정'}),b=first.write({prompt:'마지막 수정'});await Promise.all([a,b]);return {migrated:migrated.prompt,current:(await aiDraftStore('legacy-draft').read()).prompt,legacy:localStorage.getItem('legacy-draft')};}),{migrated:'이전 초안',current:'마지막 수정',legacy:null});
  if(process.env.NATIVE_COMPOSE_SHOT)await page.screenshot({path:process.env.NATIVE_COMPOSE_SHOT+'-'+engine+'-proposal.png'});
  assert.equal(await page.locator('iframe').count(),0);
  const calls=await page.evaluate(()=>window.asked.length);await page.locator('.cv-back').click();await page.getByRole('button',{name:'그림 1 열기',exact:true}).click();await page.locator('[data-assist-toggle]').click();await page.waitForFunction(()=>document.querySelectorAll('.onba-compose-previews article').length===17);assert.equal(await page.evaluate(()=>window.asked.length),calls,'reopening a proposal never calls AI again');
  await page.locator('[data-compose-apply]').click();await page.locator('.cv-canvas .fe-stage').waitFor();await page.evaluate(async()=>{(await import('/app/tour.js')).stopTour();});
- assert.equal(await page.locator('[data-assist-pane="edit"]').isVisible(),true);
+ await page.locator('[data-assist-pane="edit"]').waitFor({state:'visible'});
  await page.locator('[data-compose-undo]').click();assert.equal(await page.locator('.cv-slide[data-slide]').count(),1);assert.equal(await page.locator('.cv-canvas .fi-text').count(),0);await page.keyboard.press('Control+y');await page.waitForFunction(()=>document.querySelectorAll('.cv-slide[data-slide]').length===17);
  await page.locator('.cv-canvas .fi-text').first().click();await page.getByLabel('선택한 요소만',{exact:true}).check();await page.locator('.cv-assist-wish').fill('이 제목만 더 크게 하고 주황색으로 바꿔');await page.locator('[data-assist-ask]').click();await page.locator('[data-assist-apply]').waitFor();
  assert.equal(await page.evaluate(()=>window.asked.at(-1).slides[0].items.length),1);await page.locator('[data-assist-apply]').click();await page.locator('[data-assist-undo]').waitFor();await page.locator('[data-assist-undo]').click();
