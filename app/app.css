@@ -1701,4 +1701,5 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero{overflow:visible;z
 .onba-ai-home{display:flex;gap:10px;flex-wrap:wrap;padding:16px 24px}.ai-working .cv-work{position:relative}.ai-working [inert]{opacity:.48}
 @keyframes onba-ai-glow{50%{opacity:.45;transform:scale(.9)}}
 @media(prefers-reduced-motion:reduce){.onba-ai-orbit{animation:none}}
+@media(max-width:899px){.cv-page-workspace.ai-working.assist-open>.cv-assist{display:none}}
 @media(max-width:700px){.onba-ai-lock{inset:8px;padding:18px;gap:12px;justify-content:flex-start}.onba-ai-lock h2{font-size:22px}.onba-ai-steps{gap:4px}.onba-ai-nav{flex-direction:column;width:100%}}

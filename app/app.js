@@ -1266,7 +1266,7 @@ function assistHost(O) {
     provider: appMaker,
     draftKey:storageName()+'.native-helper-v1.'+O.record.id,
     prepareAi:async()=>{O.aiDraft=true;touched(O);if(!await save(O))throw Error('발표 저장을 확인해 주세요.');},
-    aiState:(state,retry)=>{if(O.closed)return;O.aiProgress.update(state,retry);if(state)toggleAssist(O,true);},
+    aiState:(state,retry)=>{if(O.closed)return;O.aiProgress.update(state,retry);if(state&&(O.aiSeenId!==state.id||(state.state==='ready'&&O.aiSeenState!=='ready')))toggleAssist(O,true);O.aiSeenId=state?.id;O.aiSeenState=state?.state;},
     selectedId:()=>O.editor.selectedId(),
     preserveSpeech: !!O.record.story,
     // 여러 파트로 나뉜 자료(PPT 전체 자료 · 온바탕 파일의 묶음)는 모든 파트의 장을 쪽 차례대로 보여 준다(장 목록 띠와 같다)
