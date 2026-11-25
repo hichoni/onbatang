@@ -24,6 +24,19 @@ const deck = () => [
   cleanDesign({bg: 'paper', items: [T('셋째 장', 50, 20, 80, 5)]}),
 ];
 
+test('resumed edits ignore JSON key order but reject changed content, order and identity', () => {
+  const base=deck(),ctx=editContext(base,[0]);
+  const reorder=value=>Array.isArray(value)?value.map(reorder):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).reverse().map(([k,v])=>[k,reorder(v)])):value;
+  const saved=reorder(base);
+  assert.notEqual(JSON.stringify(saved[0]),JSON.stringify(base[0]));
+  assert.deepEqual(ctx.stale(saved),[],'database JSON serialization is not an edit');
+  const answer=checkEdits({ops:[{op:'text',item:'p1.2',text:'다시 열린 발표'}]},ctx,{slides:base});
+  assert.equal(applyEdits(saved,answer.ops,ctx).count,1);
+  for(const mutate of [s=>s.items[1].text='사용자가 고친 글',s=>s.items.reverse(),s=>s.items[1].x+=1,s=>s.id='sdifferent',s=>s.notes='새 원고']){
+    const changed=structuredClone(saved);mutate(changed[0]);assert.deepEqual(ctx.stale(changed),[0]);assert.equal(applyEdits(changed,answer.ops,ctx).count,0);
+  }
+});
+
 test('roles are read from the layout: title, kicker, number, bar, arrow, photo and its frame, closing line', () => {
   const [one, two] = deck();
   assert.deepEqual(rolesOf(one), ['kicker', 'title', 'bar', 'number', 'arrow', 'frame', 'photo', 'closing', 'body']);

@@ -111,6 +111,9 @@ const slideKind = (slide) => (slide?.activity?.kind ? String(slide.activity.kind
 const r1 = (v) => (Number.isFinite(v) ? Math.round(v * 10) / 10 : 0);
 const clipText = (text, max) => { const all = Array.from(String(text ?? '')); return all.length > max ? { text: `${all.slice(0, max).join('')}…`, cut: true } : { text: all.join(''), cut: false }; };
 const MOTION_KEYS = ['an', 'lp', 'em', 'ex', 'sp'];
+// Cloud JSON storage may reorder object keys. Keep every value, identity and
+// array position in the guard; only serialization order is insignificant.
+const editStamp = value => JSON.stringify(value,(_key,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.keys(v).sort().map(k=>[k,v[k]])):v);
 
 function itemEntry(it, role, key, limits) {
   const out = { key, t: it.t, role, x: r1(it.x), y: r1(it.y), w: r1(it.w) };
@@ -152,7 +155,7 @@ export function editContext(slides, picks, { title = '', aspect = 16 / 9, limits
     let dropped = 0;
     indexes.forEach((index, n) => {
       const slide = list[index], key = `p${n + 1}`, items = Array.isArray(slide.items) ? slide.items : [];
-      stamps.set(index, JSON.stringify(slide));
+      stamps.set(index, editStamp(slide));
       map.set(key, { slide: index });
       const itemKeys = new Array(items.length).fill('');
       keys.set(index, { key, items: itemKeys });
@@ -195,7 +198,7 @@ export function editContext(slides, picks, { title = '', aspect = 16 / 9, limits
     find: (key) => map.get(key) || null,
     keyOf: (slide, item) => (item === undefined ? keys.get(slide)?.key : keys.get(slide)?.items[item]) || '',
     locked: (key) => frozen.has(key),
-    stale: (now) => chosen.filter((i) => JSON.stringify(now?.[i]) !== stamps.get(i)),
+    stale: (now) => chosen.filter((i) => editStamp(now?.[i]) !== stamps.get(i)),
   };
 }
 

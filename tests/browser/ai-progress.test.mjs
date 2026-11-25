@@ -50,9 +50,9 @@ for(const engine of ['chromium','webkit'])test(engine+' locks editing and resume
  assert.equal(jobs.size,1,'returning never creates another paid request');assert.equal(submits,engine==='chromium'?2:1,'lost acceptance reuses original id; accepted jobs only poll');
  await page.locator('[data-compose-apply]').click();await page.locator('[data-assist-pane="edit"]').waitFor({state:'visible'});assert.equal(await page.locator('.cv-canvas').evaluate(n=>n.inert),false);
  // A second job changes existing elements and survives a full refresh.
- completed=false;await page.locator('.cv-assist-wish').fill('첫 제목을 이어받은 제목으로 고쳐 줘');await page.locator('[data-assist-ask]').click();await page.getByRole('region',{name:'AI-G 제작 진행'}).waitFor();
+ completed=false;await page.getByRole('button',{name:/^3번째 장/}).click();await page.locator('.cv-assist-wish').fill('세 번째 장의 제목을 이어받은 제목으로 고쳐 줘');await page.locator('[data-assist-ask]').click();await page.getByRole('region',{name:'AI-G 제작 진행'}).waitFor();
  await page.waitForFunction(()=>document.querySelector('.onba-ai-lock p')?.textContent?.includes('디자인'));
- await page.reload();await page.getByRole('region',{name:'AI-G 제작 진행'}).waitFor();assert.equal(jobs.size,2);
- completed=true;await page.locator('[data-assist-apply]').waitFor({timeout:8000}).catch(async e=>{e.message+=' '+await page.locator('.onba-ai-task').innerText();throw e;});await page.locator('[data-assist-apply]').click();await page.locator('.cv-canvas').getByText('이어받은 제목',{exact:true}).waitFor();assert.equal(jobs.size,2);
+ await page.getByRole('button',{name:'내 그림으로 나가기',exact:true}).click();await page.getByRole('button',{name:/AI-G 작업 이어보기/}).waitFor();await page.reload();await page.getByRole('button',{name:/AI-G 작업 이어보기/}).click();await page.getByRole('region',{name:'AI-G 제작 진행'}).waitFor();assert.equal(jobs.size,2);
+ completed=true;await page.locator('[data-assist-apply]').waitFor({timeout:8000}).catch(async e=>{e.message+=' '+await page.locator('.onba-ai-task').innerText();throw e;});await page.locator('[data-assist-apply]').click();await page.getByRole('button',{name:/^3번째 장/}).click();await page.locator('.cv-canvas').getByText('이어받은 제목',{exact:true}).waitFor();assert.equal(jobs.size,2);
  await page.locator('.cv-back').click();assert.equal(await page.locator('.onba-ai-home').count(),0);assert.deepEqual(errors,[]);
 });
