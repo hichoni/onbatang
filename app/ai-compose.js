@@ -6,7 +6,7 @@ import {readStoryFile} from './story-source.js';
 import {readStoryPhoto,ACCEPT_IMAGES} from './story-photos.js';
 import {aiDraftStore} from './ai-draft-store.js';
 
-export function createAiCompose({provider,draftKey,view,onCreate,onClose,inline=false,aspect=()=>16/9,capture=()=>null,blocked=()=>'',onApplied=()=>{},onDraft=()=>{},destination=()=>''}){
+export function createAiCompose({provider,draftKey,view,onCreate,onClose,inline=false,aspect=()=>16/9,capture=()=>null,blocked=()=>'',onApplied=()=>{},onDraft=()=>{},destination=()=>'',startTask=null,taskBusy=()=>false,clearTask=async()=>{},onIdle=()=>{}}){
  let asking=null,disposed=false,reading=false,saving=false,initializing=true,saveVersion=0,photos=[],proposal=null;
  const store=aiDraftStore(draftKey);
  const status=el('p',{role:'status','aria-live':'polite',class:'cv-down-note'});
@@ -27,8 +27,8 @@ export function createAiCompose({provider,draftKey,view,onCreate,onClose,inline=
  const stop=el('button',{class:'btn',type:'button',hidden:true,onClick:()=>asking?.abort()},'기다리기 중단');
  const create=el('button',{class:'btn btn-primary',type:'button',dataset:{composeApply:''},disabled:true,onClick:async()=>{
   if(!proposal||asking||reading||saving||disposed)return;saving=true;lock();
-  try{const result=await onCreate({title:proposal.title,slides:structuredClone(proposal.slides),context:proposal.context});if(inline){proposal=null;draw();await save();onApplied(result);}else await store.write(null);}
-  catch(e){if(!disposed)status.textContent=e.message;}finally{saving=false;if(!disposed)lock();}
+  try{const result=await onCreate({title:proposal.title,slides:structuredClone(proposal.slides),context:proposal.context});await clearTask(proposal.taskId);if(inline){proposal=null;draw();await save();onApplied(result);}else await store.write(null);}
+  catch(e){if(!disposed)status.textContent=e.message;}finally{saving=false;if(!disposed){lock();onIdle();}}
  }},inline?'이 발표에 장 넣기':'이 발표를 온바탕에서 편집하기');
  const previews=el('div',{class:'onba-compose-previews','aria-label':'생성한 발표 전체'});
  const resultTitle=el('h3',{text:'만들어진 모든 장을 여기서 확인하세요.'});
@@ -42,13 +42,14 @@ export function createAiCompose({provider,draftKey,view,onCreate,onClose,inline=
   el('h2',{text:'어떤 발표를 만들까요?'}),el('p',{class:'cv-down-note',text:'이야기 흐름부터 디자인과 움직임까지 구성합니다. 완성된 모든 장은 온바탕에서 글·도형·사진을 눌러 직접 고칠 수 있어요.'}),
   placement,el('div',{class:'onba-compose-columns'},fields,el('section',{},resultTitle,previews)),draftError,status,
   el('div',{class:'story-actions'},stop,create,...(inline?[]:[el('button',{class:'btn',type:'button',onClick:onClose},'닫기')])));
- function lock(){const busy=initializing||!!asking||reading||saving;fields.disabled=busy;ask.disabled=!provider;stop.hidden=!asking;create.disabled=busy||!proposal;photoFile.disabled=photos.length>=3;}
+ function lock(){const busy=initializing||!!asking||reading||saving||taskBusy();fields.disabled=busy;ask.disabled=!provider;stop.hidden=!asking;create.disabled=busy||!proposal;photoFile.disabled=photos.length>=3;}
  async function save(){if(disposed||initializing||!draftKey)return;const version=++saveVersion;try{const draft=proposal?{title:proposal.title,request:proposal.request,result:proposal.result,photos:proposal.photos,context:proposal.context}:null;const value={prompt:prompt.value,count:count.value,reference:reference.value,photos,proposal:draft};if(prompt.value.trim()||reference.value.trim()||photos.length||proposal)onDraft();await store.write(value);if(!disposed&&version===saveVersion)draftError.hidden=true;}catch{if(!disposed&&version===saveVersion){draftError.hidden=false;draftError.textContent='이 기기에 초안을 저장하지 못했어요. 창을 닫기 전에 온바탕 발표로 저장해 주세요.';}}}
  function drawPhotos(){photoList.replaceChildren(...photos.map(p=>el('div',{class:'onba-compose-photo'},el('img',{src:p.url,alt:p.alt}),el('label',{},'사진 설명',el('input',{value:p.alt,maxLength:160,onInput:e=>{p.alt=e.target.value;save();}})),el('button',{class:'btn',type:'button',onClick:()=>{photos=photos.filter(v=>v!==p);drawPhotos();lock();save();}},'빼기'))));}
  function draw(){previews.replaceChildren();resultTitle.textContent=proposal?`${proposal.title} · ${proposal.slides.length}장`:'만들어진 모든 장을 여기서 확인하세요.';if(proposal){proposal.slides.forEach((slide,i)=>previews.append(el('article',{},view(slide),el('b',{text:`${i+1}. ${slide.topic}`}),el('details',{},el('summary',{text:'발표 원고'}),el('p',{text:slide.notes||'발화 없음'})))));}lock();}
  async function generate(){
-  if(!provider||initializing||asking||reading||saving||disposed)return;let request,context;
+  if(!provider||initializing||asking||reading||saving||disposed||taskBusy())return;let request,context;
   try{const why=blocked();if(why)throw Error(why);request=cleanComposeRequest({kind:'slides',task:'compose',prompt:prompt.value,count:Number(count.value),reference:reference.value,aspect:aspect(),fonts:nativeComposeCatalog(settings().fonts).fonts,photos:photos.map(p=>({id:p.id,alt:p.alt,aspect:p.ratio}))});context=capture(request);}catch(e){status.textContent=e.message;return;}
+  if(startTask){try{await save();await startTask(request,{request,context,photos:structuredClone(photos)});}catch(e){status.textContent=e.message;}return;}
   const control=asking=new AbortController();lock();save();status.textContent='AI 연결을 확인하고 있어요.';
   try{
    await provider.connect();control.signal.throwIfAborted();
@@ -61,6 +62,11 @@ export function createAiCompose({provider,draftKey,view,onCreate,onClose,inline=
   finally{if(asking===control)asking=null;if(!disposed)lock();}
  }
  for(const field of [prompt,count,reference])field.addEventListener('input',save);
- void(async()=>{try{const draft=await store.read();if(disposed)return;if(draft){prompt.value=String(draft.prompt||'').slice(0,1800);count.value=String(draft.count||10);reference.value=String(draft.reference||'').slice(0,16000);photos=Array.isArray(draft.photos)?draft.photos.slice(0,3):[];if(draft.proposal){const checked=validateComposition(draft.proposal.result,draft.proposal.request);proposal={...draft.proposal,title:checked.title,slides:compositionSlides(checked,draft.proposal.request,draft.proposal.photos||photos)};}status.textContent='저장해 둔 초안을 이어서 열었어요. AI를 다시 호출하지 않았어요.';}}catch{if(!disposed){status.textContent='이전 초안을 읽지 못했어요. 저장된 발표는 그대로 있습니다.';proposal=null;}}finally{initializing=false;if(!disposed){drawPhotos();draw();}}})();
- drawPhotos();draw();return {node,focus:()=>prompt.focus(),busy:()=>!!asking||reading||saving,refresh(){placement.textContent=destination();},destroy(){save();disposed=true;asking?.abort();}};
+ const restored=(async()=>{try{const draft=await store.read();if(disposed)return;if(draft){prompt.value=String(draft.prompt||'').slice(0,1800);count.value=String(draft.count||10);reference.value=String(draft.reference||'').slice(0,16000);photos=Array.isArray(draft.photos)?draft.photos.slice(0,3):[];if(draft.proposal){const checked=validateComposition(draft.proposal.result,draft.proposal.request);proposal={...draft.proposal,title:checked.title,slides:compositionSlides(checked,draft.proposal.request,draft.proposal.photos||photos)};}status.textContent='저장해 둔 초안을 이어서 열었어요. AI를 다시 호출하지 않았어요.';}}catch{if(!disposed){status.textContent='이전 초안을 읽지 못했어요. 저장된 발표는 그대로 있습니다.';proposal=null;}}finally{initializing=false;if(!disposed){drawPhotos();draw();}}})();
+ drawPhotos();draw();return {node,focus:()=>prompt.focus(),busy:()=>!!asking||reading||saving,refresh(){placement.textContent=destination();lock();},async acceptTask(task){
+  await restored;if(disposed)return;
+  const {request,context,photos:images}=task.meta,checked=validateComposition(task.answer,request);
+  proposal={title:checked.title,request,result:checked,photos:images,context,slides:compositionSlides(checked,request,images)};
+  draw();await save();status.textContent=`${proposal.slides.length}장 모두 받았어요. 전체 구성을 확인한 뒤 적용해 주세요.`;
+ },destroy(){save();disposed=true;asking?.abort();}};
 }

@@ -19,6 +19,7 @@ import {emptyAiPage} from './ai-insert.js';
 import {settings} from '../src/model.js';
 import {nativeComposeCatalog} from '../src/ai-compose.js';
 import {readStoryPhoto,ACCEPT_IMAGES} from './story-photos.js';
+import {createAiTask} from './ai-task.js';
 
 const WANTS = [['text', '글'], ['layout','배치·디자인'], ['elements','요소 추가·삭제'], ['motion', '움직임'], ['notes', '발표자 노트']];
 const clip = (text, max) => { const all = Array.from(String(text ?? '')); return all.length > max ? `${all.slice(0, max).join('')}…` : all.join(''); };
@@ -30,7 +31,12 @@ export function createAiHelper(host) {
   const limit = EDIT_LIMITS.slides;
   let scope = 'here', picked = new Set(), want = new Set(choices.map(([id]) => id)), asking = null, disposed = false, count = -1;
   const stops = new Set();
-  let composer=null,mode='edit',photos=[],readingPhoto=false;
+  let composer=null,mode='edit',photos=[],readingPhoto=false,task=null,ticker=null;
+  const taskLabel=el('strong'),taskDetail=el('p'),taskTime=el('small');
+  const taskRetry=el('button',{class:'btn',type:'button',onClick:()=>task?.retry()},'연결 확인하고 이어받기');
+  const taskNotice=el('section',{class:'onba-ai-task',role:'status','aria-live':'polite',hidden:true},
+    el('span',{class:'onba-ai-orbit','aria-hidden':'true'},'✦'),taskLabel,taskDetail,taskTime,
+    el('p',{text:'제작 중에는 이 발표의 편집을 잠가요. 내 그림이나 연구소 홈으로 나가도 접수한 작업은 서버에서 계속돼요.'}),taskRetry);
 
   // ---------- 범위 ----------
   const hereLabel = el('span');
@@ -99,14 +105,14 @@ export function createAiHelper(host) {
   const tabs=el('div',{class:'cv-assist-modes','aria-label':'AI-G 작업 고르기'});
   function setMode(next,applied=false){if(!applied&&(asking||readingPhoto||composer?.busy()))return;mode=next;editPane.hidden=mode!=='edit';composePane.hidden=mode!=='compose';for(const b of tabs.children)b.setAttribute('aria-pressed',String(b.dataset.assistMode===mode));if(mode==='compose')composer?.focus();else wish.focus();}
   if(provider&&host.compose){
-    composer=createAiCompose({provider,draftKey:host.draftKey,inline:true,view:host.view,aspect:host.aspect,blocked:host.compose.blocked,capture:host.compose.capture,onCreate:host.compose.apply,destination:host.compose.destination,onDraft:host.compose.draftChanged,onApplied:token=>{
+    composer=createAiCompose({provider,onIdle:()=>update(),draftKey:host.draftKey,inline:true,view:host.view,aspect:host.aspect,blocked:host.compose.blocked,capture:host.compose.capture,onCreate:host.compose.apply,destination:host.compose.destination,onDraft:host.compose.draftChanged,startTask:(input,meta)=>task.start(input,meta),taskBusy:()=>!!task?.busy(),clearTask:async()=>{await host.prepareAi?.();await task?.clear();},onApplied:token=>{
       const box=el('article',{class:'cv-assist-card',dataset:{composeDone:''}},el('p',{text:'장을 넣었어요. 왼쪽 장 목록에서 골라 글·요소·움직임을 계속 고칠 수 있어요.'}));
       const undo=el('button',{class:'btn',type:'button',dataset:{composeUndo:''},onClick:async()=>{if(await host.undo(token)){box.replaceChildren(el('p',{text:'생성한 장을 넣기 전으로 되돌렸어요.'}));}else undo.disabled=true;}},'생성 적용 되돌리기');
       box.append(undo);box._sync=()=>{undo.disabled=!host.canUndo(token);};log.append(box);setMode('edit',true);scrollTo(box);
     }});composePane.append(composer.node);
     for(const [id,label] of [['compose','발표 만들기'],['edit','요소 추가·수정']])tabs.append(el('button',{class:'btn chip',type:'button',dataset:{assistMode:id},'aria-pressed':String(id==='edit'),onClick:()=>setMode(id)},label));
   }
-  const body = el('div', { class: 'cv-assist-body' },tabs,composePane,editPane,log);
+  const body = el('div', { class: 'cv-assist-body' },taskNotice,tabs,composePane,editPane,log);
   const close = el('button', { class: 'cv-assist-close', type: 'button', 'aria-label': 'AI-G 도우미 닫기', onClick: () => host.close?.() }, '×');
   const node = el('div', { class: 'cv-assist-box' }, el('header', { class: 'cv-assist-head' }, gaiOwl(), el('h2', { text: 'AI-G 도우미' }), close), body);
 
@@ -122,6 +128,19 @@ export function createAiHelper(host) {
     polishButton.disabled = polishScope.value === 'scope' && !n;
     if (peek.open) shown.textContent = peekText();
   }
+  if(composer)task=createAiTask({key:host.draftKey,provider,prepare:()=>host.prepareAi?.(),change:state=>{
+    const busy=state?.state==='pending';taskNotice.hidden=!state;
+    taskNotice.dataset.state=state?.state||'';
+    taskLabel.textContent=busy?'AI-G가 발표를 만들고 있어요':state?.state==='ready'?'완성된 결과를 확인해 주세요':'AI 작업을 확인해 주세요';
+    taskDetail.textContent=state?.message||'';taskRetry.hidden=!busy||!!task?.running();
+    const elapsed=()=>{taskTime.textContent=busy?`${Math.floor((Date.now()-state.createdAt)/60000)}분 ${Math.floor((Date.now()-state.createdAt)/1000)%60}초 경과`:'';};
+    clearInterval(ticker);elapsed();if(busy)ticker=setInterval(elapsed,1000);
+    for(const part of [tabs,composePane,editPane,log])part.inert=busy;
+    composer.refresh();host.aiState?.(state,()=>task?.retry());if(state)setMode(state.input?.task==='compose'?'compose':'edit',true);update();
+  },result:async state=>{
+    if(state.input.task==='compose'){await composer.acceptTask(state);return;}
+    receiveEdit(state.answer,state.meta,state.id);
+  }});
   const say = (text) => { status.textContent = text; };
   const bubble = (who, text) => { const p = el('p', { class: `cv-assist-bubble ${who}`, text }); log.append(p); return p; };
   const scrollTo = (card) => requestAnimationFrame(() => card.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
@@ -133,7 +152,7 @@ export function createAiHelper(host) {
   };
 
   // ---------- 결과 카드(미리 보기 → 적용) ----------
-  function card({ ctx, base, checked, limits, note = [], tail = '' }) {
+  function card({ ctx, base, checked, limits, note = [], tail = '',taskId=null }) {
     const skip = new Set();
     let state = 'ready', token = null;
     const box = el('article', { class: 'cv-assist-card', dataset: { assistCard: '', state } });
@@ -183,7 +202,7 @@ export function createAiHelper(host) {
       actions.replaceChildren(...[...(state === 'ready' ? [
         full.changes.some((c) => c.lines.some((l) => /나타나기|계속|전환|조합/.test(l.text))) ? btn('움직임 보기', { dataset: { assistPlay: '' }, disabled: !now.count }, play) : null,
         btn('적용', { class: 'btn btn-primary', dataset: { assistApply: '' }, disabled: !now.count }, apply),
-        btn('버리기', { class: 'btn btn-ghost', dataset: { assistDrop: '' } }, () => { state = 'dropped'; draw(); }),
+        btn('버리기', { class: 'btn btn-ghost', dataset: { assistDrop: '' } }, async () => { if(taskId)await task.clear(taskId);state = 'dropped'; draw(); }),
       ] : state === 'applied' ? [btn('되돌리기', { dataset: { assistUndo: '' }, disabled: !host.canUndo(token) }, async () => { if (await host.undo(token)) { state = 'undone'; draw(); } else draw(); })] : []),
       // replaceChildren 은 null 을 "null" 글자로 넣는다: 없는 것은 걸러서 넘긴다(영수증 글이 없는 자동 다듬기 카드에 null 이 보였다)
       tail && state !== 'dropped' ? el('small', { class: 'cv-assist-tail', text: tail }) : null].filter(Boolean));
@@ -231,6 +250,7 @@ export function createAiHelper(host) {
       if (!token) { notes.hidden = false; notes.textContent = '지금은 적용할 수 없어요. 편집 화면을 확인한 뒤 다시 눌러 주세요.'; return; }
       if (done.stale.length) extra.push(`부탁한 뒤에 고친 ${done.stale.map((i) => `${i + 1}장`).join(' · ')}은 그대로 두었어요.`);
       state = 'applied';
+      if(taskId){await host.prepareAi?.();await task.clear(taskId);}
       draw();
     };
     box._stops = [];
@@ -245,7 +265,7 @@ export function createAiHelper(host) {
   // ---------- 부탁하기 ----------
   async function ask() {
     if (asking) { asking.abort(); return; }
-    if (!provider||readingPhoto||composer?.busy()) return;
+    if (!provider||readingPhoto||composer?.busy()||task?.busy()) return;
     const blocked = host.blocked();
     if (blocked) { say(blocked); return; }
     const picks = chosen();
@@ -253,8 +273,13 @@ export function createAiHelper(host) {
     const base = host.slides();
     const ctx = sent();
     if(scope==='selection'&&!ctx.request.slides.some(s=>s.items.length)){say('캔버스에서 고칠 글·도형·사진을 먼저 골라 주세요.');return;}
+    if(task){
+      const wants=choices.filter(([id])=>want.has(id)&&(scope!=='selection'||id!=='notes')).map(([id])=>id),prompt=wish.value.trim();
+      const options={title:host.title(),aspect:host.aspect(),fonts:nativeComposeCatalog(settings().fonts).fonts,photos,...(scope==='selection'?{selectedIds:[host.selectedId?.()||'']}:{})};
+      try{await task.start({kind:'slides',task:'polish',want:wants,prompt,...ctx.request,catalog:motionCatalog()},{base,picks:ctx.picks,options});}catch(e){say(e.message);}return;
+    }
     // 연결 창은 누른 그 순간에 열어야 막히지 않는다: 기다리기 전에 connect 를 부른다.
-    let task; try { task = provider.connect(); } catch (error) { task = Promise.reject(error); }
+    let connection; try { connection = provider.connect(); } catch (error) { connection = Promise.reject(error); }
     const controller = asking = new AbortController();
     const wants = choices.filter(([id]) => want.has(id)&&(scope!=='selection'||id!=='notes')), prompt = wish.value.trim();
     bubble('me', `${rangeText(ctx.picks)} · ${wants.map(([, name]) => name).join(' · ')}${prompt ? `\n${prompt}` : ''}`);
@@ -262,7 +287,7 @@ export function createAiHelper(host) {
     update();
     say('AI-G 연결을 확인하고 있어요…');
     try {
-      await task;
+      await connection;
       if (controller.signal.aborted) throw new DOMException('', 'AbortError');
       const n = ctx.picks.length;
       say(`AI-G가 ${n === 1 ? '장을' : `${n}장을`} 읽고 있어요… ${n === 1 ? '20초쯤' : n <= 6 ? '1분쯤' : n <= 12 ? '1 ~ 2분' : '3분쯤'} 걸려요(차례를 기다리면 더 걸릴 수 있어요).`);
@@ -290,6 +315,12 @@ export function createAiHelper(host) {
       wish.disabled = false;
       update();
     }
+  }
+  function receiveEdit(answer,meta,taskId){
+    const {base,picks,options}=meta,ctx=editContext(base,picks,options);
+    const safe=host.preserveSpeech?{...answer,ops:answer.ops.map(op=>{if(op.op!=='slide')return op;const {notes,...rest}=op;return rest;})}:answer;
+    const checked=checkEdits(safe,ctx,{slides:base});
+    card({ctx,base,checked,limits:EDIT_LIMITS,tail:answer.receipt||'',taskId});say('결과를 미리 보고 적용해 주세요.');
   }
   function polish() {
     const blocked = host.blocked();
@@ -322,7 +353,7 @@ export function createAiHelper(host) {
       for (const box of log.children) box._sync?.();
     },
     focus() { if(mode==='compose')composer.focus();else (provider ? wish : polishButton).focus({ preventScroll: true }); },
-    busy: () => !!asking||readingPhoto||!!composer?.busy(),
-    destroy() { disposed = true; asking?.abort();composer?.destroy(); for (const stop of stops) stop(); stops.clear(); node.remove(); },
+    busy: () => !!asking||readingPhoto||!!composer?.busy()||!!task?.busy(),
+    destroy() { disposed = true;clearInterval(ticker);task?.destroy();asking?.abort();composer?.destroy(); for (const stop of stops) stop(); stops.clear(); node.remove(); },
   };
 }

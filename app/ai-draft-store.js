@@ -32,3 +32,10 @@ export function aiDraftStore(key){
   const value=JSON.parse(text);await write(value);return value;
  }};
 }
+export async function listAiTasks(prefix){
+ const db=await open();return new Promise((resolve,reject)=>{
+  const tx=db.transaction('drafts'),s=tx.objectStore('drafts'),keys=s.getAllKeys(),values=s.getAll();
+  tx.oncomplete=()=>resolve(keys.result.flatMap((key,i)=>typeof key==='string'&&key.startsWith(prefix)&&key.endsWith('.task')&&['pending','ready'].includes(values.result[i]?.state)?[{key,task:values.result[i]}]:[]));
+  tx.onabort=tx.onerror=()=>reject(tx.error);
+ });
+}

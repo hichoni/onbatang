@@ -1684,3 +1684,22 @@ body.mc-app :is(#app,.cv-app-root)[data-view="home"] .cv-hero{overflow:visible;z
 .cv-assist-body [hidden]{display:none!important}
 
 .onba-compose-inline .story-actions{position:sticky;bottom:0;z-index:1;background:var(--cv-paper,#fffdf7);padding:12px 0 4px;border-top:1px solid var(--cv-line,#d9e2dd)}
+.onba-ai-lock{position:absolute;inset:52px 16px 16px;z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:28px;text-align:center;background:rgba(255,253,247,.97);border:1px solid #c6d9d2;border-radius:22px;box-shadow:0 16px 60px #16382e12;color:#193d33;overflow:auto}
+.onba-ai-lock[hidden],.onba-ai-task[hidden]{display:none}
+.onba-ai-lock:focus{outline:2px solid #bfd8d2;outline-offset:2px}
+.onba-ai-lock h2{font-size:clamp(22px,2.8vw,34px);margin:0;line-height:1.3}
+.onba-ai-lock p{max-width:540px;margin:0;line-height:1.7}
+.onba-ai-nav{display:flex;flex-wrap:wrap;justify-content:center;gap:10px}
+.onba-ai-orbit{font-size:38px;color:#287565;animation:onba-ai-glow 2.4s ease-in-out infinite}
+.onba-ai-steps{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;list-style:none;padding:0;margin:0;counter-reset:ai-step}
+.onba-ai-steps li{padding:8px 12px;border:1px solid #dbe3df;border-radius:30px;color:#76877f;font-size:13px;counter-increment:ai-step}
+.onba-ai-steps li:before{content:counter(ai-step) ' ';font-weight:700}
+.onba-ai-steps li[data-current=true]{background:#246d5d;border-color:#246d5d;color:#fff}
+.onba-ai-steps li[data-done=true]{background:#e2eee8;color:#246d5d}
+.onba-ai-task{padding:18px;margin:0 0 16px;border:1px solid #b5d1c5;border-radius:16px;background:#edf5ef;color:#224e40}
+.onba-ai-task strong{display:block;font-size:18px}.onba-ai-task p{line-height:1.6}.onba-ai-task small{display:block;font-variant-numeric:tabular-nums}
+.onba-ai-home{display:flex;gap:10px;flex-wrap:wrap;padding:16px 24px}.ai-working .cv-work{position:relative}.ai-working [inert]{opacity:.48}
+@keyframes onba-ai-glow{50%{opacity:.45;transform:scale(.9)}}
+@media(prefers-reduced-motion:reduce){.onba-ai-orbit{animation:none}}
+@media(max-width:899px){.cv-page-workspace.ai-working.assist-open>.cv-assist{display:none}}
+@media(max-width:700px){.onba-ai-lock{inset:8px;padding:18px;gap:12px;justify-content:flex-start}.onba-ai-lock h2{font-size:22px}.onba-ai-steps{gap:4px}.onba-ai-nav{flex-direction:column;width:100%}}
