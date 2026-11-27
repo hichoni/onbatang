@@ -82,9 +82,8 @@ export function createAiHelper(host) {
   }});
   function drawPhotos(){photoList.replaceChildren(...photos.map(p=>el('div',{class:'onba-compose-photo'},el('img',{src:p.url,alt:p.alt}),el('input',{'aria-label':'추가할 사진 설명',value:p.alt,maxLength:160,onInput:e=>p.alt=e.target.value}),el('button',{class:'btn',type:'button',onClick:()=>{if(asking)return;photos=photos.filter(v=>v!==p);drawPhotos();update();}},'빼기'))));}
   const attachments=el('details',{class:'cv-assist-photos'},el('summary',{text:'장에 넣을 사진 첨부 · 최대 3장'}),photoFile,photoList,el('p',{class:'cv-down-note',text:'사진 설명만 AI에 보내고, 원본은 이 발표에 넣어요.'}));
-  const aiPart = provider
-    ? el('div', { class: 'cv-assist-ai' }, chips, wish, attachments, peek, askButton, status)
-    : el('p', { class: 'cv-down-note cv-assist-status', dataset: { assistNoAi: '' }, text: 'AI-G에게 부탁하기는 GBE-AI Lab(gbe.ai.kr)의 온바탕에서 쓸 수 있어요. 아래 "움직임 자동 다듬기"는 여기서도 바로 쓸 수 있어요.' });
+  // AI 연결이 없는 독립 온바탕에는 AI를 알리거나 권하는 글 없이 움직임 자동 다듬기만 둔다.
+  const aiPart = provider ? el('div', { class: 'cv-assist-ai' }, chips, wish, attachments, peek, askButton, status) : null;
 
   // ---------- 움직임 자동 다듬기 ----------
   const polishScope = el('select', { class: 'cv-assist-select', 'aria-label': '자동으로 다듬을 범위' }, el('option', { value: 'scope', text: '위에서 고른 장' }), el('option', { value: 'all', text: '자료 전체' }));
@@ -92,17 +91,18 @@ export function createAiHelper(host) {
   const polishButton = el('button', { class: 'btn cv-assist-polish', type: 'button', dataset: { assistPolish: '' }, onClick: () => polish() }, '움직임 자동 다듬기');
   const polishPart = el('div', { class: 'cv-assist-auto' },
     el('b', { text: '움직임 자동 다듬기' }),
-    el('p', { class: 'cv-down-note', text: '장의 모양을 보고 입혀요(카드 줄은 차례로, 숫자는 쿵). AI를 쓰지 않아 질문권이 들지 않아요.' }),
+    el('p', { class: 'cv-down-note', text: provider ? '장의 모양을 보고 입혀요(카드 줄은 차례로, 숫자는 쿵). AI를 쓰지 않아 질문권이 들지 않아요.' : '장의 모양을 보고 입혀요(카드 줄은 차례로, 숫자는 쿵).' }),
     el('div', { class: 'cv-assist-row' }, polishScope, polishButton),
     el('label', { class: 'cv-assist-keep' }, keep, ' 이미 정한 움직임은 그대로 두기'));
 
-  const log = el('div', { class: 'cv-assist-log', role: 'log', 'aria-label': 'AI-G 도우미와 나눈 일' });
+  const panelName = provider ? 'AI-G 도우미' : '움직임 다듬기';
+  const log = el('div', { class: 'cv-assist-log', role: 'log', 'aria-label': `${panelName}와 나눈 일` });
   const editPane=el('div',{dataset:{assistPane:'edit'}},el('div', { class: 'cv-assist-form' },
       el('b', { text: '무엇을 다듬을까요?' }),
       el('div', { class: 'cv-assist-scopes', role: 'radiogroup', 'aria-label': '다듬을 범위' }, radio('here', hereLabel), radio('pick', el('span', { text: '장 고르기' })),host.selectedId?radio('selection',el('span',{text:'선택한 요소만'})):null),
       picker, aiPart, polishPart));
   const composePane=el('div',{hidden:true,dataset:{assistPane:'compose'}});
-  const tabs=el('div',{class:'cv-assist-modes','aria-label':'AI-G 작업 고르기'});
+  const tabs=el('div',{class:'cv-assist-modes',...(provider?{'aria-label':'AI-G 작업 고르기'}:{hidden:true})});
   function setMode(next,applied=false){if(!applied&&(asking||readingPhoto||composer?.busy()))return;mode=next;editPane.hidden=mode!=='edit';composePane.hidden=mode!=='compose';for(const b of tabs.children)b.setAttribute('aria-pressed',String(b.dataset.assistMode===mode));if(mode==='compose')composer?.focus();else wish.focus();}
   if(provider&&host.compose){
     composer=createAiCompose({provider,onIdle:()=>update(),draftKey:host.draftKey,inline:true,view:host.view,aspect:host.aspect,blocked:host.compose.blocked,capture:host.compose.capture,onCreate:host.compose.apply,destination:host.compose.destination,onDraft:host.compose.draftChanged,startTask:(input,meta)=>task.start(input,meta),taskBusy:()=>!!task?.busy(),clearTask:async()=>{await host.prepareAi?.();await task?.clear();},onApplied:token=>{
@@ -113,8 +113,8 @@ export function createAiHelper(host) {
     for(const [id,label] of [['compose','발표 만들기'],['edit','요소 추가·수정']])tabs.append(el('button',{class:'btn chip',type:'button',dataset:{assistMode:id},'aria-pressed':String(id==='edit'),onClick:()=>setMode(id)},label));
   }
   const body = el('div', { class: 'cv-assist-body' },taskNotice,tabs,composePane,editPane,log);
-  const close = el('button', { class: 'cv-assist-close', type: 'button', 'aria-label': 'AI-G 도우미 닫기', onClick: () => host.close?.() }, '×');
-  const node = el('div', { class: 'cv-assist-box' }, el('header', { class: 'cv-assist-head' }, gaiOwl(), el('h2', { text: 'AI-G 도우미' }), close), body);
+  const close = el('button', { class: 'cv-assist-close', type: 'button', 'aria-label': `${panelName} 닫기`, onClick: () => host.close?.() }, '×');
+  const node = el('div', { class: 'cv-assist-box' }, el('header', { class: 'cv-assist-head' }, provider ? gaiOwl() : null, el('h2', { text: panelName }), close), body);
 
   function update() {
     if (disposed) return;

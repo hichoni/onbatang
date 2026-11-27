@@ -440,7 +440,8 @@ function openWhatsNew() {
   const box = el('section', { class: 'cv-news-box', tabindex: '-1', 'aria-labelledby': 'cv-news-title', onKeydown: escCloses },
     el('h2', { id: 'cv-news-title', text: '온바탕에 새로 생긴 기능' }),
     el('p', { class: 'cv-down-note', text: '무엇인지 · 언제 쓰는지 · 어떻게 하는지 차례로 적었어요. 꾸미는 화면의 ? 단추로 사용법 안내도 볼 수 있어요.' }),
-    el('div', { class: 'cv-news-list' }, ...WHATS_NEW.map((f) => el('article', { class: 'cv-news-item', dataset: { feature: f.id } },
+    // AI-G를 이어 주지 않은 독립 온바탕은 AI를 뺀 설명(standalone)을 보여 준다.
+    el('div', { class: 'cv-news-list' }, ...WHATS_NEW.map((f) => activityAuthoring && appMaker || !f.standalone ? f : { ...f, ...f.standalone }).map((f) => el('article', { class: 'cv-news-item', dataset: { feature: f.id } },
       el('h3', {}, el('span', { text: f.name }), f.since === newest ? el('small', { class: 'cv-news-new', text: '새로' }) : null),
       el('p', { class: 'cv-news-what', text: f.what }),
       el('p', { class: 'cv-news-when' }, el('b', { text: '이럴 때 · ' }), f.when),
@@ -1194,7 +1195,10 @@ function editorShell(O, bar) {
       presentationAction&&el('button',{class:'btn cv-html-action',type:'button',dataset:{presentationEdit:''},onClick:()=>openPresentationMaker(O)},'AI로 이어 만들기'),
       el('button', {class: 'btn cv-html-action', type: 'button', onClick: () => { O.editor.openTab('upload'); O.workspace.openTools(); }}, 'HTML 설정'),
       // AI-G 도우미: 장을 다듬어 달라고 부탁하거나(AI-G 를 이어 준 곳), AI 없이 움직임을 자동으로 다듬는다. 오른쪽 속성 칸 자리에 열린다.
-      el('button', { class: 'cv-assist-toggle', type: 'button', 'aria-expanded': 'false', dataset: { assistToggle: '' }, title: 'AI-G 도우미: 장을 다듬고 움직임을 입혀요', onClick: () => toggleAssist(O) }, gaiOwl(), el('span', { class: 'cv-lbl', text: 'AI-G 도우미' })),
+      // AI는 AI-G를 이어 준 곳(GBE-AI Lab)에서만 쓴다. 독립 온바탕에는 AI 이름 없이 '움직임 다듬기'만 보인다.
+      activityAuthoring && appMaker
+        ? el('button', { class: 'cv-assist-toggle', type: 'button', 'aria-expanded': 'false', dataset: { assistToggle: '' }, title: 'AI-G 도우미: 장을 다듬고 움직임을 입혀요', onClick: () => toggleAssist(O) }, gaiOwl(), el('span', { class: 'cv-lbl', text: 'AI-G 도우미' }))
+        : el('button', { class: 'cv-assist-toggle', type: 'button', 'aria-expanded': 'false', dataset: { assistToggle: '' }, title: '움직임 다듬기: 장의 모양을 보고 움직임을 입혀요', onClick: () => toggleAssist(O) }, ...face('motion', '움직임 다듬기')),
       el('button', { class: 'btn cv-properties-toggle', type: 'button', 'aria-expanded': 'false' }, ...face('pencil', '속성'))),
     canvasBox, O.htmlHost = el('div', {class: 'cv-html-live', hidden: true, dataset: {htmlWorkspace: ''}}),
     O.editor.notes);
@@ -1204,7 +1208,7 @@ function editorShell(O, bar) {
   // 노트 칸을 펴 두었는지는 이 기기에 기억한다(다음에 열 때도 그대로).
   try { O.editor.notes.open = localStorage.getItem(NOTES_OPEN_KEY) === '1'; } catch { /* 저장 공간이 막힌 기기: 접어 둔다 */ }
   O.editor.notes.addEventListener('toggle', () => { try { localStorage.setItem(NOTES_OPEN_KEY, O.editor.notes.open ? '1' : '0'); } catch { /* 기억하지 못해도 칸은 그대로 쓴다 */ } });
-  O.assistBox = el('aside', { class: 'cv-assist', 'aria-label': 'AI-G 도우미' });
+  O.assistBox = el('aside', { class: 'cv-assist', 'aria-label': activityAuthoring && appMaker ? 'AI-G 도우미' : '움직임 다듬기' });
   const shell = O.shell = el('div', { class: 'cv-app cv-page-workspace folded' }, bar, O.alert, side, O.strip, work, properties, O.assistBox);
   O.workspace = bindEditorWorkspace(shell);
   O.htmlWorkspace = createHtmlWorkspace(O.htmlHost);
