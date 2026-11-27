@@ -17,6 +17,8 @@ await startMinican({storage:'progress-fixture',resume:true,activityAuthoring:tru
  let payload=jobId?{jobId}:{input,requestId};for(;;){const r=await fetch('/job',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),signal});const v=await r.json();if(v.kind==='slides')return v;onProgress(v);payload={jobId:v.jobId};await new Promise((ok,no)=>{const timer=setTimeout(ok,50);signal.addEventListener('abort',()=>{clearTimeout(timer);no(signal.reason);},{once:true});});}
 }}});window.ready=true;
 </script>`;
+// An AI answer opens on the review desk first; returning puts the same card back in the panel.
+const leaveDesk=async page=>{const desk=page.getByRole('region',{name:'AI-G 결과 작업대'});await desk.waitFor();await desk.getByRole('button',{name:'편집기로 돌아가기'}).click();await desk.waitFor({state:'detached'});};
 for(const engine of ['chromium','webkit'])test(engine+' locks editing and resumes compose/edit after leaving, refresh and lost acceptance',{skip:!process.env.MINICAN_PLAYWRIGHT_PATH,timeout:120000},async t=>{
  const jobs=new Map();let completed=false,lost=engine==='chromium',submits=0;
  const server=createServer(async(req,res)=>{try{
@@ -49,15 +51,15 @@ for(const engine of ['chromium','webkit'])test(engine+' locks editing and resume
  if(process.env.AI_PROGRESS_SHOT)await page.screenshot({path:process.env.AI_PROGRESS_SHOT+'-'+engine+'-mobile.png'});
  await page.setViewportSize({width:1440,height:1000});
  // Wait for acceptance (or the lost acceptance response), then leave the whole app.
- await page.waitForFunction(()=>document.querySelector('.onba-ai-lock p')?.textContent?.includes('연결 확인')||document.querySelector('.onba-ai-lock p')?.textContent?.includes('디자인'));
+ await page.waitForFunction(()=>document.querySelector('.onba-ai-message')?.textContent?.includes('연결 확인')||document.querySelector('.onba-ai-message')?.textContent?.includes('디자인'));
  await page.getByRole('button',{name:'연구소 홈으로 나가기',exact:true}).click();await page.getByRole('heading',{name:'놀이터',exact:true}).waitFor();assert.equal(jobs.size,1);
  completed=true;await page.getByRole('link',{name:'온바탕 돌아가기'}).click();await page.getByRole('button',{name:/AI-G 작업 이어보기/}).click();await page.waitForFunction(()=>document.querySelectorAll('.onba-compose-previews article').length===3);
  assert.equal(jobs.size,1,'returning never creates another paid request');assert.equal(submits,engine==='chromium'?2:1,'lost acceptance reuses original id; accepted jobs only poll');
  await page.locator('[data-compose-apply]').click();await page.locator('[data-assist-pane="edit"]').waitFor({state:'visible'});assert.equal(await page.locator('.cv-canvas').evaluate(n=>n.inert),false);
  // A second job changes existing elements and survives a full refresh.
- completed=false;await page.getByRole('button',{name:/^3번째 장/}).click();await page.locator('.cv-assist-wish').fill('세 번째 장의 제목을 이어받은 제목으로 고쳐 줘');await page.locator('[data-assist-ask]').click();await page.getByRole('region',{name:'AI-G 제작 진행'}).waitFor();
- await page.waitForFunction(()=>document.querySelector('.onba-ai-lock p')?.textContent?.includes('디자인'));
+ completed=false;await page.getByRole('button',{name:/^3번째 장/}).click();await page.locator('.cv-assist-options summary').click();await page.locator('.cv-assist input[value="here"]').check();await page.locator('.cv-assist-wish').fill('세 번째 장의 제목을 이어받은 제목으로 고쳐 줘');await page.locator('[data-assist-ask]').click();await page.getByRole('region',{name:'AI-G 제작 진행'}).waitFor();
+ await page.waitForFunction(()=>document.querySelector('.onba-ai-message')?.textContent?.includes('디자인'));
  await page.getByRole('button',{name:'내 그림으로 나가기',exact:true}).click();await page.getByRole('button',{name:/AI-G 작업 이어보기/}).waitFor();await page.reload();await page.getByRole('button',{name:/AI-G 작업 이어보기/}).click();await page.getByRole('region',{name:'AI-G 제작 진행'}).waitFor();assert.equal(jobs.size,2);
- completed=true;await page.locator('[data-assist-apply]').waitFor({timeout:8000}).catch(async e=>{e.message+=' '+await page.locator('.onba-ai-task').innerText();throw e;});await page.locator('[data-assist-apply]').click();await page.getByRole('button',{name:/^3번째 장/}).click();await page.locator('.cv-canvas').getByText('이어받은 제목',{exact:true}).waitFor();assert.equal(jobs.size,2);
+ completed=true;await leaveDesk(page);await page.locator('[data-assist-apply]').waitFor({timeout:8000}).catch(async e=>{e.message+=' '+await page.locator('.onba-ai-task').innerText();throw e;});await page.locator('[data-assist-apply]').click();await page.getByRole('button',{name:/^3번째 장/}).click();await page.locator('.cv-canvas').getByText('이어받은 제목',{exact:true}).waitFor();assert.equal(jobs.size,2);
  await page.locator('.cv-back').click();assert.equal(await page.locator('.onba-ai-home').count(),0);assert.deepEqual(errors,[]);
 });

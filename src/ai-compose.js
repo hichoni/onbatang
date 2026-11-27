@@ -5,7 +5,7 @@ import {newId} from './document.js';
 export const COMPOSE_LIMITS=Object.freeze({pages:24,items:24,photos:3,prompt:1800,reference:16000,text:400,notes:3000,bytes:480000});
 const bad=message=>{throw Error(message);},obj=v=>v&&typeof v==='object'&&!Array.isArray(v),hex=v=>typeof v==='string'&&/^#[0-9a-f]{6}$/i.test(v);
 const word=(v,max,label,empty=false)=>{if(typeof v!=='string'||v.length>max||!empty&&!v.trim())bad(label+'을 확인해주세요.');return v.trim();};
-const number=(v,min,max,label)=>{if(!Number.isFinite(v)||v<min||v>max)bad(label+' 범위를 확인해주세요.');return Math.round(v*100)/100;};
+const number=(v,min,max,label,precision=100)=>{if(!Number.isFinite(v)||v<min||v>max)bad(label+' 범위를 확인해주세요.');return Math.round(v*precision)/precision;};
 const known=new Map(SHAPE_ASSETS.map(s=>[s.id,s]));
 const motion={an:ENTERS,lp:IDLES,em:EMPHASES,ex:EXITS,tr:TRANSITIONS};
 export function nativeComposeCatalog(fonts=[]){return {
@@ -21,7 +21,7 @@ export function cleanComposeRequest(input){
  const fontRows=fonts.map(row=>{if(!Array.isArray(row)||row.length!==2||!/^[-a-zA-Z0-9_]{1,60}$/.test(row[0]))bad('글꼴 이름을 확인해주세요.');return [row[0],word(row[1],80,'글꼴 이름')];});
  if(new Set(fontRows.map(f=>f[0])).size!==fontRows.length)bad('글꼴 이름이 겹쳐요.');
  const photos=(input.photos??[]);if(!Array.isArray(photos)||photos.length>COMPOSE_LIMITS.photos)bad('사진은 세 장까지 골라주세요.');
- const seen=new Set(),photoRows=photos.map(p=>{if(!obj(p)||!/^photo[1-3]$/.test(p.id)||seen.has(p.id))bad('사진 연결을 확인해주세요.');seen.add(p.id);return {id:p.id,alt:word(p.alt,160,'사진 설명'),aspect:number(p.aspect,.1,10,'사진 비율')};});
+ const seen=new Set(),photoRows=photos.map(p=>{if(!obj(p)||!/^photo[1-3]$/.test(p.id)||seen.has(p.id))bad('사진 연결을 확인해주세요.');seen.add(p.id);return {id:p.id,alt:word(p.alt,160,'사진 설명'),aspect:number(p.aspect,.1,10,'사진 비율',100000)};});
  const rawAspect=input.aspect??16/9;if(!Number.isFinite(rawAspect)||rawAspect<.3||rawAspect>3)bad('화면 비율을 확인해주세요.');const aspect=Math.round(rawAspect*100000)/100000;
  return {kind:'slides',task:'compose',prompt,count,reference,fonts:fontRows,photos:photoRows,aspect};
 }

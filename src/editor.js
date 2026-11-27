@@ -4013,12 +4013,12 @@ export function createEditor({
       const bar = el('span', { class: 'fe-tl-track', 'aria-hidden': 'true' }, el('span', { class: 'fe-tl-bar', style: `left:${(a.delay / total) * 100}%;width:${Math.max(2, (ms / total) * 100)}%` }));
       return row(a.i, [el('b', { text: itemLabel(list[a.i]) }), el('small', { text: `${nameOf(ENTERS, a.enter)} · ${sec(a.delay)}부터 ${sec(ms)}` }), bar]);
     });
-    const clickRows = plan.clicks.map((c, n) => {
+    const clickRows = plan.beats.flatMap((beat, n) => beat.map(c => {
       const what = c.emphasis === LOOK_EM ? `강조 · 글자 효과(${lookEmphasis(itemLook(list[c.i], slideLook(design)))?.name || ''}) ${sec(emphasisTime(c.emphasis, list[c.i]))}`
         : c.emphasis ? `강조 · ${nameOf(EMPHASES, c.emphasis)} ${sec(emphasisTime(c.emphasis, list[c.i]))}`
         : c.exit ? `사라지기 · ${nameOf(EXITS, c.exit)} ${sec(exitTime(c.exit, list[c.i]))}` : `나타나기 · ${nameOf(ENTERS, c.enter)} ${sec(enterTime(c.enter, list[c.i]))}`;
       return row(c.i, [el('span', { class: 'fe-tl-step', text: `누름 ${n + 1}` }), el('b', { text: itemLabel(list[c.i]) }), el('small', { text: what })]);
-    });
+    }));
     // 계속 움직이는 조각: 움직임 칸의 계속 움직이기 + 글자 효과의 계속 움직이기(lkloop).
     const slideLk = slideLook(design);
     const lasting = [...plan.loops.map((l) => `${itemLabel(list[l.i])}(${nameOf(IDLES, l.loop)})`),
@@ -4043,7 +4043,7 @@ export function createEditor({
           ? effectPicker(it, effect => { stopPreview(); change({ effect }); onToolClose?.(); },settings().aspect)
           : el('p', { class:'fe-note', text:'글·그림·도형을 하나 고르면 HTML 그래픽 효과를 붙일 수 있어요.' }),
       ]);
-      const mine = it && !it.lock ? motionPart('mine', [sel, itemLabel(it), it.an || '', !!it.aw, it.em || '', it.lp || '', it.ex || '', it.sp || '', it.dl || 0, here.pa || ''].join('|'), () => {
+      const mine = it && !it.lock ? motionPart('mine', [sel, itemLabel(it), it.an || '', !!it.aw, it.awGroup || 0, it.em || '', it.lp || '', it.ex || '', it.sp || '', it.dl || 0, here.pa || ''].join('|'), () => {
         const follow = { id: '', name: here.pa ? '장의 효과대로' : '없음' };
         const choices = [follow, ...(here.pa ? [{ id: STILL, name: '가만히' }] : []), ...ENTERS];
         const now = it.an === STILL && !here.pa ? '' : it.an || '';
@@ -4057,7 +4057,10 @@ export function createEditor({
           el('div', { class: 'fe-grid two fe-motion-when', role: 'group', 'aria-label': '나타나는 때' },
             pbtn('장이 열릴 때', () => setWait(false), { 'aria-pressed': String(!it.aw), class: `fe-btn${it.aw ? '' : ' on'}` }),
             pbtn('누를 때', () => setWait(true), { 'aria-pressed': String(!!it.aw), class: `fe-btn${it.aw ? ' on' : ''}` })),
-          it.aw ? el('p', { class: 'fe-note', text: '발표하다가 화면을 누르면(또는 오른쪽 화살표 · 스페이스) 그때 나타나요. 여러 개면 위에서부터 하나씩 나와요.' }) : null,
+          it.aw ? el('label', {}, '함께 등장할 묶음 ',
+            el('select', {'aria-label':'함께 등장할 묶음', onChange:e=>change({awGroup:Number(e.target.value)||undefined})},
+              el('option',{value:'0',selected:!it.awGroup},'따로 등장'),
+              ...Array.from({length:12},(_,i)=>el('option',{value:String(i+1),selected:it.awGroup===i+1},'묶음 '+(i+1))))) : null,
           el('div', { class: 'fe-motions', role: 'group', 'aria-label': '고른 조각이 나타나는 모양', dataset: { group: 'mine' } }, ...choices.map((c) => motionTile({
             group: 'mine', name: c.name, on: now === c.id, kind: c.id && c.id !== STILL ? 'enter' : c.id === '' && here.pa ? 'follow' : 'none', id: c.id,
             onPick: () => setEnter(c.id),

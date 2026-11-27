@@ -1261,8 +1261,9 @@ function toggleAssist(O, open = !O.shell.classList.contains('assist-open')) {
   if (open) O.assist.focus(); else if (O.assistBox.contains(document.activeElement)) button?.focus({ preventScroll: true });
 }
 function assistHost(O) {
-  O.aiProgress??=aiProgress(O,{leave:e=>closeDesign(O,e.currentTarget),home:onBrandClick?e=>closeToHost(O,e.currentTarget):null});
+  O.aiProgress??=aiProgress(O,{leave:e=>closeDesign(O,e.currentTarget),home:onBrandClick?e=>closeToHost(O,e.currentTarget):null,view:slide=>slideView(slide,aspectOf(O.record),320),aspect:()=>aspectOf(O.record)});
   const host = {
+    shell:O.shell,
     provider: appMaker,
     draftKey:storageName()+'.native-helper-v1.'+O.record.id,
     prepareAi:async()=>{O.aiDraft=true;touched(O);if(!await save(O))throw Error('발표 저장을 확인해 주세요.');},
@@ -1293,12 +1294,17 @@ function assistHost(O) {
     draftChanged:()=>{O.aiDraft=true;touched(O);},
     blocked:()=>host.blocked()||(O.materialDeck?'여러 파트로 된 자료는 새 발표에서 장을 만든 뒤 가져와 주세요.':O.record.story?'원고와 발화가 연결된 발표는 장을 자동 추가할 수 없어요. 요소 추가·수정은 그대로 쓸 수 있어요.':''),
     destination:()=>emptyAiPage(currentSlides(O)[O.at])?`비어 있는 ${O.at+1}장부터 채워요. 적용 뒤에도 글·도형·사진을 직접 고칠 수 있어요.`:`지금 ${O.at+1}장 뒤에 새 장을 넣어요. 기존 장과 원고는 그대로 두어요.`,
-    capture:request=>{const base=structuredClone(currentSlides(O));if(base.length+request.count-(emptyAiPage(base[O.at])?1:0)>MAX_SLIDES)throw Error(`한 발표에는 ${MAX_SLIDES}장까지 넣을 수 있어요.`);return {base,at:O.at,doc:O.record.id,storage:storageName(),ratio:O.record.ratio};},
+    capture:(request,{insertAt}={})=>{
+      const base=structuredClone(currentSlides(O)),replace=insertAt===undefined && emptyAiPage(base[O.at]);
+      if(insertAt!==undefined && (!Number.isInteger(insertAt)||insertAt<0||insertAt>base.length))throw Error('새 장을 넣을 위치를 확인해 주세요.');
+      if(base.length+request.count-Number(replace)>MAX_SLIDES)throw Error(`한 발표에는 ${MAX_SLIDES}장까지 넣을 수 있어요.`);
+      return {base,at:O.at,doc:O.record.id,storage:storageName(),ratio:O.record.ratio,...(insertAt===undefined?{}:{insertAt})};
+    },
     apply:async({title,slides,context})=>{
       const why=host.compose.blocked();if(why)throw Error(why);
       if(!context||context.doc!==O.record.id||context.storage!==storageName()||context.ratio!==O.record.ratio)throw Error('생성할 때의 발표와 계정을 다시 확인해 주세요.');
-      const before=deckState(O),after=insertAiPages(before.slides,context.base,context.at,slides,MAX_SLIDES);
-      if(before.slides.length===1&&emptyAiPage(before.slides[0])){before.name=O.record.name;after.name=title.slice(0,MAX_NAME);}
+      const before=deckState(O),after=insertAiPages(before.slides,context.base,context.at,slides,MAX_SLIDES,context.insertAt);
+      if(context.insertAt===undefined&&before.slides.length===1&&emptyAiPage(before.slides[0])){before.name=O.record.name;after.name=title.slice(0,MAX_NAME);}
       const entry={t:'deck',doc:O.record.id,before,after};noteUndo(O,entry);applyDeck(O,after);return entry;
     }
   };
@@ -2231,7 +2237,7 @@ function removeSlideByKey(O) {
 // 그림판과 옆 칸은 제 글쇠를 먼저 듣는다(defaultPrevented). 글을 쓰는 칸 · 창(모달) · 발표 화면 · 가져오기 화면은 건드리지 않는다.
 function onEditorKeys(e) {
   const O = S.open;
-  if (!O || O.aiWorking || O.closed || O.inlineImport || e.defaultPrevented || e.isComposing || !O.editor || !O.shell?.isConnected || app.inert) return;
+  if (!O || O.aiWorking || O.closed || O.inlineImport || e.defaultPrevented || e.isComposing || !O.editor || !O.shell?.isConnected || O.shell.classList.contains('onba-reviewing') || app.inert) return;
   if (document.querySelector('.modal-backdrop, .cv-show') || document.body.classList.contains('modal-open')) return;
   const t = e.target instanceof Element ? e.target : null;
   if (!t || O.editor.stage.contains(t)) return;
@@ -3154,7 +3160,7 @@ async function present(O) {
     topic: (k) => shownTopics(lessonPages(O).map((v) => v.page)).get(entries[k]?.page.id) || '',
     label: (k) => (slides[k]?.activity ? '활동' : entries[k]?.page.source?.kind === 'result' ? '결과' : ''),
     // 자동 넘기기: 리허설로 잰 시간(없으면 기본) · 누를 때 나오는 걸음 수. 리허설: 잰 시간을 발표가 끝난 뒤 저장할지 묻는다.
-    dwell: (k) => slides[k]?.dur, steps: (k) => (slides[k] && !slides[k].activity ? planMotion(slides[k]).clicks.length : 0),
+    dwell: (k) => slides[k]?.dur, steps: (k) => (slides[k] && !slides[k].activity ? planMotion(slides[k]).beats.length : 0),
     waitForTeacher: k=>!!slides[k]?.activity?.photoStudy || slides[k]?.items?.some(it=>questionEffect(it.effect)||steppedEffect(it.effect)),
     saveTimes: (seconds) => { rehearsed = entries.map((v, k) => [v.page.id, seconds[k]]).filter(([, s]) => s != null); },
     title: O.record.name, notify: toast, keyClass: 'cv-show-key', stateChanged: tellRemote,

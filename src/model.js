@@ -280,6 +280,7 @@ export function cleanItem(item, { keepSpaces = false } = {}) {
   // 움직임(발표할 때)은 정했을 때만 적는다. an: 나타나는 효과(또는 'none' = 가만히) · aw: 누를 때 나타난다(motion.js).
   if (ENTER_IDS.includes(it.an) || it.an === STILL) base.an = it.an;
   if (it.aw === true) base.aw = true;
+  if (base.aw && Number.isInteger(it.awGroup) && it.awGroup >= 1 && it.awGroup <= 12) base.awGroup = it.awGroup;
   if (EMPHASIS_IDS.includes(it.em)) base.em = it.em;          // 강조 효과: 누를 때 한 번 움직인다
   if (IDLE_IDS.includes(it.lp) || it.lp === STILL) base.lp = it.lp;   // 계속 움직이기: 다 나온 뒤 장에 머무는 동안 되풀이해 움직인다('none' = 조합 효과가 있어도 가만히)
   if (EXIT_IDS.includes(it.ex)) base.ex = it.ex;              // 사라지는 효과: 누를 때 사라진다(나타나기 · 강조 다음 차례)

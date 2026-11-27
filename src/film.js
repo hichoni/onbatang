@@ -98,7 +98,7 @@ export function filmPlan(designs, { stay = DEFAULT_STAY, scenes = true } = {}) {
     const arrived = new Set((pairs || []).map(([, j]) => j));
     const items = Array.isArray(design?.items) ? design.items : [];
     const moves = plan.auto.filter((a) => !arrived.has(a.i)).map((a) => ({ i: a.i, enter: a.enter, mirror: a.mirror, start: lead + a.delay, ms: enterTime(a.enter, items[a.i]), click: false }));
-    const count = plan.clicks.length;
+    const count = plan.beats.length;
     if (count) {
       const least = Math.max(STEP_LEAST, Math.min(STEP_MIN, CLICKS_MAX / count));
       const step = Math.round(Math.max(least, Math.min(STEP_MAX, (stayMs - plan.ms - TAIL) / count)));
@@ -106,12 +106,14 @@ export function filmPlan(designs, { stay = DEFAULT_STAY, scenes = true } = {}) {
       const pressed = (voice?.steps || []).slice(0, count);
       const after = pressed.length ? pressed[pressed.length - 1] : lead + plan.ms;
       const rest = Math.round(Math.max(least, Math.min(STEP_MAX, (stayMs - after - TAIL) / Math.max(1, count - pressed.length))));
-      plan.clicks.forEach((c, k) => {
+      plan.beats.forEach((beat, k) => {
         const start = voice ? (k < pressed.length ? Math.max(lead, pressed[k]) : after + rest * (k - pressed.length + 1)) : lead + plan.ms + step * (k + 1);
-        const it = items[c.i];
-        moves.push(c.emphasis ? { i: c.i, emphasis: c.emphasis, start, ms: emphasisTime(c.emphasis, it), click: true }
-          : c.exit ? { i: c.i, exit: c.exit, start, ms: exitTime(c.exit, it), click: true }
-            : { i: c.i, enter: c.enter, mirror: c.mirror, start, ms: enterTime(c.enter, it), click: true });
+        for (const c of beat) {
+          const it = items[c.i];
+          moves.push(c.emphasis ? { i: c.i, emphasis: c.emphasis, start, ms: emphasisTime(c.emphasis, it), click: true }
+            : c.exit ? { i: c.i, exit: c.exit, start, ms: exitTime(c.exit, it), click: true }
+              : { i: c.i, enter: c.enter, mirror: c.mirror, start, ms: enterTime(c.enter, it), click: true });
+        }
       });
     }
     const settle = moves.reduce((m, v) => Math.max(m, v.start + v.ms), lead);

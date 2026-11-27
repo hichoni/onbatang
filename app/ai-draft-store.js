@@ -39,3 +39,20 @@ export async function listAiTasks(prefix){
   tx.onabort=tx.onerror=()=>reject(tx.error);
  });
 }
+
+// Two editor tabs may receive the same completed job or finish different jobs
+// for the same document. Read and append within one transaction per receipt.
+export async function rememberReview(key,row){
+ const db=await open();
+ return new Promise((resolve,reject)=>{
+  const tx=db.transaction('drafts','readwrite'),store=tx.objectStore('drafts'),read=store.get(key);
+  let rows;
+  read.onsuccess=()=>{
+   rows=Array.isArray(read.result)?read.result:[];
+   if(rows.some(item=>item.id===row.id))return;
+   rows=[row,...rows].slice(0,20);store.put(rows,key);
+  };
+  tx.oncomplete=()=>resolve(rows);
+  tx.onabort=tx.onerror=()=>reject(tx.error||Error('AI 요청 기록을 저장하지 못했어요.'));
+ });
+}

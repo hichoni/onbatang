@@ -54,6 +54,14 @@ window.readParts=async()=>[await getDesign('dassistpart001'),await getDesign('da
 await startMinican({storage:'assist-parts'${maker}});window.ready=true;
 </script>`;
 
+// An AI answer opens on the full-screen review desk first; returning puts the same card back in the panel.
+async function leaveDesk(page) {
+  const desk = page.getByRole('region', {name: 'AI-G 결과 작업대'});
+  await desk.waitFor();
+  await desk.getByRole('button', {name: '편집기로 돌아가기'}).click();
+  await desk.waitFor({state: 'detached'});
+}
+
 async function setup(t, page0 = '/fixture-ai.html') {
   const server = createServer(async (req, res) => {
     try {
@@ -102,7 +110,10 @@ test('AI-G polishes the current slide: text and layout go out, the answer is pre
   await toggle.click();
   await panel.locator('.cv-assist-box').waitFor();
   assert.equal(await toggle.getAttribute('aria-expanded'), 'true');
-  assert.match(await panel.locator('.cv-assist-scope').first().textContent(), /지금 장\(1장\)/);
+  // The scope now sits under '범위 직접 정하기' and defaults to the request itself; this test pins the current slide.
+  await panel.locator('.cv-assist-options summary').click();
+  await panel.locator('input[value="here"]').check();
+  assert.match(await panel.locator('.cv-assist-scope').filter({has: page.locator('input[value="here"]')}).textContent(), /지금 장\(1장\)/);
   const ask = panel.locator('[data-assist-ask]');
   assert.match(await ask.textContent(), /AI-G에게 부탁하기\s*질문권 1회/);
   // What will be sent can be read first: words and places, never the picture.
@@ -111,6 +122,7 @@ test('AI-G polishes the current slide: text and layout go out, the answer is pre
   assert.ok(peek.includes('검색, 검색, 검색') && peek.includes('특허 검색 화면') && !peek.includes('base64'));
   await panel.locator('.cv-assist-wish').fill('6학년이 읽기 쉽게');
   await ask.click();
+  await leaveDesk(page);
   const card = panel.locator('[data-assist-card]');
   await card.waitFor();
   const asked = await page.evaluate(() => window.asked);
@@ -169,12 +181,14 @@ test('several chosen slides go in one request and come back as one undo step; a 
   const before = await page.evaluate(() => window.readSaved());
   await page.locator('[data-assist-toggle]').click();
   const panel = page.locator('.cv-assist');
+  await panel.locator('.cv-assist-options summary').click();
   await panel.locator('input[value="pick"]').check();
   await panel.locator('[data-assist-pick="1"]').check();
   await panel.locator('[data-assist-pick="2"]').check();
   assert.match(await panel.locator('.cv-assist-pick-count').textContent(), /^3장 고름/);
   await panel.locator('[data-assist-want="text"]').click();
   await panel.locator('[data-assist-ask]').click();
+  await leaveDesk(page);
   const card = panel.locator('[data-assist-card]').last();
   await card.waitFor();
   const asked = await page.evaluate(() => window.asked);
@@ -247,11 +261,13 @@ test('a deck in several parts is one deck to the helper: every slide can be chos
   await page.waitForFunction(() => document.querySelectorAll('.cv-slide-list .cv-slide:not(.add)').length === 4);   // the rail shows both parts
   await page.locator('[data-assist-toggle]').click();
   const panel = page.locator('.cv-assist');
+  await panel.locator('.cv-assist-options summary').click();
   await panel.locator('input[value="pick"]').check();
   assert.deepEqual(await panel.locator('.cv-assist-pick span').allTextContents(), ['1장 (지금)', '2장', '3장', '4장'], 'the slides of the other part are listed too');
   for (const i of [1, 2, 3]) await panel.locator(`[data-assist-pick="${i}"]`).check();
   assert.match(await panel.locator('.cv-assist-pick-count').textContent(), /^4장 고름/);
   await panel.locator('[data-assist-ask]').click();
+  await leaveDesk(page);
   const card = panel.locator('[data-assist-card]');
   await card.waitFor();
   const asked = await page.evaluate(() => window.asked);

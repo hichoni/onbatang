@@ -554,7 +554,21 @@ export function planMotion(design) {
     const a = auto.find((v) => v.i === r.i);
     return { i: r.i, loop: idleOf(r), after: r.it.aw === true ? null : a ? timeOf(a) : 0 };
   });
-  return { auto, clicks, loops, ms };
+  // A group opens at its first entrance in the reading order. Emphasis and exit
+  // keep their own presses, including when they belong to a grouped item.
+  const beats = [], entrances = new Map();
+  for (const action of clicks) {
+    const group = action.enter && items[action.i].awGroup;
+    if (Number.isInteger(group) && group >= 1 && group <= 12) {
+      if (!entrances.has(group)) {
+        const beat = [];
+        entrances.set(group, beat);
+        beats.push(beat);
+      }
+      entrances.get(group).push(action);
+    } else beats.push([action]);
+  }
+  return { auto, clicks, beats, loops, ms };
 }
 /** 그 디자인에 움직임이 하나라도 있는지(슬라이드 띠에 표시할 때 쓴다). */
 export function hasMotion(design) {
@@ -981,9 +995,9 @@ export function playDesign(card, design, { delay = 0, still = false } = {}) {
     entered.add(a.i);
     chain(keep(playEnter(nodes[a.i], items[a.i], a.enter, { delay: delay + a.delay, mirror: a.mirror })), a.i);
   }
-  const waiting = plan.clicks.filter((c) => nodes[c.i]);
-  for (const c of waiting) if (c.enter) nodes[c.i].style.visibility = 'hidden';
-  const clicked = new Set(waiting.filter((c) => c.enter).map((c) => c.i));
+  const waiting = still ? [] : plan.beats.map(beat => beat.filter(c => nodes[c.i])).filter(beat => beat.length);
+  const clicked = new Set(waiting.flat().filter(c => c.enter).map(c => c.i));
+  for (const i of clicked) nodes[i].style.visibility = 'hidden';
   for (const l of plan.loops) if (nodes[l.i] && !entered.has(l.i) && !clicked.has(l.i)) loop(l.i, { delay, phase: delay > 0 ? 0 : idlePhase(l.i, l.loop, items[l.i]) });
   // 앞 장으로 돌아왔을 때(still): 사라지는 효과까지 다 한 모습이므로 사라질 요소는 숨겨 둔다.
   if (still) for (const r of planMotion(design).clicks) if (r.exit && nodes[r.i]) nodes[r.i].style.visibility = 'hidden';
@@ -1021,16 +1035,16 @@ export function playDesign(card, design, { delay = 0, still = false } = {}) {
   return {
     left: () => waiting.length,
     next() {
-      const c = waiting.shift();
-      if (!c) return false;
-      show(c, true);
+      const beat = waiting.shift();
+      if (!beat) return false;
+      for (const c of beat) show(c, true);
       return true;
     },
     finish,
     stop,
     reveal() {
       stop();
-      for (const c of waiting.splice(0)) show(c, false);
+      for (const beat of waiting.splice(0)) for (const c of beat) show(c, false);
       finish();
     },
     restore() {
