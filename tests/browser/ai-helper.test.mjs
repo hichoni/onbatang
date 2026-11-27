@@ -107,6 +107,8 @@ test('AI-G polishes the current slide: text and layout go out, the answer is pre
   assert.match(await ask.textContent(), /AI-G에게 부탁하기\s*질문권 1회/);
   // What will be sent can be read first: words and places, never the picture.
   await panel.locator('.cv-assist-peek summary').click();
+  // The text is filled by the details toggle event, which fires after the click.
+  await page.waitForFunction(() => document.querySelector('.cv-assist-sent')?.textContent);
   const peek = await panel.locator('.cv-assist-sent').textContent();
   assert.ok(peek.includes('검색, 검색, 검색') && peek.includes('특허 검색 화면') && !peek.includes('base64'));
   await panel.locator('.cv-assist-wish').fill('6학년이 읽기 쉽게');
@@ -208,10 +210,13 @@ test('several chosen slides go in one request and come back as one undo step; a 
 test('without an AI connection the panel still polishes motion by rule, for the whole deck, with the same preview and undo', options, async t => {
   const {page, external, errors} = await setup(t, '/fixture.html');
   const before = await page.evaluate(() => window.readSaved());
+  // The public Onbatang shows no AI at all: the button and panel are named for motion only.
+  assert.equal((await page.locator('[data-assist-toggle]').innerText()).trim(), '움직임 다듬기');
   await page.locator('[data-assist-toggle]').click();
   const panel = page.locator('.cv-assist');
-  await panel.locator('[data-assist-no-ai]').waitFor();
+  await panel.getByRole('heading', {name: '움직임 다듬기', exact: true}).waitFor();
   assert.equal(await panel.locator('[data-assist-ask]').count(), 0, 'no AI button where no connection was given');
+  assert.doesNotMatch(await panel.innerText(), /AI|질문권|GBE-AI Lab|도우미/);
   await panel.locator('.cv-assist-select').selectOption('all');
   await panel.locator('[data-assist-polish]').click();
   const card = panel.locator('[data-assist-card]');
